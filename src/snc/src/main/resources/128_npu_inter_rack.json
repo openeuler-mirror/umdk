@@ -399,385 +399,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB2/0/1:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 0
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB2/0/1:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 0
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB2/0/2:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 2
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB2/0/2:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 2
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB2/0/3:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 8
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB2/0/3:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 8
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB2/0/4:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 10
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB2/0/4:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 10
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB2/0/5:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 16
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB2/0/5:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 16
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB2/0/6:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 18
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB2/0/6:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 18
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB2/0/7:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 24
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB2/0/7:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 24
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB2/0/8:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 26
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB2/0/8:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 26
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB2/0/9:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 32
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB2/0/9:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 32
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB2/0/10:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 34
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB2/0/10:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 34
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB2/0/11:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 40
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB2/0/11:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 40
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB2/0/12:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 42
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB2/0/12:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 42
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB2/0/13:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 48
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB2/0/13:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 48
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB2/0/14:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 50
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB2/0/14:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 50
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB2/0/15:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 56
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB2/0/15:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 56
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB2/0/16:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 58
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB2/0/16:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 58
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB2/0/17:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 1
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB2/0/17:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 1
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB2/0/18:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 3
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB2/0/18:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 3
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB2/0/19:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 9
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB2/0/19:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 9
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB2/0/20:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 11
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB2/0/20:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 11
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB2/0/21:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 17
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB2/0/21:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 17
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB2/0/22:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 19
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB2/0/22:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 19
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB2/0/23:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 25
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB2/0/23:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 25
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB2/0/24:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 27
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB2/0/24:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 27
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB2/0/25:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 33
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB2/0/25:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 33
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB2/0/26:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 35
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB2/0/26:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 35
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB2/0/27:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 41
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB2/0/27:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 41
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB2/0/28:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 43
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB2/0/28:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 43
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB2/0/29:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 49
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB2/0/29:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 49
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB2/0/30:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 51
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB2/0/30:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 51
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB2/0/31:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 57
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB2/0/31:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 57
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB2/0/32:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 59
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB2/0/32:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 59
         }
@@ -790,385 +790,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB3/0/1:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 0
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB3/0/1:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 0
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB3/0/2:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 2
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB3/0/2:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 2
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB3/0/3:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 8
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB3/0/3:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 8
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB3/0/4:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 10
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB3/0/4:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 10
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB3/0/5:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 16
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB3/0/5:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 16
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB3/0/6:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 18
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB3/0/6:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 18
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB3/0/7:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 24
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB3/0/7:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 24
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB3/0/8:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 26
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB3/0/8:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 26
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB3/0/9:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 32
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB3/0/9:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 32
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB3/0/10:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 34
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB3/0/10:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 34
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB3/0/11:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 40
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB3/0/11:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 40
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB3/0/12:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 42
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB3/0/12:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 42
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB3/0/13:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 48
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB3/0/13:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 48
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB3/0/14:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 50
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB3/0/14:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 50
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB3/0/15:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 56
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB3/0/15:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 56
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB3/0/16:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 58
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB3/0/16:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 58
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB3/0/17:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 1
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB3/0/17:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 1
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB3/0/18:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 3
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB3/0/18:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 3
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB3/0/19:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 9
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB3/0/19:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 9
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB3/0/20:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 11
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB3/0/20:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 11
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB3/0/21:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 17
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB3/0/21:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 17
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB3/0/22:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 19
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB3/0/22:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 19
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB3/0/23:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 25
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB3/0/23:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 25
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB3/0/24:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 27
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB3/0/24:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 27
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB3/0/25:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 33
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB3/0/25:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 33
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB3/0/26:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 35
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB3/0/26:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 35
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB3/0/27:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 41
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB3/0/27:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 41
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB3/0/28:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 43
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB3/0/28:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 43
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB3/0/29:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 49
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB3/0/29:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 49
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB3/0/30:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 51
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB3/0/30:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 51
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB3/0/31:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 57
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB3/0/31:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 57
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB3/0/32:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 59
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB3/0/32:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 59
         }
@@ -1181,385 +1181,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB4/0/1:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 0
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB4/0/1:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 0
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB4/0/2:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 2
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB4/0/2:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 2
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB4/0/3:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 8
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB4/0/3:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 8
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB4/0/4:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 10
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB4/0/4:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 10
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB4/0/5:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 16
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB4/0/5:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 16
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB4/0/6:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 18
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB4/0/6:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 18
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB4/0/7:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 24
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB4/0/7:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 24
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB4/0/8:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 26
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB4/0/8:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 26
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB4/0/9:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 32
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB4/0/9:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 32
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB4/0/10:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 34
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB4/0/10:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 34
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB4/0/11:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 40
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB4/0/11:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 40
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB4/0/12:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 42
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB4/0/12:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 42
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB4/0/13:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 48
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB4/0/13:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 48
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB4/0/14:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 50
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB4/0/14:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 50
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB4/0/15:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 56
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB4/0/15:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 56
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB4/0/16:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 58
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB4/0/16:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 58
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB4/0/17:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 1
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB4/0/17:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 1
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB4/0/18:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 3
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB4/0/18:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 3
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB4/0/19:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 9
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB4/0/19:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 9
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB4/0/20:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 11
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB4/0/20:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 11
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB4/0/21:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 17
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB4/0/21:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 17
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB4/0/22:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 19
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB4/0/22:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 19
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB4/0/23:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 25
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB4/0/23:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 25
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB4/0/24:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 27
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB4/0/24:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 27
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB4/0/25:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 33
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB4/0/25:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 33
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB4/0/26:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 35
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB4/0/26:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 35
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB4/0/27:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 41
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB4/0/27:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 41
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB4/0/28:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 43
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB4/0/28:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 43
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB4/0/29:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 49
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB4/0/29:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 49
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB4/0/30:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 51
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB4/0/30:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 51
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB4/0/31:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 57
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB4/0/31:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 57
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB4/0/32:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 59
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB4/0/32:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 59
         }
@@ -1963,385 +1963,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB2/0/1:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 4
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB2/0/1:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 4
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB2/0/2:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 6
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB2/0/2:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 6
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB2/0/3:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 12
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB2/0/3:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 12
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB2/0/4:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 14
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB2/0/4:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 14
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB2/0/5:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 20
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB2/0/5:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 20
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB2/0/6:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 22
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB2/0/6:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 22
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB2/0/7:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 28
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB2/0/7:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 28
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB2/0/8:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 30
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB2/0/8:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 30
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB2/0/9:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 36
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB2/0/9:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 36
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB2/0/10:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 38
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB2/0/10:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 38
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB2/0/11:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 44
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB2/0/11:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 44
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB2/0/12:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 46
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB2/0/12:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 46
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB2/0/13:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 52
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB2/0/13:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 52
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB2/0/14:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 54
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB2/0/14:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 54
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB2/0/15:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 60
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB2/0/15:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 60
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB2/0/16:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 62
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB2/0/16:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 62
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB2/0/17:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 5
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB2/0/17:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 5
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB2/0/18:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 7
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB2/0/18:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 7
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB2/0/19:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 13
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB2/0/19:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 13
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB2/0/20:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 15
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB2/0/20:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 15
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB2/0/21:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 21
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB2/0/21:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 21
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB2/0/22:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 23
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB2/0/22:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 23
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB2/0/23:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 29
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB2/0/23:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 29
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB2/0/24:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 31
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB2/0/24:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 31
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB2/0/25:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 37
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB2/0/25:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 37
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB2/0/26:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 39
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB2/0/26:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 39
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB2/0/27:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 45
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB2/0/27:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 45
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB2/0/28:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 47
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB2/0/28:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 47
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB2/0/29:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 53
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB2/0/29:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 53
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB2/0/30:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 55
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB2/0/30:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 55
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB2/0/31:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 61
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB2/0/31:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 61
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB2/0/32:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 63
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB2/0/32:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 63
         }
@@ -2354,385 +2354,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB3/0/1:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 4
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB3/0/1:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 4
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB3/0/2:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 6
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB3/0/2:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 6
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB3/0/3:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 12
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB3/0/3:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 12
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB3/0/4:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 14
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB3/0/4:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 14
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB3/0/5:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 20
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB3/0/5:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 20
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB3/0/6:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 22
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB3/0/6:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 22
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB3/0/7:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 28
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB3/0/7:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 28
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB3/0/8:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 30
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB3/0/8:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 30
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB3/0/9:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 36
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB3/0/9:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 36
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB3/0/10:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 38
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB3/0/10:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 38
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB3/0/11:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 44
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB3/0/11:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 44
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB3/0/12:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 46
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB3/0/12:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 46
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB3/0/13:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 52
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB3/0/13:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 52
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB3/0/14:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 54
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB3/0/14:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 54
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB3/0/15:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 60
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB3/0/15:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 60
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB3/0/16:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 62
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB3/0/16:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 62
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB3/0/17:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 5
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB3/0/17:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 5
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB3/0/18:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 7
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB3/0/18:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 7
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB3/0/19:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 13
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB3/0/19:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 13
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB3/0/20:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 15
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB3/0/20:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 15
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB3/0/21:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 21
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB3/0/21:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 21
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB3/0/22:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 23
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB3/0/22:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 23
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB3/0/23:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 29
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB3/0/23:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 29
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB3/0/24:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 31
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB3/0/24:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 31
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB3/0/25:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 37
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB3/0/25:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 37
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB3/0/26:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 39
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB3/0/26:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 39
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB3/0/27:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 45
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB3/0/27:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 45
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB3/0/28:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 47
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB3/0/28:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 47
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB3/0/29:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 53
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB3/0/29:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 53
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB3/0/30:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 55
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB3/0/30:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 55
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB3/0/31:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 61
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB3/0/31:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 61
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB3/0/32:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 63
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB3/0/32:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 63
         }
@@ -2745,385 +2745,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB4/0/1:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 4
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB4/0/1:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 4
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB4/0/2:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 6
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB4/0/2:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 6
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB4/0/3:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 12
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB4/0/3:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 12
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB4/0/4:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 14
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB4/0/4:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 14
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB4/0/5:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 20
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB4/0/5:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 20
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB4/0/6:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 22
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB4/0/6:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 22
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB4/0/7:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 28
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB4/0/7:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 28
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB4/0/8:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 30
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB4/0/8:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 30
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB4/0/9:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 36
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB4/0/9:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 36
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB4/0/10:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 38
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB4/0/10:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 38
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB4/0/11:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 44
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB4/0/11:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 44
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB4/0/12:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 46
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB4/0/12:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 46
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB4/0/13:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 52
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB4/0/13:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 52
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB4/0/14:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 54
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB4/0/14:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 54
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB4/0/15:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 60
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB4/0/15:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 60
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB4/0/16:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 62
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB4/0/16:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 62
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB4/0/17:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 5
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB4/0/17:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 5
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB4/0/18:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 7
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB4/0/18:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 7
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB4/0/19:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 13
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB4/0/19:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 13
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB4/0/20:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 15
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB4/0/20:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 15
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB4/0/21:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 21
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB4/0/21:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 21
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB4/0/22:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 23
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB4/0/22:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 23
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB4/0/23:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 29
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB4/0/23:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 29
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB4/0/24:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 31
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB4/0/24:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 31
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB4/0/25:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 37
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB4/0/25:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 37
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB4/0/26:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 39
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB4/0/26:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 39
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB4/0/27:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 45
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB4/0/27:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 45
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB4/0/28:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 47
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB4/0/28:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 47
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB4/0/29:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 53
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB4/0/29:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 53
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB4/0/30:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 55
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB4/0/30:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 55
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB4/0/31:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 61
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB4/0/31:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 61
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB4/0/32:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 63
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB4/0/32:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 63
         }
@@ -3527,385 +3527,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB2/0/1:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 64
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB2/0/1:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 64
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB2/0/2:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 66
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB2/0/2:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 66
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB2/0/3:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 72
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB2/0/3:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 72
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB2/0/4:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 74
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB2/0/4:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 74
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB2/0/5:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 80
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB2/0/5:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 80
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB2/0/6:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 82
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB2/0/6:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 82
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB2/0/7:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 88
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB2/0/7:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 88
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB2/0/8:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 90
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB2/0/8:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 90
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB2/0/9:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 96
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB2/0/9:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 96
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB2/0/10:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 98
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB2/0/10:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 98
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB2/0/11:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 104
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB2/0/11:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 104
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB2/0/12:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 106
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB2/0/12:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 106
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB2/0/13:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 112
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB2/0/13:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 112
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB2/0/14:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 114
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB2/0/14:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 114
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB2/0/15:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 120
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB2/0/15:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 120
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB2/0/16:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 122
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB2/0/16:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 122
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB2/0/17:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 65
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB2/0/17:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 65
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB2/0/18:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 67
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB2/0/18:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 67
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB2/0/19:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 73
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB2/0/19:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 73
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB2/0/20:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 75
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB2/0/20:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 75
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB2/0/21:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 81
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB2/0/21:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 81
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB2/0/22:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 83
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB2/0/22:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 83
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB2/0/23:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 89
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB2/0/23:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 89
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB2/0/24:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 91
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB2/0/24:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 91
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB2/0/25:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 97
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB2/0/25:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 97
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB2/0/26:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 99
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB2/0/26:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 99
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB2/0/27:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 105
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB2/0/27:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 105
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB2/0/28:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 107
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB2/0/28:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 107
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB2/0/29:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 113
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB2/0/29:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 113
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB2/0/30:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 115
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB2/0/30:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 115
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB2/0/31:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 121
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB2/0/31:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 121
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB2/0/32:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 123
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB2/0/32:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 123
         }
@@ -3918,385 +3918,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB3/0/1:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 64
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB3/0/1:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 64
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB3/0/2:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 66
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB3/0/2:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 66
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB3/0/3:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 72
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB3/0/3:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 72
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB3/0/4:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 74
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB3/0/4:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 74
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB3/0/5:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 80
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB3/0/5:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 80
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB3/0/6:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 82
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB3/0/6:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 82
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB3/0/7:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 88
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB3/0/7:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 88
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB3/0/8:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 90
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB3/0/8:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 90
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB3/0/9:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 96
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB3/0/9:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 96
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB3/0/10:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 98
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB3/0/10:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 98
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB3/0/11:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 104
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB3/0/11:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 104
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB3/0/12:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 106
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB3/0/12:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 106
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB3/0/13:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 112
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB3/0/13:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 112
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB3/0/14:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 114
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB3/0/14:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 114
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB3/0/15:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 120
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB3/0/15:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 120
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB3/0/16:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 122
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB3/0/16:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 122
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB3/0/17:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 65
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB3/0/17:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 65
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB3/0/18:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 67
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB3/0/18:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 67
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB3/0/19:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 73
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB3/0/19:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 73
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB3/0/20:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 75
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB3/0/20:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 75
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB3/0/21:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 81
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB3/0/21:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 81
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB3/0/22:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 83
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB3/0/22:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 83
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB3/0/23:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 89
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB3/0/23:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 89
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB3/0/24:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 91
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB3/0/24:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 91
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB3/0/25:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 97
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB3/0/25:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 97
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB3/0/26:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 99
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB3/0/26:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 99
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB3/0/27:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 105
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB3/0/27:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 105
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB3/0/28:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 107
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB3/0/28:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 107
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB3/0/29:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 113
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB3/0/29:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 113
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB3/0/30:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 115
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB3/0/30:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 115
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB3/0/31:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 121
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB3/0/31:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 121
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB3/0/32:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 123
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB3/0/32:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 123
         }
@@ -4309,385 +4309,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB4/0/1:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 64
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB4/0/1:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 64
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB4/0/2:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 66
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB4/0/2:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 66
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB4/0/3:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 72
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB4/0/3:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 72
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB4/0/4:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 74
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB4/0/4:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 74
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB4/0/5:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 80
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB4/0/5:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 80
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB4/0/6:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 82
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB4/0/6:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 82
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB4/0/7:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 88
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB4/0/7:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 88
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB4/0/8:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 90
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB4/0/8:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 90
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB4/0/9:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 96
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB4/0/9:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 96
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB4/0/10:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 98
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB4/0/10:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 98
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB4/0/11:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 104
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB4/0/11:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 104
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB4/0/12:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 106
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB4/0/12:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 106
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB4/0/13:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 112
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB4/0/13:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 112
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB4/0/14:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 114
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB4/0/14:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 114
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB4/0/15:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 120
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB4/0/15:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 120
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB4/0/16:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 122
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB4/0/16:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 122
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB4/0/17:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 65
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB4/0/17:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 65
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB4/0/18:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 67
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB4/0/18:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 67
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB4/0/19:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 73
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB4/0/19:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 73
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB4/0/20:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 75
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB4/0/20:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 75
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB4/0/21:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 81
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB4/0/21:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 81
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB4/0/22:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 83
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB4/0/22:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 83
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB4/0/23:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 89
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB4/0/23:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 89
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB4/0/24:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 91
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB4/0/24:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 91
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB4/0/25:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 97
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB4/0/25:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 97
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB4/0/26:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 99
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB4/0/26:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 99
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB4/0/27:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 105
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB4/0/27:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 105
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB4/0/28:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 107
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB4/0/28:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 107
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB4/0/29:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 113
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB4/0/29:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 113
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB4/0/30:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 115
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB4/0/30:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 115
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB4/0/31:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 121
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB4/0/31:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 121
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB4/0/32:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 123
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB4/0/32:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 123
         }
@@ -5091,385 +5091,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB2/0/1:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 68
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB2/0/1:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 68
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB2/0/2:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 70
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB2/0/2:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 70
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB2/0/3:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 76
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB2/0/3:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 76
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB2/0/4:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 78
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB2/0/4:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 78
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB2/0/5:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 84
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB2/0/5:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 84
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB2/0/6:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 86
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB2/0/6:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 86
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB2/0/7:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 92
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB2/0/7:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 92
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB2/0/8:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 94
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB2/0/8:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 94
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB2/0/9:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 100
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB2/0/9:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 100
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB2/0/10:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 102
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB2/0/10:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 102
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB2/0/11:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 108
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB2/0/11:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 108
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB2/0/12:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 110
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB2/0/12:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 110
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB2/0/13:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 116
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB2/0/13:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 116
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB2/0/14:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 118
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB2/0/14:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 118
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB2/0/15:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 124
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB2/0/15:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 124
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB2/0/16:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 126
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB2/0/16:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 126
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB2/0/17:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 69
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB2/0/17:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 69
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB2/0/18:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 71
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB2/0/18:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 71
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB2/0/19:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 77
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB2/0/19:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 77
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB2/0/20:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 79
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB2/0/20:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 79
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB2/0/21:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 85
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB2/0/21:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 85
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB2/0/22:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 87
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB2/0/22:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 87
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB2/0/23:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 93
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB2/0/23:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 93
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB2/0/24:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 95
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB2/0/24:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 95
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB2/0/25:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 101
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB2/0/25:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 101
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB2/0/26:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 103
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB2/0/26:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 103
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB2/0/27:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 109
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB2/0/27:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 109
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB2/0/28:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 111
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB2/0/28:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 111
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB2/0/29:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 117
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB2/0/29:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 117
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB2/0/30:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 119
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB2/0/30:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 119
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB2/0/31:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 125
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB2/0/31:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 125
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB2/0/32:1",
           "peer_node_label": "type:l2_sw|index:2|chip:1",
           "peer_port_id": 127
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB2/0/32:2",
           "peer_node_label": "type:l2_sw|index:2|chip:2",
           "peer_port_id": 127
         }
@@ -5482,385 +5482,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB3/0/1:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 68
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB3/0/1:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 68
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB3/0/2:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 70
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB3/0/2:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 70
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB3/0/3:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 76
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB3/0/3:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 76
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB3/0/4:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 78
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB3/0/4:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 78
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB3/0/5:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 84
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB3/0/5:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 84
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB3/0/6:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 86
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB3/0/6:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 86
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB3/0/7:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 92
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB3/0/7:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 92
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB3/0/8:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 94
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB3/0/8:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 94
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB3/0/9:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 100
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB3/0/9:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 100
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB3/0/10:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 102
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB3/0/10:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 102
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB3/0/11:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 108
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB3/0/11:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 108
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB3/0/12:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 110
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB3/0/12:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 110
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB3/0/13:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 116
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB3/0/13:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 116
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB3/0/14:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 118
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB3/0/14:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 118
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB3/0/15:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 124
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB3/0/15:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 124
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB3/0/16:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 126
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB3/0/16:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 126
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB3/0/17:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 69
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB3/0/17:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 69
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB3/0/18:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 71
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB3/0/18:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 71
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB3/0/19:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 77
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB3/0/19:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 77
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB3/0/20:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 79
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB3/0/20:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 79
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB3/0/21:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 85
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB3/0/21:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 85
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB3/0/22:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 87
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB3/0/22:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 87
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB3/0/23:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 93
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB3/0/23:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 93
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB3/0/24:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 95
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB3/0/24:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 95
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB3/0/25:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 101
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB3/0/25:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 101
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB3/0/26:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 103
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB3/0/26:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 103
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB3/0/27:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 109
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB3/0/27:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 109
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB3/0/28:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 111
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB3/0/28:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 111
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB3/0/29:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 117
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB3/0/29:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 117
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB3/0/30:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 119
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB3/0/30:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 119
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB3/0/31:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 125
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB3/0/31:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 125
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB3/0/32:1",
           "peer_node_label": "type:l2_sw|index:3|chip:1",
           "peer_port_id": 127
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB3/0/32:2",
           "peer_node_label": "type:l2_sw|index:3|chip:2",
           "peer_port_id": 127
         }
@@ -5873,385 +5873,385 @@
       "ports": [
         {
           "port_id": 64,
-          "port_name": "800GUB1/0/1:1",
+          "port_name": "800GUB4/0/1:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 68
         },
         {
           "port_id": 65,
-          "port_name": "800GUB1/0/1:2",
+          "port_name": "800GUB4/0/1:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 68
         },
         {
           "port_id": 66,
-          "port_name": "800GUB1/0/2:1",
+          "port_name": "800GUB4/0/2:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 70
         },
         {
           "port_id": 67,
-          "port_name": "800GUB1/0/2:2",
+          "port_name": "800GUB4/0/2:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 70
         },
         {
           "port_id": 68,
-          "port_name": "800GUB1/0/3:1",
+          "port_name": "800GUB4/0/3:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 76
         },
         {
           "port_id": 69,
-          "port_name": "800GUB1/0/3:2",
+          "port_name": "800GUB4/0/3:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 76
         },
         {
           "port_id": 70,
-          "port_name": "800GUB1/0/4:1",
+          "port_name": "800GUB4/0/4:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 78
         },
         {
           "port_id": 71,
-          "port_name": "800GUB1/0/4:2",
+          "port_name": "800GUB4/0/4:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 78
         },
         {
           "port_id": 72,
-          "port_name": "800GUB1/0/5:1",
+          "port_name": "800GUB4/0/5:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 84
         },
         {
           "port_id": 73,
-          "port_name": "800GUB1/0/5:2",
+          "port_name": "800GUB4/0/5:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 84
         },
         {
           "port_id": 74,
-          "port_name": "800GUB1/0/6:1",
+          "port_name": "800GUB4/0/6:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 86
         },
         {
           "port_id": 75,
-          "port_name": "800GUB1/0/6:2",
+          "port_name": "800GUB4/0/6:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 86
         },
         {
           "port_id": 76,
-          "port_name": "800GUB1/0/7:1",
+          "port_name": "800GUB4/0/7:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 92
         },
         {
           "port_id": 77,
-          "port_name": "800GUB1/0/7:2",
+          "port_name": "800GUB4/0/7:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 92
         },
         {
           "port_id": 78,
-          "port_name": "800GUB1/0/8:1",
+          "port_name": "800GUB4/0/8:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 94
         },
         {
           "port_id": 79,
-          "port_name": "800GUB1/0/8:2",
+          "port_name": "800GUB4/0/8:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 94
         },
         {
           "port_id": 80,
-          "port_name": "800GUB1/0/9:1",
+          "port_name": "800GUB4/0/9:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 100
         },
         {
           "port_id": 81,
-          "port_name": "800GUB1/0/9:2",
+          "port_name": "800GUB4/0/9:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 100
         },
         {
           "port_id": 82,
-          "port_name": "800GUB1/0/10:1",
+          "port_name": "800GUB4/0/10:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 102
         },
         {
           "port_id": 83,
-          "port_name": "800GUB1/0/10:2",
+          "port_name": "800GUB4/0/10:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 102
         },
         {
           "port_id": 84,
-          "port_name": "800GUB1/0/11:1",
+          "port_name": "800GUB4/0/11:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 108
         },
         {
           "port_id": 85,
-          "port_name": "800GUB1/0/11:2",
+          "port_name": "800GUB4/0/11:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 108
         },
         {
           "port_id": 86,
-          "port_name": "800GUB1/0/12:1",
+          "port_name": "800GUB4/0/12:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 110
         },
         {
           "port_id": 87,
-          "port_name": "800GUB1/0/12:2",
+          "port_name": "800GUB4/0/12:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 110
         },
         {
           "port_id": 88,
-          "port_name": "800GUB1/0/13:1",
+          "port_name": "800GUB4/0/13:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 116
         },
         {
           "port_id": 89,
-          "port_name": "800GUB1/0/13:2",
+          "port_name": "800GUB4/0/13:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 116
         },
         {
           "port_id": 90,
-          "port_name": "800GUB1/0/14:1",
+          "port_name": "800GUB4/0/14:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 118
         },
         {
           "port_id": 91,
-          "port_name": "800GUB1/0/14:2",
+          "port_name": "800GUB4/0/14:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 118
         },
         {
           "port_id": 92,
-          "port_name": "800GUB1/0/15:1",
+          "port_name": "800GUB4/0/15:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 124
         },
         {
           "port_id": 93,
-          "port_name": "800GUB1/0/15:2",
+          "port_name": "800GUB4/0/15:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 124
         },
         {
           "port_id": 94,
-          "port_name": "800GUB1/0/16:1",
+          "port_name": "800GUB4/0/16:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 126
         },
         {
           "port_id": 95,
-          "port_name": "800GUB1/0/16:2",
+          "port_name": "800GUB4/0/16:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 126
         },
         {
           "port_id": 96,
-          "port_name": "800GUB1/0/17:1",
+          "port_name": "800GUB4/0/17:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 69
         },
         {
           "port_id": 97,
-          "port_name": "800GUB1/0/17:2",
+          "port_name": "800GUB4/0/17:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 69
         },
         {
           "port_id": 98,
-          "port_name": "800GUB1/0/18:1",
+          "port_name": "800GUB4/0/18:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 71
         },
         {
           "port_id": 99,
-          "port_name": "800GUB1/0/18:2",
+          "port_name": "800GUB4/0/18:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 71
         },
         {
           "port_id": 100,
-          "port_name": "800GUB1/0/19:1",
+          "port_name": "800GUB4/0/19:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 77
         },
         {
           "port_id": 101,
-          "port_name": "800GUB1/0/19:2",
+          "port_name": "800GUB4/0/19:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 77
         },
         {
           "port_id": 102,
-          "port_name": "800GUB1/0/20:1",
+          "port_name": "800GUB4/0/20:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 79
         },
         {
           "port_id": 103,
-          "port_name": "800GUB1/0/20:2",
+          "port_name": "800GUB4/0/20:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 79
         },
         {
           "port_id": 104,
-          "port_name": "800GUB1/0/21:1",
+          "port_name": "800GUB4/0/21:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 85
         },
         {
           "port_id": 105,
-          "port_name": "800GUB1/0/21:2",
+          "port_name": "800GUB4/0/21:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 85
         },
         {
           "port_id": 106,
-          "port_name": "800GUB1/0/22:1",
+          "port_name": "800GUB4/0/22:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 87
         },
         {
           "port_id": 107,
-          "port_name": "800GUB1/0/22:2",
+          "port_name": "800GUB4/0/22:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 87
         },
         {
           "port_id": 108,
-          "port_name": "800GUB1/0/23:1",
+          "port_name": "800GUB4/0/23:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 93
         },
         {
           "port_id": 109,
-          "port_name": "800GUB1/0/23:2",
+          "port_name": "800GUB4/0/23:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 93
         },
         {
           "port_id": 110,
-          "port_name": "800GUB1/0/24:1",
+          "port_name": "800GUB4/0/24:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 95
         },
         {
           "port_id": 111,
-          "port_name": "800GUB1/0/24:2",
+          "port_name": "800GUB4/0/24:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 95
         },
         {
           "port_id": 112,
-          "port_name": "800GUB1/0/25:1",
+          "port_name": "800GUB4/0/25:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 101
         },
         {
           "port_id": 113,
-          "port_name": "800GUB1/0/25:2",
+          "port_name": "800GUB4/0/25:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 101
         },
         {
           "port_id": 114,
-          "port_name": "800GUB1/0/26:1",
+          "port_name": "800GUB4/0/26:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 103
         },
         {
           "port_id": 115,
-          "port_name": "800GUB1/0/26:2",
+          "port_name": "800GUB4/0/26:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 103
         },
         {
           "port_id": 116,
-          "port_name": "800GUB1/0/27:1",
+          "port_name": "800GUB4/0/27:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 109
         },
         {
           "port_id": 117,
-          "port_name": "800GUB1/0/27:2",
+          "port_name": "800GUB4/0/27:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 109
         },
         {
           "port_id": 118,
-          "port_name": "800GUB1/0/28:1",
+          "port_name": "800GUB4/0/28:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 111
         },
         {
           "port_id": 119,
-          "port_name": "800GUB1/0/28:2",
+          "port_name": "800GUB4/0/28:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 111
         },
         {
           "port_id": 120,
-          "port_name": "800GUB1/0/29:1",
+          "port_name": "800GUB4/0/29:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 117
         },
         {
           "port_id": 121,
-          "port_name": "800GUB1/0/29:2",
+          "port_name": "800GUB4/0/29:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 117
         },
         {
           "port_id": 122,
-          "port_name": "800GUB1/0/30:1",
+          "port_name": "800GUB4/0/30:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 119
         },
         {
           "port_id": 123,
-          "port_name": "800GUB1/0/30:2",
+          "port_name": "800GUB4/0/30:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 119
         },
         {
           "port_id": 124,
-          "port_name": "800GUB1/0/31:1",
+          "port_name": "800GUB4/0/31:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 125
         },
         {
           "port_id": 125,
-          "port_name": "800GUB1/0/31:2",
+          "port_name": "800GUB4/0/31:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 125
         },
         {
           "port_id": 126,
-          "port_name": "800GUB1/0/32:1",
+          "port_name": "800GUB4/0/32:1",
           "peer_node_label": "type:l2_sw|index:4|chip:1",
           "peer_port_id": 127
         },
         {
           "port_id": 127,
-          "port_name": "800GUB1/0/32:2",
+          "port_name": "800GUB4/0/32:2",
           "peer_node_label": "type:l2_sw|index:4|chip:2",
           "peer_port_id": 127
         }
