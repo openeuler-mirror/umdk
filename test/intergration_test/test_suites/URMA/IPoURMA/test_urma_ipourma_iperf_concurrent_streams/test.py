@@ -45,8 +45,8 @@ class Test(UBUSFeature):
             host.exec_cmd("pkill iperf3 || true")
 
         # Step 3: 循环测试不同并发级别
-        port = self.get_free_port()
         for p in parallel_levels:
+            port = self.get_free_port()
             b_val =  total_mbps / p
             server.exec_cmd(f"iperf3 -s -p {port}", background=True)
             time.sleep(2)
