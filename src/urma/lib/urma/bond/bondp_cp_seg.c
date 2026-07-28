@@ -611,13 +611,45 @@ static int bondp_import_seg_from_user_ext(bondp_context_t *bdp_ctx, urma_context
     const bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext_const(seg);
 
     bdp_tseg->skip_import_vseg = true;
-    if (seg_ext->len < sizeof(urma_bond_seg_ext_t)) {
+    if (seg_ext->len < sizeof(urma_bond_seg_ext_v0_t)) {
         URMA_LOG_ERR("Invalid seg ext length=%u.\n", seg_ext->len);
         return -1;
     }
 
-    const urma_bond_seg_ext_t *bond_ext = (const urma_bond_seg_ext_t *)seg_ext->data;
-    (void)memcpy(&udata_out->peer_p_seg, bond_ext->peer_p_seg, sizeof(udata_out->peer_p_seg));
+    const urma_bond_seg_ext_v0_t *bond_ext = (const urma_bond_seg_ext_v0_t *)seg_ext->data;
+    size_t required = sizeof(urma_bond_seg_ext_v0_t) +
+                      sizeof(bondp_seg_peer_ctx_t) * bond_ext->peer_cnt;
+    if (seg_ext->len < required) {
+        URMA_LOG_ERR("Invalid seg ext len=%u, required=%zu, peer_cnt=%u.\n",
+                     seg_ext->len, required, bond_ext->peer_cnt);
+        return -1;
+    }
+
+    (void)memset(udata_out->peer_p_seg, 0, sizeof(udata_out->peer_p_seg));
+    bool seen[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    for (uint32_t i = 0; i < bond_ext->peer_cnt; ++i) {
+        bondp_seg_peer_ctx_t entry = {0};
+        size_t off = sizeof(bondp_seg_peer_ctx_t) * i;
+        /* Use sizeof(*bond_ext) instead of bond_ext->data: avoid -Wstringop-overflow on data[0]. */
+        (void)memcpy(&entry, (const uint8_t *)bond_ext + sizeof(*bond_ext) + off, sizeof(entry));
+        if (entry.peer_idx >= URMA_UBAGG_DEV_MAX_NUM || seen[entry.peer_idx]) {
+            URMA_LOG_ERR("Invalid seg ext peer_idx=%u at %u.\n", entry.peer_idx, i);
+            return -1;
+        }
+        seen[entry.peer_idx] = true;
+
+        /* Reuse va/len/uasid/attr from outer vseg; adapt attr to match pseg register. */
+        urma_seg_base_t *peer = &udata_out->peer_p_seg[entry.peer_idx];
+        peer->ubva.eid = entry.eid;
+        peer->ubva.uasid = seg->ubva.uasid;
+        peer->ubva.va = seg->ubva.va;
+        peer->len = seg->len;
+        peer->attr = seg->attr;
+        peer->attr.bs.has_user_info = 0;
+        peer->attr.bs.user_token_id = URMA_TOKEN_ID_INVALID;
+        peer->token_id = entry.token_id;
+    }
+
     bondp_fill_v_tseg(&bdp_tseg->v_tseg, seg, addr, 0, ctx);
 
     urma_eid_t dst_eid = seg->ubva.eid;

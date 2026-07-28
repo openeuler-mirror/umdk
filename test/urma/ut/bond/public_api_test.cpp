@@ -1411,8 +1411,9 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     EXPECT_EQ(1U, jettyExt->target_ctx_cnt);
     EXPECT_NE(0U, jettyExt->mask & BONDP_RJETTY_EXT_MASK_LOCAL_CTX);
     EXPECT_NE(0U, jettyExt->mask & BONDP_RJETTY_EXT_MASK_TARGET_CTX);
-    auto *targetEntry = reinterpret_cast<bondp_rjetty_target_ctx_t *>(jettyExt->data + 1);
-    EXPECT_EQ(0U, targetEntry->target_idx);
+    bondp_rjetty_target_ctx_t targetEntry = {};
+    std::memcpy(&targetEntry, jettyExt->data + 1, sizeof(targetEntry));
+    EXPECT_EQ(0U, targetEntry.target_idx);
     std::free(rjetty);
 
     inputTseg.v_tseg.urma_ctx = &fixture.ctx.v_ctx;
@@ -1426,9 +1427,14 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     ASSERT_NE(nullptr, seg);
     EXPECT_TRUE(bondp_seg_has_user_info(seg));
     auto *segPrivExt = bondp_seg_get_priv_ext(seg);
-    EXPECT_EQ(sizeof(urma_bond_seg_ext_t), segPrivExt->len);
-    auto *segExt = reinterpret_cast<urma_bond_seg_ext_t *>(segPrivExt->data);
-    EXPECT_EQ(0x55U, segExt->peer_p_seg[0].token_id);
+    EXPECT_EQ(sizeof(urma_bond_seg_ext_v0_t) + sizeof(bondp_seg_peer_ctx_t), segPrivExt->len);
+    auto *segExt = reinterpret_cast<urma_bond_seg_ext_v0_t *>(segPrivExt->data);
+    EXPECT_EQ(0U, segExt->version);
+    EXPECT_EQ(1U, segExt->peer_cnt);
+    bondp_seg_peer_ctx_t entry = {};
+    std::memcpy(&entry, segExt->data, sizeof(entry));
+    EXPECT_EQ(0U, entry.peer_idx);
+    EXPECT_EQ(0x55U, entry.token_id);
     std::free(seg);
 }
 

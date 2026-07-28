@@ -156,22 +156,61 @@ static int bondp_toggle_msn(urma_context_t *ctx, bool enable)
     return 0;
 }
 
-static int bondp_fill_seg_ext_from_tseg(const bondp_tseg_t *bdp_tseg, urma_bond_seg_ext_t *ext)
+static inline size_t bondp_calc_seg_ext_len(uint32_t peer_cnt)
 {
-    if (bdp_tseg == NULL || bdp_tseg->bondp_ctx == NULL) {
+    return sizeof(urma_bond_seg_ext_v0_t) + sizeof(bondp_seg_peer_ctx_t) * peer_cnt;
+}
+
+static inline void bondp_set_seg_peer_ctx_entry(urma_bond_seg_ext_v0_t *ext, uint32_t idx,
+                                                const bondp_seg_peer_ctx_t *entry)
+{
+    size_t off = sizeof(bondp_seg_peer_ctx_t) * idx;
+    /* Use sizeof(*ext) instead of ext->data: GCC -Wstringop-overflow treats data[0] as size 0. */
+    (void)memcpy((uint8_t *)ext + sizeof(*ext) + off, entry, sizeof(*entry));
+}
+
+static int bondp_fill_seg_ext_from_tseg(const bondp_tseg_t *bdp_tseg, urma_bond_seg_ext_v0_t *ext,
+                                        size_t ext_len)
+{
+    if (bdp_tseg == NULL || bdp_tseg->bondp_ctx == NULL || ext == NULL) {
         return -EINVAL;
     }
 
-    ext->version = 0;
-    ext->mask = 0;
-    (void)memset(ext->peer_p_seg, 0, sizeof(ext->peer_p_seg));
-
+    uint32_t peer_cnt = 0;
+    uint32_t v_uasid = bdp_tseg->v_tseg.seg.ubva.uasid;
     for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
         urma_target_seg_t *p_tseg = bdp_tseg->p_tseg[local_idx];
         if (p_tseg == NULL) {
             continue;
         }
-        bondp_seg_to_base(&p_tseg->seg, &ext->peer_p_seg[local_idx]);
+        if (p_tseg->seg.ubva.uasid != v_uasid) {
+            URMA_LOG_ERR("pseg uasid mismatch, idx=%u, p_uasid=%u, v_uasid=%u.\n",
+                         local_idx, p_tseg->seg.ubva.uasid, v_uasid);
+            return -EINVAL;
+        }
+        ++peer_cnt;
+    }
+    if (ext_len < bondp_calc_seg_ext_len(peer_cnt)) {
+        URMA_LOG_ERR("Invalid compact seg ext len=%zu, peer_cnt=%u.\n", ext_len, peer_cnt);
+        return -EINVAL;
+    }
+
+    ext->version = 0;
+    ext->mask = 0;
+    ext->peer_cnt = peer_cnt;
+
+    uint32_t n = 0;
+    for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
+        urma_target_seg_t *p_tseg = bdp_tseg->p_tseg[local_idx];
+        if (p_tseg == NULL) {
+            continue;
+        }
+        bondp_seg_peer_ctx_t entry = {0};
+        entry.peer_idx = (uint8_t)local_idx;
+        entry.eid = p_tseg->seg.ubva.eid;
+        entry.token_id = p_tseg->seg.token_id;
+        bondp_set_seg_peer_ctx_entry(ext, n, &entry);
+        ++n;
     }
     return 0;
 }
@@ -193,9 +232,17 @@ static int bondp_user_ctl_get_seg_ctx(urma_context_t *ctx, urma_user_ctl_in_t *i
 
     bondp_tseg_t *bdp_tseg = CONTAINER_OF_FIELD(tseg, bondp_tseg_t, v_tseg);
 
+    uint32_t peer_cnt = 0;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_tseg->p_tseg[i] != NULL) {
+            ++peer_cnt;
+        }
+    }
+    size_t ext_len = bondp_calc_seg_ext_len(peer_cnt);
+
     urma_seg_t *new_seg = (urma_seg_t *)calloc(1, sizeof(urma_seg_t) +
                                                       sizeof(bondp_seg_ext_priv_t) +
-                                                      sizeof(urma_bond_seg_ext_t));
+                                                      ext_len);
     if (new_seg == NULL) {
         URMA_LOG_ERR("Failed to alloc seg.\n");
         return -ENOMEM;
@@ -203,9 +250,9 @@ static int bondp_user_ctl_get_seg_ctx(urma_context_t *ctx, urma_user_ctl_in_t *i
 
     bondp_seg_set_user_info(new_seg, true);
     bondp_seg_ext_priv_t *seg_ext = bondp_seg_get_priv_ext(new_seg);
-    seg_ext->len = sizeof(urma_bond_seg_ext_t);
-    urma_bond_seg_ext_t *ext = (urma_bond_seg_ext_t *)seg_ext->data;
-    int ret = bondp_fill_seg_ext_from_tseg(bdp_tseg, ext);
+    seg_ext->len = (uint32_t)ext_len;
+    urma_bond_seg_ext_v0_t *ext = (urma_bond_seg_ext_v0_t *)seg_ext->data;
+    int ret = bondp_fill_seg_ext_from_tseg(bdp_tseg, ext, ext_len);
     if (ret != 0) {
         free(new_seg);
         return ret;
