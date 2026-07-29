@@ -13,8 +13,8 @@
 extern "C" {
 #endif
 
-#define TW_DEFAULT_TICK_MS  (10U)
-#define TW_DEFAULT_SLOT_NUM (512U)
+#define TW_DEFAULT_TICK_MS  (100U)
+#define TW_DEFAULT_SLOT_NUM (8192U)
 
 typedef uint64_t tw_task_id_t;
 

@@ -22,7 +22,7 @@ struct urma_bond_seg_info_out;
 struct urma_bond_id_info_out;
 
 #define BONDP_HC_DEFAULT_PROBE_INTERVAL_MS (1000)
-#define BONDP_HC_DEFAULT_PROBE_NODE_NUM    (1024)
+#define BONDP_HC_DEFAULT_BATCH_NODE_NUM    (8)
 
 typedef struct bondp_hc_cfg {
     /*
@@ -32,9 +32,9 @@ typedef struct bondp_hc_cfg {
     uint64_t probe_interval_ms;
     /*
      * Maximum nodes probed in one batch.
-     * Set to 0 to use BONDP_HC_DEFAULT_PROBE_NODE_NUM.
+     * Set to 0 to use BONDP_HC_DEFAULT_BATCH_NODE_NUM.
      */
-    uint32_t probe_node_num;
+    uint32_t batch_node_num;
 } bondp_hc_cfg_t;
 
 int bondp_hc_init(struct bondp_context *bdp_ctx, const bondp_hc_cfg_t *cfg);
