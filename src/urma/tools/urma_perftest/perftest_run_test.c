@@ -230,7 +230,7 @@ static inline void update_duration_state(perftest_context_t *ctx, perftest_confi
 
 static inline uint64_t get_remote_seg_va(const perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t i)
 {
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_seg_duplex != NULL) {
         return ctx->remote_seg_duplex[i]->ubva.va;
     }
     return ctx->remote_seg[i].ubva.va;
