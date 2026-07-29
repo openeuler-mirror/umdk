@@ -414,6 +414,7 @@ static int bondp_hc_init_from_env(bondp_context_t *bdp_ctx)
 {
     bondp_hc_cfg_t cfg = {
         .probe_interval_ms = g_bondp_env.health_check_interval_ms,
+        .batch_node_num = g_bondp_env.health_check_batch_node_num,
     };
     return bondp_hc_init(bdp_ctx, &cfg);
 }
