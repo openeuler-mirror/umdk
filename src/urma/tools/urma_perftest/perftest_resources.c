@@ -1447,7 +1447,7 @@ static int create_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
                 ? ctx->jfs[i]->jfs_id.eid
                 : ctx->jetty[i]->jetty_id.eid;
         tp_cfg.peer_eid =
-            cfg->jetty_mode == PERFTEST_JETTY_DUPLEX
+            (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX && ctx->remote_rjetty != NULL)
                 ? ctx->remote_rjetty[i]->jetty_id.eid
                 : ctx->remote_jetty_id[i].eid;
         uint32_t tp_cnt = 1;
@@ -1555,8 +1555,11 @@ free_buf:
 static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     int ret;
-
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    /* Bonding DUPLEX uses variable-length delegated sync; single-device DUPLEX
+     * falls back to fixed-length sync for interop with older binaries. */
+    bool is_bonding_duplex = (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) &&
+                             perftest_is_bonding_dev(ctx->urma_ctx->dev->name);
+    if (is_bonding_duplex) {
         ret = exchange_seg_ctx(ctx, cfg);
     } else {
         ret = exchange_seg_info(ctx, cfg);
@@ -1566,7 +1569,7 @@ static int exchange_connection_info(perftest_context_t *ctx, perftest_config_t *
         return -1;
     }
 
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (is_bonding_duplex) {
         ret = exchange_rjetty(ctx, cfg);
     } else {
         ret = exchange_jetty_id(ctx, cfg);
@@ -1607,13 +1610,13 @@ create_tp_info_fail:
 exchange_notify_fail:
     free_remote_credit(ctx);
 exchange_credit_fail:
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_rjetty != NULL) {
         free_remote_rjetty(ctx, cfg);
     } else {
         free_remote_jetty(ctx);
     }
 exchange_jetty_id_fail:
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_seg_duplex != NULL) {
         free_remote_seg_duplex(ctx, cfg);
     } else {
         free_remote_seg(ctx);
@@ -1627,11 +1630,14 @@ static void destroy_connection_info(perftest_context_t *ctx, const perftest_conf
     free_tp_info(ctx);
     free_remote_notify(ctx);
     free_remote_credit(ctx);
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_seg_duplex != NULL) {
         free_remote_seg_duplex(ctx, cfg);
-        free_remote_rjetty(ctx, cfg);
     } else {
         free_remote_seg(ctx);
+    }
+    if (ctx->remote_rjetty != NULL) {
+        free_remote_rjetty(ctx, cfg);
+    } else {
         free_remote_jetty(ctx);
     }
 }
@@ -1788,7 +1794,10 @@ static int import_seg_for_duplex(perftest_context_t *ctx, perftest_config_t *cfg
     }
 
     for (i = 0; i < (int)ctx->jetty_num; i++) {
-        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, ctx->remote_seg_duplex[i], &g_perftest_token, 0, flag);
+        urma_seg_t *remote_seg = (ctx->remote_seg_duplex != NULL)
+                                     ? ctx->remote_seg_duplex[i]
+                                     : &ctx->remote_seg[i];
+        ctx->import_tseg[i] = urma_import_seg(ctx->urma_ctx, remote_seg, &g_perftest_token, 0, flag);
         if (ctx->import_tseg[i] == NULL) {
             LOG_ERROR("Failed to import seg, loop:%d!\n", i);
             goto unimp_dup_seg;
@@ -1978,10 +1987,25 @@ static void disconnect_jetty_default(perftest_context_t *ctx, const perftest_con
     }
 }
 
+/* Return remote rjetty for jetty[i], or build a stack one from remote_jetty_id. */
+static urma_rjetty_t *get_remote_rjetty(perftest_context_t *ctx, const perftest_config_t *cfg,
+                                        uint32_t i, urma_rjetty_t *buf)
+{
+    if (ctx->remote_rjetty != NULL) {
+        return ctx->remote_rjetty[i];
+    }
+    buf->jetty_id = ctx->remote_jetty_id[i];
+    buf->trans_mode = cfg->trans_mode;
+    buf->type = URMA_JETTY;
+    buf->flag.bs.order_type = cfg->order_type;
+    return buf;
+}
+
 static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
-        urma_rjetty_t *rjetty = ctx->remote_rjetty[i];
+        urma_rjetty_t rjetty_buf = {0};
+        urma_rjetty_t *rjetty = get_remote_rjetty(ctx, cfg, i, &rjetty_buf);
 
         if (cfg->use_ctp) {
             rjetty->tp_type = URMA_CTP;
@@ -2048,7 +2072,8 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
             active_cfg.tp_attr.rx_psn = ctx->remote_tp_info[i].psn;
         }
 
-        urma_rjetty_t *rjetty = ctx->remote_rjetty[i];
+        urma_rjetty_t rjetty_buf = {0};
+        urma_rjetty_t *rjetty = get_remote_rjetty(ctx, cfg, i, &rjetty_buf);
         if (rjetty->trans_mode == URMA_TM_RC &&
             (rjetty->flag.bs.order_type == URMA_OT)) {
             rjetty->flag.bs.share_tp = 1;
@@ -2160,7 +2185,8 @@ static int connect_jetty_async(perftest_context_t *ctx, perftest_config_t *cfg)
     expected = 0;
     waited = 0;
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
-        urma_rjetty_t *rjetty = ctx->remote_rjetty[i];
+        urma_rjetty_t rjetty_buf = {0};
+        urma_rjetty_t *rjetty = get_remote_rjetty(ctx, cfg, i, &rjetty_buf);
         if (rjetty->trans_mode == URMA_TM_RC &&
             (rjetty->flag.bs.order_type == URMA_OT)) {
             rjetty->flag.bs.share_tp = 1;
@@ -2261,6 +2287,9 @@ static int modify_user_tp(perftest_context_t *ctx, perftest_config_t *cfg);
 
 int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
 {
+    bool is_bonding_duplex = (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) &&
+                             perftest_is_bonding_dev(ctx->urma_ctx->dev->name);
+
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
         disconnect_jfr(ctx, cfg);
     } else {
@@ -2268,7 +2297,7 @@ int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
     }
     free_remote_tp_info(ctx);
     free_tp_info(ctx);
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_rjetty != NULL) {
         free_remote_rjetty(ctx, cfg);
     } else {
         free_remote_jetty(ctx);
@@ -2292,7 +2321,7 @@ int recreate_jetty(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
 
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (is_bonding_duplex) {
         if (exchange_rjetty(ctx, cfg) != 0) {
             LOG_ERROR("Failed to exchange rjetty!\n");
             goto free_jetty_info;
@@ -2346,7 +2375,7 @@ free_remote_tp:
 free_tp:
     free_tp_info(ctx);
 free_jetty_info:
-    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+    if (ctx->remote_rjetty != NULL) {
         free_remote_rjetty(ctx, cfg);
     } else {
         free_remote_jetty(ctx);
@@ -2778,8 +2807,11 @@ static int modify_user_tp(perftest_context_t *ctx, perftest_config_t *cfg)
     urma_tp_attr_mask_t mask = {0};
     mask.value = 0xffffffff;
     urma_net_addr_info_t net_addr = {0};
+    urma_eid_t peer_eid = (ctx->remote_rjetty != NULL)
+                              ? ctx->remote_rjetty[0]->jetty_id.eid
+                              : ctx->remote_jetty_id[0].eid;
     (void)find_net_addr_by_eid(ctx->remote_user_tp->net_addr_list, ctx->remote_user_tp->net_addr_cnt,
-                               ctx->remote_rjetty[0]->jetty_id.eid, &net_addr);
+                               peer_eid, &net_addr);
 
     for (uint32_t i = 0; i < cfg->jettys; i++) {
         uint32_t tpn = ctx->user_tp[i].attr.peer_tpn;
