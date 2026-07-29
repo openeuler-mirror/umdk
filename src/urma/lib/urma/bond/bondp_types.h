@@ -215,6 +215,8 @@ typedef struct bondp_comp {
     // send
     bool modify_to_error;
     pthread_spinlock_t send_lock;
+    uint32_t max_send_sge;
+    uint32_t max_send_rsge;
     wr_buf_t send_wr_buf;
 #ifndef __cplusplus
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
@@ -231,6 +233,7 @@ typedef struct bondp_comp {
     std::atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #endif
     // recv
+    uint32_t max_recv_sge;
     wr_buf_t recv_wr_buf;
     uint32_t rqe_cnt[URMA_UBAGG_DEV_MAX_NUM];
 } bondp_comp_t;
