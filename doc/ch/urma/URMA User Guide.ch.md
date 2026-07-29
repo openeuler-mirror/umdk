@@ -755,6 +755,8 @@ urma异常场景
 
 应用删除某个对象（例如JFS，JFR，JFC，Jetty）之前，如果获得过该对象产生的异常事件时，必须调用确认异常接口（urma_ack_async_event），然后才能删除该对象。
 
+> **UDMA 资源销毁限制**：当前不支持在数据面通信仍在进行时删除 Jetty、注销 Segment 或复位 UDMA 设备。执行上述操作前，必须停止相关数据面通信，并确认所有相关传输操作均已完成。
+
 4.  使用说明
 
 （1）用户调用urma_get_async_event接口获取异常事件；
@@ -2530,5 +2532,3 @@ URMA北向接口内存权限配置与UB协议定义保持一致，采用如下�
 # 10 URMA 生态迁移 skill
 
 **verbs-to-urma-converter** 用于对基于 RDMA verbs (libibverbs) 的项目源码进行系统迁移改造，将其转换为 URMA API 实现。改造内容包括 API 替换、结构体字段更新、连接建立流程改造等，并通过单文件与项目级双层验证机制确保资源生命周期完整、语义正确。详见 [/skills/verbs-to-urma-converter](../../../skills/verbs-to-urma-converter/README.md)。
-
-> **UDMA 使用限制**：当前不支持在数据面通信未停止的过程中删除 Jetty、删除 Segment，或者对 UDMA 设备执行复位操作。执行上述操作前，请先停止相关数据面通信，并确认相关传输操作已完成。

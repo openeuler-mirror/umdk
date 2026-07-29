@@ -23,9 +23,9 @@ UMQ支持在UB模式下启用流量控制功能，根据对端UMQ的接收队列
 
 子UMQ信用统计信息结构体umq_credit_private_stats_t主要有以下关键信息：
 * queue_idle：当前本端接收队列已发布的信用数量
-* queue_be_allocted：当前本端作为接收方，为该队列已分配给对端的信用数
+* queue_be_allocated：当前本端作为接收方，为该队列已分配给对端的信用数
 * queue_acquired：当前本端作为发送方，为该队列持有的对端信用数
-* total_queue_idle：保留字段，始终为0
+* total_queue_idle：从启动至今，本端接收队列累计发布的信用总数
 * total_queue_acquired：从启动至今，本端为该队列累计持有的对端信用总数
 * total_queue_be_allocated：从启动至今，本端为该队列累计被分配的信用总数
 * total_queue_post_tx_success：本端作为发送方，成功发送I/O请求（WR）累计次数
