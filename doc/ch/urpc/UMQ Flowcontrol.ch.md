@@ -22,7 +22,7 @@ UMQ支持在UB模式下启用流量控制功能，根据对端UMQ的接收队列
 * total_pool_post_rx_err：不合法（会导致pool_idle统计溢出）信用总数
 
 子UMQ信用统计信息结构体umq_credit_private_stats_t主要有以下关键信息：
-* queue_idle：保留字段，始终为0
+* queue_idle：当前本端接收队列已发布的信用数量
 * queue_be_allocted：当前本端作为接收方，为该队列已分配给对端的信用数
 * queue_acquired：当前本端作为发送方，为该队列持有的对端信用数
 * total_queue_idle：保留字段，始终为0
