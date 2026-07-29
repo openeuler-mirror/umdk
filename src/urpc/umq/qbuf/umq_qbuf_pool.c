@@ -838,8 +838,9 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     g_qbuf_pool.base.support_without_data = true;
     g_qbuf_pool.base.fetch_fn = normal_qbuf_base_fetch;
     g_qbuf_pool.base.self_shrink_fn = normal_qbuf_base_self_shrink;
-    uint32_t split_extra_header_count = cfg->disable_scale_cap ? UMQ_EMPTY_HEADER_COEFFICIENT : 0;
-    int ret = qbuf_pool_base_init(&g_qbuf_pool.base, cfg, split_extra_header_count);
+    uint64_t head_without_data_count = UMQ_EMPTY_HEADER_COEFFICIENT * (cfg->expansion_block_count == 0 ?
+        QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count);
+    int ret = qbuf_pool_base_init(&g_qbuf_pool.base, cfg, head_without_data_count);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }
@@ -855,12 +856,9 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     if (cfg->mode == UMQ_BUF_SPLIT) {
         g_qbuf_pool.ext_header_buffer = g_qbuf_pool.base.header_buffer +
             g_qbuf_pool.base.total_block_num * sizeof(umq_buf_t);
-        if (cfg->disable_scale_cap) {
-            uint64_t head_without_data_count = g_qbuf_pool.base.total_block_num * UMQ_EMPTY_HEADER_COEFFICIENT;
-            buf_init_with_mode(NULL, g_qbuf_pool.ext_header_buffer, head_without_data_count, 0,
-                UMQ_QBUF_DEFAULT_MEMPOOL_ID, false, UMQ_BUF_SPLIT, &g_qbuf_pool.base.block_pool.head_without_data);
-            g_qbuf_pool.base.block_pool.buf_cnt_without_data = head_without_data_count;
-        }
+        buf_init_with_mode(NULL, g_qbuf_pool.ext_header_buffer, head_without_data_count, 0,
+            UMQ_QBUF_DEFAULT_MEMPOOL_ID, false, UMQ_BUF_SPLIT, &g_qbuf_pool.base.block_pool.head_without_data);
+        g_qbuf_pool.base.block_pool.buf_cnt_without_data = head_without_data_count;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         g_qbuf_pool.ext_header_buffer = NULL;
     } else {
@@ -876,18 +874,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         goto EXPANSION_POOL_UNINIT;
     }
 
-    /* move without data expansion to control plane for reduce the first-packet I/O latency */
-    if (!cfg->disable_scale_cap && cfg->mode == UMQ_BUF_SPLIT) {
-        ret = expand_global_pool(false);
-        if (ret != UMQ_SUCCESS) {
-            goto UNINIT_KEY;
-        }
-    }
     return UMQ_SUCCESS;
-
-UNINIT_KEY:
-    (void)util_thread_key_delete(g_umq_qbuf_pool_key);
-    g_umq_qbuf_pool_key = NULL;
 
 EXPANSION_POOL_UNINIT:
     umq_qbuf_expansion_pool_uninit();
