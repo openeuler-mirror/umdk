@@ -61,6 +61,7 @@ typedef struct bondp_hc_node {
     struct bondp_target_jetty *hc_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     struct ub_list tjetty_list;
     uint8_t no_cqe_round[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+    bool probe_checked[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 } bondp_hc_node_t;
 
 /* Per-context health-check context */
@@ -200,10 +201,12 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     }
     atomic_store(&node->valid[local_idx][target_idx], ok);
     if (ok && !prev) {
+        URMA_LOG_INFO("Health probe link [%d, %d] recovered.\n", local_idx, target_idx);
         hc_set_tjetty_list_target_valid(node, local_idx, target_idx);
     }
 
     node->no_cqe_round[local_idx][target_idx] = 0;
+    node->probe_checked[local_idx][target_idx] = true;
 }
 
 static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
@@ -326,13 +329,29 @@ static void hc_probe_link(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node,
 
 static void hc_probe_node(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node)
 {
+    bool any_connected = false;
+    bool all_checked = true;
+
     pthread_rwlock_rdlock(&node->lock);
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         for (int j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             if (node->hc_tjetty[i][j] == NULL) {
                 continue;
             }
+            any_connected = true;
+            if (node->probe_checked[i][j]) {
+                continue;
+            }
+            all_checked = false;
             hc_probe_link(hc_ctx, node, i, j);
+        }
+    }
+
+    if (any_connected && all_checked) {
+        for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+            for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+                node->probe_checked[i][j] = false;
+            }
         }
     }
     pthread_rwlock_unlock(&node->lock);
@@ -390,6 +409,7 @@ static int hc_init_node(bondp_hc_node_t *node, uint32_t node_idx)
     ub_list_init(&node->tjetty_list);
     (void)memset(node->hc_tjetty, 0, sizeof(node->hc_tjetty));
     (void)memset(node->no_cqe_round, 0, sizeof(node->no_cqe_round));
+    (void)memset(node->probe_checked, 0, sizeof(node->probe_checked));
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
             atomic_store(&node->valid[i][j], true);
