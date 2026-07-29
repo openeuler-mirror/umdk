@@ -215,7 +215,7 @@ urma_status_t urma_init(urma_init_attr_t *conf)
 {
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
-        URMA_LOG_ERR("urma_init has been called before.\n");
+        URMA_LOG_WARN("urma_init has been called before.\n");
         return URMA_EEXIST;
     }
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
