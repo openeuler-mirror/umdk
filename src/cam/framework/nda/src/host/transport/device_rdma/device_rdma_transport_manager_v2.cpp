@@ -703,34 +703,34 @@ void RdmaTransportManagerV2::PrintHostInfo(AiQpRMAQueueInfo& copyInfo)
 bool RdmaTransportManagerV2::ReserveRdmaInfoSpace() noexcept
 {
     // reserve qp info space
-    if (qpInfo_ != nullptr) {
-        return true;
-    }
+    if (qpInfo_ == nullptr) {
+        void* ptr = nullptr;
+        auto oneQpSize = 2U * (sizeof(AiQpRMAWQ) + sizeof(AiQpRMACQ)) + sizeof(RdmaMemRegionInfo);
+        qpInfoSize_ = sizeof(AiQpRMAQueueInfo) + oneQpSize * rankCount_;
+        auto ret = DlAclApi::AclrtMalloc(&ptr, qpInfoSize_, 0);
+        if (ret != 0) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] allocate device size: " << qpInfoSize_ << ", failed: " << ret);
+            qpInfo_ = nullptr;
+            return false;
+        }
 
-    void* ptr = nullptr;
-    auto oneQpSize = 2U * (sizeof(AiQpRMAWQ) + sizeof(AiQpRMACQ)) + sizeof(RdmaMemRegionInfo);
-    qpInfoSize_ = sizeof(AiQpRMAQueueInfo) + oneQpSize * rankCount_;
-    auto ret = DlAclApi::AclrtMalloc(&ptr, qpInfoSize_, 0);
-    if (ret != 0) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] allocate device size: " << qpInfoSize_ << ", failed: " << ret);
-        return false;
+        qpInfo_ = (AiQpRMAQueueInfo*)ptr;
     }
-
-    qpInfo_ = (AiQpRMAQueueInfo*)ptr;
 
     // reserve atomic info space
-    if (atomicSharedMemory_ != nullptr) {
-        return true;
+    if (atomicSharedMemory_ == nullptr) {
+        void* ptr = nullptr;
+        uint32_t atomicSize = ATOMIC_MAX_NUM * sizeof(uint64_t) * rankCount_; // 128 是最大的 atomic 并发数
+        atomicSize = ALIGN_UP(atomicSize, MEMORY_ALIGNMENT);
+        auto ret = DlAclApi::AclrtMalloc(&ptr, atomicSize, 0);
+        if (ret != 0) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] allocate device atomic size: " << atomicSize << ", failed: " << ret);
+            atomicSharedMemory_ = nullptr;
+            return false;
+        }
+        atomicSharedMemory_ = ptr;
     }
 
-    uint32_t atomicSize = ATOMIC_MAX_NUM * sizeof(uint64_t) * rankCount_; // 128 是最大的 atomic 并发数
-    atomicSize = ALIGN_UP(atomicSize, MEMORY_ALIGNMENT);
-    ret = DlAclApi::AclrtMalloc(&atomicSharedMemory_, atomicSize, 0);
-    if (ret != 0) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] allocate device atomic size: " << atomicSize << ", failed: " << ret);
-        return false;
-    }
-    atomicLkey_ = 0;
     return true;
 }
 
