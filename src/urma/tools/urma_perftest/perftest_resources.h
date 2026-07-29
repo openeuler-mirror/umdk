@@ -23,6 +23,18 @@
 
 #define PERFTEST_ALIGN_CACHELINE(size, cache_line_size) (((size) > (cache_line_size)) ? ROUND_UP((size), (cache_line_size)) : (cache_line_size))
 
+/* True if dev_name is a bonding aggregation device. */
+static inline bool perftest_is_bonding_dev(const char *dev_name)
+{
+    if (dev_name == NULL) {
+        return false;
+    }
+    if (strnlen(dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
+        return false;
+    }
+    return memcmp(dev_name, "bonding_dev", strlen("bonding_dev")) == 0;
+}
+
 typedef enum duration_states {
     WARMUP_STATE,
     START_STATE,
