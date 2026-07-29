@@ -135,9 +135,11 @@ static urma_status_t post_send_check_jfs_wr_valid(const bondp_comp_t *bdp_send_c
         case URMA_OPC_SEND:
         case URMA_OPC_SEND_IMM:
         case URMA_OPC_SEND_INVALIDATE:
-            /* No need to handle cases where num_sge == 0 or sge == NULL;
-               UDMA will take care of it, as SEND_WITH_IMM may allow NULL to be passed.
-            */
+            /* No need to reject zero-SGE SEND; underlying hardware may support it. */
+            if (wr->send.src.num_sge != 0 && wr->send.src.sge == NULL) {
+                URMA_LOG_ERR("when set send_wr, num_sge is nonzero but sge is NULL.\n");
+                return URMA_EINVAL;
+            }
             if (max_jfs_sge < wr->send.src.num_sge) {
                 URMA_LOG_ERR("The number of sge %u is greater than the maximum supported=%u by the device.\n",
                              wr->send.src.num_sge, max_jfs_sge);
@@ -964,7 +966,11 @@ static urma_status_t post_recv_check_jfr_wr_valid(const bondp_comp_t *bdp_comp, 
 {
     uint32_t max_jfr_sge = bondp_get_max_recv_sge(bdp_comp);
 
-    /* No need to handle cases where num_sge == 0 or sge == NULL; Certain hardware supports this usage. */
+    /* No need to reject zero-SGE RECV; certain hardware supports this usage. */
+    if (wr->src.num_sge != 0 && wr->src.sge == NULL) {
+        URMA_LOG_ERR("when set recv_wr, num_sge is nonzero but sge is NULL.\n");
+        return URMA_EINVAL;
+    }
     if (max_jfr_sge < wr->src.num_sge) {
         URMA_LOG_ERR("The number of sge %u the src segment is greater than the maximum supported=%u"
                      " by the device.\n",
