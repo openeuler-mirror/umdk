@@ -1340,8 +1340,9 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d], cr status=%d\n", send_idx, target_idx,
-                      new_send_idx, new_target_idx, cr->status);
+        URMA_LOG_INFO("Resend from [%u, %u] to [%d, %d], cr status=%d, jetty_id=%u, tjetty_id=%u\n",
+                      send_idx, target_idx, new_send_idx, new_target_idx, cr->status,
+                      bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
         urma_ubagg_switch_inc();
 
         for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
