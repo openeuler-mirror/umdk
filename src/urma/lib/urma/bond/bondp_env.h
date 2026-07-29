@@ -18,6 +18,7 @@ typedef struct bondp_env {
     bool enable_failback;
     bool enable_health_check;
     uint64_t health_check_interval_ms;
+    uint32_t health_check_batch_node_num;
     uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
     bondp_path_t path[IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE + 1];
 } bondp_env_t;
