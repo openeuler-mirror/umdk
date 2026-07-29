@@ -18,7 +18,8 @@
 #define BONDP_ENV_ENABLE_FAILOVER       "BOND_ENABLE_FAILOVER"
 #define BONDP_ENV_ENABLE_FAILBACK       "BOND_ENABLE_FAILBACK"
 #define BONDP_ENV_ENABLE_HEALTH_CHECK   "BOND_ENABLE_HEALTH_CHECK"
-#define BONDP_ENV_HEALTH_CHECK_INTERVAL "BOND_HEALTH_CHECK_ACTIVE_INTERVAL"
+#define BONDP_ENV_HEALTH_CHECK_INTERVAL "BOND_HEALTH_CHECK_INTERVAL"
+#define BONDP_ENV_HEALTH_CHECK_NODE_NUM "BOND_HEALTH_CHECK_BATCH_NODE_NUM"
 #define BONDP_ENV_LEN_MAX               (128)
 /*
  * #define BONDP_ENV_FAILOVER_DIEX_Y_ROUTEZ          "BOND_FAILOVER_DIEX_Y_ROUTEZ"
@@ -140,6 +141,7 @@ static void read_all_env(bondp_env_t *env)
     const bool default_enable_failback = true;
     const bool default_enable_failover = true;
     const uint64_t default_health_check_interval_ms = BONDP_HC_DEFAULT_PROBE_INTERVAL_MS;
+    const uint32_t default_health_check_batch_node_num = BONDP_HC_DEFAULT_BATCH_NODE_NUM;
     env->enable_health_check = read_env_bool(
         BONDP_ENV_ENABLE_HEALTH_CHECK, default_enable_health_check);
     env->enable_failover = read_env_bool(
@@ -148,6 +150,9 @@ static void read_all_env(bondp_env_t *env)
         BONDP_ENV_ENABLE_FAILBACK, default_enable_failback);
     env->health_check_interval_ms = read_env_uint64(
         BONDP_ENV_HEALTH_CHECK_INTERVAL, default_health_check_interval_ms);
+    uint64_t health_check_batch_node_num = read_env_uint64(
+        BONDP_ENV_HEALTH_CHECK_NODE_NUM, default_health_check_batch_node_num);
+    env->health_check_batch_node_num = default_health_check_batch_node_num;
     read_env_balance_route_all(env);
 
     const uint64_t time_100ms = 100;
@@ -158,16 +163,24 @@ static void read_all_env(bondp_env_t *env)
                       default_health_check_interval_ms);
         env->health_check_interval_ms = default_health_check_interval_ms;
     }
+    if (health_check_batch_node_num == 0 || health_check_batch_node_num > MAX_NODE_NUM) {
+        URMA_LOG_WARN("Invalid BOND_HEALTH_CHECK_BATCH_NODE_NUM value %lu (range 1~%u), using default %u\n",
+                      health_check_batch_node_num, MAX_NODE_NUM,
+                      default_health_check_batch_node_num);
+    } else {
+        env->health_check_batch_node_num = (uint32_t)health_check_batch_node_num;
+    }
 }
 
 static void print_all_env(const bondp_env_t *env)
 {
     URMA_LOG_INFO("Health check config: enable_failover=%s, enable_failback=%s, enable_health_check=%s, "
-                  "interval=%lums\n",
+                  "interval=%lums, batch_node_num=%u\n",
                   env->enable_failover ? "true" : "false",
                   env->enable_failback ? "true" : "false",
                   env->enable_health_check ? "true" : "false",
-                  env->health_check_interval_ms);
+                  env->health_check_interval_ms,
+                  env->health_check_batch_node_num);
 }
 
 static void init_path(bondp_env_t *env)

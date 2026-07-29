@@ -216,7 +216,7 @@ static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
         return;
     }
 
-    bool need_rebuild = false;
+    bool has_timeout_cqe = false;
     urma_cr_t cr[HC_CQE_BATCH];
 
     while (true) {
@@ -225,9 +225,11 @@ static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
             break;
         }
         for (int i = 0; i < n; i++) {
-            hc_process_probe_cr(hc_ctx, local_idx, &cr[i]);
+            if (!has_timeout_cqe) {
+                hc_process_probe_cr(hc_ctx, local_idx, &cr[i]);
+            }
             if (cr[i].status == URMA_CR_ACK_TIMEOUT_ERR) { /* status 9 */
-                need_rebuild = true;
+                has_timeout_cqe = true;
             }
         }
         if ((uint32_t)n > res->inflight) {
@@ -238,7 +240,7 @@ static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
             res->inflight -= (uint32_t)n;
         }
     }
-    if (need_rebuild) {
+    if (has_timeout_cqe) {
         hc_rebuild_probe_jetty(hc_ctx, res);
     }
 }
@@ -357,9 +359,9 @@ static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
         hc_poll_probe_cq(hc_ctx, (int)i);
     }
 
-    uint32_t probe_cnt = MIN(hc_ctx->cfg.probe_node_num, hc_ctx->node_num);
+    uint32_t batch_cnt = MIN(hc_ctx->cfg.batch_node_num, hc_ctx->node_num);
     uint32_t node_idx = hc_ctx->probe_cur_idx % hc_ctx->node_num;
-    for (uint32_t i = 0; i < probe_cnt; ++i) {
+    for (uint32_t i = 0; i < batch_cnt; ++i) {
         bondp_hc_node_t *node = &hc_ctx->nodes[node_idx];
         hc_probe_node(hc_ctx, node);
         node_idx = (node_idx + 1) % hc_ctx->node_num;
@@ -567,7 +569,7 @@ DELETE_JFC:
 static void hc_init_cfg(bondp_hc_ctx_t *hc_ctx, const bondp_hc_cfg_t *cfg)
 {
     hc_ctx->cfg.probe_interval_ms = BONDP_HC_DEFAULT_PROBE_INTERVAL_MS;
-    hc_ctx->cfg.probe_node_num = BONDP_HC_DEFAULT_PROBE_NODE_NUM;
+    hc_ctx->cfg.batch_node_num = BONDP_HC_DEFAULT_BATCH_NODE_NUM;
 
     if (cfg == NULL) {
         return;
@@ -576,8 +578,8 @@ static void hc_init_cfg(bondp_hc_ctx_t *hc_ctx, const bondp_hc_cfg_t *cfg)
     if (cfg->probe_interval_ms != 0) {
         hc_ctx->cfg.probe_interval_ms = cfg->probe_interval_ms;
     }
-    if (cfg->probe_node_num != 0) {
-        hc_ctx->cfg.probe_node_num = cfg->probe_node_num;
+    if (cfg->batch_node_num != 0) {
+        hc_ctx->cfg.batch_node_num = cfg->batch_node_num;
     }
 }
 
