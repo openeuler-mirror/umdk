@@ -81,6 +81,7 @@ umq_buf_mode_t umq_qbuf_mode_get(void);
 
 int umq_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
+void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth);
 
 #ifdef __cplusplus
 }
