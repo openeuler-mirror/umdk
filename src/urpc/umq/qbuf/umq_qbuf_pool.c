@@ -1464,3 +1464,24 @@ bool umq_qbuf_try_expansion_pool(bool with_data, uint64_t *global_buf_cnt, bool 
     __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
     return ret == UMQ_SUCCESS;
 }
+
+void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth)
+{
+    if (!g_qbuf_pool.base.tls_pools.enable_tls_expand_qbuf_pool) {
+        return;
+    }
+
+    bool expected = false;
+    if (!__atomic_compare_exchange_n(&g_qbuf_pool.base.tls_pools.tls_expand_qbuf_pool_depth_is_set,
+        &expected, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+
+    if (g_qbuf_pool.base.tls_pools.tls_qbuf_pool_depth > pjfr_depth) {
+        g_qbuf_pool.base.tls_pools.tls_expand_qbuf_pool_depth =
+            (g_qbuf_pool.base.tls_pools.tls_qbuf_pool_depth - pjfr_depth) >> 1;
+    } else {
+        g_qbuf_pool.base.tls_pools.tls_expand_qbuf_pool_depth =
+            umq_qbuf_pool_expand_max(g_qbuf_pool.base.tls_pools.tls_qbuf_pool_depth);
+    }
+}

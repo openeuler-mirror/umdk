@@ -31,10 +31,6 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
     base->tls_pools.tls_qbuf_pool_depth =
         cfg->tls_qbuf_pool_depth == 0 ? base->tls_pools.default_tls_qbuf_pool_depth : cfg->tls_qbuf_pool_depth;
     base->tls_pools.tls_expand_qbuf_pool_depth = 0;
-    if (base->tls_pools.enable_tls_expand_qbuf_pool) {
-        base->tls_pools.tls_expand_qbuf_pool_depth = cfg->tls_expand_qbuf_pool_depth == 0 ?
-            umq_qbuf_pool_expand_max(base->tls_pools.tls_qbuf_pool_depth) : cfg->tls_expand_qbuf_pool_depth;
-    }
 
     uint64_t blk_num;
     if (cfg->mode == UMQ_BUF_SPLIT) {
