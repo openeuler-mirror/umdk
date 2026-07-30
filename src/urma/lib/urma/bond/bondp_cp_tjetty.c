@@ -339,7 +339,7 @@ static int bondp_import_vjetty(
     return ret;
 }
 
-static int bondp_import_pjetty(
+static int bondp_import_pjetty_default(
     bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
     urma_rjetty_t *rjetty, urma_token_t *rjetty_token,
     urma_bond_id_info_out_t *rvjetty_info)
@@ -383,6 +383,25 @@ static int bondp_import_pjetty(
         }
     }
     return 0;
+}
+
+static int bondp_import_pjetty_custom(
+    bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+    urma_rjetty_t *rjetty, urma_token_t *rjetty_token,
+    urma_bond_id_info_out_t *rvjetty_info)
+{
+    return 0;
+}
+
+static int bondp_import_pjetty(
+    bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+    urma_rjetty_t *rjetty, urma_token_t *rjetty_token,
+    urma_bond_id_info_out_t *rvjetty_info)
+{
+    if (!bdp_ctx->port_cfg_enable) {
+        return bondp_import_pjetty_default(bdp_ctx, bdp_tjetty, rjetty, rjetty_token, rvjetty_info);
+    }
+    return bondp_import_pjetty_custom(bdp_ctx, bdp_tjetty, rjetty, rjetty_token, rvjetty_info);
 }
 
 static int bondp_unimport_vjetty(bondp_target_jetty_t *bdp_tjetty)
