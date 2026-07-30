@@ -5,43 +5,44 @@
  * Create: 2026-2-4
  */
 
-#include "umq_errno.h"
-#include "umq_qbuf_pool.h"
-#include "umq_huge_qbuf_pool.h"
-#include "umq_tiny_qbuf_pool.h"
 #include "perf.h"
+#include "umq_errno.h"
+#include "umq_huge_qbuf_pool.h"
 #include "umq_inner.h"
+#include "umq_qbuf_pool.h"
+#include "umq_tiny_qbuf_pool.h"
 
 #define UMQ_DFX_EQUALS "=================================================================================="
 #define UMQ_DFX_UNDERLINE "----------------------------------------------------------------------------------"
-#define UMQ_DFX_EQUALS_120 "==========================================================================================\
+#define UMQ_DFX_EQUALS_120 \
+    "==========================================================================================\
 =============================="
-#define UMQ_DFX_UNDERLINE_120 "---------------------------------------------------------------------------------------\
+#define UMQ_DFX_UNDERLINE_120 \
+    "---------------------------------------------------------------------------------------\
 ---------------------------------"
 #define TRANS_MODE_NAME_SIZE 20
 #define UMQ_DFX_PERF_REC_NAME_MAX_LEN 20
-#define UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN 20
 
-#define UMQ_DFX_SNPRINTF_BUF(__buf, __max_buf_len, __offset, __format, ...)                                 \
-    do {                                                                                                    \
-        int __ret;                                                                                          \
-        if ((__max_buf_len) <= (__offset)) {                                                                \
-            __ret = snprintf(NULL, 0, __format, ##__VA_ARGS__);                                             \
-        } else {                                                                                            \
-            __ret = snprintf((__buf) + (__offset), (__max_buf_len) - (__offset), __format, ##__VA_ARGS__);  \
-        }                                                                                                   \
-        (__offset) += __ret;                                                                                \
-    } while (0)                                                                                             \
+#define UMQ_DFX_SNPRINTF_BUF(__buf, __max_buf_len, __offset, __format, ...)                                \
+    do {                                                                                                   \
+        int __ret;                                                                                         \
+        if ((__max_buf_len) <= (__offset)) {                                                               \
+            __ret = snprintf(NULL, 0, __format, ##__VA_ARGS__);                                            \
+        } else {                                                                                           \
+            __ret = snprintf((__buf) + (__offset), (__max_buf_len) - (__offset), __format, ##__VA_ARGS__); \
+        }                                                                                                  \
+        (__offset) += __ret;                                                                               \
+    } while (0)
 
 int umq_stats_flow_control_get(uint64_t umqh, umq_flow_control_stats_t *flow_control_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_stats_flow_control_get == NULL || flow_control_stats == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_flow_control_get == NULL || flow_control_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or flow control stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return ops->umq_tp_stats_flow_control_get(umqh, flow_control_stats);
+    return umq->dfx_tp_ops->umq_tp_stats_flow_control_get(umq->umqh_tp, flow_control_stats);
 }
 
 int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_stats, char *buf, int max_buf_len)
@@ -56,69 +57,68 @@ int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_s
 
     // format flow control statistics header
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
-        "                               Flow Control Statistics");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", "                               Flow Control Statistics");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40s\n", "Type", "Value");
 
     // format pool credit statistics
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
-        "                               Pool Credit Statistics");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", "                               Pool Credit Statistics");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Pool Idle", flow_control_stats->pool_credit.pool_idle);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Pool Allocated", flow_control_stats->pool_credit.pool_be_allocated);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Pool Idle", flow_control_stats->pool_credit.total_pool_idle);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Pool Allocated", flow_control_stats->pool_credit.total_pool_be_allocated);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Pool Post RX Err", flow_control_stats->pool_credit.total_pool_post_rx_err);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Pool Idle",
+                         flow_control_stats->pool_credit.pool_idle);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Pool Allocated",
+                         flow_control_stats->pool_credit.pool_be_allocated);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Pool Idle",
+                         flow_control_stats->pool_credit.total_pool_idle);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Pool Allocated",
+                         flow_control_stats->pool_credit.total_pool_be_allocated);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Pool Post RX Err",
+                         flow_control_stats->pool_credit.total_pool_post_rx_err);
 
     // format queue credit statistics
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "                              Queue Credit Statistics\n");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "                              Queue Credit Statistics\n");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Queue Idle", flow_control_stats->queue_credit.queue_idle);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Queue Allocated", flow_control_stats->queue_credit.queue_be_allocated);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Queue Acquired", flow_control_stats->queue_credit.queue_acquired);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Idle", flow_control_stats->queue_credit.total_queue_idle);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Acquired", flow_control_stats->queue_credit.total_queue_acquired);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Allocated", flow_control_stats->queue_credit.total_queue_be_allocated);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Post TX Success", flow_control_stats->queue_credit.total_queue_post_tx_success);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Post TX Err", flow_control_stats->queue_credit.total_queue_post_tx_err);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Total Queue Acquired Err", flow_control_stats->queue_credit.total_queue_acquired_err);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Queue Idle",
+                         flow_control_stats->queue_credit.queue_idle);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Queue Allocated",
+                         flow_control_stats->queue_credit.queue_be_allocated);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Queue Acquired",
+                         flow_control_stats->queue_credit.queue_acquired);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Idle",
+                         flow_control_stats->queue_credit.total_queue_idle);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Acquired",
+                         flow_control_stats->queue_credit.total_queue_acquired);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Allocated",
+                         flow_control_stats->queue_credit.total_queue_be_allocated);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Post TX Success",
+                         flow_control_stats->queue_credit.total_queue_post_tx_success);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Post TX Err",
+                         flow_control_stats->queue_credit.total_queue_post_tx_err);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Total Queue Acquired Err",
+                         flow_control_stats->queue_credit.total_queue_acquired_err);
 
     // format packet statistics
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "                              Packet Statistics\n");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Send Cnt", flow_control_stats->packet_stats.send_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Send Success", flow_control_stats->packet_stats.send_success);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Recv Cnt", flow_control_stats->packet_stats.recv_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Send Error Cnt", flow_control_stats->packet_stats.send_error_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Recv Error Cnt", flow_control_stats->packet_stats.recv_error_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Recv Duplicate Req Cnt", flow_control_stats->packet_stats.recv_duplicate_req_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40lu\n", "Recv Duplicate Rsp Cnt", flow_control_stats->packet_stats.recv_duplicate_rsp_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Send Cnt",
+                         flow_control_stats->packet_stats.send_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Send Success",
+                         flow_control_stats->packet_stats.send_success);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Recv Cnt",
+                         flow_control_stats->packet_stats.recv_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Send Eagain Cnt",
+                         flow_control_stats->packet_stats.send_eagain_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Send Error Cnt",
+                         flow_control_stats->packet_stats.send_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Recv Error Cnt",
+                         flow_control_stats->packet_stats.recv_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Recv Duplicate Req Cnt",
+                         flow_control_stats->packet_stats.recv_duplicate_req_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "Recv Duplicate Rsp Cnt",
+                         flow_control_stats->packet_stats.recv_duplicate_rsp_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
 
@@ -156,215 +156,31 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
     }
 
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_stats_qbuf_pool_get == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_qbuf_pool_get == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or qbuf pool stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    return ops->umq_tp_stats_qbuf_pool_get(umqh, qbuf_pool_stats);
+    return umq->dfx_tp_ops->umq_tp_stats_qbuf_pool_get(umq->umqh_tp, qbuf_pool_stats);
 }
 
-static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
-{
-    static const char qbuf_pool_type[UMQ_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
-        [UMQ_QBUF_POOL_TYPE_SMALL] = "Small",
-        [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
-        [UMQ_QBUF_POOL_TYPE_BIG] = "Big",
-        [UMQ_QBUF_POOL_TYPE_HUGE] = "Huge",
-        [UMQ_QBUF_POOL_TYPE_GIGANTIC] = "Gigantic",
-        [UMQ_QBUF_POOL_TYPE_TINY] = "Tiny",
-    };
-
-    if (type >= UMQ_QBUF_POOL_TYPE_MAX) {
-        return "Unknown";
-    }
-    return qbuf_pool_type[type];
-}
-
-int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, char *buf, int max_buf_len)
-{
-    if (qbuf_pool_stats == NULL || buf == NULL || max_buf_len <= 0 ||
-        qbuf_pool_stats->num > UMQ_STATS_QBUF_POOL_TYPE_MAX ||
-        qbuf_pool_stats->local_qbuf_pool_num > UMQ_LOCAL_QBUF_POOL_MAX_NUM) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
-        return -UMQ_ERR_EINVAL;
-    }
-
-    int str_size = 0;
-    (void)memset(buf, 0, max_buf_len);
-
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                             Qbuf Pool Statistics");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-
-    // === Global Pool Config ===
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                             Global Pool Config");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-9s %-11s %-8s %-8s %-8s %-8s %-8s %-11s %-11s %-11s %-13s %-13s\n",
-        "Type", "Mode", "TotalSize", "TotalBlk", "BlkSize", "Headroom",
-        "DataSize", "BufSize", "UmqBufSize", "FreeBlk", "FreeSize", "NoBufFreeBlk", "NoBufFreeSize");
-    for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
-        const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-13s %-9s %-11lu %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu %-13lu %-13lu\n",
-            umq_qbuf_pool_type_name(info->type),
-            info->mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE",
-            info->total_size,
-            info->total_block_num,
-            info->block_size,
-            info->headroom_size,
-            info->data_size,
-            info->buf_size,
-            info->umq_buf_t_size,
-            info->available_mem.split.block_num_with_data,
-            info->available_mem.split.size_with_data,
-            info->available_mem.split.block_num_without_data,
-            info->available_mem.split.size_without_data);
-    }
-
-    // === Expansion Pool ===
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                             Expansion Pool");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-15s %-17s %-15s %-17s %-17s %-17s\n",
-        "Type", "ExpandCnt", "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "AccShrinkCnt");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu\n",
-        "WithData",
-        qbuf_pool_stats->exp_pool_with_data.expansion_count,
-        qbuf_pool_stats->exp_pool_with_data.exp_total_block_num,
-        qbuf_pool_stats->exp_pool_with_data.exp_total_free_block_num,
-        qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size,
-        qbuf_pool_stats->exp_pool_with_data.total_expansion_count,
-        qbuf_pool_stats->exp_pool_with_data.total_shrink_count);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu\n",
-        "WithoutData",
-        qbuf_pool_stats->exp_pool_without_data.expansion_count,
-        qbuf_pool_stats->exp_pool_without_data.exp_total_block_num,
-        qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num,
-        qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size,
-        qbuf_pool_stats->exp_pool_without_data.total_expansion_count,
-        qbuf_pool_stats->exp_pool_without_data.total_shrink_count);
-
-    // === Per-Thread TLS Pool Stats (WithData) ===
-    uint64_t total_tls_capacity_with_data = 0;
-    uint64_t total_tls_buf_cnt_with_data = 0;
-    uint64_t total_tls_capacity_without_data = 0;
-    uint64_t total_tls_buf_cnt_without_data = 0;
-    uint64_t total_tls_fetch_cnt_with_data = 0;
-    uint64_t total_tls_fetch_buf_cnt_with_data = 0;
-    uint64_t total_tls_fetch_cnt_without_data = 0;
-    uint64_t total_tls_fetch_buf_cnt_without_data = 0;
-    uint64_t total_tls_return_cnt_with_data = 0;
-    uint64_t total_tls_return_buf_cnt_with_data = 0;
-    uint64_t total_tls_return_cnt_without_data = 0;
-    uint64_t total_tls_return_buf_cnt_without_data = 0;
-    uint64_t total_alloc_cnt_with_data = 0;
-    uint64_t total_alloc_cnt_without_data = 0;
-    uint64_t total_free_cnt_with_data = 0;
-    uint64_t total_free_cnt_without_data = 0;
-
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                             Per-Thread TLS Pool Stats (WithData)");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
-        "Type", "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf",
-        "AccAlloc", "AccFree");
-   
-    for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
-        const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        total_tls_capacity_with_data += s->capacity_with_data;
-        total_tls_buf_cnt_with_data += s->buf_cnt_with_data;
-        total_tls_fetch_cnt_with_data += s->tls_fetch_cnt_with_data;
-        total_tls_fetch_buf_cnt_with_data += s->tls_fetch_buf_cnt_with_data;
-        total_tls_return_cnt_with_data += s->tls_return_cnt_with_data;
-        total_tls_return_buf_cnt_with_data += s->tls_return_buf_cnt_with_data;
-        total_alloc_cnt_with_data += s->alloc_cnt_with_data;
-        total_free_cnt_with_data += s->free_cnt_with_data;
-    }
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-        "total", "-",
-        total_tls_capacity_with_data, total_tls_buf_cnt_with_data,
-        total_tls_fetch_cnt_with_data, total_tls_fetch_buf_cnt_with_data,
-        total_tls_return_cnt_with_data, total_tls_return_buf_cnt_with_data,
-        total_alloc_cnt_with_data, total_free_cnt_with_data);
-
-    for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
-        const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-            umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_with_data, s->buf_cnt_with_data,
-            s->tls_fetch_cnt_with_data, s->tls_fetch_buf_cnt_with_data,
-            s->tls_return_cnt_with_data, s->tls_return_buf_cnt_with_data,
-            s->alloc_cnt_with_data, s->free_cnt_with_data);
-    }
-
-    // === Per-Thread TLS Pool Stats (WithoutData) ===
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                             Per-Thread TLS Pool Stats (WithoutData)");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-16s %-13s %-13s %-13s %-13s %-13s %-13s %-13s %-13s\n",
-        "Type", "TID", "CurCap", "CurBuf", "AccFetchCnt", "AccFetchBuf", "AccReturnCnt", "AccReturnBuf",
-        "AccAlloc", "AccFree");
-
-    for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
-        const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        total_tls_capacity_without_data += s->capacity_without_data;
-        total_tls_buf_cnt_without_data += s->buf_cnt_without_data;
-        total_tls_fetch_cnt_without_data += s->tls_fetch_cnt_without_data;
-        total_tls_fetch_buf_cnt_without_data += s->tls_fetch_buf_cnt_without_data;
-        total_tls_return_cnt_without_data += s->tls_return_cnt_without_data;
-        total_tls_return_buf_cnt_without_data += s->tls_return_buf_cnt_without_data;
-        total_alloc_cnt_without_data += s->alloc_cnt_without_data;
-        total_free_cnt_without_data += s->free_cnt_without_data;
-    }
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-13s %-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-        "total", "-",
-        total_tls_capacity_without_data, total_tls_buf_cnt_without_data,
-        total_tls_fetch_cnt_without_data, total_tls_fetch_buf_cnt_without_data,
-        total_tls_return_cnt_without_data, total_tls_return_buf_cnt_without_data,
-        total_alloc_cnt_without_data, total_free_cnt_without_data);
-
-    for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
-        const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu\n",
-            umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_without_data, s->buf_cnt_without_data,
-            s->tls_fetch_cnt_without_data, s->tls_fetch_buf_cnt_without_data,
-            s->tls_return_cnt_without_data, s->tls_return_buf_cnt_without_data,
-            s->alloc_cnt_without_data, s->free_cnt_without_data);
-    }
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-16s %-13lu\n",
-        "escape_buf_cnt", qbuf_pool_stats->escape_buf_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-
-    return str_size;
-}
+/* umq_qbuf_pool_stats_to_str() and the static helper umq_qbuf_pool_type_name()
+ * have been moved to umq_dfx_api_str.c so that consumers which do not pull in
+ * umq_inner.h / perf.h (e.g. the qbuf_pool_tool test driver) can link against
+ * the to_str implementation without the transport-layer dependency chain.
+ * See umq_dfx_api_str.c for the implementation. */
 
 int umq_info_get(uint64_t umqh, umq_info_t *umq_info)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_info_get == NULL || umq_info == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_info_get == NULL || umq_info == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or umq info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    return ops->umq_tp_info_get(umqh, umq_info);
+    return umq->dfx_tp_ops->umq_tp_info_get(umq->umqh_tp, umq_info);
 }
 
 int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
@@ -378,14 +194,10 @@ int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
     (void)memset(buf, 0, max_buf_len);
 
     static const char trans_mode_map[UMQ_TRANS_MODE_MAX][TRANS_MODE_NAME_SIZE] = {
-        [UMQ_TRANS_MODE_UB]        = "UB",
-        [UMQ_TRANS_MODE_IB]        = "IB",
-        [UMQ_TRANS_MODE_UCP]       = "UCP",
-        [UMQ_TRANS_MODE_IPC]       = "IPC",
-        [UMQ_TRANS_MODE_UBMM]      = "UBMM",
-        [UMQ_TRANS_MODE_UB_PLUS]   = "UB_PLUS",
-        [UMQ_TRANS_MODE_IB_PLUS]   = "IB_PLUS",
-        [UMQ_TRANS_MODE_UBMM_PLUS] = "UB_PLUS",
+        [UMQ_TRANS_MODE_UB] = "UB",           [UMQ_TRANS_MODE_IB] = "IB",
+        [UMQ_TRANS_MODE_UCP] = "UCP",         [UMQ_TRANS_MODE_IPC] = "IPC",
+        [UMQ_TRANS_MODE_UBMM] = "UBMM",       [UMQ_TRANS_MODE_UB_PLUS] = "UB_PLUS",
+        [UMQ_TRANS_MODE_IB_PLUS] = "IB_PLUS", [UMQ_TRANS_MODE_UBMM_PLUS] = "UB_PLUS",
     };
 
     // Format UMQ Info
@@ -394,23 +206,21 @@ int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40s\n", "Info", "Value");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-40s %-40s\n", "Trans Mode", trans_mode_map[umq_info->trans_mode]);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40s\n", "Trans Mode",
+                         trans_mode_map[umq_info->trans_mode]);
 
     if (umq_info->trans_mode == UMQ_TRANS_MODE_UB || umq_info->trans_mode == UMQ_TRANS_MODE_UB_PLUS) {
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "UMQ ID", umq_info->ub.umq_id);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s " EID_FMT "\n", "EID", EID_ARGS(umq_info->ub.eid));
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s %-40s\n", "Dev Name", umq_info->ub.dev_name);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s %-40u\n", "Local IO Jetty ID", umq_info->ub.local_io_jetty_id);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s %-40u\n", "Local FC Jetty ID", umq_info->ub.local_fc_jetty_id);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s %-40u\n", "Remote IO Jetty ID", umq_info->ub.remote_io_jetty_id);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-40s %-40u\n", "Remote FC Jetty ID", umq_info->ub.remote_fc_jetty_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s " EID_FMT "\n", "EID", EID_ARGS(umq_info->ub.eid));
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40s\n", "Dev Name", umq_info->ub.dev_name);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Local IO Jetty ID",
+                             umq_info->ub.local_io_jetty_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Local FC Jetty ID",
+                             umq_info->ub.local_fc_jetty_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Remote IO Jetty ID",
+                             umq_info->ub.remote_io_jetty_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Remote FC Jetty ID",
+                             umq_info->ub.remote_fc_jetty_id);
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
@@ -421,23 +231,23 @@ int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
 int umq_stats_io_get(uint64_t umqh, umq_packet_stats_t *packet_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_stats_io_get == NULL || packet_stats == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_io_get == NULL || packet_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or packet stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return ops->umq_tp_stats_io_get(umqh, packet_stats);
+    return umq->dfx_tp_ops->umq_tp_stats_io_get(umq->umqh_tp, packet_stats);
 }
 
 int umq_stats_io_reset(uint64_t umqh)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_stats_io_reset == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_io_reset == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return ops->umq_tp_stats_io_reset(umqh);
+    return umq->dfx_tp_ops->umq_tp_stats_io_reset(umq->umqh_tp);
 }
 
 int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int max_buf_len)
@@ -457,19 +267,16 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40s\n", "Type", "Value");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "send_cnt", packet_stats->send_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-        "send_success", packet_stats->send_success);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "send_success", packet_stats->send_success);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "recv_cnt", packet_stats->recv_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-                         "send_eagain_cnt", packet_stats->send_eagain_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-        "send_error_cnt", packet_stats->send_error_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-        "recv_error_cnt", packet_stats->recv_error_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-        "recv_duplicate_req_cnt", packet_stats->recv_duplicate_req_cnt);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n",
-        "recv_duplicate_rsp_cnt", packet_stats->recv_duplicate_rsp_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "send_eagain_cnt",
+                         packet_stats->send_eagain_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "send_error_cnt", packet_stats->send_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "recv_error_cnt", packet_stats->recv_error_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "recv_duplicate_req_cnt",
+                         packet_stats->recv_duplicate_req_cnt);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40lu\n", "recv_duplicate_rsp_cnt",
+                         packet_stats->recv_duplicate_rsp_cnt);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
 
@@ -479,17 +286,16 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
 int umq_stats_transport_pool_get(uint64_t umqh, umq_transport_pool_stats_t *umq_transport_pool_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
-    if (umq == NULL || ops == NULL || ops->umq_tp_stats_transport_pool_get == NULL ||
-        umq_transport_pool_stats == NULL) {
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
+        umq->dfx_tp_ops->umq_tp_stats_transport_pool_get == NULL || umq_transport_pool_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or transport pool stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return ops->umq_tp_stats_transport_pool_get(umq_transport_pool_stats);
+    return umq->dfx_tp_ops->umq_tp_stats_transport_pool_get(umq_transport_pool_stats);
 }
 
-int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transport_pool_stats,
-    char *buf, int max_buf_len)
+int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transport_pool_stats, char *buf,
+                                    int max_buf_len)
 {
     if (umq_transport_pool_stats == NULL || buf == NULL || max_buf_len <= 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
@@ -498,20 +304,18 @@ int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transp
     int str_size = 0;
     (void)memset(buf, 0, max_buf_len);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%s\n", "                                         Transport Pool Statistics");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
+                         "                                         Transport Pool Statistics");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
-        "TotalTpCnt", "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt",
-        "AccAllocTpCnt", "AccFreeTpCnt", "AccMissTpCnt");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
-        umq_transport_pool_stats->total_num, umq_transport_pool_stats->global_num,
-        umq_transport_pool_stats->cache_num, umq_transport_pool_stats->in_use_num,
-        umq_transport_pool_stats->error_num, umq_transport_pool_stats->acc_alloc_num,
-        umq_transport_pool_stats->acc_free_num, umq_transport_pool_stats->acc_miss_num);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n", "TotalTpCnt",
+                         "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt", "AccAllocTpCnt", "AccFreeTpCnt",
+                         "AccMissTpCnt");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
+                         umq_transport_pool_stats->total_num, umq_transport_pool_stats->global_num,
+                         umq_transport_pool_stats->cache_num, umq_transport_pool_stats->in_use_num,
+                         umq_transport_pool_stats->error_num, umq_transport_pool_stats->acc_alloc_num,
+                         umq_transport_pool_stats->acc_free_num, umq_transport_pool_stats->acc_miss_num);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     return str_size;
 }
@@ -531,12 +335,6 @@ int umq_stats_trace_start(umq_trace_cfg_t *cfg)
     if (cfg == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "cfg invalid\n");
         return -UMQ_ERR_EINVAL;
-    }
-
-    int ret = umq_thread_init();
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umq thread init failde, ret %d\n", ret);
-        return ret;
     }
     return umq_trace_start(cfg);
 }
@@ -563,44 +361,45 @@ int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_b
         return -UMQ_ERR_EINVAL;
     }
     static char perf_record_type_name[UMQ_PERF_RECORD_TYPE_MAX][UMQ_DFX_PERF_REC_NAME_MAX_LEN] = {
-        "umq_enqueue", "umq_dequeue", "umq_dequeue_empty", "umq_post_all", "umq_post_tx", "umq_post_rx",
-        "umq_poll_all", "umq_poll_tx", "umq_poll_rx", "umq_poll_all_empty", "umq_poll_tx_empty", "umq_poll_rx_empty",
-        "umq_rearm_tx", "umq_rearm_rx", "umq_wait_tx", "umq_wait_rx", "umq_ack_tx", "umq_ack_rx", "umq_notify",
-        "umq_buf_alloc", "umq_buf_free", "umq_data_to_head",
-        "umq_create", "umq_destroy", "umq_get_route_list", "umq_bind_info_get", "umq_bind", "umq_unbind",
-        "tp_post_send", "tp_post_recv", "tp_post_send_eagain", "tp_poll_tx", "tp_poll_rx", "tp_poll_tx_empty",
-        "tp_poll_rx_empty", "tp_rearm_tx", "tp_rearm_rx", "tp_wait_tx", "tp_wait_rx", "tp_ack_tx", "tp_ack_rx",
-        "tp_create_jfce", "tp_create_jfc", "tp_create_jfr", "tp_create_jetty",
-        "tp_destroy_jfce", "tp_destroy_jfc", "tp_destroy_jfr", "tp_destroy_jetty",
-        "tp_rjetty_get", "tp_rjetty_put", "tp_route_path_get", "tp_import_jetty", "tp_bind_jetty",
-        "tp_unimport_jetty", "tp_unbind_jetty", "tp_alloc_jetty_node", "tp_free_jetty_node",
+        "umq_enqueue",         "umq_dequeue",       "umq_dequeue_empty", "umq_post_all",     "umq_post_tx",
+        "umq_post_rx",         "umq_poll_all",      "umq_poll_tx",       "umq_poll_rx",      "umq_poll_all_empty",
+        "umq_poll_tx_empty",   "umq_poll_rx_empty", "umq_rearm_tx",      "umq_rearm_rx",     "umq_wait_tx",
+        "umq_wait_rx",         "umq_ack_tx",        "umq_ack_rx",        "umq_notify",       "umq_buf_alloc",
+        "umq_buf_free",        "umq_data_to_head",  "umq_create",        "umq_destroy",      "umq_get_route_list",
+        "umq_bind_info_get",   "umq_bind",          "umq_unbind",        "tp_post_send",     "tp_post_recv",
+        "tp_post_send_eagain", "tp_poll_tx",        "tp_poll_rx",        "tp_poll_tx_empty", "tp_poll_rx_empty",
+        "tp_rearm_tx",         "tp_rearm_rx",       "tp_wait_tx",        "tp_wait_rx",       "tp_ack_tx",
+        "tp_ack_rx",           "tp_create_jfce",    "tp_create_jfc",     "tp_create_jfr",    "tp_create_jetty",
+        "tp_destroy_jfce",     "tp_destroy_jfc",    "tp_destroy_jfr",    "tp_destroy_jetty", "tp_rjetty_get",
+        "tp_rjetty_put",       "tp_route_path_get", "tp_import_jetty",   "tp_bind_jetty",    "tp_unimport_jetty",
+        "tp_unbind_jetty",
     };
 
     int str_size = 0;
     (void)memset(buf, 0, max_buf_len);
 
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_EQUALS);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
+    UMQ_DFX_SNPRINTF_BUF(
+        buf, max_buf_len, str_size, "%s\n",
         "                                                                    Analyse Function Execution Time Records");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_EQUALS);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-        "%-20s %-12s %-14s %-14s %-14s %-14s %-14s %-14s %-14s\n",
-        "Type", "Sample Num", "Average (ns)", "Minimum (ns)", "Maxinum (ns)", "P50 (ns)", "P90 (ns)",
-        "P99 (ns)", "P9999 (ns)");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-20s %-12s %-14s %-14s %-14s %-14s %-14s %-14s %-14s\n", "Type",
+                         "Sample Num", "Average (ns)", "Minimum (ns)", "Maxinum (ns)", "P50 (ns)", "P90 (ns)",
+                         "P99 (ns)", "P9999 (ns)");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_UNDERLINE);
     for (uint32_t type = 0; type < UMQ_PERF_RECORD_TYPE_MAX; type++) {
         if (type == UMQ_PERF_RECORD_TRANSPORT_POST_SEND_EAGAIN) {
             continue;
         }
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-            "%-20s %-12lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu\n",
-            perf_record_type_name[type], umq_perf_stats->type_record[type].sample_num,
-            umq_perf_stats->type_record[type].average, umq_perf_stats->type_record[type].mininum,
-            umq_perf_stats->type_record[type].maxinum,
-            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P50],
-            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P90],
-            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P99],
-            umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P9999]);
+                             "%-20s %-12lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu %-14lu\n",
+                             perf_record_type_name[type], umq_perf_stats->type_record[type].sample_num,
+                             umq_perf_stats->type_record[type].average, umq_perf_stats->type_record[type].mininum,
+                             umq_perf_stats->type_record[type].maxinum,
+                             umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P50],
+                             umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P90],
+                             umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P99],
+                             umq_perf_stats->type_record[type].quantile[UMQ_PERF_QUANTILE_P9999]);
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_PERF_EQUALS);
@@ -622,7 +421,7 @@ int umq_stats_tp_perf_start(umq_trans_mode_t trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_start == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
@@ -645,7 +444,7 @@ int umq_stats_tp_perf_stop(umq_trans_mode_t trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_stop == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
@@ -668,7 +467,7 @@ int umq_stats_tp_perf_info_get(umq_trans_mode_t trans_mode, char *perf_buf, uint
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_info_get == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
