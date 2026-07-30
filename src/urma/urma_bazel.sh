@@ -612,13 +612,13 @@ stage_payload()
     library_version=$(project_version URMA_VERSION "${WORKSPACE_DIR}/lib/urma/core/CMakeLists.txt")
 
     rm -rf "${stage_dir}"
-    mkdir -p "${rootfs}${LIBDIR}/urma" "${rootfs}${BINDIR}" "${rootfs}${INCLUDEDIR}/udma"
+    mkdir -p "${rootfs}${LIBDIR}" "${rootfs}${BINDIR}" "${rootfs}${INCLUDEDIR}/udma"
 
     stage_versioned_so "${bin_dir}/liburma.so" "${rootfs}${LIBDIR}" "liburma" "${library_version}"
     stage_versioned_so "${bin_dir}/liburma_common.so" "${rootfs}${LIBDIR}" "liburma_common" "${common_version}"
     stage_versioned_so "${bin_dir}/libtpsa.so" "${rootfs}${LIBDIR}" "libtpsa" "${library_version}"
-    stage_versioned_so "${bin_dir}/liburma_ubagg.so" "${rootfs}${LIBDIR}/urma" "liburma_ubagg" "${library_version}"
-    copy_exec "${bin_dir}/liburma-udma.so" "${rootfs}${LIBDIR}/urma/liburma-udma.so"
+    stage_versioned_so "${bin_dir}/liburma_ubagg.so" "${rootfs}${LIBDIR}" "liburma_ubagg" "${library_version}"
+    copy_exec "${bin_dir}/liburma-udma.so" "${rootfs}${LIBDIR}/liburma-udma.so"
     stage_libummu_payload "${rootfs}" "${bin_dir}"
 
     copy_exec "${bin_dir}/urma_admin" "${rootfs}${BINDIR}/urma_admin"
