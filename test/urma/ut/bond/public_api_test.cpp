@@ -681,10 +681,10 @@ TEST(UrmaBondTest, PublicWaitJfcThenRearmRefreshesAllMembers)
     EXPECT_EQ(1, bondp_wait_jfc(&fixture.jfce.v_jfce, 1, 100, readyJfc));
     EXPECT_EQ(&fixture.jfc.v_jfc, readyJfc[0]);
 
+    /* Only the physical JFC that fired (the backup member) is rearmed. */
     EXPECT_EQ(URMA_SUCCESS, bondp_rearm_jfc(&fixture.jfc.v_jfc, false));
-    ASSERT_EQ(2, g_rearmPhysicalJfcCount);
-    EXPECT_EQ(&fixture.phyJfc, g_rearmedPhysicalJfc[0]);
-    EXPECT_EQ(&backupPhysicalJfc, g_rearmedPhysicalJfc[1]);
+    ASSERT_EQ(1, g_rearmPhysicalJfcCount);
+    EXPECT_EQ(&backupPhysicalJfc, g_rearmedPhysicalJfc[0]);
 }
 
 TEST(UrmaBondTest, PublicRearmJfcRefreshesAllMembersRepeatedly)
@@ -704,15 +704,22 @@ TEST(UrmaBondTest, PublicRearmJfcRefreshesAllMembersRepeatedly)
     backupPhysicalJfc.urma_ctx = &fixture.phyCtx;
     g_rearmPhysicalJfcCount = 0;
 
+    /* Simulate that both physical members have fired events by arming the rearm mask. */
+    fixture.jfc.rearm_mask.store(0x3u);
     EXPECT_EQ(URMA_SUCCESS, bondp_rearm_jfc(&fixture.jfc.v_jfc, false));
     ASSERT_EQ(2, g_rearmPhysicalJfcCount);
     EXPECT_EQ(&fixture.phyJfc, g_rearmedPhysicalJfc[0]);
     EXPECT_EQ(&backupPhysicalJfc, g_rearmedPhysicalJfc[1]);
+    /* Successful rearm clears the corresponding bits. */
+    EXPECT_EQ(0u, fixture.jfc.rearm_mask.load());
 
+    /* Re-arm the mask to verify rearm can be repeated after the mask is cleared. */
+    fixture.jfc.rearm_mask.store(0x3u);
     EXPECT_EQ(URMA_SUCCESS, bondp_rearm_jfc(&fixture.jfc.v_jfc, false));
     ASSERT_EQ(4, g_rearmPhysicalJfcCount);
     EXPECT_EQ(&fixture.phyJfc, g_rearmedPhysicalJfc[2]);
     EXPECT_EQ(&backupPhysicalJfc, g_rearmedPhysicalJfc[3]);
+    EXPECT_EQ(0u, fixture.jfc.rearm_mask.load());
 }
 
 TEST(UrmaBondTest, PublicEventApisCoverProviderFailureContracts)
@@ -729,7 +736,11 @@ TEST(UrmaBondTest, PublicEventApisCoverProviderFailureContracts)
     fixture.jfce.dev_num = 1;
     fixture.phyOps.rearm_jfc = MockRearmPhysicalJfc;
     urma_test::SetHwMockStatus(URMA_EAGAIN);
+    /* Arm the rearm mask so rearm iterates the physical member and surfaces the provider failure. */
+    fixture.jfc.rearm_mask.store(0x1u);
     EXPECT_EQ(URMA_FAIL, bondp_rearm_jfc(&fixture.jfc.v_jfc, true));
+    /* Failed rearm does not clear the bit, leaving it for the next retry. */
+    EXPECT_EQ(0x1u, fixture.jfc.rearm_mask.load());
 
     epollFd = epoll_create1(EPOLL_CLOEXEC);
     ASSERT_GE(epollFd, 0);
