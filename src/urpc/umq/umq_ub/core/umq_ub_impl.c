@@ -713,6 +713,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .expansion_threshold = cfg->buf_pool_cfg.expansion_threshold,
         .tls_pool_mem_budget = cfg->buf_pool_cfg.tls_pool_mem_budget,
         .tls_expand_mem_budget = cfg->buf_pool_cfg.tls_expand_mem_budget,
+        .lazy_init_block_size_threshold = cfg->buf_pool_cfg.lazy_init_block_size_threshold,
     };
     ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
