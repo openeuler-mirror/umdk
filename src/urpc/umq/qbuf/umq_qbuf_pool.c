@@ -2321,6 +2321,13 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_info->config.tls_pool_mem_budget = g_qbuf_pool.tls_pool_mem_budget;
     qbuf_pool_info->config.tls_expand_mem_budget = g_qbuf_pool.tls_expand_mem_budget;
     qbuf_pool_info->config.tls_expand_qbuf_pool_depth = g_qbuf_pool.tls_expand_qbuf_pool_depth;
+    /* batch_count: actual effective batch granularity used by fetch_from_global
+     * / return_to_global paths (currently uniform across all sc via
+     * umq_qbuf_pool_batch_cnt() / get_batch_count(sc), both return
+     * QBUF_POOL_BATCH_CNT). Calling the accessor instead of the macro so
+     * future runtime-configurable batch (per-sc or cfg-driven) propagates
+     * automatically without DFX code change. */
+    qbuf_pool_info->config.batch_count = umq_qbuf_pool_batch_cnt();
     qbuf_pool_info->sc_count = g_qbuf_pool.size_class_count;
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         umq_qbuf_sc_info_t *sci = &qbuf_pool_info->sc_info[sc];

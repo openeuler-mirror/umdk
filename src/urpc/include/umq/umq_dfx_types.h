@@ -126,6 +126,7 @@ typedef struct umq_qbuf_pool_config {
     uint64_t tls_pool_mem_budget;        // global TLS total bytes cap
     uint64_t tls_expand_mem_budget;      // per-thread TLS bytes cap (default 7/8 of tls_pool_mem_budget)
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 7/8 of tls_qbuf_pool_depth)
+    uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
 } umq_qbuf_pool_config_t;
 
 typedef enum umq_qbuf_pool_type {
