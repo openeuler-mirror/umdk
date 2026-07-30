@@ -127,6 +127,7 @@ typedef struct qbuf_pool {
 
     bool disable_scale_cap;
     bool disable_malloc_escape;
+    uint32_t lazy_sc_mask;
 } qbuf_pool_t;
 
 static qbuf_pool_t g_qbuf_pool = {0};
@@ -342,10 +343,11 @@ static inline uint32_t buf_data_to_size_class(void *buf_data)
     if (count == 0) {
         return UMQ_QBUF_SIZE_CLASS_MAX;
     }
-    if (data < g_qbuf_pool.data_region_start[0] || data >= g_qbuf_pool.data_region_end[count - 1]) {
+    if (data < g_qbuf_pool.data_region_start[0]) {
         return UMQ_QBUF_SIZE_CLASS_MAX;
     }
     for (uint32_t i = 0; i < count; i++) {
+        if (g_qbuf_pool.data_region_end[i] == NULL) continue;
         if (data < g_qbuf_pool.data_region_end[i]) {
             return i;
         }
@@ -1205,13 +1207,25 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
     g_qbuf_pool.expansion_threshold = exp_threshold;
     g_qbuf_pool.expansion_size = exp_size;
     g_qbuf_pool.disable_malloc_escape = cfg->disable_malloc_escape;
-    // block-equal-division per size_class:
-    //   SPLIT    — N = total_size / (sum(block_sizes) + count * per_blk_overhead), per_blk_overhead depends on
-    //              disable_scale_cap (see SPLIT layout branches below).
-    //   COMBINE  — N = total_size / sum(block_sizes); the umq_buf_t header is inline in each block, no separate
-    //              header region, so no per-block overhead is subtracted here.
+    // lazy init: SCs with block_size >= threshold get zero initial memory
+    uint64_t lazy_threshold = (cfg->lazy_init_block_size_threshold == 0) ?
+                                  QBUF_POOL_DEFAULT_LAZY_INIT_BLOCK_SIZE_THRESHOLD :
+                                  cfg->lazy_init_block_size_threshold;
+    g_qbuf_pool.lazy_sc_mask = 0;
+    uint32_t nonlazy_count = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        if (g_qbuf_pool.block_sizes[i] >= lazy_threshold) {
+            g_qbuf_pool.lazy_sc_mask |= (1U << i);
+        } else {
+            nonlazy_count++;
+        }
+    }
+    // block-equal-division per size_class (only non-lazy SCs get initial memory):
+    //   SPLIT    — N = total_size / (sum(nonlazy_block_sizes) + nonlazy_count * per_blk_overhead)
+    //   COMBINE  — N = total_size / sum(nonlazy_block_sizes)
     uint64_t sum_block_sizes = 0;
     for (uint32_t i = 0; i < count; i++) {
+        if (g_qbuf_pool.lazy_sc_mask & (1U << i)) continue;
         sum_block_sizes += g_qbuf_pool.block_sizes[i];
     }
     uint64_t per_blk_overhead = 0;
@@ -1221,7 +1235,11 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
             per_blk_overhead = (UMQ_EMPTY_HEADER_COEFFICIENT + 1) * sizeof(umq_buf_t);
         }
     }
-    g_qbuf_pool.per_sc_block_count = cfg->total_size / (sum_block_sizes + (uint64_t)count * per_blk_overhead);
+    if (nonlazy_count == 0) {
+        g_qbuf_pool.per_sc_block_count = 0;
+    } else {
+        g_qbuf_pool.per_sc_block_count = cfg->total_size / (sum_block_sizes + (uint64_t)nonlazy_count * per_blk_overhead);
+    }
 
     return 0;
 }
@@ -1235,8 +1253,13 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     char *data_ptr = (char *)cfg->buf_addr;
 
     for (uint32_t sc = 0; sc < count; sc++) {
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            blk_nums[sc] = 0;
+            g_qbuf_pool.data_region_start[sc] = NULL;
+            g_qbuf_pool.data_region_end[sc] = NULL;
+            continue;
+        }
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
-        // per_sc_block_count already factors in disable_scale_cap (see init_size_class_config).
         uint64_t blk_num = g_qbuf_pool.per_sc_block_count;
         blk_nums[sc] = blk_num;
         total_blk_num += blk_num;
@@ -1258,6 +1281,14 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = blk_nums[sc];
         g_qbuf_pool.header_region_start[sc] = header_cur;
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
+            g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
+            uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
+            if (exp_blk_cnt == 0) exp_blk_cnt = 1;
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
+            continue;
+        }
         for (uint64_t i = 0; i < blk_num; i++) {
             umq_buf_t *buf = (umq_buf_t *)(header_cur + i * sizeof(umq_buf_t));
             buf->umqh = UMQ_INVALID_HANDLE;
@@ -1308,8 +1339,13 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     char *data_ptr = (char *)cfg->buf_addr;
 
     for (uint32_t sc = 0; sc < count; sc++) {
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            blk_nums[sc] = 0;
+            g_qbuf_pool.data_region_start[sc] = NULL;
+            g_qbuf_pool.data_region_end[sc] = NULL;
+            continue;
+        }
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
-        // per_sc_block_count is already the block count per SC (no extra header region in COMBINE mode).
         uint64_t blk_num = g_qbuf_pool.per_sc_block_count;
         blk_nums[sc] = blk_num;
         total_blk_num += blk_num;
@@ -1327,6 +1363,14 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     for (uint32_t sc = 0; sc < count; sc++) {
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = blk_nums[sc];
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
+            g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
+            uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
+            if (exp_blk_cnt == 0) exp_blk_cnt = 1;
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
+            continue;
+        }
         for (uint64_t i = 0; i < blk_num; i++) {
             umq_buf_t *buf = (umq_buf_t *)(g_qbuf_pool.data_region_start[sc] + i * blk_size);
             buf->umqh = UMQ_INVALID_HANDLE;
@@ -1441,6 +1485,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     }
     UMQ_VLOG_INFO(VLOG_UMQ, "  global_without_data=%llu\n",
                   (unsigned long long)g_qbuf_pool.block_pool[0].buf_cnt_without_data);
+    UMQ_VLOG_INFO(VLOG_UMQ, "  lazy_sc_mask=0x%x\n", g_qbuf_pool.lazy_sc_mask);
     UMQ_VLOG_INFO(VLOG_UMQ, "  total_size=%llu per_sc_block_count=%llu expansion_mem_max=%llu\n",
                   (unsigned long long)g_qbuf_pool.total_size, (unsigned long long)g_qbuf_pool.per_sc_block_count,
                   (unsigned long long)g_qbuf_pool.expansion_mem_size_max);
