@@ -56,6 +56,8 @@ static int umq_tiny_pool_cfg_check(const umq_init_cfg_t *cfg, uint64_t init_size
         TINY_QBUF_POOL_DEFAULT_BLOCK_COUNT : cfg->buf_pool_cfg.tiny_pool_block_count;
 
     if (tiny_block_count < QBUF_POOL_BATCH_CNT || tiny_block_count < cfg->buf_pool_cfg.tls_tiny_pool_depth) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tiny block count %llu is less than QBUF_POOL_BATCH_CNT or tls_tiny_pool_depth %llu\n",
+            tiny_block_count, cfg->buf_pool_cfg.tls_tiny_pool_depth);
         return -UMQ_ERR_EINVAL;
     }
 
