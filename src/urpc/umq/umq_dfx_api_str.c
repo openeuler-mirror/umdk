@@ -129,8 +129,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              cfg->per_sc_block_count, "disable_scale_cap", (uint32_t)cfg->disable_scale_cap);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u %-30s %-12lu\n", "disable_malloc_escape",
                              (uint32_t)cfg->disable_malloc_escape, "expansion_size", cfg->expansion_size);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "expansion_threshold",
-                             cfg->expansion_threshold);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u %-30s %-12u\n", "expansion_threshold",
+                             cfg->expansion_threshold, "batch_count", cfg->batch_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "expansion_mem_size_max",
                              cfg->expansion_mem_size_max, "exp_total_mem_pool_size", cfg->exp_total_mem_pool_size);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "tls_pool_mem_budget",
