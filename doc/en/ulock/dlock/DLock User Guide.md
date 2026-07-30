@@ -206,7 +206,7 @@ The DLock data plane supports basic operations on distributed objects: Atomic Fe
 
 #### Usage Guide:
 (1) After acquiring a distributed object, the client can call "umo_atomic64_faa" to request an atomic Fetch and Add operation on the object from the server, returning the original value. \
-(2) After acquiring a distributed object, the client can call "umo_atomic64_cas" to request an atomic Compare and Swap operation on the object from the server, returning the new value after modification. \
+(2) After acquiring a distributed object, the client can call "umo_atomic64_cas" to request an atomic Compare and Swap operation on the object from the server. \
 (3) After acquiring a distributed object, the client can call "umo_atomic64_get_snapshot" to request the current value of the object from the server.
 
 ## 9. Heartbeat Detection

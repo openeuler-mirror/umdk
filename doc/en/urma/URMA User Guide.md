@@ -545,6 +545,7 @@ typedef struct urma_context {
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
     struct urma_ref ref; /* [Private] reference count of urma context. */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
@@ -565,6 +566,8 @@ typedef struct urma_context {
 8.  **uint32_t uasid**: An unsigned 32-bit integer representing the User Assisted Segment Identifier (UASID) of the current process.
 
 9.  **struct urma_ref ref**: An instance of the urma_ref structure, used to track the reference count of urma_context_t.
+
+10.  **urma_context_aggr_mode_t aggr_mode**: The public aggregated mode of the URMA context. Its values are `URMA_AGGR_MODE_STANDALONE`, `URMA_AGGR_MODE_ACTIVE_BACKUP`, and `URMA_AGGR_MODE_BALANCE`.
 
 ### 5.2.2 Jetty Management
 
@@ -996,7 +999,7 @@ The message send process is:
 
 - **urma_recv**: The receiver uses this function to receive data from remote memory.
 
-- **urma_send**: The sender uses this function to send data to remote memory. It supports carrying IMM data and can be set to with invalid, meaning the operation will continue even if the target address is invalid.
+- **urma_send**: The sender uses this function to send data to remote memory. It supports carrying IMM data and can be set to send with invalidate, in which case the send operation invalidates the specified target segment (tseg).
 
 ![](figures/urma-arch-data-two-sided-01.png)
 
@@ -1611,7 +1614,7 @@ Options:
   -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.
   -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).
   -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.
-  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.
+  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 512 for lat.
   -d, --dev <dev_name>        The name of ubep device.
   -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.
   -e, --use_jfce              use jfc event.
@@ -1625,7 +1628,7 @@ Options:
   -j, --share_jfr <true/false> share jfr on create jetty.
   -J, --jettys <num of jetty> Num of jettys(default 1).
   -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.
-  -n, --iters <iters>         Number of exchanges (at least 5, default 10000).
+  -n, --iters <iters>         Number of exchanges (at least 5, default 10000 for lat, 50000 for bw).
   -N, --no_peak               Cancel peak-bw calculation.
   -l, --jfs_post_list <size>  Post list of send WQEs of <list size> size.
   -L, --lock_free             Jetty's interior is unlocked.
@@ -1635,7 +1638,7 @@ Options:
   -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.
   -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.
   -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).
-  -s, --size <size>           Size of message to exchange (default 2).
+  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).
   -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .
   -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).
   -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.
