@@ -27,7 +27,7 @@
 #define BONDP_WORKER_EVENT_NUM         (16)
 #define BONDP_WORKER_HANDLER_MAP_SIZE  (64U)
 #define BONDP_WORKER_MAX_ADVANCE_TICKS (64U)
-#define BONDP_WORKER_THREAD_NAME       "urma_bond_worker"
+#define BONDP_WORKER_THREAD_NAME       "urma_bond_wrk"
 
 typedef struct bondp_worker_event_handler {
     int fd;
