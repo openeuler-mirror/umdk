@@ -299,6 +299,42 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
 int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 
 /**
+ * Get mempool info: serialize the local mempool import descriptor so it can be
+ * sent to the peer and imported there (used by the UBSocket bigdata READ path).
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[in] mempool_info_size: size of mempool_info buffer
+ * @param[out] mempool_info: mempool import information
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size);
+
+/**
+ * Set mempool info: import a peer mempool from the descriptor received in a
+ * control message (used by the UBSocket bigdata READ path). The carried
+ * version is recorded on the imported entry so the next state_get can decide
+ * reuse vs unimport+reimport (design §3.5).
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[in] mempool_info_size: size of mempool_info buffer
+ * @param[in] mempool_info: mempool import information
+ * @param[in] version: current mempool version
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_set(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size,
+                         uint32_t version);
+
+/**
+ * Get remote mempool import state vs the given version.
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[in] version: current mempool version
+ * Return: 0 no import needed (cached version matches); 1 need import (not imported);
+ *         2 need unimport & re-import (imported but version changed); -1 error
+ */
+int umq_remote_mempool_state_get(uint64_t umqh, uint32_t mempool_id, uint32_t version);
+
+/**
  * Get device information.
  * @param[in] dev_name: device name
  * @param[in] umq_trans_mode: umq trans mode
