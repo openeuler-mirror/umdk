@@ -2876,6 +2876,101 @@ FREE_BUF:
     return ret;
 }
 
+int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+    uint32_t mempool_info_size)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM ||
+        mempool_info == NULL || mempool_info_size < sizeof(ub_import_mempool_info_t)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[mempool_id];
+    if (tseg == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u tseg not exist\n", mempool_id);
+        return -UMQ_ERR_EINVAL;
+    }
+    urma_seg_t *seg = &tseg->seg;
+
+    ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)mempool_info;
+    import_mempool_info->mempool_seg_flag = seg->attr.value;
+    import_mempool_info->mempool_length = seg->len;
+    import_mempool_info->mempool_token_id = seg->token_id;
+    import_mempool_info->mempool_id = mempool_id;
+    import_mempool_info->mempool_token_value = tseg->user_ctx;
+    (void)memcpy(import_mempool_info->mempool_ubva, &seg->ubva, sizeof(urma_ubva_t));
+    import_mempool_info->version = queue->dev_ctx->mempool_version[mempool_id];
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+    uint32_t mempool_info_size, uint32_t version)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM ||
+        mempool_info == NULL || mempool_info_size < sizeof(ub_import_mempool_info_t)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    // If a prior import exists for this mempool, the caller's version-based
+    // decision (umq_ub_remote_mempool_state_get_impl == 2) guarantees a
+    // version mismatch: drop and unimport it before re-importing, so the
+    // stale tseg is fully replaced (design §3.5).
+    if (umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id) != NULL) {
+        umq_ub_tseg_remove(queue->bind_ctx->tseg_table, mempool_id);
+    }
+
+    // Reuse the receive-side import path: build a temporary rx-style buffer that
+    // carries one ub_import_mempool_info_t, then import it into bind_ctx->tseg_table.
+    uint8_t buf[sizeof(umq_imm_head_t) + sizeof(ub_import_mempool_info_t)] = {0};
+    umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)buf;
+    umq_imm_head->version = UMQ_IMM_VERSION;
+    umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
+    umq_imm_head->mempool_num = 1;
+    umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
+    (void)memcpy(buf + sizeof(umq_imm_head_t), mempool_info, sizeof(ub_import_mempool_info_t));
+
+    umq_buf_t import_buf;
+    (void)memset(&import_buf, 0, sizeof(import_buf));
+    import_buf.buf_data = (char *)buf;
+    import_buf.data_size = (uint32_t)sizeof(buf);
+
+    int ret = umq_ub_data_plan_import_mem(umqh_tp, &import_buf, 0, false);
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
+
+    // Stamp the freshly imported node with the carried version so the next
+    // umq_ub_remote_mempool_state_get_impl can decide reuse vs re-import.
+    imported_tseg_node_t *node = umq_ub_tseg_node_lookup(queue->bind_ctx->tseg_table, mempool_id);
+    if (node != NULL) {
+        (void)util_rwlock_wrlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
+        node->version = version;
+        (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
+    }
+    return UMQ_SUCCESS;
+}
+
+int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get remote mempool state parameter invalid\n");
+        return -1;
+    }
+
+    imported_tseg_node_t *node = umq_ub_tseg_node_lookup(queue->bind_ctx->tseg_table, mempool_id);
+    if (node == NULL) {
+        return 1; /* not imported: need import */
+    }
+    if (node->version == version) {
+        return 0; /* cached version matches: reuse, no import */
+    }
+    return 2; /* imported but version changed: need unimport & re-import */
+}
+
 int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
 {
     if (dev_name == NULL || strnlen(dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE || umq_dev_info == NULL) {

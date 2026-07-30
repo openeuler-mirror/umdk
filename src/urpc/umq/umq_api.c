@@ -1568,6 +1568,43 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id)
     return ops->umq_tp_mempool_state_refresh(umqh, mempool_id);
 }
 
+int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
+        umq->tp_ops->umq_tp_mempool_info_get == NULL || mempool_info == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return umq->tp_ops->umq_tp_mempool_info_get(umq->umqh_tp, mempool_id, mempool_info, mempool_info_size);
+}
+
+int umq_mempool_info_set(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size,
+                         uint32_t version)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
+        umq->tp_ops->umq_tp_mempool_info_set == NULL || mempool_info == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    return umq->tp_ops->umq_tp_mempool_info_set(umq->umqh_tp, mempool_id, mempool_info, mempool_info_size, version);
+}
+
+int umq_remote_mempool_state_get(uint64_t umqh, uint32_t mempool_id, uint32_t version)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->tp_ops == NULL ||
+        umq->tp_ops->umq_tp_remote_mempool_state_get == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "invalid parameter\n");
+        return -1;
+    }
+
+    return umq->tp_ops->umq_tp_remote_mempool_state_get(umq->umqh_tp, mempool_id, version);
+}
+
 int umq_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
 {
     if (dev_name == NULL || strnlen(dev_name, UMQ_DEV_NAME_SIZE) >= UMQ_DEV_NAME_SIZE || umq_dev_info == NULL) {
