@@ -1105,6 +1105,7 @@ static int umq_ub_create_jetty_node(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx,
     }
 
     if (queue->flow_control.enabled) {
+        bondp_jfc_cfg.base.depth = UMQ_UB_FLOW_CONTORL_JETTY_DEPTH + 1; // flush done consumes one cqe
         start_timestamp = umq_perf_get_start_timestamp();
         jetty_node->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] =
         umq_symbol_urma()->urma_create_jfc(dev_ctx->urma_ctx, &bondp_jfc_cfg.base);
