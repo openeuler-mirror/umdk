@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "perf.h"
+#include "umq_dfx_types.h"
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "urpc_thread_closure.h"
