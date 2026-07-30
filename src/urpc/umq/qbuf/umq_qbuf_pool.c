@@ -2086,15 +2086,43 @@ void umq_qbuf_free(umq_buf_list_t *list)
     umq_buf_t *sc_heads[UMQ_QBUF_SIZE_CLASS_MAX] = {NULL};
     umq_buf_t *sc_tails[UMQ_QBUF_SIZE_CLASS_MAX] = {NULL};
     uint32_t total_cnt = 0;
+    umq_buf_t *nodata_head = NULL;
+    umq_buf_t *nodata_tail = NULL;
     umq_buf_t *cur = QBUF_LIST_FIRST(list);
     while (cur != NULL) {
         umq_buf_t *next = QBUF_LIST_NEXT(cur);
-        uint32_t cur_blk = (g_qbuf_pool.mode == UMQ_BUF_SPLIT) ? cur->buf_size - (uint32_t)sizeof(umq_buf_t) :
-                                                                 cur->buf_size;
-        uint32_t cur_sc = blk_size_to_sc(cur_blk);
         QBUF_LIST_NEXT(cur) = NULL;
+
+        if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && cur->mempool_without_data == 1) {
+            if (nodata_head == NULL) {
+                nodata_head = cur;
+            } else {
+                QBUF_LIST_NEXT(nodata_tail) = cur;
+            }
+            nodata_tail = cur;
+            cur = next;
+            continue;
+        }
+
+        uint32_t cur_blk;
+        if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
+            if (cur->buf_size < (uint32_t)sizeof(umq_buf_t)) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                    "umq_qbuf_free: buf_size=%u underflow (< %zu), buf=%p mpool=%u nodata=%u\n",
+                    cur->buf_size, sizeof(umq_buf_t), (void *)cur, cur->mempool_id, cur->mempool_without_data);
+                cur = next;
+                continue;
+            }
+            cur_blk = cur->buf_size - (uint32_t)sizeof(umq_buf_t);
+        } else {
+            cur_blk = cur->buf_size;
+        }
+
+        uint32_t cur_sc = blk_size_to_sc(cur_blk);
         if (cur_sc >= g_qbuf_pool.size_class_count) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "blk_size_to_sc: unmatched blk_size=%u, buf=%p\n", cur_blk, (void *)cur);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                "umq_qbuf_free: blk_size_to_sc unmatched blk_size=%u buf=%p mpool=%u nodata=%u\n",
+                cur_blk, (void *)cur, cur->mempool_id, cur->mempool_without_data);
             cur = next;
             continue;
         }
@@ -2109,6 +2137,22 @@ void umq_qbuf_free(umq_buf_list_t *list)
         cur = next;
     }
     QBUF_LIST_FIRST(list) = NULL;
+
+    if (nodata_head != NULL) {
+        umq_buf_list_t nodata_list;
+        QBUF_LIST_FIRST(&nodata_list) = nodata_head;
+        uint32_t cnt = release_batch(&nodata_list, &local_pool->head_without_data, false);
+        local_pool->buf_cnt_without_data += cnt;
+        uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)local_pool->capacity_without_data;
+        if (local_pool->buf_cnt_without_data > cap) {
+            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
+            return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
+            g_thread_cache.stats.tls_return_cnt_without_data++;
+        }
+        g_thread_cache.stats.free_cnt_without_data += cnt;
+        if (qbuf_debug_on())
+            g_dbg_stats.free_without_data += cnt;
+    }
 
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         if (sc_heads[sc] == NULL) {
@@ -2146,6 +2190,12 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     }
     uint32_t block_size;
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
+        if (qbuf->buf_size < (uint32_t)sizeof(umq_buf_t)) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                "umq_qbuf_headroom_reset: buf_size=%u underflow (< %zu), buf=%p\n",
+                qbuf->buf_size, sizeof(umq_buf_t), (void *)qbuf);
+            return -UMQ_ERR_EINVAL;
+        }
         block_size = qbuf->buf_size - (uint32_t)sizeof(umq_buf_t);
     } else {
         block_size = qbuf->buf_size;
