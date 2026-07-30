@@ -296,7 +296,8 @@ typedef struct umq_ops {
      * @param[in] umqh_tp: umq tp handle
      * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
      * @param[in] version: current mempool version
-     * Return: 0 no import needed; 1 need import; 2 need unimport & re-import; -1 error
+     * Return: 0 no import needed; 1 need import; 2 need unimport & re-import (version grew);
+     *         3 protocol error (version rollback), caller sends READ_ABORT; -1 error
      */
     int (*umq_tp_remote_mempool_state_get)(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version);
 

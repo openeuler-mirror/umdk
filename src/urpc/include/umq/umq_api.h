@@ -330,7 +330,9 @@ int umq_mempool_info_set(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_in
  * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
  * @param[in] version: current mempool version
  * Return: 0 no import needed (cached version matches); 1 need import (not imported);
- *         2 need unimport & re-import (imported but version changed); -1 error
+ *         2 need unimport & re-import (imported but version grew);
+ *         3 protocol error: version rolled back or field conflict, caller sends READ_ABORT;
+ *         -1 error
  */
 int umq_remote_mempool_state_get(uint64_t umqh, uint32_t mempool_id, uint32_t version);
 
