@@ -1033,12 +1033,13 @@ void umq_buf_free(umq_buf_t *qbuf)
         umq_buf_list_t free_head;
         QBUF_LIST_FIRST(&free_head) = free_node;
         umq_pool_type_t type = umq_pool_type_get(qbuf->mempool_id);
+        bool is_nodata = (qbuf->mempool_without_data == 1);
         QBUF_LIST_FIRST(&head) = QBUF_LIST_NEXT(qbuf);
 
         QBUF_LIST_FOR_EACH_SAFE(cur_node, &head, next_node)
         {
-            if (type == umq_pool_type_get(cur_node->mempool_id)) {
-                // current qbuf is in the same pool, scan the next one directly
+            if (type == umq_pool_type_get(cur_node->mempool_id) &&
+                is_nodata == (cur_node->mempool_without_data == 1)) {
                 last_node = cur_node;
                 continue;
             }
@@ -1048,6 +1049,7 @@ void umq_buf_free(umq_buf_t *qbuf)
             umq_invalid_handle_buf_free(&free_head, umq_pool_type_get(QBUF_LIST_FIRST(&free_head)->mempool_id));
             free_node = cur_node;
             type = umq_pool_type_get(cur_node->mempool_id);
+            is_nodata = (cur_node->mempool_without_data == 1);
             last_node = cur_node;
         }
 
