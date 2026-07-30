@@ -10,7 +10,7 @@
 
 #include "umq_qbuf_pool_base.h"
 
-int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint32_t split_extra_header_count)
+int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint64_t split_extra_header_count)
 {
     if (base == NULL || base->block_size <= sizeof(umq_buf_t) || cfg == NULL || cfg->buf_addr == NULL ||
         cfg->total_size == 0) {
@@ -38,8 +38,8 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
 
     uint64_t blk_num;
     if (cfg->mode == UMQ_BUF_SPLIT) {
-        uint64_t header_size = ((uint64_t)split_extra_header_count + 1) * (uint32_t)sizeof(umq_buf_t);
-        blk_num = cfg->total_size / (base->block_size + header_size);
+        uint64_t header_size = (uint64_t)sizeof(umq_buf_t);
+        blk_num = (cfg->total_size - split_extra_header_count * header_size) / (base->block_size + header_size);
         base->header_buffer = (char *)cfg->buf_addr + blk_num * base->block_size;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         blk_num = cfg->total_size / base->block_size;
