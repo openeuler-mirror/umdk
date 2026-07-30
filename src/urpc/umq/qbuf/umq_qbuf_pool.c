@@ -2212,11 +2212,24 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
             uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
             uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
             uint64_t id = offset / blk_size;
-            return (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
+            umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
+            /* Validate that the computed qbuf actually contains 'data'.
+             * buf_data_to_size_class can return false positives for
+             * expansion-pool blocks whose addresses happen to fall within
+             * a normal-pool data_region's address range. */
+            if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
+                candidate->buf_data + blk_size > (char *)data) {
+                return candidate;
+            }
+            /* Fall through to escape / expansion path. */
         }
 
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) > 0) {
-            return umq_qbuf_data_to_head_escape(data);
+        /* Always try expansion pool / escape lookup. Expansion-pool blocks
+         * don't increment g_total_escape_buf_cnt, so we can't gate on it. */
+        umq_buf_t *esc = umq_qbuf_data_to_head_escape(data);
+        if (esc != NULL && esc->buf_data != NULL && esc->buf_data <= (char *)data &&
+            esc->buf_data + esc->buf_size > (char *)data) {
+            return esc;
         }
 
         uint64_t buffer_head = (uint64_t)(uintptr_t)data & (~(QBUF_MEMALIGN_SIZE - 1));
@@ -2231,7 +2244,13 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
         uint64_t id = offset / blk_size;
-        return (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_region_start[sc] + id * blk_size);
+        umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_region_start[sc] + id * blk_size);
+        /* Validate (see SPLIT mode comment above). */
+        if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
+            candidate->buf_data + blk_size > (char *)data) {
+            return candidate;
+        }
+        /* Fall through to escape / expansion path. */
     }
 
     if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) > 0) {
