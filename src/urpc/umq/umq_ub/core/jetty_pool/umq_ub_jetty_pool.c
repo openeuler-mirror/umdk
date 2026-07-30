@@ -24,6 +24,8 @@
 #define JETTY_POOL_MAX_NODES 65536
 #define UMQ_JETTY_NODE_MIN_BORROW_LIMIT 2
 #define UMQ_JETTY_NODE_BORROW_LIMIT_RATIO 1024
+#define UMQ_UB_WAIT_JETTY_IDLE_TIMEOUT_US 1000
+#define UMQ_UB_WAIT_JETTY_IDLE_RETRY_CNT 3
 
 typedef struct jetty_pool {
     umq_ub_jetty_node_list_t jetty_node_list;
@@ -486,6 +488,12 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
                     (void)pthread_spin_unlock(&pool->lock);
                 }
                 continue;
+            } else if (node->is_jetty_err) {
+                (void)pthread_spin_lock(&pool->lock);
+                pool->active_count++;
+                recycle_node_to_relay_q(pool, node);
+                (void)pthread_spin_unlock(&pool->lock);
+                continue;
             }
 
             node->borrow_count = 0;
@@ -663,6 +671,49 @@ void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node)
         return; // was already true
     }
     (void)__atomic_add_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
+}
+
+int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
+{
+    if (node == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
+    umq_ub_jetty_node_mark_err(node);
+    uint64_t wait_timeout = UMQ_UB_WAIT_JETTY_IDLE_TIMEOUT_US;
+    uint32_t retry_cnt = 0;
+    while (__atomic_load_n(&node->state, __ATOMIC_ACQUIRE) == JETTY_POOL_NODE_IN_USE) {
+        if (retry_cnt < UMQ_UB_WAIT_JETTY_IDLE_RETRY_CNT) {
+            retry_cnt++;
+            usleep(wait_timeout);
+            wait_timeout += wait_timeout;
+            continue;
+        }
+
+        __atomic_store_n(&node->is_jetty_err, false, __ATOMIC_RELEASE);
+        (void)pthread_spin_lock(&g_jetty_pool.lock);
+        if (node->in_global_pool) {
+            // it has already been returned to the global pool. Lock it and reset this node to err
+            umq_ub_jetty_node_mark_err(node);
+            urpc_list_remove(&node->node);
+            recycle_node_to_relay_q(&g_jetty_pool, node);
+            (void)pthread_spin_unlock(&g_jetty_pool.lock);
+            return UMQ_SUCCESS;
+        }
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
+        return -UMQ_ERR_EBUSY;
+    }
+
+    // the jetty node has already been set to err and cannot be allocated again
+    (void)pthread_spin_lock(&g_jetty_pool.lock);
+    if (!node->in_global_pool) {
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
+        return UMQ_SUCCESS;
+    }
+
+    urpc_list_remove(&node->node);
+    recycle_node_to_relay_q(&g_jetty_pool, node);
+    (void)pthread_spin_unlock(&g_jetty_pool.lock);
+    return UMQ_SUCCESS;
 }
 
 int umq_ub_jetty_pool_align_tx(uint32_t queue_tx_depth, uint32_t queue_tx_buf_size)

@@ -3050,6 +3050,13 @@ int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_han
         return -UMQ_ERR_EINVAL;
     }
 
+    int ret = umq_ub_jetty_node_modify_err_and_to_relay(jetty_node_list->node_list[tp_handle_idx]);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) tp_handle_idx %u currently in use, ret %d\n",
+            queue->umq_id, tp_handle_idx, ret);
+        return ret;
+    }
+
     urma_jetty_t *jetty = jetty_node_list->node_list[tp_handle_idx]->jetty[UB_QUEUE_JETTY_IO];
     urma_jetty_attr_t jetty_attr = {
         .mask = JETTY_STATE,
@@ -3071,7 +3078,6 @@ int umq_ub_transport_pool_resource_modify_impl(uint64_t umqh_tp, uint32_t tp_han
                 jetty->jetty_id.id, (int)urma_status);
         }
     }
-    umq_ub_jetty_node_mark_err(jetty_node_list->node_list[tp_handle_idx]);
     return umq_status_convert(urma_status);
 }
 

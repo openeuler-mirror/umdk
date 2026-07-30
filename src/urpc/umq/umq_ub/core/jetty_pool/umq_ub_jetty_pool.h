@@ -79,6 +79,7 @@ bool umq_ub_jetty_pool_has_avail(void);
 umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
+int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node);
 
 // Enforce that a main umq's tx_depth and tx_buf_size match the jetty pool baseline.
 // The first main+share_transport umq to call establishes the baseline; every subsequent caller must match it
