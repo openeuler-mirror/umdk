@@ -191,6 +191,23 @@ static int umq_tp_ub_mempool_state_refresh(uint64_t umqh_tp, uint32_t mempool_id
     return umq_ub_mempool_state_refresh_impl(umqh_tp, mempool_id);
 }
 
+static int umq_tp_ub_mempool_info_get(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+    uint32_t mempool_info_size)
+{
+    return umq_ub_mempool_info_get_impl(umqh_tp, mempool_id, mempool_info, mempool_info_size);
+}
+
+static int umq_tp_ub_mempool_info_set(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+    uint32_t mempool_info_size, uint32_t version)
+{
+    return umq_ub_mempool_info_set_impl(umqh_tp, mempool_id, mempool_info, mempool_info_size, version);
+}
+
+static int umq_tp_ub_remote_mempool_state_get(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version)
+{
+    return umq_ub_remote_mempool_state_get_impl(umqh_tp, mempool_id, version);
+}
+
 static int umq_tp_ub_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
 {
     return umq_ub_dev_info_get_impl(dev_name, umq_trans_mode, umq_dev_info);
@@ -252,6 +269,9 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_get_topo = umq_tp_ub_get_route_list_impl,
     .umq_tp_mempool_state_get = umq_tp_ub_mempool_state_get,
     .umq_tp_mempool_state_refresh = umq_tp_ub_mempool_state_refresh,
+    .umq_tp_mempool_info_get = umq_tp_ub_mempool_info_get,
+    .umq_tp_mempool_info_set = umq_tp_ub_mempool_info_set,
+    .umq_tp_remote_mempool_state_get = umq_tp_ub_remote_mempool_state_get,
     .umq_tp_dev_info_get = umq_tp_ub_dev_info_get,
     .umq_tp_dev_info_list_get = umq_tp_ub_dev_info_list_get,
     .umq_tp_dev_info_list_free = umq_tp_ub_dev_info_list_free,

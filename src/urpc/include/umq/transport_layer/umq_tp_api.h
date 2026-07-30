@@ -269,6 +269,38 @@ typedef struct umq_ops {
     int (*umq_tp_mempool_state_refresh)(uint64_t umqh_tp, uint32_t mempool_id);
 
     /**
+     * Get mempool info: serialize the local mempool import descriptor.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * @param[in] mempool_info_size: size of mempool_info buffer
+     * @param[out] mempool_info: mempool import information
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_info_get)(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+        uint32_t mempool_info_size);
+
+    /**
+     * Set mempool info: import a peer mempool from a received descriptor.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * @param[in] mempool_info_size: size of mempool_info buffer
+     * @param[in] mempool_info: mempool import information
+     * @param[in] version: current mempool version
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_info_set)(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+        uint32_t mempool_info_size, uint32_t version);
+
+    /**
+     * Get remote mempool import state vs the given version.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * @param[in] version: current mempool version
+     * Return: 0 no import needed; 1 need import; 2 need unimport & re-import; -1 error
+     */
+    int (*umq_tp_remote_mempool_state_get)(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version);
+
+    /**
      * Get device information.
      * @param[in] dev_name: device name
      * @param[in] umq_trans_mode: umq trans mode

@@ -253,6 +253,42 @@ urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg_table, uint32_t 
     return NULL;
 }
 
+imported_tseg_node_t *umq_ub_tseg_node_lookup(import_tseg_table_t *tseg_table, uint32_t mempool_id)
+{
+    imported_tseg_node_t *tseg_node = NULL;
+    uint32_t hash = umq_ub_tseg_hash_get(mempool_id);
+    (void)util_rwlock_rdlock(tseg_table->tseg_hmap_lock);
+    URPC_HMAP_FOR_EACH_WITH_HASH(tseg_node, node, hash, &tseg_table->tseg_hmap) {
+        if (tseg_node->mempool_id == mempool_id) {
+            (void)util_rwlock_unlock(tseg_table->tseg_hmap_lock);
+            return tseg_node;
+        }
+    }
+    (void)util_rwlock_unlock(tseg_table->tseg_hmap_lock);
+    return NULL;
+}
+
+void umq_ub_tseg_remove(import_tseg_table_t *tseg_table, uint32_t mempool_id)
+{
+    imported_tseg_node_t *tseg_node = NULL;
+    imported_tseg_node_t *found = NULL;
+    uint32_t hash = umq_ub_tseg_hash_get(mempool_id);
+    (void)util_rwlock_wrlock(tseg_table->tseg_hmap_lock);
+    URPC_HMAP_FOR_EACH_WITH_HASH(tseg_node, node, hash, &tseg_table->tseg_hmap) {
+        if (tseg_node->mempool_id == mempool_id) {
+            found = tseg_node;
+            break;
+        }
+    }
+    if (found != NULL) {
+        urpc_hmap_delete(&tseg_table->tseg_hmap, &found->node);
+    }
+    (void)util_rwlock_unlock(tseg_table->tseg_hmap_lock);
+    if (found != NULL) {
+        umq_tseg_node_destroy(found);
+    }
+}
+
 static imported_tseg_node_t *umq_ub_tseg_node_create(
     ub_queue_t *queue, urma_seg_t *seg, uint32_t seg_size, uint32_t token_value, uint32_t mempool_id)
 {
@@ -2001,6 +2037,9 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint
         return -UMQ_ERR_ENODEV;
     }
 
+    /* Bump the per-mempool version on each (re)registration so peers can detect
+     * a recycled/reallocated mempool and re-import (design §3.5). */
+    ctx->mempool_version[mempool_id]++;
     return UMQ_SUCCESS;
 }
 
