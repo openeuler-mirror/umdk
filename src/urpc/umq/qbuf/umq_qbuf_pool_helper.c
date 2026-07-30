@@ -7,16 +7,16 @@
  * History: 2026-6-26
  */
 
+#include "umq_qbuf_pool_helper.h"
 #include "umq_errno.h"
-#include "umq_vlog.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
-#include "umq_qbuf_pool_helper.h"
+#include "umq_vlog.h"
 
 static uint32_t umq_qbuf_alloc_headroom_get(umq_alloc_option_t *option)
 {
-    return (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
-        option->headroom_size : umq_qbuf_headroom_get();
+    return (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ? option->headroom_size :
+                                                                                     umq_qbuf_headroom_get();
 }
 
 static uint32_t umq_qbuf_alloc_effective_size(uint32_t request_size, uint32_t headroom_size)
@@ -26,7 +26,7 @@ static uint32_t umq_qbuf_alloc_effective_size(uint32_t request_size, uint32_t he
 }
 
 static int umq_qbuf_alloc_from_pool(umq_alloc_pool_type_t pool_type, uint32_t request_size, uint32_t num,
-    umq_alloc_option_t *option, umq_buf_list_t *list)
+                                    umq_alloc_option_t *option, umq_buf_list_t *list)
 {
     uint32_t headroom_size = umq_qbuf_alloc_headroom_get(option);
     uint32_t effective_size = umq_qbuf_alloc_effective_size(request_size, headroom_size);
@@ -63,15 +63,8 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     int ret;
     if (pool_type == UMQ_ALLOC_POOL_AUTO) {
         pool_type = UMQ_ALLOC_POOL_NORMAL;
-        if (umq_huge_qbuf_pool_is_inited()) {
-            uint32_t headroom_size = umq_qbuf_alloc_headroom_get(option);
-            uint32_t effective_size = umq_qbuf_alloc_effective_size(request_size, headroom_size);
-            if (effective_size >= umq_huge_qbuf_get_size_by_type(HUGE_QBUF_POOL_SIZE_TYPE_MID)) {
-                pool_type = UMQ_ALLOC_POOL_HUGE;
-            }
-        }
         ret = umq_qbuf_alloc_from_pool(pool_type, request_size, num, option, list);
-        if (ret != UMQ_SUCCESS && pool_type != UMQ_ALLOC_POOL_HUGE) {
+        if (ret != UMQ_SUCCESS) {
             ret = umq_qbuf_alloc_from_pool(UMQ_ALLOC_POOL_ESCAPE, request_size, num, option, list);
         }
         return ret;
