@@ -1167,7 +1167,7 @@ urma_jetty_t *umq_create_jetty(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_cre
                 .priority = queue->priority,
                 .max_sge = queue->max_tx_sge,
                 .max_rsge = 1,
-                .max_inline_data = dev_ctx->dev_attr.dev_cap.max_jfs_inline_len,
+                .max_inline_data = 0,
                 .jfc = config->jfs_jfc,
                 .rnr_retry = queue->rnr_retry,
                 .err_timeout = queue->err_timeout,
