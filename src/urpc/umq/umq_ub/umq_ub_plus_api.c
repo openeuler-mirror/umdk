@@ -11,10 +11,10 @@
 #include "umq_errno.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_qbuf_pool.h"
-#include "umq_ub_impl.h"
-#include "umq_ub_api.h"
-#include "umq_vlog.h"
 #include "umq_symbol_private.h"
+#include "umq_ub_api.h"
+#include "umq_ub_impl.h"
+#include "umq_vlog.h"
 
 static int umq_tp_ub_plus_symbol_load(void)
 {
@@ -46,11 +46,6 @@ static uint8_t *umq_tp_ub_plus_init(umq_init_cfg_t *cfg)
             goto UNINIT_MEM;
         }
     }
-    ret = umq_ub_huge_qbuf_pool_init(cfg);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "init huge qbuf pool configuration failed, status: %d\n", ret);
-        goto UNINIT_MEM;
-    }
 
     return ub_ctx;
 
@@ -68,7 +63,6 @@ static void umq_tp_ub_plus_uninit(uint8_t *ctx)
         UMQ_VLOG_ERR(VLOG_UMQ, "ub_ctx is null\n");
         return;
     }
-    umq_ub_huge_qbuf_pool_uninit();
     umq_ub_unregister_memory_impl();
     umq_ub_ctx_uninit_impl(ctx);
 }
@@ -109,7 +103,7 @@ static umq_state_t umq_tp_ub_plus_state_get(uint64_t umqh_tp)
 }
 
 static umq_buf_t *umq_tp_ub_plus_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint64_t umqh_tp,
-    umq_alloc_option_t *option)
+                                           umq_alloc_option_t *option)
 {
     return umq_ub_plus_buf_alloc_impl(request_size, request_qbuf_num, umqh_tp, option);
 }
