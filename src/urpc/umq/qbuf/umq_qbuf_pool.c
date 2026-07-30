@@ -1935,6 +1935,60 @@ uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, 
     return count;
 }
 
+uint32_t umq_qbuf_expansion_slot_dist(umq_expansion_slot_info_t *infos, uint32_t cap)
+{
+    if (infos == NULL || cap == 0) {
+        return 0;
+    }
+    if (!g_qbuf_pool.inited || g_qbuf_pool.disable_scale_cap) {
+        return 0;
+    }
+
+    uint32_t n = 0;
+     /* with_data: traverse exp_pool_with_data[sc].slot_list bu size class */
+    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        qbuf_expansion_pool_t *exp_pool = &g_qbuf_pool.exp_pool_with_data[sc];
+        (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+        qbuf_expansion_pool_slot_t *slot;
+        URPC_LIST_FOR_EACH(slot, node, &exp_pool->slot_list)
+        {
+            if (n >= cap) {
+                (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+                return n;
+            }
+            infos[n].mempool_id = (uint16_t)(slot->slot_id + QBUF_POOL_EXP_SLOT_ID_MIN);
+            infos[n].size_class = (uint16_t)sc;
+            infos[n].slot_id = slot->slot_id;
+            infos[n].total_block_cnt = slot->total_block_cnt;
+            infos[n].free_block_cnt = slot->free_block_cnt;
+            infos[n].in_use_cnt = slot->total_block_cnt - slot->free_block_cnt;
+            n++;
+        }
+        (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+    }
+
+    /* without_data: traverse exp_pool_without_date.slot_list */
+    qbuf_expansion_pool_t *exp_pool = &g_qbuf_pool.exp_pool_without_date;
+    (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+    qbuf_expansion_pool_slot_t *slot;
+    URPC_LIST_FOR_EACH(slot, node, &exp_pool->slot_list)
+    {
+        if (n >= cap) {
+            (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+            return n;
+        }
+        infos[n].mempool_id = (uint16_t)(slot->slot_id + QBUF_POOL_EXP_SLOT_ID_MIN);
+        infos[n].size_class = UMQ_QBUF_SIZE_CLASS_MAX;
+        infos[n].slot_id = slot->slot_id;
+        infos[n].total_block_cnt = slot->total_block_cnt;
+        infos[n].free_block_cnt = slot->free_block_cnt;
+        infos[n].in_use_cnt = slot->total_block_cnt - slot->free_block_cnt;
+        n++;
+    }
+    (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+    return n;
+}
+
 static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc)
 {
     uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
