@@ -34,10 +34,20 @@ urma_status_t bondp_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
         return URMA_EINVAL;
     }
 
-    /* Rearm writes the current CQ CI, so refresh standby JFCs as well. */
+    uint32_t mask = atomic_load(&bdp_jfc->rearm_mask);
+    /* When no physical JFC has recorded a fired event (e.g. the initial arming before the
+     * hot loop), rearm all enabled physical JFCs to keep the event channel armed. When the
+     * mask is non-zero, skip the physical JFCs whose bits are clear so only the ones that
+     * actually fired get rearmed. */
     for (uint32_t n = 0; n < bdp_jfc->enabled_count; ++n) {
         uint32_t i = bdp_jfc->enabled_indices[n];
+        if (mask != 0 && ((mask >> i) & 1U) == 0) {
+            continue;
+        }
         if (urma_rearm_jfc(bdp_jfc->p_jfc[i], solicited_only) == URMA_SUCCESS) {
+            if (mask != 0) {
+                atomic_fetch_and(&bdp_jfc->rearm_mask, ~(1U << i));
+            }
             success_once = true;
         }
     }
@@ -67,6 +77,16 @@ static inline urma_jfce_t *bondp_find_p_jfce_by_fd(bondp_jfce_t *bdp_jfce, int f
     return NULL;
 }
 
+static inline int bondp_find_p_jfc_index(bondp_jfc_t *bdp_jfc, urma_jfc_t *p_jfc)
+{
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_jfc->p_jfc[i] == p_jfc) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 static urma_jfc_t *bondp_wait_one_jfc_event(bondp_jfce_t *bdp_jfce, int fd)
 {
     urma_jfce_t *p_jfce = bondp_find_p_jfce_by_fd(bdp_jfce, fd);
@@ -88,6 +108,15 @@ static urma_jfc_t *bondp_wait_one_jfc_event(bondp_jfce_t *bdp_jfce, int fd)
     if (v_jfc == NULL) {
         URMA_LOG_WARN("v_jfc is NULL, pjfc_id=%u.\n", p_jfc->jfc_id.id);
         return NULL;
+    }
+
+    /* Mark the physical JFC that fired so the subsequent rearm can target it. */
+    bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(v_jfc, bondp_jfc_t, v_jfc);
+    int p_idx = bondp_find_p_jfc_index(bdp_jfc, p_jfc);
+    if (p_idx < 0) {
+        URMA_LOG_WARN("pjfc not found in p_jfc array, pjfc_id=%u.\n", p_jfc->jfc_id.id);
+    } else {
+        atomic_fetch_or(&bdp_jfc->rearm_mask, 1U << p_idx);
     }
     return v_jfc;
 }
