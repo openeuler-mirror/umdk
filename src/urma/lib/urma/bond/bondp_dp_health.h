@@ -38,6 +38,7 @@ typedef struct bondp_hc_cfg {
 } bondp_hc_cfg_t;
 
 int bondp_hc_init(struct bondp_context *bdp_ctx, const bondp_hc_cfg_t *cfg);
+int bondp_hc_start(struct bondp_context *bdp_ctx, uint8_t priority);
 void bondp_hc_uninit(struct bondp_context *bdp_ctx);
 
 /**

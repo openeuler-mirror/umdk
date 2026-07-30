@@ -1401,6 +1401,11 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto FREE_JETTY;
     }
 
+    if (bondp_hc_start(bdp_ctx, jetty_cfg->jfs_cfg.priority) != 0) {
+        URMA_LOG_ERR("Failed to start health check\n");
+        goto FREE_JETTY;
+    }
+
     if (bondp_create_pjetty(bdp_ctx, bdp_jetty, jetty_cfg) != 0) {
         URMA_LOG_ERR("Failed to create pjetty\n");
         goto DELETE_PJETTY;
