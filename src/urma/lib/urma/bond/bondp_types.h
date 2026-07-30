@@ -96,6 +96,13 @@ typedef struct bondp_device {
     int dev_num;
 } bondp_device_t;
 
+typedef struct bondp_port_cfg {
+    uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t enabled_count;
+    uint8_t chip_id[URMA_UBAGG_DEV_MAX_NUM];
+    uint32_t chip_id_count;
+} bondp_port_cfg_t;
+
 /**
  *  The first field is exposed to user.
  *  p_ctxs and p_devs stores neccesary parameters of slave devices.
@@ -123,6 +130,8 @@ typedef struct bondp_context {
     bool seg_cache_enable;
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
+    bool port_cfg_enable;
+    bondp_port_cfg_t port_cfg;
 } bondp_context_t;
 
 typedef struct bondp_jfc {

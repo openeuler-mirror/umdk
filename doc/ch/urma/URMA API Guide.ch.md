@@ -6698,6 +6698,45 @@ typedef struct urma_user_ctl_out {
 } urma_user_ctl_out_t;
 ```
 
+##### 2.5.1.1.3 BONDP_USER_CTL_SET_BONDING_PORT
+
+聚合（bonding）设备可通过该 opcode 在创建 JFC、JFS、JFR、Jetty 之前设置统一的物理端口列表，使后续创建的对象仅在该端口子集上建立物理连接，从而减少物理连接数。该 opcode 与输入结构定义在 [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h) 中。
+
+调用方式：
+
+- `in.opcode` 取 `BONDP_USER_CTL_SET_BONDING_PORT`；
+- `in.addr` 指向 `bondp_set_bonding_port_in_t` 结构，`in.len` 为该结构的大小；
+- `out` 不使用（可为 0）。
+
+```c
+typedef struct bondp_set_bonding_port_in {
+    const bondp_port_id_t *port_ids; /* [Required] 物理端口 id 数组 */
+    uint32_t port_count;             /* [Required] 数组元素个数，取值范围 [1, URMA_UBAGG_DEV_MAX_NUM] */
+} bondp_set_bonding_port_in_t;
+```
+
+`bondp_port_id_t` 的语义字段：
+
+- `chip_id`：芯片号，合法取值 [1, CHIP_NUM]；
+- `die_id`：固定为 1；
+- `port_idx`：端口 EID 编号，合法取值 [0, PORT_NUM]；取 `UINT8_MAX` 时表示该芯片的 primary EID。
+
+**与创建对象时端口配置的一致性约束**：
+
+调用方在创建 JFC、JFS、JFR、Jetty 时若置位 `has_drv_ext`，其扩展字段传入的 `port_ids` 必须与本配置一致。一致性校验在创建流程中执行，规则如下：
+
+- **chip_id 顺序必须一致**：本配置与创建对象时传入的 `port_ids`，其 chip_id 的排列顺序必须相同。liburma 在设置与创建时均按 port_id 逐项转化为 matrix active index，并保留 chip_id 与 index 的对应关系；顺序不一致会导致配对错位、校验失败。
+- **port_idx 顺序不做要求**：同一 chip 内的 port_idx 出现顺序可以不同，liburma 会对 port_id 做去重，最终比较的是去重后的端口集合。
+- **全量 port 必须一致**：本配置的端口集合与创建对象时传入的端口集合（去重后）必须完全相同，即包含的 chip_id + port_idx 组合完全一致，不能多也不能少；否则创建对象时校验失败。
+
+约束与时序：
+
+- liburma 内部会拷贝 `port_ids` 数组（含 chip_id），调用返回后调用方可立即释放该缓冲区。
+- 该配置为上下文级，作用于同一 `urma_context_t` 上后续创建的 JFC/JFS/JFR/Jetty。
+- 配置必须在创建任何 JFC/JFS/JFR/Jetty **之前**完成；若上下文已被对象引用（仍有存活对象），再次调用将返回 `URMA_EAGAIN`，调用方需先销毁已有对象再重新设置。
+
+Return: 0 on success, `URMA_EAGAIN` when the context is still referenced by existing objects, other value on error.
+
 ### 2.5.2 日志
 
 #### 2.5.2.1 urma_register_log_func

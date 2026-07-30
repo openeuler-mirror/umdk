@@ -6610,6 +6610,45 @@ typedef struct urma_user_ctl_out {
 } urma_user_ctl_out_t;
 ```
 
+##### 2.5.1.1.3 BONDP_USER_CTL_SET_BONDING_PORT
+
+A bonding device may set a unified physical port list through this opcode before creating JFC, JFS, JFR, and Jetty, so that subsequently created objects establish physical connections only on this port subset, reducing the number of physical connections. The opcode and its input structure are defined in [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h).
+
+Usage:
+
+- `in.opcode` is `BONDP_USER_CTL_SET_BONDING_PORT`;
+- `in.addr` points to a `bondp_set_bonding_port_in_t` structure, and `in.len` is the size of that structure;
+- `out` is unused (may be 0).
+
+```c
+typedef struct bondp_set_bonding_port_in {
+    const bondp_port_id_t *port_ids; /* [Required] array of physical port ids */
+    uint32_t port_count;             /* [Required] number of elements, in [1, URMA_UBAGG_DEV_MAX_NUM] */
+} bondp_set_bonding_port_in_t;
+```
+
+Semantic fields of `bondp_port_id_t`:
+
+- `chip_id`: chip number, valid range [1, CHIP_NUM];
+- `die_id`: fixed to 1;
+- `port_idx`: port EID number, valid range [0, PORT_NUM]; `UINT8_MAX` represents the primary EID of the chip.
+
+**Consistency constraint with the port config supplied at object creation**:
+
+When the caller sets `has_drv_ext` while creating JFC, JFS, JFR, or Jetty, the `port_ids` supplied via the extension fields must be consistent with this configuration. The consistency check runs during the creation flow with the following rules:
+
+- **chip_id order must match**: the chip_id ordering in this configuration and in the `port_ids` supplied at object creation must be identical. liburma converts each port_id into a matrix active index at both set and create time, preserving the chip_id-to-index correspondence; a mismatched order would cause mispairing and fail the check.
+- **port_idx order is not required**: the order of port_idx values within a chip may differ. liburma de-duplicates port_ids and ultimately compares the de-duplicated port sets.
+- **the full port set must match**: the port set of this configuration and the port set supplied at object creation (after de-duplication) must be exactly the same, i.e. the chip_id + port_idx combinations must match exactly with no missing or extra entries; otherwise the object creation fails the check.
+
+Constraints and ordering:
+
+- liburma copies the `port_ids` array (including chip_id) internally; the caller may release the buffer immediately after the call returns.
+- The configuration is context-scoped and applies to JFC/JFS/JFR/Jetty created afterwards on the same `urma_context_t`.
+- The configuration must be done **before** creating any JFC/JFS/JFR/Jetty; if the context is still referenced by existing objects, a subsequent call returns `URMA_EAGAIN`, and the caller must destroy the existing objects first before reconfiguring.
+
+Return: 0 on success, `URMA_EAGAIN` when the context is still referenced by existing objects, other value on error.
+
 ### 2.5.2 Logging
 
 #### 2.5.2.1 urma_register_log_func
