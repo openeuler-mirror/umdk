@@ -87,6 +87,7 @@ typedef struct umq_flow_control_stats {
 
 typedef struct umq_expansion_pool_stats {
     uint32_t expansion_count;          // number of expansions performed
+    uint32_t partial_slot_count;       // slots with 0 < free_block_cnt < total_block_cnt (partial returns)
     uint64_t exp_total_block_num;      // total number of blocks in the expansion pool
     uint64_t exp_total_free_block_num; // number of free blocks in the expansion pool
     uint64_t exp_total_mem_size;       // total memory of the expansion pool

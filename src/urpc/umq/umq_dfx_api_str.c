@@ -201,6 +201,9 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size,
                          qbuf_pool_stats->exp_pool_without_data.total_expansion_count,
                          qbuf_pool_stats->exp_pool_without_data.total_shrink_count);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "partial_slot_count: WithData=%u WithoutData=%u\n",
+                         qbuf_pool_stats->exp_pool_with_data.partial_slot_count,
+                         qbuf_pool_stats->exp_pool_without_data.partial_slot_count);
 
     // === Per-Thread TLS Pool Stats (WithData) ===
     // Column rename: AccAlloc -> AccAllocCnt, AccFree -> AccFreeCnt (Cnt suffix

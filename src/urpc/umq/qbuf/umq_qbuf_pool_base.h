@@ -610,6 +610,11 @@ static ALWAYS_INLINE void qbuf_tls_capacity_self_shrink(global_block_pool_t *glo
 }
 
 // flush polled buf to global
+/* DEPRECATED: This function bypasses mempool_id routing and blindly prepends to global_head.
+ * Use return_to_global instead, which calls return_list_to_pools to correctly route
+ * expansion-pool buffers back to their slots based on mempool_id.
+ * DO NOT call this function — it is dead code retained for reference only.
+ * If revived, expansion-pool buffers would leak into the base pool and never be reclaimed. */
 static ALWAYS_INLINE void return_qbuf_to_global(global_block_pool_t *global_pool, umq_buf_t *buf, bool with_data)
 {
     uint32_t cnt = 0;
