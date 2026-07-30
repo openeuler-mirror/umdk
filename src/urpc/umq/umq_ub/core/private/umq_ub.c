@@ -19,6 +19,8 @@
 
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
 #define DEFAULT_ERR_TIMEOUT 2
+
+static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node);
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
 #define UMQ_MAX_QBUF_NUM 1
 #define UMQ_LEN_ALIGNMENT_4 4
@@ -28,7 +30,7 @@
  * 4KB-per-connection cost a large bucket array would add at 48K+ peers. */
 #define TSEG_MAP_NUM 8
 #define UMQ_CTP_MAX_BUF_SIZE 4096
-#define UMQ_INITIAL_CREDIT 0
+#define UMQ_INITIAL_CREDIT 16
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
@@ -268,11 +270,46 @@ imported_tseg_node_t *umq_ub_tseg_node_lookup(import_tseg_table_t *tseg_table, u
     return NULL;
 }
 
+/*
+ * Same as umq_ub_tseg_node_lookup but does NOT take the lock — the caller must
+ * already hold tseg_hmap_lock (read or write). Use this when the caller needs
+ * to keep the node pointer stable across a following in-lock access (version
+ * read/write), so a concurrent umq_ub_tseg_remove cannot free the node between
+ * the lookup and the dereference.
+ */
+imported_tseg_node_t *umq_ub_tseg_node_lookup_locked(import_tseg_table_t *tseg_table, uint32_t mempool_id)
+{
+    imported_tseg_node_t *tseg_node = NULL;
+    uint32_t hash = umq_ub_tseg_hash_get(mempool_id);
+    URPC_HMAP_FOR_EACH_WITH_HASH(tseg_node, node, hash, &tseg_table->tseg_hmap) {
+        if (tseg_node->mempool_id == mempool_id) {
+            return tseg_node;
+        }
+    }
+    return NULL;
+}
+
 void umq_ub_tseg_remove(import_tseg_table_t *tseg_table, uint32_t mempool_id)
 {
     imported_tseg_node_t *tseg_node = NULL;
     imported_tseg_node_t *found = NULL;
     uint32_t hash = umq_ub_tseg_hash_get(mempool_id);
+    /*
+     * Destroy (urma_unimport_seg + free) the node under the write lock, not
+     * after unlocking. umq_ub_tseg_lookup returns the tseg pointer to callers
+     * that then use it outside the lock (e.g. umq_ub_read's read_post_send).
+     * If we removed the node from the hmap but deferred destroy to lock-free
+     * scope, a concurrent lookup could still resolve and hand out the about-to-
+     * be-freed tseg, racing with our destroy -> use-after-free. By holding the
+     * wrlock across hmap_remove + umq_tseg_node_destroy, any rdlock-holding
+     * lookup is either fully before (sees the live node) or fully after (sees
+     * nothing and returns NULL), never a dangling pointer.
+     *
+     * Note: this closes the remove-vs-lookup race. Callers that keep a tseg
+     * pointer across the lock boundary (umq_ub_read's path) are still
+     * responsible at the bigdata layer for not re-importing a mempool while an
+     * in-flight READ still references it.
+     */
     (void)util_rwlock_wrlock(tseg_table->tseg_hmap_lock);
     URPC_HMAP_FOR_EACH_WITH_HASH(tseg_node, node, hash, &tseg_table->tseg_hmap) {
         if (tseg_node->mempool_id == mempool_id) {
@@ -281,12 +318,10 @@ void umq_ub_tseg_remove(import_tseg_table_t *tseg_table, uint32_t mempool_id)
         }
     }
     if (found != NULL) {
-        urpc_hmap_delete(&tseg_table->tseg_hmap, &found->node);
-    }
-    (void)util_rwlock_unlock(tseg_table->tseg_hmap_lock);
-    if (found != NULL) {
+        urpc_hmap_remove(&tseg_table->tseg_hmap, &found->node);
         umq_tseg_node_destroy(found);
     }
+    (void)util_rwlock_unlock(tseg_table->tseg_hmap_lock);
 }
 
 static imported_tseg_node_t *umq_ub_tseg_node_create(
@@ -2031,15 +2066,20 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint
         .iova = 0
     };
 
-    ctx->tseg_list[mempool_id] = umq_symbol_urma()->urma_register_seg(ctx->urma_ctx, &seg_cfg);
-    if (ctx->tseg_list[mempool_id] == NULL) {
+    urma_target_seg_t *new_tseg = umq_symbol_urma()->urma_register_seg(ctx->urma_ctx, &seg_cfg);
+    if (new_tseg == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_register_seg failed, errno: %d\n", errno);
         return -UMQ_ERR_ENODEV;
     }
 
-    /* Bump the per-mempool version on each (re)registration so peers can detect
-     * a recycled/reallocated mempool and re-import (design §3.5). */
+    /* Publish the new tseg and bump the per-mempool version under
+     * tseg_list_lock. umq_ub_mempool_info_get_impl reads both fields under the
+     * same lock; without it, a reader could observe a new tseg with a stale
+     * version (or a torn read of mempool_version) — a data race. */
+    (void)pthread_spin_lock(&ctx->tseg_list_lock);
+    ctx->tseg_list[mempool_id] = new_tseg;
     ctx->mempool_version[mempool_id]++;
+    (void)pthread_spin_unlock(&ctx->tseg_list_lock);
     return UMQ_SUCCESS;
 }
 
@@ -2472,9 +2512,9 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
             continue;
         }
 
-        imported_tseg_node_t *new_node = (imported_tseg_node_t *)malloc(sizeof(imported_tseg_node_t));
+        imported_tseg_node_t *new_node = (imported_tseg_node_t *)calloc(1, sizeof(imported_tseg_node_t));
         if (new_node == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, malloc tseg node failed\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc tseg node failed\n",
                 EID_ARGS(*eid), id);
             return UMQ_FAIL;
         }
@@ -2496,6 +2536,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
 
         new_node->mempool_id = import_mempool_info[i].mempool_id;
         new_node->tseg = imported_tseg;
+        new_node->version = import_mempool_info[i].version;
         (void)util_rwlock_wrlock(tseg_table->tseg_hmap_lock);
         urpc_hmap_insert(&tseg_table->tseg_hmap, &new_node->node,
             umq_ub_tseg_hash_get(import_mempool_info[i].mempool_id));

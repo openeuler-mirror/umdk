@@ -279,7 +279,9 @@ typedef struct umq_ub_ctx {
     urma_target_seg_t *tseg_list[UMQ_MAX_TSEG_NUM];
     /* Per-mempool version, bumped each time the local mempool is (re)registered
      * so the peer can detect a recycled/reallocated mempool and re-import
-     * (design §3.5). Serialized by tseg_list_lock. */
+     * (design §3.5). Read/written under tseg_list_lock (together with the
+     * tseg_list[mempool_id] publish in umq_ub_register_seg / read in
+     * umq_ub_mempool_info_get_impl). */
     uint32_t mempool_version[UMQ_MAX_TSEG_NUM];
     remote_imported_tseg_info_t *remote_imported_info;
     urma_target_jetty_t *tjetty;
@@ -700,6 +702,12 @@ urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg_table, uint32_t 
  * mempool, under the table's read lock. Returns NULL if not imported. The
  * caller must not free the returned node; it is owned by the table. */
 imported_tseg_node_t *umq_ub_tseg_node_lookup(import_tseg_table_t *tseg_table, uint32_t mempool_id);
+
+/* Same as umq_ub_tseg_node_lookup but assumes the caller already holds
+ * tseg_hmap_lock (read or write) — does not take the lock itself. Use when the
+ * caller dereferences the returned node before dropping the lock, so a
+ * concurrent umq_ub_tseg_remove cannot free it in between. */
+imported_tseg_node_t *umq_ub_tseg_node_lookup_locked(import_tseg_table_t *tseg_table, uint32_t mempool_id);
 
 /* Remove and unimport the node for a mempool (no-op if absent). Used by the
  * version-aware re-import path: the caller detected a stale version and must
