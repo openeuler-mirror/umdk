@@ -2429,8 +2429,13 @@ static ALWAYS_INLINE bool umq_ub_wait_ack_lock_ensure(ub_queue_t *queue)
 
 static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_t mempool_id, bool send_ack)
 {
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    urma_eid_t dummy_eid = {{0}};
+    urma_eid_t *eid = &dummy_eid;
+    uint32_t id = 0;
+    if (queue->jetty[UB_QUEUE_JETTY_IO] != NULL) {
+        eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
+        id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    }
     if (send_ack) {
         if (umq_ub_import_mem_done(queue, mempool_id) != UMQ_SUCCESS) {
             // send import mem done failed not cause the data plane to be unavailable
@@ -2488,8 +2493,13 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         return -UMQ_ERR_EINVAL;
     }
 
-    urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-    uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    urma_eid_t dummy_eid = {{0}};
+    urma_eid_t *eid = &dummy_eid;
+    uint32_t id = 0;
+    if (queue->jetty[UB_QUEUE_JETTY_IO] != NULL) {
+        eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
+        id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    }
     if (queue->bind_ctx == NULL) {
         UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the queue has been unbind\n",
             EID_ARGS(*eid), id);
