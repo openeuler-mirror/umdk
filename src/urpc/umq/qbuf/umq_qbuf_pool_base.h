@@ -57,6 +57,7 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_TLS_POOL_MEM_BUDGET (96ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
+#define QBUF_POOL_DEFAULT_LAZY_INIT_BLOCK_SIZE_THRESHOLD (1024U * 1024U)
 
 // Expansion pool global shared id range [257, 1023), table size 766
 #define QBUF_POOL_EXP_SLOT_ID_MIN (257)
@@ -105,6 +106,7 @@ typedef struct qbuf_pool_cfg {
     uint64_t tls_pool_mem_budget;        // global TLS total bytes cap (flat across all threads), default 96MB
     uint64_t tls_expand_mem_budget;      // per-thread TLS bytes cap, default 7/8 of tls_pool_mem_budget
 
+    uint64_t lazy_init_block_size_threshold; // 0 = disabled, default 1MB
     bool disable_scale_cap; // expansion and shrink switch
     // escape
     bool disable_malloc_escape; // disable the escape mechanism
