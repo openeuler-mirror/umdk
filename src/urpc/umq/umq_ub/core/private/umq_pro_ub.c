@@ -192,6 +192,15 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
             urma_wr_ptr->rw.src.num_sge = sge_num;
             break;
         case UMQ_OPC_SEND_IMM:
+            /* io_imm.rsvd1 (bits 20-39) is reserved for the umq backend; ubsocket
+             * borrows bit 20 (UBS_IMM_BIG_CTRL_BIT) to classify a packet as
+             * BIG_CTRL vs SMALL_DATA/ordinary SEND. The receiver reads it back
+             * from the CQE imm (umq_ub_poll_rx fills buf_pro->imm_data from
+             * cr->imm_data), so the sender must propagate it into the wire imm.
+             * type (bits 0-1) and umq_id (bits 2-19) stay backend-owned; only the
+             * reserved rsvd1 bits are passed through. Clearing imm.rsvd0 below
+             * would drop the marker, so capture it first. */
+            imm_data.value |= (buf_pro->imm_data & UMQ_UB_IMM_RSV1_MASK);
             buf_pro->imm.rsvd0 = 0;
             imm_data.io_imm.type = IMM_TYPE_USER;
             imm_data.io_imm.user_data = buf_pro->imm.user_data;
@@ -793,7 +802,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
     switch (imm.bs.type) {
         case IMM_TYPE_USER:
             buf_pro->opcode = UMQ_OPC_SEND_IMM;
-            buf_pro->imm.user_data = imm.io_imm.user_data;
+            buf_pro->imm_data = imm.value;
             umq_io_perf_process(UMQ_PERF_RECORD_TRANSPORT_POLL_RX, rx_buf);
             break;
         case IMM_TYPE_USER_WITHOUT_IMM:
