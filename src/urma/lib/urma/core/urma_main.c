@@ -185,7 +185,7 @@ static int urma_open_drivers(void)
     DIR *dir = opendir(dl_dir);
     if (dir == NULL) {
         URMA_LOG_ERR("Failed to open liburma dir %s\n", dl_dir);
-        return -1;
+        return 0;
     }
 
     int n_loaded_drivers = 0;
@@ -220,7 +220,7 @@ urma_status_t urma_init(urma_init_attr_t *conf)
     }
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     /* TODONEXT: call ubcore to allocate uasid */
-    if (urma_open_drivers() <= 0) {
+    if (urma_open_drivers() < 0) {
         URMA_LOG_ERR("None of the providers registered.\n");
         /* we can continue on android platform */
 #if !defined(__ANDROID__) && !defined(SO_LINKED)
