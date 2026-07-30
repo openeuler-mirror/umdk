@@ -214,6 +214,7 @@ static volatile int g_qbuf_debug_enabled = 0;
 // (avoid cache-line bounce overhead when debug is off).
 static inline bool qbuf_debug_on(void)
 {
+    return true; // for now default on
 #ifdef UMQ_QBUF_DEBUG
     return __atomic_load_n(&g_qbuf_debug_enabled, __ATOMIC_RELAXED) != 0;
 #else
