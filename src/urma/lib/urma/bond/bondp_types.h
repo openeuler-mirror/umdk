@@ -140,8 +140,10 @@ typedef struct bondp_jfc {
     uint32_t active_count;
 #ifndef __cplusplus
     atomic_uint fast_return_count;
+    atomic_uint rearm_mask; /* bit i set: p_jfc[i] needs rearm */
 #else
     std::atomic_uint fast_return_count;
+    std::atomic_uint rearm_mask; /* bit i set: p_jfc[i] needs rearm */
 #endif
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
