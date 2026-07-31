@@ -47,7 +47,7 @@ static const char UMQ_DFX_UNDERLINE_120[] =
 static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
 {
     static const char qbuf_pool_type[UMQ_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
-        [UMQ_QBUF_POOL_TYPE_SMALL] = "Small",       [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
+        [UMQ_QBUF_POOL_TYPE_SMALL] = "Normal",     [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
         [UMQ_QBUF_POOL_TYPE_BIG] = "Big",           [UMQ_QBUF_POOL_TYPE_HUGE] = "Huge",
         [UMQ_QBUF_POOL_TYPE_GIGANTIC] = "Gigantic", [UMQ_QBUF_POOL_TYPE_TINY] = "Tiny",
         [UMQ_QBUF_POOL_TYPE_IOBUF] = "IOBuf",

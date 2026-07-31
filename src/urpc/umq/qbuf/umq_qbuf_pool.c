@@ -9,6 +9,7 @@
 
 #include <malloc.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include "umq_errno.h"
@@ -963,7 +964,12 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_cache(void)
         QBUF_LIST_INIT(&g_thread_cache.block_pool.head_without_data);
         g_thread_cache.block_pool.buf_cnt_without_data = 0;
         (void)memset(&g_thread_cache.stats, 0, sizeof(g_thread_cache.stats));
-        g_thread_cache.stats.tid = (uint64_t)pthread_self();
+        /* Use kernel TID (gettid via syscall, compatible with all glibc versions)
+         * instead of pthread_self() (pthread_t address = ~15-digit number with
+         * no mapping to ps/top). Kernel TID is a small integer matching what
+         * `ps -L` / `top -H` report, so testers can correlate DFX TID rows
+         * with OS-level per-thread diagnostics. */
+        g_thread_cache.stats.tid = (uint64_t)syscall(SYS_gettid);
         g_thread_cache.inited = true;
         urpc_thread_closure_register(THREAD_CLOSURE_QBUF, 0, release_thread_cache);
         (void)pthread_spin_lock(&g_tls_stats_lock);
