@@ -234,7 +234,7 @@ static ALWAYS_INLINE urma_opcode_t transform_op_code(umq_opcode_t opcode)
 static ALWAYS_INLINE void umq_ub_tx_eagain_cnt(int ret, bool user_send_imm, ub_queue_t *queue, uint16_t eagain_wr_cnt,
                                                umq_buf_t *qbuf)
 {
-    if (ret != -UMQ_ERR_EAGAIN) {
+    if (ret != -UMQ_ERR_EAGAIN && ret != -UMQ_ERR_EFLOWCTL_EAGAIN) {
         return;
     }
 
@@ -966,7 +966,7 @@ static int umq_ub_process_fc_msg_with_retry(ub_queue_t *queue, umq_ub_imm_t *imm
         case -UMQ_ERR_EMLINK:
             retry_type = UMQ_UB_RETRY_TYPE_NO_JETTY;
             break;
-        case -UMQ_ERR_EAGAIN:
+        case -UMQ_ERR_EFLOWCTL_EAGAIN:
             retry_type = UMQ_UB_RETRY_TYPE_EAGAIN;
             break;
         case -UMQ_ERR_EFLOWCTL_FATAL:
@@ -1150,7 +1150,7 @@ static int umq_ub_fc_msg_retry_dequeue(ub_queue_t *queue, umq_ub_fc_msg_retry_li
             new_retry_type = UMQ_UB_RETRY_TYPE_NO_JETTY;
             want_list = &retry_list->no_jetty_list;
             break;
-        case -UMQ_ERR_EAGAIN:
+        case -UMQ_ERR_EFLOWCTL_EAGAIN:
             new_retry_type = UMQ_UB_RETRY_TYPE_EAGAIN;
             want_list = &retry_list->no_jetty_list;
             break;
