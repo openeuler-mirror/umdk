@@ -1015,7 +1015,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
         return_buf_cnt = return_list_to_pools(QBUF_LIST_FIRST(&local_pool->head_without_data),
                                               &g_qbuf_pool.block_pool[0].head_without_data,
                                               &g_qbuf_pool.block_pool[0].buf_cnt_without_data, false, 0);
-        local_pool->buf_cnt_without_data -= return_buf_cnt;
+        (void)__atomic_fetch_sub(&local_pool->buf_cnt_without_data, return_buf_cnt, __ATOMIC_RELAXED);
         g_thread_cache.stats.tls_return_buf_cnt_without_data += return_buf_cnt;
         (void)pthread_spin_unlock(&g_qbuf_pool.block_pool[0].global_mutex);
     }
@@ -1679,20 +1679,21 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
             }
         }
     } else {
-        uint64_t actual_cnt = local_pool->buf_cnt_without_data;
-        if (actual_cnt > local_pool->capacity_without_data) {
-            uint64_t delta = actual_cnt - local_pool->capacity_without_data;
-            if (local_pool->capacity_without_data + delta > g_qbuf_pool.tls_expand_qbuf_pool_depth) {
-                delta = (local_pool->capacity_without_data >= g_qbuf_pool.tls_expand_qbuf_pool_depth) ?
+        uint64_t actual_cnt = __atomic_load_n(&local_pool->buf_cnt_without_data, __ATOMIC_RELAXED);
+        uint64_t cur_cap = __atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
+        if (actual_cnt > cur_cap) {
+            uint64_t delta = actual_cnt - cur_cap;
+            if (cur_cap + delta > g_qbuf_pool.tls_expand_qbuf_pool_depth) {
+                delta = (cur_cap >= g_qbuf_pool.tls_expand_qbuf_pool_depth) ?
                             0 :
-                            (g_qbuf_pool.tls_expand_qbuf_pool_depth - local_pool->capacity_without_data);
+                            (g_qbuf_pool.tls_expand_qbuf_pool_depth - cur_cap);
             }
             uint64_t g_total = __atomic_load_n(&g_total_local_cap_without_data, __ATOMIC_RELAXED);
             if (g_total + delta > g_qbuf_pool.tls_qbuf_pool_depth) {
                 delta = (g_total >= g_qbuf_pool.tls_qbuf_pool_depth) ? 0 : (g_qbuf_pool.tls_qbuf_pool_depth - g_total);
             }
             if (delta > 0) {
-                local_pool->capacity_without_data += (uint32_t)delta;
+                (void)__atomic_fetch_add(&local_pool->capacity_without_data, (uint32_t)delta, __ATOMIC_RELAXED);
                 __atomic_fetch_add(&g_total_local_cap_without_data, delta, __ATOMIC_RELAXED);
             }
         }
@@ -1749,17 +1750,19 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data, uint32_t sc)
                 g_dbg_stats.self_shrink_without_data++;
             return;
         }
-        if (g_thread_cache.block_pool.capacity_without_data == 0) {
+        uint64_t cur_cap = __atomic_load_n(&g_thread_cache.block_pool.capacity_without_data, __ATOMIC_RELAXED);
+        if (cur_cap == 0) {
             return;
         }
-        if (shrink > g_thread_cache.block_pool.capacity_without_data) {
-            shrink = g_thread_cache.block_pool.capacity_without_data;
+        if (shrink > cur_cap) {
+            shrink = cur_cap;
         }
-        g_thread_cache.block_pool.capacity_without_data -= shrink;
+        (void)__atomic_fetch_sub(&g_thread_cache.block_pool.capacity_without_data, shrink, __ATOMIC_RELAXED);
         __atomic_fetch_sub(&g_total_local_cap_without_data, shrink, __ATOMIC_RELAXED);
-        if (g_thread_cache.block_pool.capacity_without_data < remaining) {
+        uint64_t new_cap = __atomic_load_n(&g_thread_cache.block_pool.capacity_without_data, __ATOMIC_RELAXED);
+        if (new_cap < remaining) {
             return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, false, 0,
-                             (uint32_t)g_thread_cache.block_pool.capacity_without_data);
+                             (uint32_t)new_cap);
             g_thread_cache.stats.tls_return_cnt_without_data++;
             if (qbuf_debug_on())
                 g_dbg_stats.self_shrink_without_data++;
@@ -2190,10 +2193,10 @@ void umq_qbuf_free(umq_buf_list_t *list)
     local_block_pool_t *local_pool = get_thread_cache();
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && QBUF_LIST_FIRST(list)->mempool_without_data == 1) {
         uint32_t cnt = release_batch(list, &local_pool->head_without_data, false);
-        local_pool->buf_cnt_without_data += cnt;
+        (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
 
-        uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)local_pool->capacity_without_data;
-        if (local_pool->buf_cnt_without_data > cap) {
+        uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
+        if (__atomic_load_n(&local_pool->buf_cnt_without_data, __ATOMIC_RELAXED) > cap) {
             uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
@@ -2267,9 +2270,9 @@ void umq_qbuf_free(umq_buf_list_t *list)
         umq_buf_list_t nodata_list;
         QBUF_LIST_FIRST(&nodata_list) = nodata_head;
         uint32_t cnt = release_batch(&nodata_list, &local_pool->head_without_data, false);
-        local_pool->buf_cnt_without_data += cnt;
-        uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)local_pool->capacity_without_data;
-        if (local_pool->buf_cnt_without_data > cap) {
+        (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
+        uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
+        if (__atomic_load_n(&local_pool->buf_cnt_without_data, __ATOMIC_RELAXED) > cap) {
             uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
@@ -2704,10 +2707,9 @@ static void umq_flush_tls_nodata_to_global(void)
                                                        &g_qbuf_pool.block_pool[0].head_without_data,
                                                        &g_qbuf_pool.block_pool[0].buf_cnt_without_data, false, 0);
         (void)__atomic_fetch_sub(&pool_iter->block_pool.buf_cnt_without_data, return_buf_cnt, __ATOMIC_RELAXED);
-        uint64_t cap_sub = (return_buf_cnt > pool_iter->block_pool.capacity_without_data) ?
-                               pool_iter->block_pool.capacity_without_data :
-                               return_buf_cnt;
-        pool_iter->block_pool.capacity_without_data -= cap_sub;
+        uint64_t cap = __atomic_load_n(&pool_iter->block_pool.capacity_without_data, __ATOMIC_RELAXED);
+        uint64_t cap_sub = (return_buf_cnt > cap) ? cap : return_buf_cnt;
+        (void)__atomic_fetch_sub(&pool_iter->block_pool.capacity_without_data, cap_sub, __ATOMIC_RELAXED);
         __atomic_fetch_sub(&g_total_local_cap_without_data, cap_sub, __ATOMIC_RELAXED);
         (void)pthread_spin_unlock(&g_qbuf_pool.block_pool[0].global_mutex);
         if (qbuf_debug_on())
