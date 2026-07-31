@@ -268,15 +268,23 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     /* record start before flow control so FC URMA calls can be captured as sub_time */
     umq_trace_start_record(UMQ_TRACE_TYPE_POST, post_start, 0, queue->umq_id);
 
-    ret = umq_ub_credit_check_and_request_send(fc, queue);
-    if (ret != UMQ_SUCCESS) {
-        *bad_qbuf = qbuf;
-        umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
-        return ret;
+    /* READ operations pull data from the remote memory and do not consume the
+     * peer's RX buffer / send credit, so skip the send-credit check for them.
+     * Otherwise a READ OFFER handler can be permanently blocked by flow
+     * control even though READ doesn't deplete the remote RX window. */
+    umq_buf_pro_t *first_pro = (umq_buf_pro_t *)qbuf->qbuf_ext;
+    bool is_read_only = (first_pro != NULL && first_pro->opcode == UMQ_OPC_READ);
+    if (!is_read_only) {
+        ret = umq_ub_credit_check_and_request_send(fc, queue);
+        if (ret != UMQ_SUCCESS) {
+            *bad_qbuf = qbuf;
+            umq_trace_end_record(UMQ_TRACE_TYPE_POST, umq_trace_timestamp_get());
+            return ret;
+        }
     }
     uint32_t max_sge_num = queue->max_tx_sge;
     urma_jfs_wr_t *urma_wr_ptr = g_umq_ub_urma_wr;
-    urma_sge_t src_sge, dst_sge;
+    urma_sge_t src_sge[UMQ_BATCH_SIZE] = {}, dst_sge[UMQ_BATCH_SIZE] = {};
     urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_sge_t *sges_ptr;
@@ -366,7 +374,11 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             goto ERROR;
         }
         urma_wr_ptr->opcode = transform_op_code(opcode);
-        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, g_umq_ub_sges[wr_index], sge_num, &src_sge, &dst_sge);
+        /* Zero the WR union to clear stale target_hint/notify_data from
+         * previous SEND/WRITE WRs that share g_umq_ub_urma_wr[] entries. */
+        urma_wr_ptr->rw.target_hint = 0;
+        urma_wr_ptr->rw.notify_data = 0;
+        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, g_umq_ub_sges[wr_index], sge_num, &src_sge[wr_index], &dst_sge[wr_index]);
         if (ret != UMQ_SUCCESS) {
             *bad_qbuf = qbuf;
             goto ERROR;
@@ -406,17 +418,18 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         ret = umq_ub_get_jetty_node(queue, 0);
         if (ret != UMQ_SUCCESS) {
-            UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u) get jetty node failed\n", queue->umq_id);
             *bad_qbuf = qbuf;
             goto RECOVER_WINDOW;
         }
-        jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
-        uint32_t prev = __atomic_fetch_add(&jetty_node->borrow_count, wr_cnt_limit, __ATOMIC_ACQ_REL);
-        uint32_t total = prev + wr_cnt_limit;
-        if (total > jetty_node->borrow_limit) {
-            uint32_t excess = total - jetty_node->borrow_limit;
-            (void)__atomic_fetch_sub(&jetty_node->borrow_count, excess, __ATOMIC_ACQ_REL);
-            wr_cnt_limit -= excess;
+        if (!is_read_only && fc->enabled) {
+            jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
+            uint32_t prev = __atomic_fetch_add(&jetty_node->borrow_count, wr_cnt_limit, __ATOMIC_ACQ_REL);
+            uint32_t total = prev + wr_cnt_limit;
+            if (total > jetty_node->borrow_limit) {
+                uint32_t excess = total - jetty_node->borrow_limit;
+                (void)__atomic_fetch_sub(&jetty_node->borrow_count, excess, __ATOMIC_ACQ_REL);
+                wr_cnt_limit -= excess;
+            }
         }
     }
 
@@ -1725,6 +1738,13 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
             false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
         uint32_t tx_after = __atomic_sub_fetch(&node->tx_outstanding, cnt, __ATOMIC_ACQ_REL);
+        /* Decrement borrow_count on completion so it tracks in-flight WRs
+         * rather than total WRs per node lifecycle. Without this, concurrent
+         * posts on a long-lived connection accumulate borrow_count until it
+         * hits borrow_limit, causing permanent ENOBUFS. */
+        uint32_t borrow_now = __atomic_load_n(&node->borrow_count, __ATOMIC_RELAXED);
+        uint32_t borrow_dec = (borrow_now >= cnt) ? cnt : borrow_now;
+        (void)__atomic_fetch_sub(&node->borrow_count, borrow_dec, __ATOMIC_ACQ_REL);
         if (tx_after == 0) {
             uint64_t umq_ref = __atomic_load_n(&node->umq_ref, __ATOMIC_ACQUIRE);
             uint32_t ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
