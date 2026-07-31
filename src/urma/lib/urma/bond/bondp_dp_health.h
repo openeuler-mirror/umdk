@@ -42,14 +42,18 @@ int bondp_hc_start(struct bondp_context *bdp_ctx, uint8_t priority);
 void bondp_hc_uninit(struct bondp_context *bdp_ctx);
 
 /**
- * Register a target jetty for health path tracking.
- * The peer topo node is resolved by the target EID.
+ * Register a target jetty for health path tracking. The peer topo node is
+ * resolved by the target EID. Health check segments are imported at the node
+ * level (hc_tseg) and shared across tjettys targeting the same remote node.
  */
 int bondp_hc_register_tjetty(struct bondp_context *bdp_ctx,
-                             struct bondp_target_jetty *bdp_tjetty);
+                             struct bondp_target_jetty *bdp_tjetty,
+                             const struct urma_bond_id_info_out *rjetty_info);
 
 /**
  * Unregister a target jetty from health path tracking.
+ * The shared hc_tseg is unimported and re-imported with the backup's
+ * context. On failure, the slot is invalidated for future reclaim.
  */
 void bondp_hc_unregister_tjetty(struct bondp_context *bdp_ctx,
                                 struct bondp_target_jetty *bdp_tjetty);
@@ -57,10 +61,6 @@ void bondp_hc_unregister_tjetty(struct bondp_context *bdp_ctx,
 int bondp_hc_fill_seg_info(const struct bondp_context *bdp_ctx,
                            struct urma_bond_seg_info_out *seg_info,
                            bool *enabled);
-int bondp_hc_import_tseg(const struct bondp_context *bdp_ctx,
-                         struct bondp_target_jetty *bdp_tjetty,
-                         const struct urma_bond_id_info_out *rjetty_info);
-urma_status_t bondp_hc_unimport_tseg(struct bondp_target_jetty *bdp_tjetty);
 
 /**
  * Synchronise the health-check node->valid matrix into registered target
