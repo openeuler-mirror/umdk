@@ -240,11 +240,6 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
     }
 
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    bdp_ctx->port_cfg.chip_id_count = port_in->port_count;
-    for (uint32_t i = 0; i < port_in->port_count; ++i) {
-        bdp_ctx->port_cfg.chip_id[i] = port_in->port_ids[i].chip_id;
-    }
-
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM] = {0};
     uint32_t enabled_count = 0;
     for (uint32_t i = 0; i < port_in->port_count; ++i) {
@@ -270,6 +265,11 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
     if (enabled_count == 0) {
         URMA_LOG_ERR("No valid bonding port after conversion.\n");
         return -EINVAL;
+    }
+
+    bdp_ctx->port_cfg.chip_id_count = port_in->port_count;
+    for (uint32_t i = 0; i < port_in->port_count; ++i) {
+        bdp_ctx->port_cfg.chip_id[i] = port_in->port_ids[i].chip_id;
     }
 
     bdp_ctx->port_cfg.enabled_count = enabled_count;
