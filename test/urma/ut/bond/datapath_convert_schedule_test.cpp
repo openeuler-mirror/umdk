@@ -186,6 +186,7 @@ TEST(UrmaBondTest, DatapathEncodeBindAndUnbindWorkRequests)
     faddSrc.tseg = &fixture.localSeg.v_tseg;
     faddDst.tseg = &fixture.remoteSeg.v_tseg;
 
+    sendWr.send.imm_data = 0x1FFFFFULL;
     encode_jfs_wr_msn(&sendWr, &fixture.comp, 0, true);
     convert_jfs_vwr_to_pwr(&sendWr, 0, 0);
     EXPECT_EQ(URMA_OPC_SEND_IMM, sendWr.opcode);
@@ -245,8 +246,9 @@ TEST(UrmaBondTest, DatapathEncodeBindAndUnbindWorkRequests)
     EXPECT_EQ(&fixture.localPhy[0], recvWr.src.sge[0].tseg);
 
     cr.flag.bs.s_r = 0;
-    cr.imm_data = 0x123456789ULL;
+    cr.imm_data = sendWr.send.imm_data;
     convert_pcr_to_vcr(&cr, &fixture.ctx, &msn);
+    EXPECT_EQ(0x1FFFFFULL, cr.imm_data);
 }
 
 TEST(UrmaBondTest, DatapathScheduleCoversModesAndErrors)
