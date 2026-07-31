@@ -40,6 +40,9 @@ typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_OPCODE_GET_RJETTY,
     BONDP_USER_CTL_OPCODE_GET_SEG_CTX,
     BONDP_USER_CTL_DISABLE_MSN,
+    /* port_ids config for this opcode should be the same as the port_ids
+       config when creating jetty */
+    BONDP_USER_CTL_SET_BONDING_PORT,
 } bondp_user_ctl_opcode_t;
 
 // URMA_USER_CTL_BOND_SET_BONDING_MODE,
@@ -105,6 +108,15 @@ typedef union bondp_port_id {
     };
     uint64_t value;
 } bondp_port_id_t;
+
+// BONDP_USER_CTL_SET_BONDING_PORT
+// The port_ids config for this opcode should be the same as the port_ids
+// config when creating jetty. liburma copies the port_ids array internally,
+// so the caller's buffer may be released after the call returns.
+typedef struct bondp_set_bonding_port_in {
+    const bondp_port_id_t *port_ids;
+    uint32_t port_count;
+} bondp_set_bonding_port_in_t;
 
 typedef struct bondp_jfs_cfg {
     urma_jfs_cfg_t base;
