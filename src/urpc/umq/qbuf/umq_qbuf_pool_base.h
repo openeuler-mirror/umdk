@@ -385,7 +385,8 @@ static ALWAYS_INLINE void thread_local_pool_rollback(umq_buf_t *buf_head_old, ui
     }
     tail->qbuf_next = NULL;
     (void)pthread_spin_lock(&global_pool->global_mutex);
-    *info.local_buf_cnt -= return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
+    uint64_t _rollback_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
+    (void)__atomic_fetch_sub(info.local_buf_cnt, _rollback_cnt, __ATOMIC_RELAXED);
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 }
 
@@ -467,7 +468,7 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         umq_buf_t *head = QBUF_LIST_FIRST(info.local_head);
         QBUF_LIST_FIRST(info.local_head) = NULL;
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
-        *info.local_buf_cnt -= return_buf_cnt;
+        (void)__atomic_fetch_sub(info.local_buf_cnt, return_buf_cnt, __ATOMIC_RELAXED);
         *tls_return_buf_cnt += return_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
         return;
@@ -486,7 +487,7 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         umq_buf_t *head = QBUF_LIST_NEXT(switch_node);
         QBUF_LIST_NEXT(switch_node) = NULL;
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
-        *info.local_buf_cnt -= return_buf_cnt;
+        (void)__atomic_fetch_sub(info.local_buf_cnt, return_buf_cnt, __ATOMIC_RELAXED);
         *tls_return_buf_cnt += return_buf_cnt;
     }
 
@@ -731,7 +732,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
 
     // set output
     QBUF_LIST_FIRST(list) = input_head;
-    local_pool->buf_cnt_without_data -= num;
+    (void)__atomic_fetch_sub(&local_pool->buf_cnt_without_data, num, __ATOMIC_RELAXED);
 }
 
 // umq_qbuf_alloc_data_with_split: sc indexes the with_data arrays. block_size passed in
