@@ -510,6 +510,8 @@ urma_token_t *token_value);
 urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 ```
 
+若已通过 `BONDP_USER_CTL_SET_BONDING_PORT` 在上下文上配置了端口子集，则 Jetty 与 JFR 的导入仅经该端口子集建立物理 target 连接。每个已配置的本地端口与每个远端目标至多参与一条选定的物理路径（一对一配对），因此导入的物理路径数不超过本地配置端口数与远端目标数中的较小者。该端口子集必须包含与对端拓扑连通的端口，否则导入将因无可建链路径而失败。
+
 用户关注基于不感知传输层的URMA API使用流程。
 
 ## 5.2 控制面
