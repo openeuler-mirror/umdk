@@ -222,6 +222,7 @@ typedef struct ub_flow_control {
     volatile bool is_credit_applying;
     volatile uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
                                               // the link if the rsp does not return within the timeout
+    volatile uint64_t fc_eagain_start_us; // timestamp(us) of the first continuous EAGAIN on credit req send;
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     umq_ub_fc_msg_retry_list_t *fc_msg_retry_list;
     uint8_t local_req_seq;

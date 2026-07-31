@@ -864,7 +864,7 @@ static urma_status_t umq_ub_flow_control_try_post_send(ub_queue_t *queue, urma_j
 
     do {
         status = umq_symbol_urma()->urma_post_jetty_send_wr(jetty, urma_wr, bad_wr);
-        if (status != URMA_EAGAIN) {
+        if (status != URMA_EAGAIN && status != URMA_ENOMEM) {
             break;
         }
 
@@ -941,13 +941,22 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
     if (status == URMA_SUCCESS) {
         /* record req send time so an unresponsive peer (rsp never returns) can be detected as timeout */
         __atomic_store_n(&fc->credit_req_send_time, get_timestamp_us(), __ATOMIC_RELEASE);
+        /* a successful send breaks any ongoing EAGAIN streak */
+        __atomic_store_n(&fc->fc_eagain_start_us, 0, __ATOMIC_RELEASE);
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
-    } else if (status == URMA_EAGAIN) {
+    } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
+        /* check before permission release so fc_eagain_start_us access stays serialized */
+        bool fatal = umq_ub_fc_eagain_check_fatal(fc);
         umq_ub_permission_release(fc);
-        return -UMQ_ERR_EAGAIN;
+        if (fatal) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), credit req send continuous EAGAIN "
+                "exceeded fatal timeout(%u us)\n", queue->umq_id, fc->fc_req_timeout_us);
+            return -UMQ_ERR_EFLOWCTL_FATAL;
+        }
+        return -UMQ_ERR_EFLOWCTL_EAGAIN;
     }
     umq_ub_post_release_jetty_node(queue, 1);
     umq_ub_permission_release(fc);
@@ -1007,9 +1016,9 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
-    } else if (status == URMA_EAGAIN) {
+    } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
-        return -UMQ_ERR_EAGAIN;
+        return -UMQ_ERR_EFLOWCTL_EAGAIN;
     }
     umq_ub_post_release_jetty_node(queue, 1);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
@@ -1203,11 +1212,11 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
-    } else if (status == URMA_EAGAIN) {
+    } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
         umq_ub_permission_release(fc);
         fc->ops.remote_rx_window_inc(fc, return_credit, true);
-        return -UMQ_ERR_EAGAIN;
+        return -UMQ_ERR_EFLOWCTL_EAGAIN;
     }
 
     umq_ub_post_release_jetty_node(queue, 1);
@@ -1278,9 +1287,9 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
         umq_ub_post_release_jetty_node(queue, 0);
         umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
-    } else if (status == URMA_EAGAIN) {
+    } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
-        return -UMQ_ERR_EAGAIN;
+        return -UMQ_ERR_EFLOWCTL_EAGAIN;
     }
     umq_ub_post_release_jetty_node(queue, 1);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
