@@ -251,14 +251,15 @@ typedef struct bondp_comp {
 
 typedef struct bondp_p_target_jetty {
     urma_target_jetty_t *p_tjetty;
-    urma_target_seg_t *p_check_tseg;
+    uint64_t hc_va;
+    uint32_t hc_token_id;
+    uint8_t local_indice;
+    uint8_t remote_indice;
 #ifndef __cplusplus
     atomic_bool valid;
 #else
     std::atomic_bool valid;
 #endif
-    uint8_t local_indice;
-    uint8_t remote_indice;
 } bondp_p_target_jetty_t;
 
 typedef struct bondp_target_jetty {
