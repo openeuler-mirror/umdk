@@ -6,9 +6,15 @@
  * Note: Only used by UB transport mode
  */
 
-#include <dlfcn.h>
+#include "urma_api.h"
+#include "urma_perf.h"
 #include "umq_vlog.h"
 #include "umq_symbol_private.h"
+
+#ifndef UMQ_STATIC_LIB
+/* ===== Runtime dlopen binding ===== */
+
+#include <dlfcn.h>
 
 // Global URMA/UVS symbol instance
 static umq_symbol_urma_t g_umq_symbol_urma = {0};
@@ -129,3 +135,97 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     UMQ_VLOG_INFO(VLOG_UMQ, "URMA and UVS symbols loaded successfully\n");
     return 0;
 }
+
+#else /* UMQ_STATIC_LIB — build-time link via -lurma -ltpsa */
+
+// Function pointers are bound to the real symbols at link time; no dlopen handler.
+static umq_symbol_urma_t g_umq_symbol_urma = {
+    // Device/Init
+    .urma_init = urma_init,
+    .urma_uninit = urma_uninit,
+    .urma_get_device_list = urma_get_device_list,
+    .urma_free_device_list = urma_free_device_list,
+    .urma_get_eid_list = urma_get_eid_list,
+    .urma_free_eid_list = urma_free_eid_list,
+    .urma_query_device = urma_query_device,
+    .urma_create_context = urma_create_context,
+    .urma_delete_context = urma_delete_context,
+
+    // JFC
+    .urma_create_jfc = urma_create_jfc,
+    .urma_delete_jfc = urma_delete_jfc,
+    .urma_rearm_jfc = urma_rearm_jfc,
+    .urma_poll_jfc = urma_poll_jfc,
+    .urma_wait_jfc = urma_wait_jfc,
+    .urma_ack_jfc = urma_ack_jfc,
+
+    // JFCE
+    .urma_create_jfce = urma_create_jfce,
+    .urma_delete_jfce = urma_delete_jfce,
+
+    // JFR
+    .urma_create_jfr = urma_create_jfr,
+    .urma_delete_jfr = urma_delete_jfr,
+    .urma_modify_jfr = urma_modify_jfr,
+
+    // Jetty
+    .urma_create_jetty = urma_create_jetty,
+    .urma_delete_jetty = urma_delete_jetty,
+    .urma_modify_jetty = urma_modify_jetty,
+    .urma_bind_jetty = urma_bind_jetty,
+    .urma_unbind_jetty = urma_unbind_jetty,
+    .urma_import_jetty = urma_import_jetty,
+    .urma_unimport_jetty = urma_unimport_jetty,
+    .urma_flush_jetty = urma_flush_jetty,
+    .urma_post_jetty_send_wr = urma_post_jetty_send_wr,
+    .urma_post_jetty_recv_wr = urma_post_jetty_recv_wr,
+    .urma_post_jfr_wr = urma_post_jfr_wr,
+    .urma_get_rjetty = urma_get_rjetty,
+    .urma_put_rjetty = urma_put_rjetty,
+
+    // Segment
+    .urma_register_seg = urma_register_seg,
+    .urma_unregister_seg = urma_unregister_seg,
+    .urma_import_seg = urma_import_seg,
+    .urma_unimport_seg = urma_unimport_seg,
+
+    // Async Event
+    .urma_get_async_event = urma_get_async_event,
+    .urma_ack_async_event = urma_ack_async_event,
+
+    // Log
+    .urma_log_set_level = urma_log_set_level,
+    .urma_register_log_func = urma_register_log_func,
+    .urma_register_loc_log_func = urma_register_loc_log_func,
+    .urma_unregister_log_func = urma_unregister_log_func,
+
+    // UserCtl
+    .urma_user_ctl = urma_user_ctl,
+
+    // Utility
+    .urma_str_to_eid = urma_str_to_eid,
+
+    // UVS
+    .uvs_get_path_set = uvs_get_path_set,
+
+    // DFX
+    .urma_start_perf = urma_start_perf,
+    .urma_stop_perf = urma_stop_perf,
+    .urma_get_perf_info = urma_get_perf_info,
+};
+
+umq_symbol_urma_t *umq_symbol_urma(void)
+{
+    return &g_umq_symbol_urma;
+}
+
+int umq_symbol_urma_load(umq_symbol_urma_t *sym)
+{
+    // Symbols are resolved by the linker at build time; nothing to load at
+    // runtime. Kept for API compatibility so callers (umq_ub_api.c,
+    // umq_ub_plus_api.c) are unchanged.
+    (void)sym;
+    return 0;
+}
+
+#endif /* UMQ_STATIC_LIB */
