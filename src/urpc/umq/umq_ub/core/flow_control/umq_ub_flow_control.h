@@ -95,6 +95,20 @@ static ALWAYS_INLINE bool umq_ub_credit_req_timeout(struct ub_flow_control *fc)
     return (now >= send_time && (now - send_time) >= fc->fc_req_timeout_us);
 }
 
+static ALWAYS_INLINE bool umq_ub_fc_eagain_check_fatal(struct ub_flow_control *fc)
+{
+    if (fc->fc_req_timeout_us == 0) {
+        return false;
+    }
+    uint64_t now = get_timestamp_us();
+    uint64_t start = __atomic_load_n(&fc->fc_eagain_start_us, __ATOMIC_ACQUIRE);
+    if (start == 0) {
+        __atomic_store_n(&fc->fc_eagain_start_us, now, __ATOMIC_RELEASE);
+        return false;
+    }
+    return (now >= start && (now - start) >= fc->fc_req_timeout_us);
+}
+
 static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
     if (!fc->enabled) {
