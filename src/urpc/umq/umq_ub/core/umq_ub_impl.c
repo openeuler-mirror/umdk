@@ -2858,7 +2858,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
     }
 
     // If a prior import exists for this mempool, the caller's version-based
-    // decision (umq_ub_remote_mempool_state_get_impl == 2) guarantees a
+    // decision (umq_ub_remote_mempool_state_get_impl == UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT) guarantees a
     // version mismatch: drop and unimport it before re-importing, so the
     // stale tseg is fully replaced (design §3.5).
     if (umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id) != NULL) {
@@ -2904,7 +2904,7 @@ int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get remote mempool state parameter invalid\n");
-        return -1;
+        return UMQ_REMOTE_MEMPOOL_STATE_ERR;
     }
 
     /* Lookup + version read under one rdlock (lock-free helper) so a concurrent
@@ -2915,7 +2915,7 @@ int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, 
     imported_tseg_node_t *node = umq_ub_tseg_node_lookup_locked(queue->bind_ctx->tseg_table, mempool_id);
     if (node == NULL) {
         (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
-        return 1; /* not imported: need import */
+        return UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT; /* not imported: need import */
     }
     /* Version decision (design §3.5):
      *   equal            -> 0 reuse (no import)
@@ -2924,11 +2924,11 @@ int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, 
      *                       caller sends READ_ABORT. */
     int ret;
     if (node->version == version) {
-        ret = 0;
+        ret = UMQ_REMOTE_MEMPOOL_STATE_REUSE;
     } else if (version > node->version) {
-        ret = 2;
+        ret = UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT;
     } else {
-        ret = 3; /* version rollback */
+        ret = UMQ_REMOTE_MEMPOOL_STATE_VERSION_ROLLBACK; /* version rollback */
     }
     (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
     return ret;
