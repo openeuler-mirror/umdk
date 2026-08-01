@@ -35,9 +35,6 @@ static void set_pro_data(umq_buf_t *tmp, umq_perftest_qps_arg_t *qps_arg)
         pro->flag.bs.solicited_enable = 1;
         pro->flag.bs.complete_enable = 1;
         pro->opcode = UMQ_OPC_SEND;
-        if (qps_arg->cfg->config.size < UMQ_ENABLE_INLINE_LIMIT_SIZE) {
-            pro->flag.bs.inline_flag = UMQ_INLINE_ENABLE;
-        }
         tmp = tmp->qbuf_next;
     }
 }
