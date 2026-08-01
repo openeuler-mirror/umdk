@@ -55,11 +55,11 @@ One-time initialization UB device example:
         .feature = UMQ_FEATURE_API_PRO,
         .trans_info_num = 2,
     };
-    init_cfg->trans_info[0].trans_mode = UMQ_TRANS_MODE_UB;
-    sprintf(init_cfg->trans_info[0].dev_info.dev.dev_name, "%s", "udma2");
+    init_cfg.trans_info[0].trans_mode = UMQ_TRANS_MODE_UB;
+    sprintf(init_cfg.trans_info[0].dev_info.dev.dev_name, "%s", "udma2");
     init_cfg.trans_info[0].dev_info.dev.eid_idx = 7;
-	init_cfg->trans_info[1].trans_mode = UMQ_TRANS_MODE_UB;
-    sprintf(init_cfg->trans_info[1].dev_info.dev.dev_name, "%s", "udma5");
+    init_cfg.trans_info[1].trans_mode = UMQ_TRANS_MODE_UB;
+    sprintf(init_cfg.trans_info[1].dev_info.dev.dev_name, "%s", "udma5");
     init_cfg.trans_info[1].dev_info.dev.eid_idx = 7;
     umq_init(&init_cfg);
 ```

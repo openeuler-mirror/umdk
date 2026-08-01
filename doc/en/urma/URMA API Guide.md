@@ -2360,7 +2360,7 @@ Create a JFC based on the configuration.
 
 ![](figures/urma_caution.png)
 
-Under normal circumstances, insufficient JFC queue depth configuration may affect normal application operation. Under abnormal circumstances, the hardware may construct error CRs to notify the application that the Jetty or JFS status has changed. The types of constructed error CRs include URMA_CR_WR_FLUSH_ERR_DONE and URMA_CR_WR_SUSPEND_ERR_DONE. Sufficient space should also be reserved in the JFC to store hardware-constructed CRs, otherwise JFC overflow may occur. Therefore, it is recommended to configure the JFC queue depth as: queue depth >= total queue depth of associated jetties / number of WRs per CR (default 1) + number of associated jetties.
+Under normal circumstances, insufficient JFC queue depth configuration may affect normal application operation. Under abnormal circumstances, the hardware may construct error CRs to notify the application that the Jetty or JFS status has changed. The types of constructed error CRs include URMA_CR_WR_FLUSH_ERR_DONE and URMA_CR_WR_SUSPEND_DONE. Sufficient space should also be reserved in the JFC to store hardware-constructed CRs, otherwise JFC overflow may occur. Therefore, it is recommended to configure the JFC queue depth as: queue depth >= total queue depth of associated jetties / number of WRs per CR (default 1) + number of associated jetties.
 
 5. Return Value
 
@@ -4898,7 +4898,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty) interface; the validity of internal pointers and other parameters is guaranteed by this interface, and this interface will not re-validate them; otherwise, it may cause abnormal termination of the caller's process.
+This API checks whether jetty or jetty->remote_jetty is NULL; if either is NULL, it returns URMA_EINVAL.
 
 ##### 2.3.1.6.21 urma_create_notifier
 
@@ -5613,7 +5613,7 @@ Release the segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ct
 
 4. Parameters
 
-@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx). If seg is NULL, this API returns directly.
+@param[in] [Required] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx).
 
 5. Return Value
 
@@ -6127,7 +6127,7 @@ typedef struct urma_faa_wr {
 
 ##### 2.4.1.1.6 urma_opcode_t
 
-Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+Definition file: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
 ```c
 typedef enum urma_opcode {
@@ -6147,6 +6147,7 @@ typedef enum urma_opcode {
     URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
     URMA_OPC_NOP = 0x51,
     URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
+    URMA_OPC_FLUSH_DMA = 0x80,
     URMA_OPC_LAST
 } urma_opcode_t;
 ```

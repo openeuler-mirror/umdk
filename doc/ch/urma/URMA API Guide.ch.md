@@ -2361,7 +2361,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_caution.png)
 
-正常时，JFC的队列深度配置不足，可能会影响应用的正常运行。异常时，硬件可能构造错误CR通知应用Jetty或JFS的状态发生了变化，构造的错误CR类型包括URMA_CR_WR_FLUSH_ERR_DONE和URMA_CR_WR_SUSPEND_ERR_DONE，也应为JFC预留足够的空间来存放硬件构造的CR，否则JFC会发生溢出。故推荐按照JFC队列深度 \>= 关联jetty的队列深度总和 / 每多少个WR生成一个CR来配置（默认为1）+ 关联jetty数。
+正常时，JFC的队列深度配置不足，可能会影响应用的正常运行。异常时，硬件可能构造错误CR通知应用Jetty或JFS的状态发生了变化，构造的错误CR类型包括URMA_CR_WR_FLUSH_ERR_DONE和URMA_CR_WR_SUSPEND_DONE，也应为JFC预留足够的空间来存放硬件构造的CR，否则JFC会发生溢出。故推荐按照JFC队列深度 \>= 关联jetty的队列深度总和 / 每多少个WR生成一个CR来配置（默认为1）+ 关联jetty数。
 
 5.  返回值
 
@@ -4284,7 +4284,7 @@ typedef struct urma_jetty_attr {
 } urma_jetty_attr_t;
 ```
 
-7.  ?.2.urma_jetty_attr_mask_t
+7.  urma_jetty_attr_mask_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4899,7 +4899,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，参数内部指针等合法性由该接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+本接口会校验参数jetty及jetty->remote_jetty是否为空；任一为空时返回URMA_EINVAL。
 
 ##### 2.3.1.6.21 urma_create_notifier
 
@@ -5614,7 +5614,7 @@ void urma_put_seg_ctx([3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_se
 
 4.  参数
 
-@param[in] [Optional] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx). If seg is NULL, this API returns directly.
+@param[in] [Required] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx).
 
 5.  返回值
 
@@ -6128,7 +6128,7 @@ typedef struct urma_faa_wr {
 
 ##### 2.4.1.1.6 urma_opcode_t
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
 ```c
 typedef enum urma_opcode {
@@ -6639,7 +6639,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，src_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
 #### 2.4.3.2 urma_read
 
@@ -10956,7 +10956,7 @@ Return: 0 on success, other value on error
 
 2.  原型
 
-int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **jetty_arr, int jetty_num, int *bad_jetty_index);
+int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **jetty_arr, int jetty_num, [4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **bad_jetty);
 
 3.  描述
 
@@ -10968,7 +10968,7 @@ int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#3
 
 @param[in] jetty_num: jetty array length;
 
-@param[out] bad_jetty_index: when error, return error jetty index in the array;
+@param[out] bad_jetty: when error, return the address of the first failed jetty pointer;
 
 5.  返回值
 
