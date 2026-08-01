@@ -283,7 +283,7 @@ typedef struct umq_buf_pool_cfg {
     uint64_t umq_buf_pool_max_size; // maximum memory allowed for umq buf pool, default 2G
     // local qbuf pool cfg
     uint64_t tls_qbuf_pool_depth; // the sum of the capacities of all thread-local qbuf pools
-    uint64_t tls_expand_qbuf_pool_depth; // The maximum capacity of a single thread-local qbuf pool
+    uint64_t tls_expand_qbuf_pool_depth; // reserved
 
     bool disable_scale_cap; // expansion and shrink switch
     // escape

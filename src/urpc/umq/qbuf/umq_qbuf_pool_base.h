@@ -147,6 +147,7 @@ typedef struct local_qbuf_pool_ctrl {
     uint64_t default_tls_qbuf_pool_depth;
     uint32_t batch_count;
     bool enable_tls_expand_qbuf_pool;
+    volatile bool tls_expand_qbuf_pool_depth_is_set;
     urpc_list_t tls_register_head;
     pthread_spinlock_t tls_stats_lock;
     urpc_thread_closure_type_t type;
