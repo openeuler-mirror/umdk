@@ -63,8 +63,18 @@ static void umq_perf_destroy_all_hdrs(uint32_t idx)
             umq_perf_hdr_destroy(rec->type_record[type].hdr);
             rec->type_record[type].hdr = NULL;
         }
-        rec->inited = false;
     }
+    rec->inited = false;
+}
+
+static void umq_perf_record_closure(uint64_t idx)
+{
+    if (g_umq_perf_record_ctx == NULL) {
+        return;
+    }
+    umq_perf_record_t *cur_record = &g_umq_perf_record_ctx->perf_record_table[idx];
+    cur_record->inited = false;
+    return;
 }
 
 static int umq_perf_type_record_init(uint32_t idx)
@@ -85,9 +95,8 @@ static int umq_perf_type_record_init(uint32_t idx)
                 goto ERROR;
             }
         }
-
-        rec->inited = true;
     }
+    rec->inited = true;
 
     return UMQ_SUCCESS;
 
@@ -120,6 +129,7 @@ int umq_perf_init(void)
             }
             goto FREE_CTX;
         }
+        urpc_thread_closure_register(THREAD_CLOSURE_UMQ_PERF, i, umq_perf_record_closure);
     }
 
     return UMQ_SUCCESS;
@@ -163,11 +173,6 @@ static void umq_clear_perf_record_item(uint32_t record_idx)
         }
     }
     cur_record->inited = false;
-}
-
-static void umq_perf_record_closure(uint64_t idx)
-{
-    umq_clear_perf_record_item(idx);
 }
 
 uint64_t umq_perf_get_start_timestamp(void)
@@ -362,9 +367,6 @@ int umq_perf_info_get(umq_perf_stats_t *perf_info)
 
     umq_perf_record_t total_perf_record = {0};
     for (uint32_t i = 0; i < UMQ_THREAD_ID_MAX; ++i) {
-        if (!g_umq_perf_record_ctx->perf_record_table[i].inited) {
-            continue;
-        }
         umq_perf_record_add(&total_perf_record, &g_umq_perf_record_ctx->perf_record_table[i]);
     }
     umq_perf_convert_cycles_to_ns(&total_perf_record);
