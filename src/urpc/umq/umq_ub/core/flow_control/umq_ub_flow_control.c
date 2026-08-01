@@ -949,7 +949,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
 static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, uint8_t seq, uint8_t ratio)
 {
     if (queue->bind_ctx == NULL) {
-        return -UMQ_ERR_EINVAL;
+        return -UMQ_ERR_EMLINK;
     }
     int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
     if (ret != UMQ_SUCCESS) {
@@ -1168,8 +1168,11 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_credit, uint8_t seq)
 {
     ub_flow_control_t *fc = &queue->flow_control;
-    if (!fc->enabled || queue->bind_ctx == NULL) {
+    if (!fc->enabled) {
         return UMQ_SUCCESS;
+    }
+    if (queue->bind_ctx == NULL) {
+        return -UMQ_ERR_EMLINK;
     }
     int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
     if (ret != UMQ_SUCCESS) {

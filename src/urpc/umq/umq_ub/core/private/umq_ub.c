@@ -15,6 +15,7 @@
 #include "umq_ub_flow_control.h"
 #include "qbuf_list.h"
 #include "umq_ub_api.h"
+#include "umq_ub_private.h"
 #include "umq_symbol_private.h"
 
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
@@ -664,6 +665,11 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
                   "remote pid: %u, remote namespace: %s, bind jetty success\n",
                   queue->umq_id, queue->remote_umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
                   ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, info->dev_info->bind_namespace);
+
+    umq_ub_fc_msg_retry_list_t *retry_list = queue->flow_control.fc_msg_retry_list;
+    if (retry_list != NULL && retry_list->inited && !urpc_list_is_empty(&retry_list->no_jetty_list)) {
+        umq_ub_fc_msg_retry_notify(retry_list);
+    }
     return UMQ_SUCCESS;
 
 RESET_BIND_CTX:
