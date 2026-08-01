@@ -309,7 +309,7 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
             bool with_data = true;
             uint64_t buf_id = umq_buf_to_id_with_header(input, (char *)cur_node, shm, &with_data);
             // shm id and pool name may not right
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s_data pool double free\n", buf_id,
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s pool double free\n", buf_id,
                                with_data ? "with" : "without");
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_FREE;
