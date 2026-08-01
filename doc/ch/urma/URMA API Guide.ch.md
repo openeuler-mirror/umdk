@@ -1095,7 +1095,7 @@ Return: 0 on success, other value on error.
 
 ##### 2.2.1.1.1 urma_init_attr_t
 
-定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
 ```c
 typedef struct urma_init_attr {
@@ -1209,12 +1209,12 @@ typedef enum urma_transport_type {
 
 9.  [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
 ```c
 typedef struct urma_provider_ops {
     const char *name;
-    urma_device_attr_t attr;
+    urma_provider_attr_t attr;
     urma_match_entry_t *match_table;
     urma_status_t (*init)(urma_init_attr_t *conf);
     urma_status_t (*uninit)(void);
@@ -1239,7 +1239,7 @@ typedef struct urma_match_entry {
 
 11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_private.h](../../../src/urma/lib/urma/core/urma_private.h)
 
 ```c
 typedef struct urma_sysfs_dev {
@@ -1262,7 +1262,7 @@ typedef struct urma_sysfs_dev {
 
 ```c
 typedef struct urma_driver {
-    struct urma_provider_ops_t *ops;
+    struct urma_provider_ops *ops;
     struct ub_list node; /* Add to driver list */
 } urma_driver_t;
 ```
@@ -1478,7 +1478,10 @@ typedef union urma_device_feature {
         uint32_t mn : 1; /* [Public] for user tp */
         uint32_t clan : 1; /* [Public] for user tp */
         uint32_t muti_seg_per_token_id : 1;
-        uint32_t reserved : 15;
+        uint32_t ipourma_en : 1;
+        uint32_t ctp_en : 1;
+        uint32_t uboe : 1;
+        uint32_t reserved : 12;
     } bs;
     uint32_t value;
 } urma_device_feature_t;
@@ -1924,22 +1927,22 @@ Return: urma context pointer on success, NULL on error.
 
 ```c
 typedef struct urma_context {
-    struct urma_device_t *dev; /* [Private] point to the corresponding urma device. */
-    struct urma_ops_t *ops; /* [Private] operation of urma device. */
+    struct urma_device *dev; /* [Private] point to the corresponding urma device. */
+    struct urma_ops *ops; /* [Private] operation of urma device. */
     int dev_fd; /* [Private] fd of urma device's sysfs file. */
     int async_fd; /* [Private] fd of urma device's async event file. */
     pthread_mutex_t mutex; /* [Private] mutex of urma context. */
     urma_eid_t eid; /* [Public] eid of urma device. */
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
-    struct urma_ref_t ref; /* [Private] reference count of urma context. */
+    struct urma_ref ref; /* [Private] reference count of urma context. */
     urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
 7.  [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
 ```c
 typedef struct urma_ops {
@@ -2040,6 +2043,10 @@ typedef struct urma_ops {
     urma_status_t (*delete_notifier)(urma_notifier_t *notifier);
     int (*wait_notify)(urma_notifier_t *notifier, uint32_t cnt, urma_notify_t *notify, int timeout);
     void (*ack_notify)(uint32_t cnt, urma_notify_t *notify);
+    urma_status_t (*get_eid_by_ip)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+    urma_status_t (*get_ip_by_eid)(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+    urma_status_t (*get_smac)(const urma_context_t *ctx, uint8_t *mac);
+    urma_status_t (*get_dmac)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 } urma_ops_t;
 ```
 
@@ -2368,7 +2375,7 @@ Return: the handle of created jfc, not NULL on success; NULL on error.
 typedef struct urma_jfc_cfg {
     uint32_t depth; /* [Required] the depth of jfc, no greater than urma_device_cap_t-\>jfc_depth */
     urma_jfc_flag_t flag; /* [Optional] see urma_jfc_flag_t, set flag.value to be 0 by default */
-    uint32_t ceqn; /* [Optional] event queue id, no greater than urma_device_cap_t-\>ceq_cnt
+    uint32_t ceqn; /* [Optional] event queue id, less than urma_device_cap_t-\>ceq_cnt
     set to 0 by default */
     urma_jfce_t *jfce; /* [Required] the event of jfc */
     uint64_t user_ctx; /* [Optional] private data of jfc, set to NULL by default */
@@ -2384,7 +2391,9 @@ typedef union urma_jfc_flag {
     struct {
         uint32_t lock_free : 1;
         uint32_t jfc_inline : 1;
-        uint32_t reserved : 30;
+        uint32_t non_blocking : 1;
+        uint32_t has_drv_ext : 1;
+        uint32_t reserved : 28;
     } bs;
     uint32_t value;
 } urma_jfc_flag_t;
@@ -2421,7 +2430,7 @@ typedef struct urma_jfc {
 
 10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
+typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
 
 ##### 2.3.1.1.2 urma_modify_jfc
 
@@ -2979,7 +2988,7 @@ typedef struct urma_jfs {
 
 10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
+typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
 
 ##### 2.3.1.4.2 urma_modify_jfs
 
@@ -3174,7 +3183,7 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
 
 4.  参数
 
-@param[in] [Required] ctx: the urma context created before;
+@param[in] [Required] urma_ctx: the urma context created before;
 
 @param[in] [Required] cfg: configuration of jfs;
 
@@ -3451,6 +3460,7 @@ typedef struct urma_jfr {
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
+    urma_jfr_opt_t urma_jfr_opt;
 } urma_jfr_t;
 ```
 
@@ -3669,7 +3679,10 @@ typedef union urma_import_jetty_flag {
         /* (0x4): UNO, unreliable non ordering */
         uint32_t share_tp : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
         this flag can only be set to 0. */
-        uint32_t reserved : 20;
+        uint32_t has_drv_ext : 1; /* Driver-defined behavior for import_jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after urma_rjetty_t. */
+        uint32_t reserved : 18;
     } bs;
     uint32_t value;
 } urma_import_jetty_flag_t;
@@ -4215,18 +4228,18 @@ typedef union urma_jetty_grp_flag {
 11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)
 
 ```c
-struct urma_jetty_grp {
-    urma_context_t *urma_ctx;
-    urma_jetty_id_t jetty_grp_id;
-    urma_jetty_grp_cfg_t cfg;
-    uint32_t jetty_cnt;
-    urma_jetty_t **jetty_list;
-    pthread_mutex_t list_mutex;
-    uint64_t handle; /* use to quickly get uobj of jetty group in kernel module */
+typedef struct urma_jetty {
+    urma_context_t *urma_ctx;          /* [Private] point to urma context. */
+    urma_jetty_id_t jetty_id;          /* [Public] see urma_jetty_id. */
+    urma_target_jetty_t *remote_jetty; /* [Private] Only valid for connection mode Jetty.
+                                          After the bind succeeds, the pointer is not null. */
+    urma_jetty_cfg_t jetty_cfg;        /* [Public] storage jetty config. */
+    uint64_t handle;
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
-};
+    urma_jetty_opt_t urma_jetty_opt;
+} urma_jetty_t;
 ```
 
 ##### 2.3.1.6.2 urma_modify_jetty
@@ -4470,7 +4483,7 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 6.  [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext)
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
+typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.8 urma_unimport_jetty
 
@@ -4630,7 +4643,7 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 6.  [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext)
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
+typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.13 urma_unbind_jetty
 
@@ -5045,7 +5058,7 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
 4.  参数
 
-@param[in] [Required] ctx: the urma context created before;
+@param[in] [Required] urma_ctx: the urma context created before;
 
 @param[in] [Required] cfg: configuration of jetty;
 
@@ -5399,18 +5412,19 @@ typedef union urma_seg_attr {
         uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
         1: URMA_CACHEABLE. */
         uint32_t dsva : 1;
-        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
-        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
-        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
-        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
-        (0x1 << 4): URMA_ACCESS_REMOTE_INVALIDATE. */
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_ONLY.
+        (0x1 << 1): URMA_ACCESS_READ.
+        (0x1 << 2): URMA_ACCESS_WRITE.
+        (0x1 << 3): URMA_ACCESS_ATOMIC. */
         uint32_t non_pin : 1; /* 0: segment pages pinned.
         1: segment pages non-pinned. */
         uint32_t user_iova : 1; /* 0: segment without user iova addr.
         1: segment with user iova addr. */
         uint32_t user_token_id : 1; /* 0: token_id is allocated and should be freed by urma.
         1: token_id is allocated by user in urma_seg_cfg. */
-        uint32_t reserved : 18;
+        uint32_t has_user_info : 1; /* 0: no extension data.
+        1: extension data appended after urma_seg_t. */
+        uint32_t reserved : 17;
     } bs;
     uint32_t value;
 } urma_seg_attr_t;
@@ -5505,11 +5519,10 @@ typedef union urma_import_seg_flag {
     struct {
         uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
         1: URMA_CACHEABLE. */
-        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
-        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
-        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
-        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
-        (0x1 << 4)：URMA_ACCESS_REMOTE_INVALIDATE.
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_ONLY.
+        (0x1 << 1): URMA_ACCESS_READ.
+        (0x1 << 2): URMA_ACCESS_WRITE.
+        (0x1 << 3): URMA_ACCESS_ATOMIC.
         */
         uint32_t mapping : 1; /* 0: URMA_SEG_NOMAP/
         1: URMA_SEG_MAPPED. */
@@ -6135,6 +6148,7 @@ typedef enum urma_opcode {
     URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
     URMA_OPC_NOP = 0x51,
     URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
+    URMA_OPC_FLUSH_DMA = 0x80,
     URMA_OPC_LAST
 } urma_opcode_t;
 ```
@@ -6149,7 +6163,7 @@ typedef union urma_jfs_wr_flag {
         uint32_t place_order : 2; /* 0: There is no order with other WR
         1: relax order
         2: strong order
-        3: reserve */ /* see urma_order_type_t */
+        3: reserve */ /* see urma_place_order_t */
         uint32_t comp_order : 1; /* 0: There is no completion order with othwe WR.
         1: Completion order with previous WR. */
         uint32_t fence : 1; /* 0: There is not fence.
@@ -6161,8 +6175,9 @@ typedef union urma_jfs_wr_flag {
         uint32_t inline_flag : 1; /* 0: not inline.
         1: inline data. */
         uint32_t db_bypass : 1;
+        uint32_t udf : 1;
         uint32_t has_drv_ext : 1;
-        uint32_t reserved : 23;
+        uint32_t reserved : 22;
     } bs;
     uint32_t value;
 } urma_jfs_wr_flag_t;
@@ -6440,6 +6455,7 @@ typedef enum urma_cr_opcode {
     URMA_CR_OPC_SEND_WITH_IMM,
     URMA_CR_OPC_SEND_WITH_INV,
     URMA_CR_OPC_WRITE_WITH_IMM,
+    URMA_CR_OPC_FLUSH_WRITE,
 } urma_cr_opcode_t;
 ```
 

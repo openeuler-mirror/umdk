@@ -551,6 +551,7 @@ typedef struct urma_context {
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
     struct urma_ref ref; /* [Private] reference count of urma context. */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
@@ -571,6 +572,8 @@ typedef struct urma_context {
 8.  uint32_t uasid: 这也是一个无符号32位整数，表示当前进程的 User Assisted Segment Identifier (UASID)。
 
 9.  struct urma_ref ref: 这是一个 urma_ref 结构体的实例，用于跟踪 urma_context_t 的引用计数。
+
+10.  urma_context_aggr_mode_t aggr_mode: 这是一个公开字段，表示 URMA 上下文的聚合模式，可取 URMA_AGGR_MODE_STANDALONE、URMA_AGGR_MODE_ACTIVE_BACKUP 或 URMA_AGGR_MODE_BALANCE。
 
 ### 5.2.2 Jetty管理
 
@@ -1042,7 +1045,7 @@ UMDK支持向接收端发送立即数，见urma_post_jfs_wr接口，所发送的
 
 - **urma_recv**：接收方使用这个函数从远程内存接收数据。
 
-- **urma_send**：发送方使用这个函数向远程内存发送数据，支持携带IMM数据，并且可以设置为with invalid，这意味着即使目标地址无效，操作也会继续执行。![](figures/urma-arch-data-two-sided-01.png)
+- **urma_send**：发送方使用这个函数向远程内存发送数据，支持携带IMM数据，并且可以设置为with invalidate，此时发送操作会使指定的目标段（tseg）失效。![](figures/urma-arch-data-two-sided-01.png)
 
 ### 5.3.3 完成记录
 
@@ -1524,7 +1527,7 @@ bonding设备不感知TP。
 
 3\. 不同 jetty 的单路径、多路径模式以及传输模式可以支持的能力有所差异；
 
-4\. 在使用聚合设备的场景下，传输层使用 TP/CTP 的选择仅和创建 jetty 和 jfs/jfr 的时候设定的参数有关，urma_import_jetty 中传入的 rjetty flag 中的 CTP 参数会被忽略。
+4\. 在使用聚合设备的场景下，传输层使用 TP/CTP 的选择仅和创建 jetty 和 jfs/jfr 的时候设定的参数有关，urma_import_jetty 中传入的 rjetty 的 tp_type 参数会被忽略。
 
 5\. 健康检查与故障回切（failback）仅支持 Jetty，不支持 JFR、JFS。健康检查通过为每条路径创建带外探测 Jetty（复用 JFR 接收资源）实现对链路状态的周期性探测；故障回切在探测恢复后通过重建 Jetty 将流量切回主路径。上述两条路径均依赖 Jetty 对象，独立创建的 JFR、JFS 不具备健康检查与故障回切能力。
 
@@ -1660,7 +1663,7 @@ Options:
   -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.
   -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).
   -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.
-  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.
+  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 512 for lat.
   -d, --dev <dev_name>        The name of ubep device.
   -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.
   -e, --use_jfce              use jfc event.
