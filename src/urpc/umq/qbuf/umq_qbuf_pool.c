@@ -1920,12 +1920,24 @@ uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, 
         umq_buf_list_t *exp_free_list = &slot->free_block_list;
         uint64_t take_cnt = (request < slot->free_block_cnt) ? request : slot->free_block_cnt;
         if (take_cnt > 0) {
-            (void)allocate_batch(exp_free_list, take_cnt, local_head);
-            *local_buf_cnt += take_cnt;
-            slot->free_block_cnt -= take_cnt;
-            count += take_cnt;
-            request -= take_cnt;
-            exp_pool->exp_total_block_num -= take_cnt;
+            uint32_t got = allocate_batch(exp_free_list, (uint32_t)take_cnt, local_head);
+            if (got > 0) {
+                *local_buf_cnt += got;
+                slot->free_block_cnt -= got;
+                count += got;
+                request -= got;
+                exp_pool->exp_total_block_num -= got;
+            }
+            if (got < take_cnt) {
+                /* free_block_cnt disagreed with the real free list length
+                 * (list shorter than the count). allocate_batch drained the
+                 * real list; realign the bookkeeping so future fetches do not
+                 * keep over-counting this slot and eventually crash. */
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                    "expansion slot free_block_cnt mismatch: claimed=%lu moved=%u, realigning to 0\n",
+                    (unsigned long)take_cnt, got);
+                slot->free_block_cnt = 0;
+            }
         }
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
