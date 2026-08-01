@@ -20,8 +20,6 @@
 extern "C" {
 #endif
 
-#define UMQ_ENABLE_INLINE_LIMIT_SIZE 32
-#define UMQ_INLINE_ENABLE 1
 
 typedef struct umq_perftest_config {
     perftest_config_t config;
