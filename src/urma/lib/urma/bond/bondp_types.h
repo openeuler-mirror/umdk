@@ -99,6 +99,8 @@ typedef struct bondp_device {
 typedef struct bondp_port_cfg {
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t enabled_count;
+    /* chip_id shall not be used for p-connection, only for chip_id check
+       when creating jfc/jfs/jfr/jetty */
     uint8_t chip_id[URMA_UBAGG_DEV_MAX_NUM];
     uint32_t chip_id_count;
 } bondp_port_cfg_t;

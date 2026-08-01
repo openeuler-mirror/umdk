@@ -508,6 +508,8 @@ urma_token_t *token_value);
 urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 ```
 
+If a port subset has been configured on the context via `BONDP_USER_CTL_SET_BONDING_PORT`, Jetty and JFR import establish physical target connections only through that subset. Each configured local port and each remote target participate in at most one selected physical path (one-to-one pairing), so the number of imported physical paths does not exceed the smaller of the configured local port count and the remote target count. The configured subset must contain a port connected to the peer topology; otherwise the import fails with no buildable path.
+
 Users should focus on the URMA API usage flow based on transport-layer-unaware connection setup.
 
 ## 5.2 Control Plane
