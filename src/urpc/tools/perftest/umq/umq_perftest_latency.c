@@ -27,9 +27,6 @@ static void set_pro_data(umq_buf_t *tmp, umq_perftest_latency_arg_t *lat_arg)
         pro->flag.value = 0;
         pro->flag.bs.solicited_enable = 1;
         pro->flag.bs.complete_enable = 1;
-        if (lat_arg->cfg->config.size < UMQ_ENABLE_INLINE_LIMIT_SIZE) {
-            pro->flag.bs.inline_flag = UMQ_INLINE_ENABLE;
-        }
         pro->opcode = UMQ_OPC_SEND;
         tmp = tmp->qbuf_next;
     }
