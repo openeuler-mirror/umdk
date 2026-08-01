@@ -304,6 +304,12 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         umq_trace_item_record(buf_pro->imm.user_data, buffer->total_data_size, 0);
         umq_opcode_t opcode = buf_pro->opcode;
         uint32_t rest_size = buffer->total_data_size;
+        if (rest_size == 0) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), total_data_size is 0, skip empty qbuf\n", queue->umq_id);
+            *bad_qbuf = qbuf;
+            ret = -UMQ_ERR_EINVAL;
+            goto ERROR;
+        }
         if (rest_size > max_send_size && (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM)) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), total data size[%u] exceed max send size[%u]\n",
                 queue->umq_id, rest_size, max_send_size);
@@ -394,8 +400,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         wr_index++;
         if (wr_index == UMQ_BATCH_SIZE && buffer != NULL) {
             // wr count exceed UMQ_BATCH_SIZE
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), wr count exceeds %d, not supported\n",
-                queue->umq_id, UMQ_BATCH_SIZE);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), wr count exceeds %d, not supported, first_qbuf=%p, cur_buffer=%p, total_data_size=%u\n",
+                queue->umq_id, UMQ_BATCH_SIZE, (void *)qbuf, (void *)buffer, buffer->total_data_size);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
             goto ERROR;

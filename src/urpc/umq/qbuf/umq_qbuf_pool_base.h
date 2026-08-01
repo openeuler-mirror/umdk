@@ -250,27 +250,41 @@ static ALWAYS_INLINE void *floor_to_align(void *ptr, uint64_t align)
     return (void *)((uint64_t)(uintptr_t)ptr & ~(align - 1));
 }
 
-/* get n elements from input and insert them at the head of output
- * input list elements count must more than n
- */
+/* Move up to n elements from input and prepend them at the head of output.
+ * Returns the actual number of elements moved (may be less than n if input
+ * holds fewer than n nodes). Safe against a NULL chain even when the caller's
+ * recorded count (e.g. slot->free_block_cnt) disagrees with the real list
+ * length: it never dereferences NULL and keeps both lists consistent. */
 static ALWAYS_INLINE uint32_t allocate_batch(umq_buf_list_t *input, uint32_t n, umq_buf_list_t *output)
 {
+    if (n == 0) {
+        return 0;
+    }
     uint32_t cnt = 0;
-    umq_buf_t *cur_node;
-    QBUF_LIST_FOR_EACH(cur_node, input)
-    {
+    umq_buf_t *cur_node = QBUF_LIST_FIRST(input);
+    umq_buf_t *tail = NULL; /* last node of the batch being moved */
+    while (cur_node != NULL) {
+        tail = cur_node;
         if (++cnt == n) {
             break;
         }
+        cur_node = QBUF_LIST_NEXT(cur_node);
     }
-
+    if (tail == NULL) {
+        /* input was empty */
+        return 0;
+    }
     umq_buf_t *input_head = QBUF_LIST_FIRST(input);
     umq_buf_t *output_head = QBUF_LIST_FIRST(output);
-    // switch head node
-    QBUF_LIST_FIRST(input) = QBUF_LIST_NEXT(cur_node);
+    /* cur_node is non-NULL when cnt==n (it is the n-th node, the batch tail);
+     * otherwise the list was exhausted before reaching n and tail holds the
+     * last real node. */
+    umq_buf_t *batch_tail = (cur_node != NULL) ? cur_node : tail;
+    /* input keeps whatever follows batch_tail (NULL when exhausted) */
+    QBUF_LIST_FIRST(input) = QBUF_LIST_NEXT(batch_tail);
+    /* prepend [input_head .. batch_tail] to output */
     QBUF_LIST_FIRST(output) = input_head;
-    // set output
-    QBUF_LIST_NEXT(cur_node) = output_head;
+    QBUF_LIST_NEXT(batch_tail) = output_head;
     return cnt;
 }
 
