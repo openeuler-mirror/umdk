@@ -739,14 +739,32 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
         }
     }
 
+    if (cnt == 0) {
+        // List is empty but buf_cnt claims buffers exist: realign counter
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "nodata list empty but buf_cnt=%lu, realigning\n",
+                           (unsigned long)__atomic_load_n(&local_pool->buf_cnt_without_data, __ATOMIC_RELAXED));
+        __atomic_store_n(&local_pool->buf_cnt_without_data, 0, __ATOMIC_RELAXED);
+        QBUF_LIST_FIRST(list) = NULL;
+        return;
+    }
+
     umq_buf_t *input_head = QBUF_LIST_FIRST(&local_pool->head_without_data);
-    // switch head node
-    QBUF_LIST_FIRST(&local_pool->head_without_data) = QBUF_LIST_NEXT(cur_node);
-    QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    // cur_node is the last node we took (non-NULL since cnt > 0)
+    if (cur_node != NULL) {
+        // Normal case: cur_node is the last node we took, split list at cur_node
+        QBUF_LIST_FIRST(&local_pool->head_without_data) = QBUF_LIST_NEXT(cur_node);
+        QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    } else {
+        // cnt > 0 but cur_node == NULL: list was exhausted (shorter than num)
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "nodata list shorter than expected: cnt=%u num=%u buf_cnt=%lu\n",
+                           cnt, num,
+                           (unsigned long)__atomic_load_n(&local_pool->buf_cnt_without_data, __ATOMIC_RELAXED));
+        QBUF_LIST_FIRST(&local_pool->head_without_data) = NULL;
+    }
 
     // set output
     QBUF_LIST_FIRST(list) = input_head;
-    (void)__atomic_fetch_sub(&local_pool->buf_cnt_without_data, num, __ATOMIC_RELAXED);
+    (void)__atomic_fetch_sub(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
 }
 
 // umq_qbuf_alloc_data_with_split: sc indexes the with_data arrays. block_size passed in
@@ -795,14 +813,31 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
         }
     }
 
+    if (cnt == 0) {
+        // List is empty but buf_cnt claims buffers exist: realign counter
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "with_data sc=%u list empty but buf_cnt=%lu, realigning\n",
+                          sc, (unsigned long)local_pool->buf_cnt_with_data[sc]);
+        local_pool->buf_cnt_with_data[sc] = 0;
+        QBUF_LIST_FIRST(list) = NULL;
+        return;
+    }
+
     umq_buf_t *head = QBUF_LIST_FIRST(&local_pool->head_with_data[sc]);
-    // switch head node
-    QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = QBUF_LIST_NEXT(cur_node);
-    QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    // cur_node is the last node we took (non-NULL since cnt > 0)
+    if (cur_node != NULL) {
+        // Normal case: cur_node is the last node we took, split list at cur_node
+        QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = QBUF_LIST_NEXT(cur_node);
+        QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    } else {
+        // cnt > 0 but cur_node == NULL: list was exhausted (shorter than actual_buf_count)
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "with_data sc=%u list shorter than expected: cnt=%u expected=%u buf_cnt=%lu\n",
+                          sc, cnt, param->actual_buf_count, (unsigned long)local_pool->buf_cnt_with_data[sc]);
+        QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = NULL;
+    }
 
     // set output
     QBUF_LIST_FIRST(list) = head;
-    local_pool->buf_cnt_with_data[sc] -= param->actual_buf_count;
+    local_pool->buf_cnt_with_data[sc] -= cnt;
 }
 
 static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *local_pool, uint32_t request_size,
@@ -850,14 +885,31 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
         }
     }
 
+    if (cnt == 0) {
+        // List is empty but buf_cnt claims buffers exist: realign counter
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "with_data sc=%u list empty but buf_cnt=%lu, realigning\n",
+                          sc, (unsigned long)local_pool->buf_cnt_with_data[sc]);
+        local_pool->buf_cnt_with_data[sc] = 0;
+        QBUF_LIST_FIRST(list) = NULL;
+        return;
+    }
+
     umq_buf_t *head = QBUF_LIST_FIRST(&local_pool->head_with_data[sc]);
-    // switch head node
-    QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = QBUF_LIST_NEXT(cur_node);
-    QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    // cur_node is the last node we took (non-NULL since cnt > 0)
+    if (cur_node != NULL) {
+        // Normal case: cur_node is the last node we took, split list at cur_node
+        QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = QBUF_LIST_NEXT(cur_node);
+        QBUF_LIST_NEXT(cur_node) = QBUF_LIST_FIRST(list);
+    } else {
+        // cnt > 0 but cur_node == NULL: list was exhausted (shorter than actual_buf_count)
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "with_data sc=%u list shorter than expected: cnt=%u expected=%u buf_cnt=%lu\n",
+                          sc, cnt, param->actual_buf_count, (unsigned long)local_pool->buf_cnt_with_data[sc]);
+        QBUF_LIST_FIRST(&local_pool->head_with_data[sc]) = NULL;
+    }
 
     // set output
     QBUF_LIST_FIRST(list) = head;
-    local_pool->buf_cnt_with_data[sc] -= param->actual_buf_count;
+    local_pool->buf_cnt_with_data[sc] -= cnt;
 }
 
 static ALWAYS_INLINE uint32_t umq_qbuf_base_actual_buf_count(const qbuf_pool_base_t *base, uint32_t request_size,
