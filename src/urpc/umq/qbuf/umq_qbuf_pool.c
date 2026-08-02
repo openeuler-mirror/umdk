@@ -761,6 +761,11 @@ static ALWAYS_INLINE void return_batch_to_expansion_pool(uint16_t mempool_id, um
 uint64_t return_list_to_pools(umq_buf_t *local_head, umq_buf_list_t *global_head, uint64_t *global_buf_cnt,
                               bool with_data, uint32_t sc)
 {
+    if (local_head == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "return_list_to_pools: local_head is NULL, with_data=%d sc=%u\n",
+                           with_data, sc);
+        return 0;
+    }
     umq_buf_t *batch_head = local_head;
     umq_buf_t *batch_tail = local_head;
     uint32_t batch_cnt = 1;
@@ -989,6 +994,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 
     (void)pthread_spin_lock(&g_tls_stats_lock);
     urpc_list_remove(&g_thread_cache.tls_node);
+    g_thread_cache.inited = false;
     (void)pthread_spin_unlock(&g_tls_stats_lock);
 
     local_block_pool_t *local_pool = get_thread_cache();
@@ -1022,7 +1028,6 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
     __atomic_fetch_sub(&g_total_local_cap_with_data_bytes, total_tls_bytes, __ATOMIC_RELAXED);
     __atomic_fetch_sub(&g_total_local_cap_without_data, local_pool->capacity_without_data, __ATOMIC_RELAXED);
 
-    g_thread_cache.inited = false;
 }
 
 static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool with_data)
