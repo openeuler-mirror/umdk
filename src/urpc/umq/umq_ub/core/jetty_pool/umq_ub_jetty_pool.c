@@ -521,6 +521,18 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         return UMQ_SUCCESS;
     }
 
+    /* TLS 析构后（glibc 2.32: TLS dtors 先于 atexit handler），thread-local jetty
+     * cache 可能未初始化（inited=false, cache_list.next=NULL）或已析构。此时若走
+     * get_thread_jetty_cache() + urpc_list_push_back 路径，会因 cache_list.next 始终
+     * 为 NULL 导致后续 URPC_LIST_FOR_EACH 解引用 NULL->in_global_pool 而 SIGSEGV。
+     * 退出路径下 jetty 资源由 urma/OS 回收，node 本身为 calloc 所得，直接 free 安全。
+     * 与 release_thread_cache 的 g_tls_dtors_running 快速路径保持一致。 */
+    if (g_tls_dtors_running) {
+        free(node);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
+        return UMQ_SUCCESS;
+    }
+
     node->borrow_count = 0;
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
     urpc_list_push_back(&cache->cache_list, &node->node);

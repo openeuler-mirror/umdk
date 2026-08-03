@@ -28,6 +28,10 @@
 static __thread urma_jfs_wr_t g_umq_ub_urma_wr[UMQ_BATCH_SIZE];
 static __thread urma_sge_t g_umq_ub_sges[UMQ_BATCH_SIZE][UMQ_MAX_SGE_NUM];
 
+/* 进程退出标志：ubsocket_uninit() 入口置 true。umq_ub_poll_fc_tx 等据此跳过
+ * poll，避免 worker 线程在主线程释放 jfc 后仍访问悬空指针。 */
+volatile bool g_ubsocket_exiting = false;
+
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
     void *addr = calloc(ctx_num, sizeof(rx_buf_ctx_t));
@@ -1871,6 +1875,13 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
 {
     urma_cr_t cr[UMQ_UB_FLOW_CONTORL_JETTY_DEPTH];
 
+    /* 进程退出期跳过 poll：ubsocket_uninit 先 ReleaseAll(Socket) 释放 jfc，
+     * 后 Stop(TX_RUNNER)，窗口期内 worker 仍 poll 已释放的 jfc 会 UAF。
+     * 退出期无需处理 CQE，直接返回 0 安全。 */
+    if (g_ubsocket_exiting) {
+        return 0;
+    }
+
     if (!umq_ub_poll_get_jetty_node(queue)) {
         return 0;
     }
@@ -1957,6 +1968,14 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
 
 int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
 {
+    /* 进程退出期跳过 poll：ubsocket_uninit 先 ReleaseAll(Socket) 释放 jfc/jetty，
+     * 后 Stop(TX_RUNNER)，窗口期内 worker 仍 poll 已释放资源会 UAF (SEGV in
+     * urma_poll_jfc)。此守卫覆盖 FC jfc 和 IO jfc 两条 poll 路径。退出期无需
+     * 处理 CQE，直接返回 0 安全。 */
+    if (g_ubsocket_exiting) {
+        return 0;
+    }
+
     if (buf_count == 0) {
         return 0;
     }
@@ -1988,16 +2007,19 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
                 (void)eventfd_read(checker->event_fd, &count);
             }
         }
-        if ((queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.tx_fc_interrupt ||
-            ((option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0))) {
-            /* buf is not NULL here, so umq_ub_poll_fc_tx returns qbuf_cnt >= 0 */
-            int ret = umq_ub_poll_fc_tx(queue, buf, buf_count, tp_handle_idx);
-            if (ret < 0) {
-                umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());
-                return ret;
-            }
-            qbuf_cnt += ret;
+        /* Always poll FC TX CQ regardless of mode/interrupt/flag. FC jetty
+         * depth is only 2 (UMQ_UB_FLOW_CONTORL_JETTY_DEPTH), so even a couple
+         * of un-reaped CQEs fill the SQ and block credit req/resp/ack sends
+         * with status:12, causing credit timeouts and RPC failures. The
+         * previous condition gated FC polling on POLLING mode, tx_fc_interrupt,
+         * or TP_HANDLE_IDX flag, which let FC CQEs accumulate in INTERRUPT
+         * mode until the SQ filled up. */
+        int ret = umq_ub_poll_fc_tx(queue, buf, buf_count, tp_handle_idx);
+        if (ret < 0) {
+            umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());
+            return ret;
         }
+        qbuf_cnt += ret;
     }
 
     if (!umq_ub_poll_get_jetty_node(queue)) {
