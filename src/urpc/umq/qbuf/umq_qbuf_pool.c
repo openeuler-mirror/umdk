@@ -958,7 +958,9 @@ static void release_thread_cache(uint64_t id);
 
 static ALWAYS_INLINE local_block_pool_t *get_thread_cache(void)
 {
-    if (!g_thread_cache.inited) {
+    /* During TLS destruction the list may hold dangling nodes; never re-init
+     * (which would push_back into the poisoned list) once we are exiting. */
+    if (!g_thread_cache.inited && !g_tls_dtors_running) {
         for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
             QBUF_LIST_INIT(&g_thread_cache.block_pool.head_with_data[i]);
             g_thread_cache.block_pool.buf_cnt_with_data[i] = 0;
@@ -988,16 +990,43 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_cache(void)
 static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 {
     (void)id;
-    if (!g_thread_cache.inited || !g_qbuf_pool.inited) {
+    if (!g_thread_cache.inited) {
+        return;
+    }
+
+    /* During process exit, glibc runs __call_tls_dtors() which destroys each
+     * thread's urpc_thread_closure, in turn calling us. By this point other
+     * threads' TLS nodes in g_tls_register_head may already be dangling (their
+     * storage freed) but still linked into the list. Any urpc_list_remove()
+     * dereferences adjacent nodes -> SEGV. Skip all cross-thread list ops and
+     * global-pool returns; the per-thread buf memory points into the global
+     * pool (not thread-malloc'd), so leaking it is acceptable at exit. */
+    if (g_tls_dtors_running) {
+        g_thread_cache.inited = false;
+        return;
+    }
+
+    if (!g_qbuf_pool.inited) {
+        if (urpc_list_is_in_list(&g_thread_cache.tls_node)) {
+            urpc_list_remove(&g_thread_cache.tls_node);
+        }
+        g_thread_cache.inited = false;
         return;
     }
 
     (void)pthread_spin_lock(&g_tls_stats_lock);
-    urpc_list_remove(&g_thread_cache.tls_node);
+    if (urpc_list_is_in_list(&g_thread_cache.tls_node)) {
+        urpc_list_remove(&g_thread_cache.tls_node);
+    }
+    /* Set inited=false AFTER we're done with the list, but BEFORE touching
+     * block_pool below. Do NOT call get_thread_cache() here: it would see
+     * inited==false and re-register us into g_tls_register_head (which may
+     * hold dangling nodes from threads killed by exit()). Access block_pool
+     * directly via &g_thread_cache.block_pool. */
     g_thread_cache.inited = false;
     (void)pthread_spin_unlock(&g_tls_stats_lock);
 
-    local_block_pool_t *local_pool = get_thread_cache();
+    local_block_pool_t *local_pool = &g_thread_cache.block_pool;
     uint64_t return_buf_cnt;
     uint64_t total_tls_bytes = 0;
 
@@ -2595,6 +2624,11 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     local_qbuf_pool_t *pool_iter = NULL;
     URPC_LIST_FOR_EACH(pool_iter, tls_node, &g_tls_register_head)
     {
+        /* Skip nodes whose owner thread already tore down its TLS cache during
+         * exit() but left the node linked (g_tls_dtors_running fast path). */
+        if (!pool_iter->inited) {
+            continue;
+        }
         if (qbuf_pool_stats->local_qbuf_pool_num >= UMQ_LOCAL_QBUF_POOL_MAX_NUM) {
             break;
         }
@@ -2715,6 +2749,9 @@ static void umq_flush_tls_nodata_to_global(void)
     local_qbuf_pool_t *pool_iter = NULL;
     URPC_LIST_FOR_EACH(pool_iter, tls_node, &g_tls_register_head)
     {
+        if (!pool_iter->inited) {
+            continue;
+        }
         if (pool_iter->block_pool.buf_cnt_without_data == 0) {
             continue;
         }

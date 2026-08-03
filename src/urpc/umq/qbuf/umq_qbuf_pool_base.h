@@ -217,7 +217,9 @@ static ALWAYS_INLINE uint64_t umq_qbuf_pool_expand_max(uint64_t total_size)
 static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbuf_pool_t *thread_cache,
                                                                 local_qbuf_pool_ctrl_t *pools)
 {
-    if (!thread_cache->inited) {
+    /* During TLS destruction the registry list may hold dangling nodes;
+     * never re-init (which would push_back into the poisoned list). */
+    if (!thread_cache->inited && !g_tls_dtors_running) {
         for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
             QBUF_LIST_INIT(&thread_cache->block_pool.head_with_data[i]);
             thread_cache->block_pool.buf_cnt_with_data[i] = 0;
@@ -518,11 +520,24 @@ static ALWAYS_INLINE void release_thread_cache_impl(thread_local_qbuf_pool_t *th
         return;
     }
 
+    /* TLS-destruction fast path: skip cross-thread list ops (adjacent nodes
+     * may be dangling) and global-pool returns (locks may be destroyed).
+     * Per-thread buf memory belongs to the global pool, so leaking is OK. */
+    if (g_tls_dtors_running) {
+        thread_cache->inited = false;
+        return;
+    }
+
     (void)pthread_spin_lock(&tls_pools->tls_stats_lock);
-    urpc_list_remove(&thread_cache->tls_node);
+    if (urpc_list_is_in_list(&thread_cache->tls_node)) {
+        urpc_list_remove(&thread_cache->tls_node);
+    }
+    thread_cache->inited = false;
     (void)pthread_spin_unlock(&tls_pools->tls_stats_lock);
 
-    local_block_pool_t *local_pool = get_thread_local_cache(thread_cache, tls_pools);
+    /* Do NOT call get_thread_local_cache(): it would see inited==false and
+     * re-init + push_back into a list that may hold dangling nodes. */
+    local_block_pool_t *local_pool = &thread_cache->block_pool;
     uint64_t return_buf_cnt;
     (void)pthread_spin_lock(&global_pool->global_mutex);
     for (uint32_t sc = 0; sc < size_class_count; sc++) {
@@ -543,8 +558,6 @@ static ALWAYS_INLINE void release_thread_cache_impl(thread_local_qbuf_pool_t *th
         thread_cache->stats.tls_return_buf_cnt_without_data += return_buf_cnt;
     }
     (void)pthread_spin_unlock(&global_pool->global_mutex);
-
-    thread_cache->inited = false;
 }
 
 static ALWAYS_INLINE uint64_t qbuf_tls_capacity_grow(uint64_t local_cap, volatile uint64_t *total_cap,
