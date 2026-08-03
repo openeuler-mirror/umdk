@@ -310,6 +310,10 @@ static void *bondp_worker_thread_main(void *arg)
 {
     bondp_worker_t *worker = arg;
     struct epoll_event events[BONDP_WORKER_EVENT_NUM];
+    int ret = pthread_setname_np(pthread_self(), BONDP_WORKER_THREAD_NAME);
+    if (ret != 0) {
+        URMA_LOG_WARN("Failed to set bond worker thread name, ret: %d.\n", ret);
+    }
 
     while (true) {
         uint64_t now_ms = bondp_worker_now_ms();
@@ -422,11 +426,6 @@ static bondp_worker_t *bondp_worker_create_instance(int *err_code)
         *err_code = -ret;
         goto ERR_WAKE;
     }
-    ret = pthread_setname_np(worker->thread, BONDP_WORKER_THREAD_NAME);
-    if (ret != 0) {
-        URMA_LOG_WARN("Failed to set bond worker thread name, ret: %d.\n", ret);
-    }
-
     return worker;
 
 ERR_WAKE:
