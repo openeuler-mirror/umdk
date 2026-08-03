@@ -12,7 +12,8 @@ set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_C_FLAGS_RELEASE "-O2 -D_FORTIFY_SOURCE=2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -D_FORTIFY_SOURCE=2")
 
-set(CMAKE_FLAGS_ASAN "-fsanitize=address -fsanitize-recover=address -fsanitize=leak -fno-omit-frame-pointer")
+set(CMAKE_FLAGS_ASAN "-fsanitize=address -fsanitize-recover=address -fsanitize=leak -fsanitize=undefined \
+-fno-omit-frame-pointer")
 set(CMAKE_FLAGS_TSAN "-fsanitize=thread -fsanitize-recover=address -fno-omit-frame-pointer")
 set(CMAKE_FLAGS_COVERAGE "-fprofile-arcs -ftest-coverage")
 set(CMAKE_FLAGS_FUZZ "${CMAKE_FLAGS_ASAN} ${CMAKE_FLAGS_COVERAGE} -fdump-rtl-expand")
