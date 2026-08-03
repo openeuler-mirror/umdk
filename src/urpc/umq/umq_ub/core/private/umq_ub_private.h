@@ -18,6 +18,11 @@
 #include <stdbool.h>
 
 #include "urma_api.h"
+
+/* 进程退出标志：ubsocket_uninit() 入口置 true。worker 线程的 poll 路径据此
+ * 跳过对已释放资源（jfc/jetty/queue）的访问，避免退出时序竞态导致的 UAF。
+ * 退出期不再处理 CQE，丢掉的 poll 由 OS 回收资源，安全。 */
+extern volatile bool g_ubsocket_exiting;
 #include "urma_ubagg.h"
 #include "umq_inner.h"
 #include "urpc_bitmap.h"
