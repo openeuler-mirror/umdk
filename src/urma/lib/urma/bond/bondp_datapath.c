@@ -30,6 +30,18 @@
 /* Max consecutive fast returns before forcing a full scan */
 #define BONDP_FAST_RETURN_THRESHOLD   64
 
+// All post paths (jfs_send, jetty_send, jfr_recv, jetty_recv) are sequential
+// within a thread, share one thread_local copy to minimize TLS memory.
+// sge[][BONDP_MAX_SGE_NUM + 1] is split per WR: src takes front, dst takes the rest.
+// Constraint: src_num_sge + dst_num_sge <= 33 (one of them is always 1).
+static thread_local struct {
+    union {
+        urma_jfs_wr_t jfs[BONDP_MAX_WR_LIST_NUM];
+        urma_jfr_wr_t jfr[BONDP_MAX_WR_LIST_NUM];
+    } wr_list;
+    urma_sge_t sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM + 1];
+} tl_post_prealloc;
+
 static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx);
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
@@ -411,9 +423,8 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                                                  const urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr,
                                                  int wr_total)
 {
-    static thread_local urma_jfs_wr_t prealloc_wr_list[BONDP_MAX_WR_LIST_NUM];
-    static thread_local urma_sge_t prealloc_src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
-    static thread_local urma_sge_t prealloc_dst_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
+    urma_jfs_wr_t *prealloc_wr_list = tl_post_prealloc.wr_list.jfs;
+    urma_sge_t (*prealloc_sge)[BONDP_MAX_SGE_NUM + 1] = tl_post_prealloc.sge;
 
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
@@ -436,8 +447,11 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         urma_jfs_wr_t *vwr = (urma_jfs_wr_t *)wr;
         while (vwr != NULL) {
             urma_jfs_wr_t *pwr = &prealloc_wr_list[index];
-            ret = copy_jfs_wr(vwr, pwr, prealloc_src_sge[index], prealloc_dst_sge[index],
-                              BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM);
+            urma_sge_t *src_sge = prealloc_sge[index];
+            uint32_t src_num_sge = jfs_wr_src_num_sge(vwr);
+            urma_sge_t *dst_sge = src_sge + src_num_sge;
+            ret = copy_jfs_wr(vwr, pwr, src_sge, dst_sge,
+                              BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM + 1 - src_num_sge);
             if (ret != 0) {
                 return ret;
             }
@@ -737,8 +751,8 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
                                                  const urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
 {
     // Pre-allocated space to improve datapath performance
-    static thread_local urma_jfr_wr_t prealloc_wr_list[BONDP_MAX_WR_LIST_NUM];
-    static thread_local urma_sge_t prealloc_src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
+    urma_jfr_wr_t *prealloc_wr_list = tl_post_prealloc.wr_list.jfr;
+    urma_sge_t (*prealloc_src_sge)[BONDP_MAX_SGE_NUM + 1] = tl_post_prealloc.sge;
 
     urma_status_t ret = 0;
     int recv_idx = -1;
@@ -775,8 +789,8 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
 static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_comp, urma_jfr_wr_t *wr,
                                                             urma_jfr_wr_t **bad_wr)
 {
-    static thread_local urma_jfr_wr_t prealloc_wr_list[BONDP_MAX_WR_LIST_NUM];
-    static thread_local urma_sge_t prealloc_src_sge[BONDP_MAX_WR_LIST_NUM][BONDP_MAX_SGE_NUM];
+    urma_jfr_wr_t *prealloc_wr_list = tl_post_prealloc.wr_list.jfr;
+    urma_sge_t (*prealloc_src_sge)[BONDP_MAX_SGE_NUM + 1] = tl_post_prealloc.sge;
 
     if (bdp_comp == NULL) {
         URMA_LOG_ERR("Invalid bdp_comp: NULL in recv post without backup.\n");

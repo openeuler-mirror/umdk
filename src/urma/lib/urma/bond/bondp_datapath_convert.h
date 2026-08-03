@@ -34,6 +34,17 @@ static inline bool is_atomic_wr(const urma_jfs_wr_t *wr)
     return wr->opcode == URMA_OPC_CAS || wr->opcode == URMA_OPC_FADD;
 }
 
+static inline uint32_t jfs_wr_src_num_sge(const urma_jfs_wr_t *wr)
+{
+    if (is_rw_wr(wr)) {
+        return wr->rw.src.num_sge;
+    }
+    if (is_send_wr(wr)) {
+        return wr->send.src.num_sge;
+    }
+    return 1; // atomic ops use single SGE
+}
+
 urma_status_t copy_jfs_wr(const urma_jfs_wr_t *src, urma_jfs_wr_t *dst,
                           urma_sge_t *prealloc_src_sge, urma_sge_t *prealloc_dst_sge,
                           uint32_t max_sge, uint32_t max_rsge);
