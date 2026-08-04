@@ -1,0 +1,169 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+
+ * ubs-hcom is licensed under the Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *      http://license.coscl.org.cn/MulanPSL2
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PSL v2 for more details.
+ */
+
+#include <malloc.h>
+#include <stdbool.h>
+#include <sys/mman.h>
+
+#include "umq_errno.h"
+#include "umq_rx_qbuf_pool.h"
+#include "umq_vlog.h"
+
+static global_block_pool_t g_rx_pool = {0};
+static void *g_rx_buffer_addr = NULL;
+static uint64_t g_rx_total_len = 0;
+static bool g_rx_pool_inited = false;
+
+void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
+{
+    if (g_rx_buffer_addr != NULL) {
+        return g_rx_buffer_addr;
+    }
+
+    uint64_t min_size = UMQ_RX_QBUF_BLOCK_SIZE;
+    if (buf_mode == UMQ_BUF_SPLIT) {
+        min_size = UMQ_RX_QBUF_BLOCK_SIZE + (uint32_t)sizeof(umq_buf_t);
+    }
+    g_rx_total_len = (size == 0) ? UMQ_RX_QBUF_POOL_MAX_SIZE : size;
+    if (g_rx_total_len > UMQ_RX_QBUF_POOL_MAX_SIZE) {
+        g_rx_total_len = UMQ_RX_QBUF_POOL_MAX_SIZE;
+    }
+
+    g_rx_buffer_addr = umq_qbuf_base_io_buf_malloc(g_rx_total_len, min_size);
+    if (g_rx_buffer_addr == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf memory alloc failed, size %lu, expect at least %lu\n", g_rx_total_len,
+                     min_size);
+        g_rx_total_len = 0;
+        return NULL;
+    }
+    UMQ_VLOG_INFO(VLOG_UMQ, "malloc rx qbuf io buf %lu bytes\n", g_rx_total_len);
+    return g_rx_buffer_addr;
+}
+
+void umq_rx_io_buf_free(void)
+{
+    if (g_rx_buffer_addr != NULL) {
+        free(g_rx_buffer_addr);
+        g_rx_buffer_addr = NULL;
+    }
+    g_rx_total_len = 0;
+}
+
+void *umq_rx_io_buf_addr(void)
+{
+    return g_rx_buffer_addr;
+}
+
+uint64_t umq_rx_io_buf_size(void)
+{
+    return g_rx_total_len;
+}
+
+int umq_rx_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
+{
+    if (g_rx_pool_inited) {
+        UMQ_VLOG_INFO(VLOG_UMQ, "rx qbuf pool has already been inited\n");
+        return -UMQ_ERR_EEXIST;
+    }
+    if (cfg == NULL || cfg->buf_addr == NULL || cfg->total_size == 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf pool cfg invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    uint32_t block_size = UMQ_RX_QBUF_BLOCK_SIZE;
+    uint64_t header_per_blk = (uint64_t)sizeof(umq_buf_t);
+    uint64_t blk_num = cfg->total_size / (block_size + header_per_blk);
+    if (blk_num == 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf pool total_size %lu too small, need at least %lu\n", cfg->total_size,
+                     block_size + header_per_blk);
+        return -UMQ_ERR_EINVAL;
+    }
+
+    int ret = umq_qbuf_block_pool_init(&g_rx_pool);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf block pool init failed, status: %d\n", ret);
+        return ret;
+    }
+
+    char *data_buffer = (char *)cfg->buf_addr;
+    char *header_buffer = data_buffer + blk_num * block_size;
+    buf_init_with_mode(data_buffer, header_buffer, blk_num, block_size, UMQ_RX_QBUF_MEMPOOL_ID, true, UMQ_BUF_SPLIT,
+                       &g_rx_pool.head_with_data);
+    g_rx_pool.buf_cnt_with_data = blk_num;
+    g_rx_pool.buf_cnt_without_data = 0;
+
+    g_rx_pool_inited = true;
+    UMQ_VLOG_INFO(VLOG_UMQ, "rx qbuf pool inited, block_count %lu, block_size %u\n", blk_num, block_size);
+    return UMQ_SUCCESS;
+}
+
+void umq_rx_qbuf_pool_uninit(void)
+{
+    if (!g_rx_pool_inited) {
+        return;
+    }
+    umq_qbuf_block_pool_uninit(&g_rx_pool);
+    QBUF_LIST_INIT(&g_rx_pool.head_with_data);
+    QBUF_LIST_INIT(&g_rx_pool.head_without_data);
+    g_rx_pool.buf_cnt_with_data = 0;
+    g_rx_pool.buf_cnt_without_data = 0;
+    g_rx_pool_inited = false;
+}
+
+int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
+{
+    (void)request_size;
+    (void)option;
+    if (!g_rx_pool_inited || num == 0) {
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    (void)pthread_spin_lock(&g_rx_pool.global_mutex);
+    if (g_rx_pool.buf_cnt_with_data < num) {
+        (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rx qbuf pool not enough, request %u, available %lu\n", num,
+                           g_rx_pool.buf_cnt_with_data);
+        return -UMQ_ERR_ENOMEM;
+    }
+    uint32_t cnt = allocate_batch(&g_rx_pool.head_with_data, num, list);
+    g_rx_pool.buf_cnt_with_data -= cnt;
+    (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
+
+    uint32_t headroom_size =
+        (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ? option->headroom_size : 0;
+    uint32_t max_data_capacity = UMQ_RX_QBUF_BLOCK_SIZE - headroom_size;
+    umq_buf_t *cur_node;
+    QBUF_LIST_FOR_EACH(cur_node, list)
+    {
+        cur_node->buf_data = (char *)floor_to_align(cur_node->buf_data, UMQ_RX_QBUF_BLOCK_SIZE) + headroom_size;
+        cur_node->buf_size = UMQ_RX_QBUF_BLOCK_SIZE + (uint32_t)sizeof(umq_buf_t);
+        cur_node->headroom_size = (uint16_t)headroom_size;
+        cur_node->total_data_size = max_data_capacity;
+        cur_node->data_size = max_data_capacity;
+        cur_node->first_fragment = 1;
+        cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
+    }
+
+    return UMQ_SUCCESS;
+}
+
+void umq_rx_qbuf_free(umq_buf_list_t *list)
+{
+    if (list == NULL || QBUF_LIST_FIRST(list) == NULL || !g_rx_pool_inited) {
+        return;
+    }
+
+    (void)pthread_spin_lock(&g_rx_pool.global_mutex);
+    uint32_t cnt = release_batch(list, &g_rx_pool.head_with_data, false);
+    g_rx_pool.buf_cnt_with_data += cnt;
+    (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
+}
