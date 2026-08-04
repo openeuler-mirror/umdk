@@ -124,9 +124,7 @@ typedef struct umq_qbuf_pool_config {
     uint32_t expansion_threshold;        // water level % triggering expansion (1-100)
     uint64_t expansion_mem_size_max;     // cap on expansion memory
     uint64_t exp_total_mem_pool_size;    // current total expansion pool memory
-    uint64_t tls_pool_mem_budget;        // global TLS total bytes cap
-    uint64_t tls_expand_mem_budget;      // per-thread TLS bytes cap (default 7/8 of tls_pool_mem_budget)
-    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 7/8 of tls_qbuf_pool_depth)
+    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 1/2 of tls_qbuf_pool_depth)
     uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
 } umq_qbuf_pool_config_t;
 
@@ -162,7 +160,7 @@ typedef struct umq_local_qbuf_pool_stats {
     uint64_t free_cnt_without_data;           // total number of buffer(nodata) free requests
     /* per-size_class breakdown of with_data TLS pool (capacity_with_data / buf_cnt_with_data
      * above are the SUM across these sc entries). Valid indices: [0..sc_count-1]. */
-    uint64_t sc_bytes_with_data[UMQ_DFX_QBUF_SIZE_CLASS_MAX];   // per-sc byte budget held in TLS
+    uint64_t sc_capacity_with_data[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc count cap held in TLS
     uint64_t sc_buf_cnt_with_data[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc buffer count held in TLS
     uint32_t sc_count; // number of valid per-sc entries (g_qbuf_pool.size_class_count)
 } umq_local_qbuf_pool_stats_t;
