@@ -27,8 +27,8 @@ public class SuperNodeService {
     public SuperNodeService(SuperNodeStore store) {
         this.store = store;
     }
-
     public void importSuperNode(SuperNode superNode) {
+
         if (superNode == null) {
             LOG.error("importSuperNode: error=SuperNode must not be null");
             throw new IllegalArgumentException("SuperNode must not be null");
