@@ -22,7 +22,6 @@ using fp8_e4m3_t = int8_t;
 
 using namespace ge;
 using namespace Cam;
-using namespace Util;
 namespace {
 constexpr const char *OPS_UTILS_LOG_SUB_MOD_NAME = "FUSED_DEEP_MOE";
 constexpr const char *OPS_UTILS_LOG_PACKAGE_TYPE = "CAM_OPS";
