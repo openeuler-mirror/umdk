@@ -47,7 +47,7 @@ static const char UMQ_DFX_UNDERLINE_120[] =
 static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
 {
     static const char qbuf_pool_type[UMQ_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
-        [UMQ_QBUF_POOL_TYPE_SMALL] = "Normal",     [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
+        [UMQ_QBUF_POOL_TYPE_SMALL] = "Normal",      [UMQ_QBUF_POOL_TYPE_MEDIUM] = "Medium",
         [UMQ_QBUF_POOL_TYPE_BIG] = "Big",           [UMQ_QBUF_POOL_TYPE_HUGE] = "Huge",
         [UMQ_QBUF_POOL_TYPE_GIGANTIC] = "Gigantic", [UMQ_QBUF_POOL_TYPE_TINY] = "Tiny",
         [UMQ_QBUF_POOL_TYPE_IOBUF] = "IOBuf",
@@ -133,8 +133,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              cfg->expansion_threshold, "batch_count", cfg->batch_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "expansion_mem_size_max",
                              cfg->expansion_mem_size_max, "exp_total_mem_pool_size", cfg->exp_total_mem_pool_size);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "tls_pool_mem_budget",
-                             cfg->tls_pool_mem_budget, "tls_expand_mem_budget", cfg->tls_expand_mem_budget);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", "tls_expand_qbuf_pool_depth",
                              cfg->tls_expand_qbuf_pool_depth);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "exp_slot_used_count",
@@ -308,10 +306,11 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              "            Per-Thread Per-SC TLS (WithData) [%s, tid=%lu, sc_count=%u]\n",
                              umq_qbuf_pool_type_name(s->type), (unsigned long)s->tid, s->sc_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4s %-18s %-18s\n", "sc", "tls_buf_cnt", "tls_bytes");
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4s %-18s %-18s\n", "sc", "tls_buf_cnt", "tls_cap_cnt");
         for (uint32_t sc = 0; sc < s->sc_count; sc++) {
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4u %-18lu %-18lu\n", sc,
-                                 (unsigned long)s->sc_buf_cnt_with_data[sc], (unsigned long)s->sc_bytes_with_data[sc]);
+                                 (unsigned long)s->sc_buf_cnt_with_data[sc],
+                                 (unsigned long)s->sc_capacity_with_data[sc]);
         }
     }
 

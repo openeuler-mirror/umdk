@@ -1048,6 +1048,8 @@ void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg)
     cfg->expansion_threshold = g_qbuf_pool.expansion_threshold;
     cfg->disable_scale_cap = g_qbuf_pool.disable_scale_cap;
     cfg->disable_malloc_escape = g_qbuf_pool.disable_malloc_escape;
+    cfg->tls_qbuf_pool_depth = g_qbuf_pool.tls_qbuf_pool_depth;
+    cfg->tls_expand_qbuf_pool_depth = g_qbuf_pool.tls_expand_qbuf_pool_depth;
 }
 
 static void release_thread_cache(uint64_t id);
