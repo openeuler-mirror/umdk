@@ -300,7 +300,7 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
         umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[qbuf_pool_stats->local_qbuf_pool_num];
         (void)memset(s, 0, sizeof(*s));
         s->type = type;
-        s->capacity_with_data = pool_iter->block_pool.bytes_with_data[0];
+        s->capacity_with_data = pool_iter->block_pool.capacity_with_data[0];
         s->buf_cnt_with_data = pool_iter->block_pool.buf_cnt_with_data[0];
         s->capacity_without_data = pool_iter->block_pool.capacity_without_data;
         s->buf_cnt_without_data = pool_iter->block_pool.buf_cnt_without_data;
