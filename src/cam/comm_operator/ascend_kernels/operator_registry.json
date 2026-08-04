@@ -1,4 +1,5 @@
 {
+  "_copyright": "SPDX-License-Identifier: MIT; Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.",
   "_comment": "CAM operator registry. soc_versions maps a SOC generation to the operator directory names it supports. operator_meta holds per-operator build metadata. To support a new SOC generation, add an entry under soc_versions. To add an operator, append its directory name to the relevant soc list and (optionally) add meta. Operator identity = source directory name under ascend_kernels/.",
   "soc_versions": {
     "ascend910_93": [
@@ -18,6 +19,9 @@
       "gather_selection_kv_cache",
       "gather_selection_kv_cache_custom",
       "swiglu_clip_quant"
+    ],
+    "ascend950": [
+      "fused_deep_moe_arch35"
     ]
   },
   "operator_meta": {
@@ -36,6 +40,12 @@
       "family": "fused_deep_moe",
       "variant": "fwk",
       "_note": "independent operator; files are fused_deep_moe_fwk.*, do NOT conflict with base/w4a8, can coexist"
+    },
+    "fused_deep_moe_arch35": {
+      "requires_shmem": false,
+      "family": "fused_deep_moe",
+      "variant": "arch35",
+      "_note": "Ascend950/A5 MX path; lives only under ascend950. Shares fused_deep_moe.* filenames with base/w4a8 but different SOC so no mutex."
     },
     "moe_combine_lowlatency_zb": {
       "requires_shmem": true

@@ -162,9 +162,35 @@ build_ascend_proj() {
         fi
     fi
 
-    # Export CATLASS_HOME_PATH for kernel compilation if CPATH contains catlass
-    if [ -z "${CATLASS_HOME_PATH}" ] && echo "${CPATH}" | grep -q "catlass"; then
-        export CATLASS_HOME_PATH=$(echo "${CPATH}" | tr ':' '\n' | grep "catlass" | sed 's|/include||')
+    # Select catlass version per SOC generation:
+    #   ascend910_93 -> catlass         (submodule)
+    #   ascend950    -> catlass_v1.6.0 if present, else fall back to catlass
+    # CATLASS_HOME_PATH drives the kernel -I include path (op_kernel/CMakeLists.txt + KERNEL_COMPILE_OPTS).
+    local catlass_dir="${CAM_THIRD_PARTY_PATH}/catlass"
+    if [[ "$soc_version" == "ascend950" ]]; then
+        if [[ -d "${CAM_THIRD_PARTY_PATH}/catlass_v1.6.0/include" ]]; then
+            catlass_dir="${CAM_THIRD_PARTY_PATH}/catlass_v1.6.0"
+        else
+            echo "WARN: catlass_v1.6.0 missing; using ${catlass_dir} for ascend950"
+        fi
+    fi
+    if [[ -d "${catlass_dir}/include" ]]; then
+        export CATLASS_HOME_PATH="${catlass_dir}"
+        export CPATH="${catlass_dir}/include:${CPATH}"
+        echo "Using CATLASS_HOME_PATH=${CATLASS_HOME_PATH}"
+    else
+        echo "ERROR: catlass include not found at ${catlass_dir}/include"
+        return 1
+    fi
+
+    # ascend950 workaround: catlass v1.6.0 block_epilogue.hpp pulls in block_epilogue_dequant.hpp
+    # inside the CATLASS_ARCH==3510 guard; comment it out for 950 only (idempotent).
+    if [[ "$soc_version" == "ascend950" ]]; then
+        local epilogue_hpp="${CATLASS_HOME_PATH}/include/catlass/epilogue/block/block_epilogue.hpp"
+        if [[ -f "$epilogue_hpp" ]] && grep -q '^#include "catlass/epilogue/block/block_epilogue_dequant.hpp"' "$epilogue_hpp"; then
+            echo "Patching catlass v1.6.0 block_epilogue.hpp (comment out block_epilogue_dequant) for ascend950"
+            sed -i 's|#include "catlass/epilogue/block/block_epilogue_dequant.hpp"|// #include "catlass/epilogue/block/block_epilogue_dequant.hpp"|g' "$epilogue_hpp"
+        fi
     fi
 
     cd ${MODULE_BUILD_PATH}/${proj_name}
@@ -184,6 +210,20 @@ build_ascend_proj() {
             KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} "
         fi
         KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-I${CATLASS_HOME_PATH}/include"
+    fi
+    if [[ "$soc_version" == "ascend950" ]]; then
+        if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
+            KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} "
+        fi
+        KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-DCATLASS_ARCH=3510"
+        if [ -n "${ASCEND_TOOLKIT_HOME}" ]; then
+            KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} -I${ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe/impl/ops_transformer/ascendc/common/"
+        fi
+    else
+        if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
+            KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} "
+        fi
+        KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-DCATLASS_ARCH=2201"
     fi
     if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
         echo "Patching kernel compile options: ${KERNEL_COMPILE_OPTS}"

@@ -26,8 +26,22 @@ elseif(DEFINED ENV{CPATH} AND "$ENV{CPATH}" MATCHES "catlass")
     endforeach()
 endif()
 
+# CATLASS_ARCH: 2201=AtlasA3 (ascend910_93), 3510=Ascend950/A5 Mx path.
+# Driven by ASCEND_COMPUTE_UNIT from CMakePresets (set by msopgen per -c soc).
+if(DEFINED ASCEND_COMPUTE_UNIT AND "${ASCEND_COMPUTE_UNIT}" STREQUAL "ascend950")
+    list(APPEND KERNEL_COMPILE_OPTS -DCATLASS_ARCH=3510)
+    # 950 kernel (catlass Mx paths) includes "common.h" from the CANN ops_transformer common dir.
+    if(DEFINED ENV{ASCEND_TOOLKIT_HOME})
+        list(APPEND KERNEL_COMPILE_OPTS -I$ENV{ASCEND_TOOLKIT_HOME}/opp/built-in/op_impl/ai_core/tbe/impl/ops_transformer/ascendc/common/)
+        message(STATUS ">>> [op_kernel] Added ops_transformer common include for ascend950")
+    endif()
+    message(STATUS ">>> [op_kernel] Added -DCATLASS_ARCH=3510 for ascend950")
+else()
+    list(APPEND KERNEL_COMPILE_OPTS -DCATLASS_ARCH=2201)
+endif()
+
 # Common options: add current source dir as global header search path (from cam_feature)
-list(APPEND KERNEL_COMPILE_OPTS -I${CMAKE_CURRENT_SOURCE_DIR} -DASCENDC_DUMP=0 --cce-auto-sync=off -DCATLASS_ARCH=2201)
+list(APPEND KERNEL_COMPILE_OPTS -I${CMAKE_CURRENT_SOURCE_DIR} -DASCENDC_DUMP=0 --cce-auto-sync=off)
 
 # set custom compile options (single call to avoid overwriting)
 if ("${CMAKE_BUILD_TYPE}x" STREQUAL "Debugx")

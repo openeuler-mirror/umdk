@@ -23,7 +23,9 @@ export TEST_PATH="${ROOT_PATH}/test/cam"
 export BUILD_PATH="${ROOT_PATH}/build/cam/build_feature"
 export CAM_THIRD_PARTY_PATH="${ROOT_PATH}/src/cam/third_party"
 
-export CPATH=${CAM_THIRD_PARTY_PATH}:${CAM_THIRD_PARTY_PATH}/catlass/include:${CPATH}
+# Do not pin a single catlass include here; compile_ascend_proj.sh selects
+# catlass (910_93) vs catlass_v1.6.0 (ascend950) per SOC and prepends CPATH.
+export CPATH=${CAM_THIRD_PARTY_PATH}:${CPATH}
 
 export BUILD_TYPE="Release"
 MODULE_NAME="all"
@@ -38,8 +40,8 @@ function print_help() {
 
     opt (forwarded to the module build script):
     -d: Enable debug
-    -c <soc>: Target SOC generation (e.g. ascend910_93). Omit to build all
-        registered generations. Supported: [ascend910_93]
+    -c <soc>: Target SOC generation (e.g. ascend910_93 / ascend950). Omit to
+        build all registered generations. Supported: [ascend910_93, ascend950]
     -a <ops>: Semicolon-separated operator list (requires -c)
     -q: Select the fused_deep_moe_w4a8 quantization variant
     -p: Build only the pybind (whl) package; skip the run package
@@ -84,20 +86,39 @@ function is_module_name() {
 
 function prepare_cam_third_party() {
     local third_party="$1"
+    # soc: ascend910_93 | ascend950 | empty(=all). Only 950 needs catlass_v1.6.0.
+    local soc="${2:-}"
+    # Two catlass trees:
+    #   catlass         -> submodule, used by ascend910_93 (also 950 fallback)
+    #   catlass_v1.6.0  -> Ascend950 preferred tree (cloned on demand; not in git)
     local catlass_dir="${third_party}/catlass"
-
-    if [[ -d "${catlass_dir}" && -d "${catlass_dir}/include" ]]; then
-        echo "catlass submodule has existed: ${catlass_dir}"
-        return 0
-    fi
-
-    echo "Initializing catlass submodule..."
-    if git submodule update --init --recursive src/cam/third_party/catlass; then
-        return 0
+    if [[ -d "${catlass_dir}/include" ]]; then
+        echo "catlass tree catlass has existed: ${catlass_dir}"
     else
-        echo "Failed to initialize catlass submodule! You can manually run: git submodule update --init --recursive src/cam/third_party/catlass"
-        return 1
+        echo "Initializing catlass tree catlass..."
+        if ! git submodule update --init --recursive "src/cam/third_party/catlass"; then
+            echo "Failed to initialize catlass! You can manually run: git submodule update --init --recursive src/cam/third_party/catlass"
+            return 1
+        fi
     fi
+
+    if [[ -z "${soc}" || "${soc}" == "ascend950" ]]; then
+        local v16_dir="${third_party}/catlass_v1.6.0"
+        if [[ -d "${v16_dir}/include" ]]; then
+            echo "catlass tree catlass_v1.6.0 has existed: ${v16_dir}"
+        else
+            # Not vendored in git (third_party is ignored). Try to fetch tag v1.6.0.
+            # If clone fails, compile_ascend_proj.sh falls back to catlass for 950.
+            echo "Fetching catlass_v1.6.0 (tag v1.6.0) into ${v16_dir}..."
+            if git clone --depth 1 -b v1.6.0 https://gitcode.com/cann/catlass.git "${v16_dir}"; then
+                echo "catlass_v1.6.0 ready: ${v16_dir}"
+            else
+                echo "WARN: failed to clone catlass_v1.6.0; ascend950 will fall back to src/cam/third_party/catlass"
+                rm -rf "${v16_dir}" 2>/dev/null || true
+            fi
+        fi
+    fi
+    return 0
 }
 
 if is_module_name $@; then
@@ -107,13 +128,38 @@ else
     process_arg $@
 fi
 
-if [[ "$MODULE_NAME" == "all" || "$MODULE_NAME" == "comm_operator" ]]; then
-    IS_MODULE_EXIST=1
-    if ! prepare_cam_third_party "${CAM_THIRD_PARTY_PATH}"; then
-        exit 1
+# Restrict modules when -c is set (parsed loosely from remaining args).
+SOC_TYPE=""
+prev=""
+for arg in "$@"; do
+    if [[ "${prev}" == "-c" ]]; then
+        SOC_TYPE="${arg}"
+        break
     fi
-    echo "${SCRIPTS_PATH}/comm_operator/build.sh $@"
-    ${SCRIPTS_PATH}/comm_operator/build.sh $@
+    prev="${arg}"
+done
+
+if [[ -n "${SOC_TYPE}" ]]; then
+    if [[ "${SOC_TYPE}" == "ascend950" ]]; then
+        if [[ "${MODULE_NAME}" != "nda" && "${MODULE_NAME}" != "all" && "${MODULE_NAME}" != "comm_operator" ]]; then
+            echo "Error: -c ascend950 supports modules 'nda'/'comm_operator' (or 'all'=both), but got '${MODULE_NAME}'"
+            exit 1
+        fi
+    elif [[ "${SOC_TYPE}" == "ascend910_93" ]]; then
+        :
+    fi
+fi
+
+# Build comm_operator for 910_93 (default) and for 950 when selected.
+if [[ "$MODULE_NAME" == "all" || "$MODULE_NAME" == "comm_operator" ]]; then
+    if [[ -z "${SOC_TYPE}" || "${SOC_TYPE}" == "ascend910_93" || "${SOC_TYPE}" == "ascend950" ]]; then
+        IS_MODULE_EXIST=1
+        if ! prepare_cam_third_party "${CAM_THIRD_PARTY_PATH}" "${SOC_TYPE}"; then
+            exit 1
+        fi
+        echo "${SCRIPTS_PATH}/comm_operator/build.sh $@"
+        ${SCRIPTS_PATH}/comm_operator/build.sh $@
+    fi
 fi
 
 if [ $IS_MODULE_EXIST -eq 0 ]; then
