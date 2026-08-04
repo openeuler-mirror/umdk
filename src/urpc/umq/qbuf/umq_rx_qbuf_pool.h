@@ -40,6 +40,9 @@ void umq_rx_io_buf_free(void);
 void *umq_rx_io_buf_addr(void);
 uint64_t umq_rx_io_buf_size(void);
 
+int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
+void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
+
 #ifdef __cplusplus
 }
 #endif

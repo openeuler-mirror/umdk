@@ -167,3 +167,26 @@ void umq_rx_qbuf_free(umq_buf_list_t *list)
     g_rx_pool.buf_cnt_with_data += cnt;
     (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
 }
+
+int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
+{
+    if (!g_rx_pool_inited) {
+        return UMQ_SUCCESS;
+    }
+
+    int ret = ops->register_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID,
+                                          g_rx_buffer_addr, g_rx_total_len);
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf register seg failed, status: %d\n", ret);
+    }
+    return ret;
+}
+
+void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
+{
+    if (!g_rx_pool_inited) {
+        return;
+    }
+    ops->unregister_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID);
+}
+
