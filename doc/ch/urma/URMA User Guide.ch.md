@@ -2103,9 +2103,9 @@ URMA整体使用OS自带的rsyslog工具来实现日志重定向打印特性，�
 用户态日志头格式如下：
 
 ```
-[URMA][liburma][thread_id=<tid>][<thread_tag>][<file>:<function>:<line>]<message>
-[URMA][libuvs][<tid>][<process_name>][work_<idx>|-][<file>:<function>:<line>]<message>
-[URMA][urma_admin][thread_id=<tid>][-][<file>:<function>:<line>]<message>
+[URMA][<file>:<function>:<line>][<tid>][<thread_tag>][liburma]<message>
+[URMA][<file>:<function>:<line>][<tid>][<process_name>][work_<idx>|-][libuvs]<message>
+[URMA][<file>:<function>:<line>][<tid>][-][urma_admin]<message>
 ```
 
 ![](figures/urma_caution.png)

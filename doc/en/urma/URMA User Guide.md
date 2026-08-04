@@ -2026,9 +2026,9 @@ URMA uses the OS's built-in rsyslog tool to implement log redirection and printi
 User-mode log headers use the following formats:
 
 ```
-[URMA][liburma][thread_id=<tid>][<thread_tag>][<file>:<function>:<line>]<message>
-[URMA][libuvs][<tid>][<process_name>][work_<idx>|-][<file>:<function>:<line>]<message>
-[URMA][urma_admin][thread_id=<tid>][-][<file>:<function>:<line>]<message>
+[URMA][<file>:<function>:<line>][<tid>][<thread_tag>][liburma]<message>
+[URMA][<file>:<function>:<line>][<tid>][<process_name>][work_<idx>|-][libuvs]<message>
+[URMA][<file>:<function>:<line>][<tid>][-][urma_admin]<message>
 ```
 
 ![](figures/urma_caution.png)
