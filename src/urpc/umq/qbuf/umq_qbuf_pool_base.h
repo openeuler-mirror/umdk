@@ -349,6 +349,11 @@ static ALWAYS_INLINE uint32_t qbuf_tls_round_batch(uint32_t needed, uint32_t bat
 // Expansion pool functions (implemented in umq_qbuf_pool.c for normal pool).
 // sc: size_class index (0..UMQ_QBUF_SIZE_CLASS_MAX). UMQ_QBUF_SIZE_CLASS_MAX means without_data.
 int expand_global_pool(bool with_data, uint32_t sc);
+#ifdef UMQ_QBUF_DEBUG
+// 线程局部标志: 当fetch_from_global走expansion pool或mmap扩容时置true
+// 用于umq_normal_qbuf_alloc区分_lc=1(fetch_global) vs _lc=2(fetch_expansion)
+extern __thread bool g_dbg_expansion_happened;
+#endif
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, umq_buf_list_t *local_head,
                                     uint64_t *local_buf_cnt);
@@ -446,7 +451,15 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     }
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 
-    count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
+    { // fetch from expansion pools (pre-allocated overflow slots)
+        uint32_t _exp_cnt = fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
+        count += _exp_cnt;
+#ifdef UMQ_QBUF_DEBUG
+        // 统计expansion pool路径: 从预分配的expansion slot中取到buf
+        // 置flag让alloc层知道此申请走的是expansion而非纯global pool
+        if (_exp_cnt > 0) g_dbg_expansion_happened = true;
+#endif
+    }
     while (count < batch_count) {
         int ret = expand_global_pool(with_data, sc);
         if (ret != UMQ_SUCCESS) {
@@ -455,6 +468,11 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
             }
             goto ROLLBACK;
         }
+#ifdef UMQ_QBUF_DEBUG
+        // 统计mmap扩容路径: expand_global_pool成功调用了mmap分配新内存
+        // 这是最慢的路径(通常>1ms)，置flag让alloc层记录为_lc=2
+        g_dbg_expansion_happened = true;
+#endif
 
         count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
     }
