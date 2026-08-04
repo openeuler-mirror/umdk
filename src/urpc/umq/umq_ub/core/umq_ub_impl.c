@@ -20,6 +20,7 @@
 #include "umq_inner.h"
 #include "umq_qbuf_pool.h"
 #include "umq_qbuf_pool_helper.h"
+#include "umq_rx_qbuf_pool.h"
 #include "umq_symbol_private.h"
 #include "umq_tiny_qbuf_pool.h"
 #include "umq_ub_flow_control.h"
@@ -719,9 +720,28 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         goto IO_BUF_FREE;
     }
 
+    if (buf_pool_plan.rx_block_count > 0) {
+        if (umq_rx_io_buf_malloc(cfg->buf_mode, buf_pool_plan.rx_io_buf_size) == NULL) {
+            goto QBUF_POOL_UNINIT;
+        }
+        qbuf_pool_cfg_t rx_qbuf_cfg = {
+            .buf_addr = umq_rx_io_buf_addr(),
+            .total_size = umq_rx_io_buf_size(),
+            .data_size = UMQ_RX_QBUF_BLOCK_SIZE,
+            .headroom_size = cfg->headroom_size,
+            .mode = UMQ_BUF_SPLIT,
+            .umq_buf_pool_max_size = buf_pool_plan.rx_io_buf_size,
+        };
+        ret = umq_rx_qbuf_pool_init(&rx_qbuf_cfg);
+        if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf pool init failed, status: %d\n", ret);
+            goto RX_IO_BUF_FREE;
+        }
+    }
+
     if (cfg->buf_pool_cfg.enable_tiny_pool) {
         if (umq_tiny_io_buf_malloc(cfg->buf_mode, buf_pool_plan.tiny_io_buf_size) == NULL) {
-            goto QBUF_POOL_UNINIT;
+            goto RX_QBUF_POOL_UNINIT;
         }
 
         qbuf_pool_cfg_t tiny_qbuf_cfg = qbuf_cfg;
@@ -769,6 +789,12 @@ TINY_QBUF_POOL_UNINIT:
 
 TINY_IO_BUF_FREE:
     umq_tiny_io_buf_free();
+
+RX_QBUF_POOL_UNINIT:
+    umq_rx_qbuf_pool_uninit();
+
+RX_IO_BUF_FREE:
+    umq_rx_io_buf_free();
 
 QBUF_POOL_UNINIT:
     umq_qbuf_pool_uninit();
@@ -824,6 +850,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     umq_ub_check_idle_queue_timer_delete();
     umq_ub_queue_ctx_list_uninit();
     umq_tiny_qbuf_pool_uninit();
+    umq_rx_qbuf_pool_uninit();
     umq_qbuf_pool_uninit();
 
     for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
@@ -838,6 +865,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     }
 
     umq_tiny_io_buf_free();
+    umq_rx_io_buf_free();
     umq_io_buf_free();
     umq_ub_id_allocator_uninit();
     umq_ub_dev_info_uninit();
