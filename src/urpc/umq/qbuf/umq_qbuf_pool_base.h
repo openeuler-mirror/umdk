@@ -54,7 +54,6 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_SIZE_CLASS_COUNT (2)
 #define QBUF_POOL_DEFAULT_STEP_MULTIPLIER (16)
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
-#define QBUF_POOL_DEFAULT_TLS_POOL_MEM_BUDGET (96ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
 #define QBUF_POOL_DEFAULT_LAZY_INIT_BLOCK_SIZE_THRESHOLD (1024U * 1024U)
@@ -65,12 +64,13 @@ extern "C" {
 #define QBUF_POOL_EXP_SLOT_TABLE_SIZE (QBUF_POOL_EXP_SLOT_ID_MAX - QBUF_POOL_EXP_SLOT_ID_MIN)
 
 #define UMQ_TINY_QBUF_MEMPOOL_ID (1022U)
+#define UMQ_RX_QBUF_MEMPOOL_ID (1021U)
 
 #define QBUF_POOL_TLS_MAX (2048)        // max count of thread local buffer storage
 #define QBUF_POOL_BATCH_CNT (64)        // batch size when fetch from global or return to global
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
-#define QBUF_POOL_EXPAND_MAX_RATIO (8)
+#define QBUF_POOL_EXPAND_MAX_RATIO (2)
 #define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
@@ -99,12 +99,9 @@ typedef struct qbuf_pool_cfg {
     uint32_t size_class_count;           // 1..UMQ_QBUF_SIZE_CLASS_MAX, default 2
     uint32_t size_class_step_multiplier; // power of 2, default 16
 
-    // thread local qbuf pool (byte budget)
-    uint64_t
-        tls_qbuf_pool_depth; // TLS depth cap for single-level pools (tiny/huge/shm); normal pool uses tls_pool_mem_budget
-    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 7/8 of tls_qbuf_pool_depth
-    uint64_t tls_pool_mem_budget;        // global TLS total bytes cap (flat across all threads), default 96MB
-    uint64_t tls_expand_mem_budget;      // per-thread TLS bytes cap, default 7/8 of tls_pool_mem_budget
+    // thread local qbuf pool (count-based depth cap)
+    uint64_t tls_qbuf_pool_depth; // TLS depth cap (count-based, per-SC for normal pool; single-level for tiny/huge/shm)
+    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 1/2 of tls_qbuf_pool_depth
 
     uint64_t lazy_init_block_size_threshold; // 0 = disabled, default 1MB
     bool disable_scale_cap; // expansion and shrink switch
@@ -128,7 +125,7 @@ uint64_t umq_buf_to_id(char *buf, bool shm, bool with_data);
 typedef struct local_block_pool {
     umq_buf_list_t head_with_data[UMQ_QBUF_SIZE_CLASS_MAX];
     uint64_t buf_cnt_with_data[UMQ_QBUF_SIZE_CLASS_MAX];
-    uint64_t bytes_with_data[UMQ_QBUF_SIZE_CLASS_MAX]; // per-sc byte budget (replaces capacity_with_data)
+    uint64_t capacity_with_data[UMQ_QBUF_SIZE_CLASS_MAX]; // per-sc count cap (mirrors capacity_without_data)
 
     umq_buf_list_t head_without_data;
     uint64_t buf_cnt_without_data;
@@ -224,7 +221,7 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
         for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
             QBUF_LIST_INIT(&thread_cache->block_pool.head_with_data[i]);
             thread_cache->block_pool.buf_cnt_with_data[i] = 0;
-            thread_cache->block_pool.bytes_with_data[i] = 0;
+            thread_cache->block_pool.capacity_with_data[i] = 0;
         }
         thread_cache->block_pool.capacity_without_data = 0;
         QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
@@ -618,7 +615,7 @@ static ALWAYS_INLINE void qbuf_tls_capacity_sub(uint64_t *local_cap, volatile ui
     __atomic_fetch_sub(total_cap, shrink, __ATOMIC_ACQ_REL);
 }
 
-// qbuf_tls_capacity_self_shrink: with_data path uses bytes_with_data[sc] (byte budget),
+// qbuf_tls_capacity_self_shrink: with_data path uses capacity_with_data[sc] (count-based),
 // without_data path stays single (capacity_without_data).
 // block_size passed in by caller (preserves base+derived: caller computes from base or g_qbuf_pool).
 static ALWAYS_INLINE void qbuf_tls_capacity_self_shrink(global_block_pool_t *global_pool,
@@ -631,13 +628,12 @@ static ALWAYS_INLINE void qbuf_tls_capacity_self_shrink(global_block_pool_t *glo
     if (with_data) {
         uint64_t remaining = local_pool->buf_cnt_with_data[sc];
         uint64_t shrink = remaining / QBUF_POOL_SELF_SHRINK_RATIO;
-        if (shrink < shrink_threshold || local_pool->bytes_with_data[sc] == 0) {
+        if (shrink < shrink_threshold || local_pool->capacity_with_data[sc] == 0) {
             return;
         }
-        uint64_t shrink_bytes = shrink * block_size;
-        qbuf_tls_capacity_sub(&local_pool->bytes_with_data[sc], total_cap, shrink_bytes);
+        qbuf_tls_capacity_sub(&local_pool->capacity_with_data[sc], total_cap, shrink);
 
-        uint64_t cap_cnt = local_pool->bytes_with_data[sc] / block_size;
+        uint64_t cap_cnt = local_pool->capacity_with_data[sc];
         if (cap_cnt >= remaining) {
             return;
         }

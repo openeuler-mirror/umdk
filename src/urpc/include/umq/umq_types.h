@@ -271,6 +271,7 @@ typedef enum umq_alloc_pool_type {
     UMQ_ALLOC_POOL_HUGE = 2,
     UMQ_ALLOC_POOL_ESCAPE = 3,
     UMQ_ALLOC_POOL_AUTO = 4,
+    UMQ_ALLOC_POOL_RX = 5,
     UMQ_ALLOC_POOL_MAX,
 } umq_alloc_pool_type_t;
 
@@ -278,24 +279,22 @@ typedef struct umq_buf_pool_cfg {
     // set block_size for umq_buf_size_small(), umq_buf_size_middle() and umq_buf_size_big() will be automatically
     // adjusted
     umq_buf_block_size_t small_block_size;
-    // Total initial size of normal and tiny pools. Set to 1024MB if 0 in UB/UB_PLUS mode.
+    // Total initial size of normal, tiny and RX pools. Set to 1024MB if 0 in UB/UB_PLUS mode.
     uint64_t umq_mem_pool_init_size;
-    // Minimum initial normal-pool block count. 0 means no validation.
-    uint32_t normal_pool_block_count;
+    // RX pool block count (minimum). 0 means no validation.
+    uint32_t rx_block_count;
     // global pool
     uint64_t umq_buf_pool_max_size; // maximum memory allowed for umq buf pool, default 2G
     // local qbuf pool cfg
     uint64_t
-        tls_qbuf_pool_depth; // TLS pool depth cap for single-level pools (tiny/huge/shm); normal pool uses tls_pool_mem_budget instead
-    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 7/8 of tls_qbuf_pool_depth
+        tls_qbuf_pool_depth; // TLS pool depth cap (count-based, per-SC for normal pool; single-level for tiny/huge/shm)
+    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 1/2 of tls_qbuf_pool_depth
 
     // multi-level size_class: 0 = use defaults. block_size[i] = base * step_multiplier^i
     uint32_t size_class_count;           // 0 = default (2), range 1..16
     uint32_t size_class_step_multiplier; // 0 = default (16), power of 2
     uint64_t expansion_size;             // 0 = default (32MB), per-expansion memory size
     uint32_t expansion_threshold;        // 0 = default (30), water level percentage [1,100] that triggers expansion
-    uint64_t tls_pool_mem_budget;        // 0 = default (96MB), global TLS total bytes cap
-    uint64_t tls_expand_mem_budget;      // per-thread TLS bytes cap, default 7/8 of tls_pool_mem_budget
 
     uint64_t lazy_init_block_size_threshold; // 0 = disabled (no lazy init), default 1048576 (1MB)
     bool disable_scale_cap; // expansion and shrink switch
@@ -435,6 +434,7 @@ struct umq_buf {
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE (1) // enable arg headroom_size
 #define UMQ_ALLOC_FLAG_POOL_TYPE (2)      // enable arg pool_type
+#define UMQ_ALLOC_FLAG_RX_POOL (4)        // route to RX pool (4KB-only, independent)
 
 typedef struct umq_alloc_option {
     uint32_t flag; // indicates which below property takes effect
