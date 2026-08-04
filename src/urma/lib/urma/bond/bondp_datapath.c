@@ -8,8 +8,8 @@
  * History: 2025-02-19   Create File
  */
 
-#include <errno.h>
 #include <threads.h>
+#include <time.h>
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
@@ -30,6 +30,8 @@
 #define BONDP_POST_SEND_MAX_RETRY     3
 /* Max consecutive fast returns before forcing a full scan */
 #define BONDP_FAST_RETURN_THRESHOLD   64
+#define BONDP_MS_PER_SEC              1000
+#define BONDP_NS_PER_MS               1000000
 
 // All post paths (jfs_send, jetty_send, jfr_recv, jetty_recv) are sequential
 // within a thread, share one thread_local copy to minimize TLS memory.
@@ -44,6 +46,23 @@ static thread_local struct {
 } tl_post_prealloc;
 
 static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx);
+
+static void sleep_before_rnr_retry_resend(uint32_t retry_cnt)
+{
+    uint64_t sleep_ms = g_bondp_env.rnr_retry_sleep_ms;
+    if (sleep_ms == 0) {
+        return;
+    }
+    for (uint32_t i = 0; i < retry_cnt; i++) {
+        sleep_ms <<= 1;
+    }
+
+    struct timespec sleep_time = {
+        .tv_sec = (time_t)(sleep_ms / BONDP_MS_PER_SEC),
+        .tv_nsec = (long)((sleep_ms % BONDP_MS_PER_SEC) * BONDP_NS_PER_MS),
+    };
+    (void)nanosleep(&sleep_time, NULL);
+}
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
 {
@@ -1140,6 +1159,28 @@ release_wr_entry:
     return ret;
 }
 
+static void resend_matched_jfs_wrs(bondp_comp_t *bdp_comp, uint64_t base_wr_id,
+                                   uint32_t old_send_idx, uint32_t old_target_idx,
+                                   int new_send_idx, int new_target_idx, const char *reason)
+{
+    for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+        const uint64_t resend_wr_id = (base_wr_id + i - 1) % bdp_comp->send_wr_buf.max_wr_num + 1;
+        jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
+        if (resend_wr_entry == NULL ||
+            resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            resend_wr_entry->bdp_comp != bdp_comp ||
+            resend_wr_entry->send_idx != old_send_idx ||
+            resend_wr_entry->target_idx != old_target_idx) {
+            continue;
+        }
+
+        atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
+        if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+            URMA_LOG_ERR("Failed to resend %s jfs wr, wr_id=%lu\n", reason, resend_wr_id);
+        }
+    }
+}
+
 /*
  * Thread-local 16-slot cache for get_comp_by_cr.
  */
@@ -1352,6 +1393,50 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         return CONVERT_SKIP;
     }
 
+    if (is_rnr_retry_cr(cr) && !bdp_comp->modify_to_error) {
+        (void)pthread_spin_lock(&bdp_comp->send_lock);
+        if (wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            wr_entry->bdp_comp != bdp_comp ||
+            wr_entry->send_idx != send_idx ||
+            wr_entry->target_idx != target_idx) {
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            put_comp(bdp_comp);
+            return CONVERT_SKIP;
+        }
+        uint32_t rnr_retry_cnt = atomic_load(&bdp_comp->rnr_retry_cnt);
+        if (rnr_retry_cnt >= g_bondp_env.rnr_retry_max) {
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
+                         wr_id, rnr_retry_cnt, g_bondp_env.rnr_retry_max);
+            goto CONVERT_CR;
+        }
+        uint32_t retry_cnt = atomic_fetch_add(&bdp_comp->rnr_retry_cnt, 1);
+        (void)pthread_spin_unlock(&bdp_comp->send_lock);
+
+        sleep_before_rnr_retry_resend(retry_cnt);
+
+        (void)pthread_spin_lock(&bdp_comp->send_lock);
+        wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
+        if (wr_entry == NULL ||
+            wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            wr_entry->bdp_comp != bdp_comp ||
+            wr_entry->send_idx != send_idx ||
+            wr_entry->target_idx != target_idx) {
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            put_comp(bdp_comp);
+            return CONVERT_SKIP;
+        }
+        URMA_LOG_INFO("Resend rnr retry from [%u, %u] to [%u, %u], cr status=%d, retry_cnt=%u, "
+                      "jetty_id=%u, tjetty_id=%u\n",
+                      send_idx, target_idx, send_idx, target_idx, cr->status, retry_cnt,
+                      bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
+        resend_matched_jfs_wrs(bdp_comp, wr_entry->wr_id, send_idx, target_idx,
+                               send_idx, target_idx, "rnr retry");
+        (void)pthread_spin_unlock(&bdp_comp->send_lock);
+        put_comp(bdp_comp);
+        return CONVERT_SKIP;
+    }
+
     if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
         bool need_rebuild_jetty = is_need_rebuild_jetty(cr);
         (void)pthread_spin_lock(&bdp_comp->send_lock);
@@ -1388,21 +1473,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
                       bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
         urma_ubagg_switch_inc();
 
-        for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
-            const uint64_t resend_wr_id = (wr_entry->wr_id + i - 1) % bdp_comp->send_wr_buf.max_wr_num + 1;
-            jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
-            if (resend_wr_entry == NULL ||
-                resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
-                resend_wr_entry->bdp_comp != bdp_comp ||
-                resend_wr_entry->send_idx != send_idx ||
-                resend_wr_entry->target_idx != target_idx) {
-                continue;
-            }
-            atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
-            if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
-                URMA_LOG_ERR("Failed to resend jfs wr, wr_id=%lu\n", resend_wr_id);
-            }
-        }
+        resend_matched_jfs_wrs(bdp_comp, wr_entry->wr_id, send_idx, target_idx,
+                               new_send_idx, new_target_idx, "failover");
         if (need_rebuild_jetty && g_bondp_env.enable_failback) {
             int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx);
             if (ret != 0 && ret != -EEXIST) {
@@ -1422,6 +1494,9 @@ CONVERT_CR:
     convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
     cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
+    if (cr->status == URMA_CR_SUCCESS) {
+        atomic_store(&bdp_comp->rnr_retry_cnt, 0);
+    }
 
     pthread_spin_lock(&bdp_comp->send_lock);
     jfs_wr_put_refs(&wr_entry->wr);
