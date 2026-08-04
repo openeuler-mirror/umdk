@@ -1456,14 +1456,19 @@ int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor)
         recv_wr[i - 1].next = &recv_wr[i];
     }
 
+    /* bondp supports at most 280 wr_list per post; cap at 256 for safety */
+    uint32_t fc_batch_max = UMQ_BATCH_SIZE;
+    if (fc_batch_max > 256) {
+        fc_batch_max = 256;
+    }
     uint32_t post_left_num = queue->fc_rx_depth;
-    uint32_t post_round = (queue->fc_rx_depth + UMQ_BATCH_SIZE - 1)/ UMQ_BATCH_SIZE;
+    uint32_t post_round = (queue->fc_rx_depth + fc_batch_max - 1) / fc_batch_max;
     for (uint32_t i = 0; i < post_round; i++) {
-        uint32_t post_num = post_left_num > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : post_left_num;
+        uint32_t post_num = post_left_num > fc_batch_max ? fc_batch_max : post_left_num;
         post_left_num -= post_num;
 
         for (uint8_t j = 0; j < rqe_post_factor; j++) {
-            uint32_t offset = i * rqe_post_factor * UMQ_BATCH_SIZE + j * post_num;
+            uint32_t offset = i * rqe_post_factor * fc_batch_max + j * post_num;
             recv_wr[offset + post_num - 1].next = NULL;
             ret = umq_ub_post_fc_recv_wrs(queue, &recv_wr[offset]);
             if (ret != UMQ_SUCCESS) {
