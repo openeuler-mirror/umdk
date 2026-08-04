@@ -12,6 +12,7 @@
 
 #include "umq_huge_qbuf_pool.h"
 #include "umq_qbuf_pool.h"
+#include "umq_rx_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
 
 #ifdef __cplusplus
@@ -21,6 +22,8 @@ extern "C" {
 typedef struct umq_qbuf_pool_plan {
     uint32_t tiny_block_size;
     uint64_t tiny_io_buf_size;
+    uint64_t rx_io_buf_size;
+    uint32_t rx_block_count;
     uint64_t normal_io_buf_size;
     uint64_t normal_pool_budget_size;
 } umq_qbuf_pool_plan_t;
@@ -30,12 +33,16 @@ typedef enum umq_pool_type {
     UMQ_POOL_TYPE_TINY,
     UMQ_POOL_TYPE_HUGE,
     UMQ_POOL_TYPE_ESCAPE,
+    UMQ_POOL_TYPE_RX,
 } umq_pool_type_t;
 
 static inline umq_pool_type_t umq_pool_type_get(uint32_t mempool_id)
 {
     if (mempool_id == UMQ_TINY_QBUF_MEMPOOL_ID) {
         return UMQ_POOL_TYPE_TINY;
+    }
+    if (mempool_id == UMQ_RX_QBUF_MEMPOOL_ID) {
+        return UMQ_POOL_TYPE_RX;
     }
     if (mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
         return UMQ_POOL_TYPE_ESCAPE;
@@ -50,6 +57,8 @@ static inline void umq_invalid_handle_buf_free(umq_buf_list_t *head, umq_pool_ty
 {
     if (type == UMQ_POOL_TYPE_TINY) {
         umq_tiny_qbuf_free(head);
+    } else if (type == UMQ_POOL_TYPE_RX) {
+        umq_rx_qbuf_free(head);
     } else if (type == UMQ_POOL_TYPE_HUGE) {
         umq_huge_qbuf_free(head);
     } else {
