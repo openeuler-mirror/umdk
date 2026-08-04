@@ -60,8 +60,8 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid, uint32_t ch
     }
 
     bool find_entity_id = false;
-    uint32_t target_entity_id;
-    int target_node_id;
+    uint32_t target_entity_id = 0;
+    int target_node_id = 0;
 
     for (int i = 0; i < (int)topo_map->node_num; i++) {
         for (int j = 0; j < DEV_NUM; j++) {
