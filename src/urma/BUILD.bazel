@@ -386,9 +386,19 @@ cc_binary(
     copts = URMA_TOOL_COPTS + [
         "-I/usr/include/libnl3",
     ],
-    additional_linker_inputs = urma_linklib_inputs(["urma", "urma_common"]),
+    additional_linker_inputs = urma_linklib_inputs([
+        "urma",
+        "urma_common",
+        "urma_ubagg",
+        "urma-udma",
+    ]),
     linkopts = URMA_TOOL_LINKOPTS + urma_dynamic_linkopts(
-        ["urma", "urma_common"],
+        [
+            "urma",
+            "urma_common",
+            "urma_ubagg",
+            "urma-udma",
+        ],
         extra_libs = [
             "-lm",
             "-lnl-genl-3",
