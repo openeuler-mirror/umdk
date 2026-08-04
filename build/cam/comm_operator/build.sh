@@ -61,8 +61,8 @@ print_help() {
     echo "
     ./build.sh comm_operator <opt>...
     -x Extract the run package
-    -c Target SOC VERSION (e.g. ascend910_93). If omitted, all registered
-       SOC generations are built. Supported: [ascend910_93]
+    -c Target SOC VERSION (e.g. ascend910_93 / ascend950). If omitted, all
+       registered SOC generations are built. Supported: [ascend910_93, ascend950]
     -a Semicolon-separated operator list to compile (requires -c). Names must
        match the SOC support list in operator_registry.json. Omit to compile
        the full SOC set.
