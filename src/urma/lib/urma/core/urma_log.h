@@ -26,8 +26,8 @@
 extern "C" {
 #endif
 
-#define LOG_FORMAT_IDX 4 /* index of 'format' of urma_log */
-#define LOG_VA_ARG_IDX 5 /* index of variable argument of urma_log */
+#define LOG_FORMAT_IDX 5 /* index of 'format' of urma_log */
+#define LOG_VA_ARG_IDX 6 /* index of variable argument of urma_log */
 
 /* Rate limit parameters */
 #define URMA_LOG_RL_WINDOW_SEC     1   /* Rate limit time window (seconds) */
@@ -42,8 +42,8 @@ void urma_getenv_log_level(void);
 void urma_getenv_log_separator(void);
 bool urma_log_drop(urma_vlog_level_t level);
 void __attribute__((format(printf, LOG_FORMAT_IDX, LOG_VA_ARG_IDX)))
-urma_log(const char *function, int line, urma_vlog_level_t level, const char *format, ...);
-void __attribute__((format(printf, LOG_FORMAT_IDX + 1, LOG_VA_ARG_IDX + 1)))
+urma_log(const char *file, const char *function, int line, urma_vlog_level_t level, const char *format, ...);
+void __attribute__((format(printf, LOG_FORMAT_IDX, LOG_VA_ARG_IDX)))
 urma_log_loc(const char *file, const char *function, int line, urma_vlog_level_t level, const char *format, ...);
 const char *urma_get_level_print(urma_vlog_level_t level);
 urma_vlog_level_t urma_log_get_level_from_string(const char *level_string);
