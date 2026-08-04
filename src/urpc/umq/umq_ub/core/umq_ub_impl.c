@@ -2621,13 +2621,21 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     ret = umq_huge_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf register seg failed, status: %d\n", ret);
-        goto UNREGISTER_MEM;
+        goto UNREGISTER_RX_MEM;
+    }
+
+    if (cfg->buf_pool_cfg.rx_block_count > 0) {
+        ret = umq_rx_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf register seg failed, status: %d\n", ret);
+            goto UNREGISTER_MEM;
+        }
     }
     if (cfg->buf_pool_cfg.enable_tiny_pool) {
         ret = umq_tiny_qbuf_register_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
         if (ret != UMQ_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ, "tiny qbuf register seg failed, status: %d\n", ret);
-            goto UNREGISTER_HUGE_MEM;
+            goto UNREGISTER_RX_MEM;
         }
     }
     g_ub_ctx[g_ub_ctx_count].ref_cnt = 1;
@@ -2636,6 +2644,11 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     g_ub_ctx_count++;
 
     return UMQ_SUCCESS;
+
+UNREGISTER_RX_MEM:
+    if (cfg->buf_pool_cfg.rx_block_count > 0) {
+        umq_rx_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+    }
 
 UNREGISTER_HUGE_MEM:
     umq_huge_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
