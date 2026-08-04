@@ -10,6 +10,7 @@
 #include "umq_qbuf_pool_helper.h"
 #include "umq_errno.h"
 #include "umq_huge_qbuf_pool.h"
+#include "umq_rx_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
 #include "umq_vlog.h"
 
@@ -43,6 +44,8 @@ static int umq_qbuf_alloc_from_pool(umq_alloc_pool_type_t pool_type, uint32_t re
         }
         case UMQ_ALLOC_POOL_ESCAPE:
             return umq_qbuf_escape_alloc(request_size, num, option, list);
+        case UMQ_ALLOC_POOL_RX:
+            return umq_rx_qbuf_alloc(request_size, num, option, list);
         case UMQ_ALLOC_POOL_NORMAL:
         default:
             return umq_normal_qbuf_alloc(request_size, num, option, list);
@@ -52,6 +55,10 @@ static int umq_qbuf_alloc_from_pool(umq_alloc_pool_type_t pool_type, uint32_t re
 int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
     umq_alloc_pool_type_t pool_type = UMQ_ALLOC_POOL_AUTO;
+    if (option != NULL && (option->flag & UMQ_ALLOC_FLAG_RX_POOL) != 0) {
+        pool_type = UMQ_ALLOC_POOL_RX;
+        return umq_qbuf_alloc_from_pool(pool_type, request_size, num, option, list);
+    }
     if (option != NULL && (option->flag & UMQ_ALLOC_FLAG_POOL_TYPE) != 0) {
         if (option->pool_type >= UMQ_ALLOC_POOL_MAX) {
             UMQ_VLOG_ERR(VLOG_UMQ, "alloc pool type %d invalid\n", option->pool_type);
