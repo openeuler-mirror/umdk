@@ -2142,6 +2142,9 @@ static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32
         current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap,
             jetty_node_list->list_len, current_idx);
         if (current_idx >= jetty_node_list->list_len) {
+            if (wrapped) {
+                break;
+            }
             wrapped = true;
             current_idx = (uint32_t)urpc_bitmap_find_next_bit(jetty_node_list->bitmap, jetty_node_list->list_len, 0);
             if (current_idx >= jetty_node_list->list_len) {
