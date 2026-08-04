@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
-load("//bazel:urma_deps.bzl", "LIBUMMU_ABI_VERSION", "LIBUMMU_RUNTIME_LINKOPTS")
+load("//bazel:urma_deps.bzl", "LIBUMMU_RUNTIME_LINKOPTS")
 load("//bazel:urma_shared.bzl", "urma_dynamic_linkopts", "urma_linklib_inputs", "urma_shared_library", "urma_shared_library_static_dep")
 
 config_setting(
@@ -227,7 +227,7 @@ cc_binary(
     deps = ["@libummu//:ummu_internal"],
     linkopts = [
         "-Wl,-z,relro,-z,now",
-        "-Wl,-soname,libummu.so." + LIBUMMU_ABI_VERSION,
+        "-Wl,-soname,libummu.so",
     ] + LIBUMMU_RUNTIME_LINKOPTS,
 )
 
