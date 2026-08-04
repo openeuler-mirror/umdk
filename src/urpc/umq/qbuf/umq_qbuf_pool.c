@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
@@ -204,10 +205,61 @@ typedef struct qbuf_debug_stats {
     // per-size-class alloc distribution (with_data only)
     uint64_t alloc_with_data_by_sc[UMQ_QBUF_SIZE_CLASS_MAX];
     uint64_t alloc_with_data_bytes_by_sc[UMQ_QBUF_SIZE_CLASS_MAX];
+    // alloc/free timing (nanoseconds)
+    uint64_t alloc_ns_total;
+    uint64_t alloc_ns_max;
+    uint64_t alloc_count;
+    uint64_t free_ns_total;
+    uint64_t free_ns_max;
+    uint64_t free_count;
+    // latency histogram buckets (7 buckets)
+#define QBUF_LAT_BUCKETS 8
+    // alloc latency: <100ns, 100ns-1us, 1-5us, 5-10us, 10-100us, 100us-1ms, 1-10ms, >10ms
+    uint64_t alloc_lat[QBUF_LAT_BUCKETS];
+    // free latency: same buckets (8 buckets)
+    uint64_t free_lat[QBUF_LAT_BUCKETS];
+    // per-lifecycle-path timing (alloc only)
+#define QBUF_LC_PATHS 4  // TLS_hit, fetch_global, fetch_expansion, escape
+    uint64_t alloc_lc_count[QBUF_LC_PATHS];      // call count per path
+    uint64_t alloc_lc_ns_total[QBUF_LC_PATHS];   // cumulative ns per path
+    uint64_t alloc_lc_ns_max[QBUF_LC_PATHS];     // max ns per path
+    // per-size-class timing (alloc only, with_data)
+    uint64_t alloc_sc_count[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t alloc_sc_ns_total[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t alloc_sc_ns_max[UMQ_QBUF_SIZE_CLASS_MAX];
 } qbuf_debug_stats_t;
 
+static inline uint64_t qbuf_mono_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+
+// Map nanosecond latency to histogram bucket index.
+// Buckets: [0,100ns) [100ns,1us) [1us,10us) [10us,100us) [100us,1ms) [1ms,10ms) [10ms,+inf)
+static inline int qbuf_lat_bucket(uint64_t ns)
+{
+    if (ns < 100ULL)          return 0;  // <100ns
+    if (ns < 1000ULL)         return 1;  // 100ns-1us
+    if (ns < 5000ULL)         return 2;  // 1-5us
+    if (ns < 10000ULL)        return 3;  // 5-10us
+    if (ns < 100000ULL)       return 4;  // 10us-100us
+    if (ns < 1000000ULL)      return 5;  // 100us-1ms
+    if (ns < 10000000ULL)     return 6;  // 1ms-10ms
+    return 7;                             // >10ms
+}
+
+static const char *qbuf_lat_labels[QBUF_LAT_BUCKETS] = {
+    "<0.1us", "0.1-1us", "1-5us", "5-10us", "10-100us", "100us-1ms", "1-10ms", ">10ms"
+};
+static const char *qbuf_lc_labels[4] = {
+    "TLS_hit", "fetch_global", "fetch_expansion", "escape"
+};
+
 static qbuf_debug_stats_t g_dbg_stats = {0};
-static __thread bool g_dbg_in_async_expand = false; // prevent recursive expand
+static __thread bool g_dbg_in_async_expand = false; // 防止异步扩容递归重入
+__thread bool g_dbg_expansion_happened = false; // 线程局部标志: expansion pool/mmap路径标识，fetch前reset，alloc后读取
 static volatile uint64_t g_dbg_alloc_count = 0;     // total allocs for summary interval
 #define QBUF_DBG_SUMMARY_INTERVAL 10000             // print summary every N allocs
 
@@ -296,10 +348,58 @@ static void qbuf_dbg_print_summary(void)
                    (unsigned long long)g_dbg_stats.tls_flush_nodata_bufs);
     UMQ_VLOG_DEBUG(VLOG_UMQ, "free: wd=%llu nd=%llu\n", (unsigned long long)g_dbg_stats.free_with_data,
                    (unsigned long long)g_dbg_stats.free_without_data);
+    if (g_dbg_stats.alloc_count > 0) {
+        fprintf(stderr, "[UMQ TIMING] alloc timing: avg=%.1f us  max=%.1f us  count=%llu\n",
+        (double)(g_dbg_stats.alloc_ns_total / g_dbg_stats.alloc_count) / 1000.0,
+        (double)g_dbg_stats.alloc_ns_max / 1000.0,
+        (unsigned long long)g_dbg_stats.alloc_count);
+    }
+    if (g_dbg_stats.free_count > 0) {
+        fprintf(stderr, "[UMQ TIMING] free timing: avg=%.1f us  max=%.1f us  count=%llu\n",
+        (double)(g_dbg_stats.free_ns_total / g_dbg_stats.free_count) / 1000.0,
+        (double)g_dbg_stats.free_ns_max / 1000.0,
+        (unsigned long long)g_dbg_stats.free_count);
+    }
     UMQ_VLOG_DEBUG(VLOG_UMQ, "=== END SUMMARY ===\n");
+    // latency histogram
+    if (g_dbg_stats.alloc_count > 0) {
+        fprintf(stderr, "[UMQ TIMING] alloc latency histogram (count=%llu):\n",
+                (unsigned long long)g_dbg_stats.alloc_count);
+        for (int b = 0; b < QBUF_LAT_BUCKETS; b++) {
+            fprintf(stderr, "  %-12s: %8llu (%5.1f%%)\n", qbuf_lat_labels[b],
+                    (unsigned long long)g_dbg_stats.alloc_lat[b],
+                    100.0 * g_dbg_stats.alloc_lat[b] / g_dbg_stats.alloc_count);
+        }
+    }
+    if (g_dbg_stats.free_count > 0) {
+        fprintf(stderr, "[UMQ TIMING] free latency histogram (count=%llu):\n",
+                (unsigned long long)g_dbg_stats.free_count);
+        for (int b = 0; b < QBUF_LAT_BUCKETS; b++) {
+            fprintf(stderr, "  %-12s: %8llu (%5.1f%%)\n", qbuf_lat_labels[b],
+                    (unsigned long long)g_dbg_stats.free_lat[b],
+                    100.0 * g_dbg_stats.free_lat[b] / g_dbg_stats.free_count);
+        }
+    }
+    // ===== END QBUF DEBUG STATS =====
+    // per lifecycle path
+    fprintf(stderr, "[UMQ TIMING] alloc by lifecycle path:\n");
+    for (int p = 0; p < 4; p++) {
+        uint64_t cnt = g_dbg_stats.alloc_lc_count[p];
+        double avg = cnt > 0 ? (double)(g_dbg_stats.alloc_lc_ns_total[p] / cnt) / 1000.0 : 0.0;
+        double mx = (double)g_dbg_stats.alloc_lc_ns_max[p] / 1000.0;
+        fprintf(stderr, "  %-20s: count=%-8llu avg=%.1f us  max=%.1f us\n",
+                qbuf_lc_labels[p], (unsigned long long)cnt, avg, mx);
+    }
+    // per size_class
+    fprintf(stderr, "[UMQ TIMING] alloc by size_class:\n");
+    for (uint32_t s = 0; s < g_qbuf_pool.size_class_count; s++) {
+        uint64_t cnt = g_dbg_stats.alloc_sc_count[s];
+        double avg = cnt > 0 ? (double)(g_dbg_stats.alloc_sc_ns_total[s] / cnt) / 1000.0 : 0.0;
+        double mx = (double)g_dbg_stats.alloc_sc_ns_max[s] / 1000.0;
+        fprintf(stderr, "  sc=%-2u blk=%-8u: count=%-8llu avg=%.1f us  max=%.1f us\n",
+                s, g_qbuf_pool.block_sizes[s], (unsigned long long)cnt, avg, mx);
+    }
 }
-// ===== END QBUF DEBUG STATS =====
-
 // Global expansion pool id allocator (shared by all size_class, CAS-based, range [257, 1023))
 static urpc_id_generator_t g_global_exp_id_gen;
 // Lookup table: expansion slot id -> slot* (indexed by [id - QBUF_POOL_EXP_SLOT_ID_MIN])
@@ -1605,6 +1705,7 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
     uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
 
     if (g_qbuf_pool.disable_scale_cap) {
+        g_dbg_expansion_happened = false; // 本次alloc开始前重置expansion标志(sticky:一旦为true不再变回false)
         uint32_t fetch_count = 0;
         while (fetch_count < needed) {
             ret = fetch_from_global(&g_qbuf_pool.block_pool[sc], local_pool, with_data, sc, batch_cnt);
@@ -2103,6 +2204,8 @@ int umq_qbuf_escape_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
 
 int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
+    uint64_t _t0 = qbuf_mono_ns();
+    int _lc = 0; // 生命周期路径标识: 0=TLS命中 1=global pool fetch 2=expansion/mmap 3=escape堆分配
     if (!g_qbuf_pool.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
@@ -2139,6 +2242,7 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
         if (local_pool->buf_cnt_without_data >= num) {
             if (qbuf_debug_on())
                 g_dbg_stats.alloc_nodata_tls_hit += num;
+            _lc = 0; // TLS命中: 线程本地缓存有足够buf，无需访问全局池
         }
         if (local_pool->buf_cnt_without_data < num) {
             int ret =
@@ -2151,6 +2255,10 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
                 return ret;
             }
             g_thread_cache.stats.tls_fetch_cnt_without_data++;
+            // 根据expansion标志区分生命周期路径:
+            // _lc=1: 纯global pool fetch(global pool中有空闲buf直接分配)
+            // _lc=2: 走expansion pool或mmap扩容(global pool空，需从expansion slot或新mmap分配)
+            _lc = g_dbg_expansion_happened ? 2 : 1;
         }
 
         umq_qbuf_alloc_nodata(local_pool, num, list, param.shm);
@@ -2159,6 +2267,20 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
         if (qbuf_debug_on() &&
             __atomic_add_fetch(&g_dbg_alloc_count, num, __ATOMIC_RELAXED) % QBUF_DBG_SUMMARY_INTERVAL < num) {
             qbuf_dbg_print_summary();
+        }
+        // 累计nodata路径的时延统计:
+        // alloc_ns_total/count/max: 全局时延
+        // alloc_lat[]: 时延直方图(7个区间: <0.1us,0.1-1us,1-10us,10-100us,100us-1ms,1-10ms,>10ms)
+        // alloc_lc_count/ns_total/ns_max[]: 按生命周期路径(TLS_hit/fetch_global/fetch_expansion/escape)分别统计
+        if (qbuf_debug_on()) {
+            uint64_t _dt = qbuf_mono_ns() - _t0;
+            g_dbg_stats.alloc_ns_total += _dt;
+            g_dbg_stats.alloc_count++;
+            g_dbg_stats.alloc_lat[qbuf_lat_bucket(_dt)]++;
+            g_dbg_stats.alloc_lc_count[_lc]++;
+            g_dbg_stats.alloc_lc_ns_total[_lc] += _dt;
+            if (_dt > g_dbg_stats.alloc_lc_ns_max[_lc]) g_dbg_stats.alloc_lc_ns_max[_lc] = _dt;
+            if (_dt > g_dbg_stats.alloc_ns_max) g_dbg_stats.alloc_ns_max = _dt;
         }
         return 0;
     }
@@ -2192,6 +2314,7 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
     if (buf_cnt >= needed) {
         if (qbuf_debug_on())
             g_dbg_stats.alloc_with_data_tls_hit += needed;
+        _lc = 0; // TLS命中: 线程本地缓存有足够buf，无需访问全局池
     }
     if (buf_cnt < needed) {
         int ret = umq_qbuf_local_pool_fetch_and_expand(needed - buf_cnt, local_pool, true, sc);
@@ -2199,6 +2322,18 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
             bool explicit_normal = option != NULL && (option->flag & UMQ_ALLOC_FLAG_POOL_TYPE) != 0 &&
                                    option->pool_type == UMQ_ALLOC_POOL_NORMAL;
             if (param.actual_buf_count == 1 && !explicit_normal && !g_qbuf_pool.disable_malloc_escape) {
+                _lc = 3; // escape路径: 所有pool耗尽，回退到memalign堆分配，最慢路径
+                // 累计escape路径时延(仅lc维度，无sc维度，escape不走size_class)
+                if (qbuf_debug_on()) {
+                    uint64_t _dt = qbuf_mono_ns() - _t0;
+                    g_dbg_stats.alloc_ns_total += _dt;
+                    g_dbg_stats.alloc_count++;
+                    g_dbg_stats.alloc_lat[qbuf_lat_bucket(_dt)]++;
+                    g_dbg_stats.alloc_lc_count[_lc]++;
+                    g_dbg_stats.alloc_lc_ns_total[_lc] += _dt;
+                    if (_dt > g_dbg_stats.alloc_lc_ns_max[_lc]) g_dbg_stats.alloc_lc_ns_max[_lc] = _dt;
+                    if (_dt > g_dbg_stats.alloc_ns_max) g_dbg_stats.alloc_ns_max = _dt;
+                }
                 return umq_qbuf_alloc_escape(list, sc);
             }
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
@@ -2208,6 +2343,8 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
             return ret;
         }
         g_thread_cache.stats.tls_fetch_cnt_with_data++;
+        // 同nodata路径，区分纯global fetch vs expansion/mmap路径
+        _lc = g_dbg_expansion_happened ? 2 : 1;
     }
 
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
@@ -2227,6 +2364,20 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
             param.actual_buf_count) {
         qbuf_dbg_print_summary();
     }
+    if (qbuf_debug_on()) {
+        uint64_t _dt = qbuf_mono_ns() - _t0;
+        g_dbg_stats.alloc_ns_total += _dt;
+        g_dbg_stats.alloc_count++;
+        g_dbg_stats.alloc_lat[qbuf_lat_bucket(_dt)]++;
+        g_dbg_stats.alloc_lc_count[_lc]++;
+        g_dbg_stats.alloc_lc_ns_total[_lc] += _dt;
+        if (_dt > g_dbg_stats.alloc_lc_ns_max[_lc]) g_dbg_stats.alloc_lc_ns_max[_lc] = _dt;
+        if (_dt > g_dbg_stats.alloc_ns_max) g_dbg_stats.alloc_ns_max = _dt;
+        // per size_class timing
+        g_dbg_stats.alloc_sc_count[sc]++;
+        g_dbg_stats.alloc_sc_ns_total[sc] += _dt;
+        if (_dt > g_dbg_stats.alloc_sc_ns_max[sc]) g_dbg_stats.alloc_sc_ns_max[sc] = _dt;
+    }
     return UMQ_SUCCESS;
 }
 
@@ -2245,6 +2396,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
         return;
     }
 
+    uint64_t _t0 = qbuf_mono_ns();
     local_block_pool_t *local_pool = get_thread_cache();
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && QBUF_LIST_FIRST(list)->mempool_without_data == 1) {
         (void)pthread_spin_lock(&local_pool->list_lock);
@@ -2371,6 +2523,14 @@ void umq_qbuf_free(umq_buf_list_t *list)
     g_thread_cache.stats.free_cnt_with_data += total_cnt;
     if (qbuf_debug_on())
         g_dbg_stats.free_with_data += total_cnt;
+    // 累计free时延统计: 全局avg/max + 时延直方图(无生命周期/size_class维度)
+    if (qbuf_debug_on()) {
+        uint64_t _dt = qbuf_mono_ns() - _t0;
+        g_dbg_stats.free_ns_total += _dt;
+        g_dbg_stats.free_count++;
+        g_dbg_stats.free_lat[qbuf_lat_bucket(_dt)]++;
+        if (_dt > g_dbg_stats.free_ns_max) g_dbg_stats.free_ns_max = _dt;
+    }
 }
 
 int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
@@ -2772,7 +2932,6 @@ static void umq_flush_tls_nodata_to_global(void)
         (void)pthread_spin_lock(&pool_iter->block_pool.list_lock);
         umq_buf_t *detached_head = QBUF_LIST_FIRST(&pool_iter->block_pool.head_without_data);
         QBUF_LIST_FIRST(&pool_iter->block_pool.head_without_data) = NULL;
-        uint64_t detached_cnt = pool_iter->block_pool.buf_cnt_without_data;
         pool_iter->block_pool.buf_cnt_without_data = 0;
         (void)pthread_spin_unlock(&pool_iter->block_pool.list_lock);
         if (detached_head == NULL) {
