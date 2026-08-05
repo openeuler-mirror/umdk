@@ -1705,8 +1705,10 @@ static ALWAYS_INLINE bool umq_ub_poll_get_jetty_node(ub_queue_t *queue)
     return false;
 }
 
-static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint32_t cnt, uint32_t tp_handle_idx)
+static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint32_t cnt, uint32_t tp_handle_idx,
+                                                         umq_io_option_t *option, bool should_report_event)
 {
+    int ret = 0;
     if (is_umq_ub_logic_queue(queue->create_flag) && queue->jetty_node != 0) {
         jetty_pool_node_t *node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
 
@@ -1737,7 +1739,7 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
                 uint64_t old_node = (uint64_t)(uintptr_t)node;
                 __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
                                             __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-                umq_ub_jetty_node_free(node);
+                ret = umq_ub_jetty_node_free(node, should_report_event);
             }
         }
     } else if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) && cnt > 0) {
@@ -1751,8 +1753,13 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
         if ((umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK) == 0 &&
             __atomic_compare_exchange_n(&node->umq_ref, &umq_ref, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
             (__atomic_load_n(&node->tx_outstanding, __ATOMIC_ACQUIRE) == 0)) {
-            umq_ub_jetty_node_free(node);
+            ret = umq_ub_jetty_node_free(node, should_report_event);
         }
+    }
+
+    // report released jetty node num
+    if (ret > 0 && option != NULL) {
+        option->tp_handle_free_num++;
     }
 }
 
@@ -1838,12 +1845,13 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
             uint64_t old_node = (uint64_t)(uintptr_t)node;
             __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-            umq_ub_jetty_node_free(node);
+            (void)umq_ub_jetty_node_free(node, true);
         }
     }
 }
 
-int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx)
+int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx,
+                      umq_io_option_t *option)
 {
     urma_cr_t cr[UMQ_UB_FLOW_CONTORL_JETTY_DEPTH];
 
@@ -1873,7 +1881,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
     uint64_t delta_ns = umq_trace_write_delta(tp_poll_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POLL_TX, tp_poll_start, delta_ns);
     if (tx_cr_cnt < 0) {
-        umq_ub_poll_release_jetty_node(queue, 0, tp_handle_idx);
+        umq_ub_poll_release_jetty_node(queue, 0, tp_handle_idx, option, option == NULL);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
         return UMQ_FAIL;
@@ -1930,7 +1938,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
         umq_ub_fc_packet_stats(&queue->flow_control, success_cnt, UB_PACKET_STATS_TYPE_SEND_SUCCESS);
     }
 
-    umq_ub_poll_release_jetty_node(queue, failed_cnt + success_cnt, tp_handle_idx);
+    umq_ub_poll_release_jetty_node(queue, failed_cnt + success_cnt, tp_handle_idx, option, option == NULL);
 
     /* If buf is not NULL, return qbuf_cnt (0 if no error, >0 if has error);
      * If buf is NULL, return ret (0 if no error, error code if has error) */
@@ -1967,7 +1975,7 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
         if ((queue->mode == UMQ_MODE_POLLING || queue->interrupt_ctx.tx_fc_interrupt ||
             ((option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0))) {
             /* buf is not NULL here, so umq_ub_poll_fc_tx returns qbuf_cnt >= 0 */
-            int ret = umq_ub_poll_fc_tx(queue, buf, buf_count, tp_handle_idx);
+            int ret = umq_ub_poll_fc_tx(queue, buf, buf_count, tp_handle_idx, option);
             if (ret < 0) {
                 umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());
                 return ret;
@@ -2002,7 +2010,7 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
     uint64_t delta_ns = umq_trace_write_delta(tp_poll_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_POLL_TX, tp_poll_start, delta_ns);
     if (tx_cr_cnt < 0) {
-        umq_ub_poll_release_jetty_node(queue, 0, tp_handle_idx);
+        umq_ub_poll_release_jetty_node(queue, 0, tp_handle_idx, option, false);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
         umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());
@@ -2073,7 +2081,7 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
 
     // Logic UMQ: release completed WRs back to pool
     if (((option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0) || is_umq_ub_logic_queue(queue->create_flag)) {
-        umq_ub_poll_release_jetty_node(queue, success_cnt + failed_cnt, tp_handle_idx);
+        umq_ub_poll_release_jetty_node(queue, success_cnt + failed_cnt, tp_handle_idx, option, false);
     }
 
     umq_trace_end_record(UMQ_TRACE_TYPE_POLL, umq_trace_timestamp_get());

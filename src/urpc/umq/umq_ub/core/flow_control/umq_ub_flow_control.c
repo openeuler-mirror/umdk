@@ -868,7 +868,7 @@ static urma_status_t umq_ub_flow_control_try_post_send(ub_queue_t *queue, urma_j
             break;
         }
 
-        if (umq_ub_poll_fc_tx(queue, NULL, 0, 0) != 0) {
+        if (umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL) != 0) {
             return URMA_FAIL;
         }
 
@@ -889,7 +889,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
         return UMQ_SUCCESS;
     }
 
-    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
+    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL);
     if (ret != UMQ_SUCCESS) {
         umq_ub_permission_release(fc);
         return ret;
@@ -971,7 +971,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
     if (queue->bind_ctx == NULL) {
         return -UMQ_ERR_EINVAL;
     }
-    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
+    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }
@@ -1144,7 +1144,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     if (!umq_ub_permission_acquire(fc)) {
         return UMQ_SUCCESS;
     }
-    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
+    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL);
     if (ret != UMQ_SUCCESS) {
         umq_ub_permission_release(fc);
         return ret;
@@ -1234,7 +1234,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     if (!fc->enabled || queue->bind_ctx == NULL) {
         return UMQ_SUCCESS;
     }
-    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0);
+    int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }
