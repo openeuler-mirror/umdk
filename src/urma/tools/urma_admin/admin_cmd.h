@@ -321,8 +321,18 @@ typedef struct admin_device_info {
     char net_dev_name[URMA_ADMIN_MAX_DEV_NAME];
 } admin_device_info_t;
 
+typedef struct admin_show_system_ctx {
+    uint8_t dev_ns_mode;
+    uint8_t eid_ns_mode;
+    bool has_dev_ns_mode;
+    bool has_eid_ns_mode;
+    bool found;
+    int ret;
+} admin_show_system_ctx_t;
+
 bool is_ubc(const char *dev_name);
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
+int admin_nl_get_system_info(admin_show_system_ctx_t *ctx);
 int admin_nl_set_dev_sharing(bool enabled);
 int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd);
