@@ -74,6 +74,11 @@ umq_buf_t *umq_qbuf_data_to_head(void *data);
 
 umq_buf_t *umq_qbuf_expansion_data_to_head(void *data);
 
+/* Diagnostic: log details (pointer, pool regions, call stack) when a pointer
+ * passed to umq_data_to_head does not belong to any normal/tiny/expansion pool.
+ * Rate-limited to the first QBUF_NON_POOL_PTR_LOG_LIMIT occurrences per process. */
+void qbuf_log_non_pool_pointer(const char *caller, void *data);
+
 void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg);
 
 uint32_t umq_qbuf_headroom_get(void);

@@ -1178,9 +1178,24 @@ umq_buf_t *umq_data_to_head(void *data)
     }
 
     buf = umq_qbuf_expansion_data_to_head(data);
+    if (buf != NULL) {
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
+        return buf;
+    }
 
-    umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
-    return buf;
+    buf = umq_rx_qbuf_data_to_head(data);
+    if (buf != NULL) {
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
+        return buf;
+    }
+
+    /* All lookups (normal / tiny / expansion / rx) failed: data does not belong
+     * to any pool. Forward to the diagnostic helper in umq_qbuf_pool.c which prints
+     * the pointer value, pool regions, and call stack to identify the upstream
+     * caller passing a non-pool pointer. */
+    qbuf_log_non_pool_pointer(__func__, data);
+
+    return NULL;
 }
 
 int umq_enqueue(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
