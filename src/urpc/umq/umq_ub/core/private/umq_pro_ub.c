@@ -26,7 +26,9 @@
 #define UMQ_UB_FC_POLL_COUNT_MAX 1 // the upper limit of the number of flow control buffers for poll
 
 static __thread urma_jfs_wr_t g_umq_ub_urma_wr[UMQ_BATCH_SIZE];
+static __thread urma_jfr_wr_t g_umq_ub_jfr_wr[UMQ_BATCH_SIZE];
 static __thread urma_sge_t g_umq_ub_sges[UMQ_BATCH_SIZE][UMQ_MAX_SGE_NUM];
+static __thread urma_sge_t g_umq_ub_jfr_sges[UMQ_BATCH_SIZE][UMQ_MAX_SGE_NUM];
 
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
@@ -557,10 +559,7 @@ static void umq_ub_rqe_posted_cnt_inc(ub_queue_t *queue, uint16_t count)
 int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
 {
     uint32_t max_sge_num = queue->max_rx_sge;
-    urma_jfr_wr_t recv_wr[UMQ_BATCH_SIZE] = {0};
-    urma_jfr_wr_t *recv_wr_ptr = recv_wr;
-
-    urma_sge_t sges[UMQ_BATCH_SIZE][max_sge_num];
+    urma_jfr_wr_t *recv_wr_ptr = g_umq_ub_jfr_wr;
     urma_sge_t *sges_ptr;
     urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_jfr_wr_t *bad_wr = NULL;
@@ -589,7 +588,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         }
         rx_buf_ctx->buffer = buffer;
         uint64_t user_ctx = (uint64_t)(uintptr_t)rx_buf_ctx;
-        sges_ptr = sges[wr_index];
+        sges_ptr = g_umq_ub_jfr_sges[wr_index];
         while (buffer && rest_size > 0) { // try to add up to total_size
             if (sge_num++ >= max_sge_num) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, sge num exceed max sge num[%u]\n",
@@ -633,7 +632,7 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
         }
 
         wr_last_buf->qbuf_next = NULL;  // last buffer of current wr
-        recv_wr_ptr->src.sge = sges[wr_index];
+        recv_wr_ptr->src.sge = g_umq_ub_jfr_sges[wr_index];
         recv_wr_ptr->src.num_sge = sge_num;
         recv_wr_ptr->user_ctx = user_ctx;
         recv_wr_ptr++;
@@ -654,9 +653,9 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
     bool post_jfr = is_umq_ub_main_queue(queue->create_flag);
     uint64_t tp_start = umq_trace_timestamp_get();
     if (post_jfr) {
-        status = umq_symbol_urma()->urma_post_jfr_wr(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, recv_wr, &bad_wr);
+        status = umq_symbol_urma()->urma_post_jfr_wr(queue->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, g_umq_ub_jfr_wr, &bad_wr);
     } else {
-        status = umq_symbol_urma()->urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], recv_wr, &bad_wr);
+        status = umq_symbol_urma()->urma_post_jetty_recv_wr(queue->jetty[UB_QUEUE_JETTY_IO], g_umq_ub_jfr_wr, &bad_wr);
     }
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
     umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_POST_RX, tp_start, delta_ns);
@@ -673,9 +672,9 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
             *bad_qbuf = (umq_buf_t *)(uintptr_t)bad_wr->user_ctx;
         } else {
             *bad_qbuf = qbuf;
-            bad_wr = recv_wr;
+            bad_wr = g_umq_ub_jfr_wr;
         }
-        umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(recv_wr, wr_index, *bad_qbuf));
+        umq_ub_rqe_posted_cnt_inc(queue, wr_index - umq_ub_post_rx_failed_num(g_umq_ub_jfr_wr, wr_index, *bad_qbuf));
         // if fails, add chain of qbuf back for rx
         process_bad_wr(queue, bad_wr, NULL);
         return umq_status_convert(status);
@@ -693,8 +692,8 @@ PUT_ALL_RX_CTX:
     // put rx buf in recv wr
     if (wr_index > 0) {
         (recv_wr_ptr - 1)->next = NULL;
-        *bad_qbuf = ((rx_buf_ctx_t *)(uintptr_t)recv_wr->user_ctx)->buffer;
-        process_bad_wr(queue, recv_wr, buffer);
+        *bad_qbuf = ((rx_buf_ctx_t *)(uintptr_t)g_umq_ub_jfr_wr->user_ctx)->buffer;
+        process_bad_wr(queue, g_umq_ub_jfr_wr, buffer);
     } else {
         *bad_qbuf = qbuf;
     }
