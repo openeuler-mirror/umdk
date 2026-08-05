@@ -156,6 +156,37 @@ int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *o
     return UMQ_SUCCESS;
 }
 
+umq_buf_t *umq_rx_qbuf_data_to_head(void *data)
+{
+    if (!g_rx_pool_inited || data == NULL) {
+        return NULL;
+    }
+    /* RX pool layout (SPLIT mode): data_buffer followed by header_buffer.
+     * data_buffer holds raw 4K-aligned data blocks; header_buffer holds
+     * umq_buf_t metadata. Given a data pointer, compute the block index
+     * and look up the corresponding header.
+     * The caller may pass either the raw block start or a pointer offset
+     * by headroom_size (sizeof IOBuf::Block = 32), so we floor-align
+     * to block_size to find the true block start. */
+    char *data_buf_start = (char *)g_rx_buffer_addr;
+    uint32_t block_size = UMQ_RX_QBUF_BLOCK_SIZE;
+    uint64_t blk_num = g_rx_total_len / (block_size + sizeof(umq_buf_t));
+    char *data_buf_end = data_buf_start + blk_num * block_size;
+    char *hdr_buf_start = data_buf_end;
+
+    char *blk_start = (char *)((uintptr_t)data & ~(uint64_t)(block_size - 1));
+    if (blk_start < data_buf_start || blk_start >= data_buf_end) {
+        return NULL;
+    }
+    uint64_t id = (uint64_t)(blk_start - data_buf_start) / block_size;
+    umq_buf_t *qbuf = (umq_buf_t *)(hdr_buf_start + id * sizeof(umq_buf_t));
+    /* Validate: qbuf->buf_data should be within [blk_start, blk_start+block_size). */
+    if (qbuf->buf_data >= blk_start && qbuf->buf_data < blk_start + block_size) {
+        return qbuf;
+    }
+    return NULL;
+}
+
 void umq_rx_qbuf_free(umq_buf_list_t *list)
 {
     if (list == NULL || QBUF_LIST_FIRST(list) == NULL || !g_rx_pool_inited) {

@@ -34,6 +34,7 @@ void umq_rx_qbuf_pool_uninit(void);
 
 int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list);
 void umq_rx_qbuf_free(umq_buf_list_t *list);
+umq_buf_t *umq_rx_qbuf_data_to_head(void *data);
 
 void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size);
 void umq_rx_io_buf_free(void);
