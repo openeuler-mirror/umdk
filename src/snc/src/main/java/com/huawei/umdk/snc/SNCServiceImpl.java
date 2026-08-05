@@ -20,6 +20,7 @@ import com.huawei.umdk.snc.engine.PathEngine;
 import com.huawei.umdk.snc.engine.RouteLookupEngine;
 import com.huawei.umdk.snc.entity.AclData;
 import com.huawei.umdk.snc.entity.AclKey;
+import com.huawei.umdk.snc.entity.LinkEvent;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
@@ -28,6 +29,7 @@ import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.TpAclEntity;
 import com.huawei.umdk.snc.exception.SNCStateException;
 import com.huawei.umdk.snc.service.AclService;
+import com.huawei.umdk.snc.service.LinkEventService;
 import com.huawei.umdk.snc.service.PathService;
 import com.huawei.umdk.snc.service.SuperNodeService;
 import com.huawei.umdk.snc.store.AclStore;
@@ -52,6 +54,8 @@ public class SNCServiceImpl implements SNCService {
     private AclService aclService;
 
     private PathService pathService;
+
+    private LinkEventService linkEventService;
 
     private volatile boolean superNodeLoaded;
 
@@ -80,7 +84,8 @@ public class SNCServiceImpl implements SNCService {
         this.aclService = new AclService(aclStore);
         this.pathService = new PathService(superNodeStore, aclStore,
             pathEngine, routeLookupEngine, aclCheckEngine);
-        LOG.debug("init: Service instances created (SuperNodeService, AclService, PathService)");
+        this.linkEventService = new LinkEventService(superNodeStore);
+        LOG.debug("init: Service instances created (SuperNodeService, AclService, PathService, LinkEventService)");
 
         this.superNodeLoaded = false;
         this.aclLoaded = false;
@@ -108,6 +113,7 @@ public class SNCServiceImpl implements SNCService {
         this.superNodeService = null;
         this.aclService = null;
         this.pathService = null;
+        this.linkEventService = null;
         LOG.info("uninit: state=" + state);
     }
 
@@ -346,6 +352,22 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("planPath: src=" + request.getSrcDevice() + ", dst=" + request.getDestDevice()
             + ", status=" + result.getStatus());
         return result;
+    }
+
+    @Override
+    public void notifyLinkEvent(SuperNode supernode, LinkEvent event) {
+        checkNotUninit();
+        if (supernode == null) {
+            LOG.error("notifyLinkEvent: error=supernode must not be null");
+            throw new IllegalArgumentException("supernode must not be null");
+        }
+        if (event == null) {
+            LOG.error("notifyLinkEvent: error=event must not be null");
+            throw new IllegalArgumentException("event must not be null");
+        }
+        linkEventService.notifyLinkEvent(supernode, event);
+        LOG.info("notifyLinkEvent: superNode=" + supernode.getName() + ", device=" + event.getDeviceName()
+            + ", port=" + event.getPortName() + ", status=" + event.getEventType());
     }
 
     private void checkNotUninit() {

@@ -16,6 +16,7 @@ import com.huawei.umdk.snc.dto.PathPlanRequest;
 import com.huawei.umdk.snc.dto.PathPlanResult;
 import com.huawei.umdk.snc.entity.AclData;
 import com.huawei.umdk.snc.entity.AclKey;
+import com.huawei.umdk.snc.entity.LinkEvent;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
@@ -58,4 +59,12 @@ public interface SNCService {
     void removeAclData(String superNodeName);
 
     PathPlanResult planPath(PathPlanRequest request);
+
+    /**
+     * 通知链路事件，更新对应端口的链路状态及路由动态收敛。
+     *
+     * @param supernode 超节点（提供上下文）
+     * @param event     链路事件
+     */
+    void notifyLinkEvent(SuperNode supernode, LinkEvent event);
 }
