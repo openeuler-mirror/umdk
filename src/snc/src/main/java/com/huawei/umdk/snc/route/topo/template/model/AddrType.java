@@ -31,7 +31,7 @@ public enum AddrType {
     }
 
     public static boolean isNodeAddress(AddrType addrTypeEnum) {
-        return addrTypeEnum == PRIMARY_ADDR || addrTypeEnum == UNIC_ADDR;
+        return addrTypeEnum == PRIMARY_ADDR || addrTypeEnum == UNIC_ADDR || addrTypeEnum == NODE_ADDR;
     }
 
     public static AddrType getAddrType(String addrDescription) {
