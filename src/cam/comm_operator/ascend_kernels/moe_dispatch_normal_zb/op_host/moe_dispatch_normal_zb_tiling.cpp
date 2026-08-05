@@ -107,7 +107,7 @@ static bool CheckTensorDim(gert::TilingContext *context, const char *nodeName, c
     OP_TILING_CHECK(xStorageShape == nullptr, OP_LOGE(nodeName, "xShape is null."), return false);
     OP_TILING_CHECK(xStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "xShape dims must be 2, but current dim num is %lu.",
-        xStorageShape->GetStorageShape().GetDimNum()),
+            xStorageShape->GetStorageShape().GetDimNum()),
         return false);
     int64_t xDim0 = xStorageShape->GetStorageShape().GetDim(0);
     int64_t xDim1 = xStorageShape->GetStorageShape().GetDim(1);
@@ -117,7 +117,7 @@ static bool CheckTensorDim(gert::TilingContext *context, const char *nodeName, c
     OP_TILING_CHECK(topkIdxStorageShape == nullptr, OP_LOGE(nodeName, "topkIdxShape is null."), return false);
     OP_TILING_CHECK(topkIdxStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "topkIdxShape dims must be 2, but current dim num is %lu.",
-        topkIdxStorageShape->GetStorageShape().GetDimNum()),
+            topkIdxStorageShape->GetStorageShape().GetDimNum()),
         return false);
     OP_LOGD(nodeName, "expertId dim0 = %ld", topkIdxStorageShape->GetStorageShape().GetDim(0));
     OP_LOGD(nodeName, "expertId dim1 = %ld", topkIdxStorageShape->GetStorageShape().GetDim(1));
@@ -125,7 +125,7 @@ static bool CheckTensorDim(gert::TilingContext *context, const char *nodeName, c
     OP_TILING_CHECK(expandXStorageShape == nullptr, OP_LOGE(nodeName, "expandXShape is null."), return false);
     OP_TILING_CHECK(expandXStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "expandXShape dims must be 2, but current dim num is %lu.",
-        expandXStorageShape->GetStorageShape().GetDimNum()),
+            expandXStorageShape->GetStorageShape().GetDimNum()),
         return false);
     OP_LOGD(nodeName, "expandX dim0 = %ld", expandXStorageShape->GetStorageShape().GetDim(0));
     OP_LOGD(nodeName, "expandX dim1 = %ld", expandXStorageShape->GetStorageShape().GetDim(1));
@@ -135,7 +135,7 @@ static bool CheckTensorDim(gert::TilingContext *context, const char *nodeName, c
             return false);
         OP_TILING_CHECK(dynamicScalesStorageShape->GetStorageShape().GetDimNum() != DYNAMIC_SCALE_DIM_NUM,
             OP_LOGE(nodeName, "dynamicScalesShape dims must be %u, but current dim num is %lu.",
-            DYNAMIC_SCALE_DIM_NUM, dynamicScalesStorageShape->GetStorageShape().GetDimNum()),
+                DYNAMIC_SCALE_DIM_NUM, dynamicScalesStorageShape->GetStorageShape().GetDimNum()),
             return false);
         OP_LOGD(nodeName, "dynamicScales dim0 = %ld", dynamicScalesStorageShape->GetStorageShape().GetDim(0));
     }
@@ -229,11 +229,11 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context, con
     int64_t epWorldSize = *epWorldSizePtr;
     OP_TILING_CHECK((epWorldSize < MIN_EP_WORLD_SIZE) || (epWorldSize > MAX_EP_WORLD_SIZE),
         OP_LOGE(nodeName, "epWorldSize is invalid, only support [%ld, %ld], but got epWorldSize=%ld.",
-        MIN_EP_WORLD_SIZE, MAX_EP_WORLD_SIZE, epWorldSize),
+            MIN_EP_WORLD_SIZE, MAX_EP_WORLD_SIZE, epWorldSize),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK((*tpWorldSizePtr < 0) || (*tpWorldSizePtr > MAX_TP_WORLD_SIZE),
         OP_LOGE(nodeName, "tpWorldSize is invalid, only support [0, %ld], but got tpWorldSize=%ld.",
-        MAX_TP_WORLD_SIZE, *tpWorldSizePtr),
+            MAX_TP_WORLD_SIZE, *tpWorldSizePtr),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK((*epRankIdPtr < 0) || (*epRankIdPtr >= epWorldSize),
         OP_LOGE(nodeName, "epRankId is invalid, only support [0, %ld), but got epRankId=%ld.", epWorldSize,
@@ -252,20 +252,20 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context, con
     }
     OP_TILING_CHECK((moeExpertNum <= 0) || (moeExpertNum > MOE_EXPERT_MAX_NUM),
         OP_LOGE(nodeName, "moeExpertNum is invalid, only support (0, %ld], but got moeExpertNum=%ld.",
-        MOE_EXPERT_MAX_NUM, moeExpertNum),
+            MOE_EXPERT_MAX_NUM, moeExpertNum),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK(
         (*quantModePtr < static_cast<int64_t>(NO_SCALES)) || (*quantModePtr > static_cast<int64_t>(DYNAMIC_SCALES)),
         OP_LOGE(nodeName, "quantMode is invalid, only support [0, %u], but got quantMode=%ld.", DYNAMIC_SCALES,
-        *quantModePtr),
+            *quantModePtr),
         return ge::GRAPH_FAILED);
     int64_t moePerRankNum = moeExpertNum / epWorldSize;
     int64_t curDispatchStatusNum = moePerRankNum * epWorldSize;
     OP_TILING_CHECK((curDispatchStatusNum > DISPATCH_STATUS_MAX_SUPPORT_NUM),
         OP_LOGE(nodeName,
-        "The moe experts num must meet the conditions,"
-        " (moeExpertNum / epWorldSize * epWorldSize <= 1280, but cur is %ld.",
-        curDispatchStatusNum),
+            "The moe experts num must meet the conditions,"
+            " (moeExpertNum / epWorldSize * epWorldSize <= 1280, but cur is %ld.",
+            curDispatchStatusNum),
         return ge::GRAPH_FAILED);
 
     tilingData.moeDispatchNormalInfo.epWorldSize = static_cast<uint32_t>(epWorldSize);
@@ -288,9 +288,9 @@ static ge::graphStatus CheckAttrs(gert::TilingContext *context, const char *node
     localMoeExpertNum = moeExpertNum / epWorldSize;
     OP_TILING_CHECK(moeExpertNum % epWorldSize != 0,
         OP_LOGE(nodeName,
-        "moeExpertNum should be divisible by epWorldSize, "
-        "but moeExpertNum=%u, epWorldSize=%u.",
-        moeExpertNum, epWorldSize),
+            "moeExpertNum should be divisible by epWorldSize, "
+            "but moeExpertNum=%u, epWorldSize=%u.",
+            moeExpertNum, epWorldSize),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK(localMoeExpertNum <= 0,
         OP_LOGE(nodeName, "localMoeExpertNum is invalid, localMoeExpertNum = %d", localMoeExpertNum),
@@ -325,8 +325,8 @@ static ge::graphStatus CheckAttrs(gert::TilingContext *context, const char *node
     OP_TILING_CHECK(
         *commMetaPtrPtr <= 0,
         OP_LOGE(nodeName,
-        "commMetaPtr is invalid, should be ZB virtual address, but got commMetaPtr=%ld.",
-        *commMetaPtrPtr),
+            "commMetaPtr is invalid, should be ZB virtual address, but got commMetaPtr=%ld.",
+            *commMetaPtrPtr),
         return ge::GRAPH_FAILED);
     tilingData.commMetaPtr = static_cast<uint64_t>(*commMetaPtrPtr);
     return ge::GRAPH_SUCCESS;
@@ -353,15 +353,15 @@ static ge::graphStatus CheckTensorShape(gert::TilingContext *context, const char
     const int64_t topkIdxDim1 = topkIdxStorageShape->GetStorageShape().GetDim(1);
     OP_TILING_CHECK(xDim0 != topkIdxDim0,
         OP_LOGE(nodeName,
-        "xShape's dim0 not equal to topkIdxShape's dim0, "
-        "xShape's dim0 is %ld, topkIdxShape's dim0 is %ld.",
-        xDim0, topkIdxDim0),
+            "xShape's dim0 not equal to topkIdxShape's dim0, "
+            "xShape's dim0 is %ld, topkIdxShape's dim0 is %ld.",
+            xDim0, topkIdxDim0),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK((topkIdxDim1 <= 0) || (topkIdxDim1 > K_MAX) || (topkIdxDim1 > moeExpertNum),
         OP_LOGE(nodeName,
-        "topkIdxShape's dim1(k) should be in (0, min(%ld, moeExpertNum=%ld)], "
-        "but got topkIdxShape's dim1=%ld.",
-        K_MAX, moeExpertNum, topkIdxDim1),
+            "topkIdxShape's dim1(k) should be in (0, min(%ld, moeExpertNum=%ld)], "
+            "but got topkIdxShape's dim1=%ld.",
+            K_MAX, moeExpertNum, topkIdxDim1),
         return ge::GRAPH_FAILED);
     tilingData.moeDispatchNormalInfo.k = static_cast<uint32_t>(topkIdxDim1);
 
@@ -373,9 +373,9 @@ static ge::graphStatus CheckTensorShape(gert::TilingContext *context, const char
     const int64_t expandXDim1 = expandXStorageShape->GetStorageShape().GetDim(1);
     OP_TILING_CHECK(xDim1 != expandXDim1,
         OP_LOGE(nodeName,
-        "expandX's dim1 not equal to xShape's dim1, "
-        "xShape's dim1 is %ld, expandX's dim1 is %ld.",
-        xDim1, expandXDim1),
+            "expandX's dim1 not equal to xShape's dim1, "
+            "xShape's dim1 is %ld, expandX's dim1 is %ld.",
+            xDim1, expandXDim1),
         return ge::GRAPH_FAILED);
 
     // Validate dynamicScales dims

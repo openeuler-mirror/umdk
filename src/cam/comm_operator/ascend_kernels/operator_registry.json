@@ -5,7 +5,11 @@
       "dispatch_layout",
       "fused_deep_moe",
       "moe_combine_normal",
+      "moe_combine_normal_zb",
+      "moe_dispatch_layout_zb",
       "moe_dispatch_normal",
+      "moe_dispatch_normal_zb",
+      "moe_notify_dispatch_zb",
       "notify_dispatch"
     ]
   },
@@ -21,8 +25,20 @@
     "moe_combine_normal": {
       "requires_shmem": false
     },
+    "moe_combine_normal_zb": {
+      "requires_shmem": true
+    },
+    "moe_dispatch_layout_zb": {
+      "requires_shmem": true
+    },
     "moe_dispatch_normal": {
       "requires_shmem": false
+    },
+    "moe_dispatch_normal_zb": {
+      "requires_shmem": true
+    },
+    "moe_notify_dispatch_zb": {
+      "requires_shmem": true
     },
     "notify_dispatch": {
       "requires_shmem": false

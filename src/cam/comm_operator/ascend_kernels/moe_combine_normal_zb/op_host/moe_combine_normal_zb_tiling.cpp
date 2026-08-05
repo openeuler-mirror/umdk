@@ -123,11 +123,11 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context,
     int64_t epWorldSize = *epWorldSizePtr;
     OP_TILING_CHECK((epWorldSize < MIN_EP_WORLD_SIZE) || (epWorldSize > MAX_EP_WORLD_SIZE),
         OP_LOGE(nodeName, "epWorldSize is invalid, only support [%ld, %ld], but got epWorldSize=%ld.",
-        MIN_EP_WORLD_SIZE, MAX_EP_WORLD_SIZE, epWorldSize),
+            MIN_EP_WORLD_SIZE, MAX_EP_WORLD_SIZE, epWorldSize),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK((*tpWorldSizePtr < 0) || (*tpWorldSizePtr > MAX_TP_WORLD_SIZE),
         OP_LOGE(nodeName, "tpWorldSize is invalid, only support [0, %ld], but got tpWorldSize=%ld.",
-        MAX_TP_WORLD_SIZE, *tpWorldSizePtr),
+            MAX_TP_WORLD_SIZE, *tpWorldSizePtr),
         return ge::GRAPH_FAILED);
     OP_TILING_CHECK((*epRankIdPtr < 0) || (*epRankIdPtr >= epWorldSize),
         OP_LOGE(nodeName, "epRankId is invalid, only support [0, %ld), but got epRankId=%ld.", epWorldSize,
@@ -146,15 +146,15 @@ static ge::graphStatus GetAttrAndSetTilingData(gert::TilingContext *context,
     }
     OP_TILING_CHECK((moeExpertNum <= 0) || (moeExpertNum > MOE_EXPERT_MAX_NUM),
         OP_LOGE(nodeName, "moeExpertNum is invalid, only support (0, %ld], but got moeExpertNum=%ld.",
-        MOE_EXPERT_MAX_NUM, moeExpertNum),
+            MOE_EXPERT_MAX_NUM, moeExpertNum),
         return ge::GRAPH_FAILED);
     int64_t moePerRankNum = moeExpertNum / epWorldSize;
     int64_t curDispatchStatusNum = moePerRankNum * epWorldSize;
     OP_TILING_CHECK((curDispatchStatusNum > DISPATCH_STATUS_MAX_SUPPORT_NUM),
         OP_LOGE(nodeName,
-        "The moe experts num must meet the conditions,"
-        " (moeExpertNum / epWorldSize) * epWorldSize <= 1280, but cur is %ld.",
-        curDispatchStatusNum),
+            "The moe experts num must meet the conditions,"
+            " (moeExpertNum / epWorldSize) * epWorldSize <= 1280, but cur is %ld.",
+            curDispatchStatusNum),
         return ge::GRAPH_FAILED);
 
     tilingData.commMetaPtr = static_cast<uint64_t>(*commMetaPtrPtr);
@@ -172,7 +172,7 @@ static bool CheckInputTensorDim(gert::TilingContext *context, const char *nodeNa
     OP_TILING_CHECK(recvXStorageShape == nullptr, OP_LOGE(nodeName, "recvX is null."), return false);
     OP_TILING_CHECK(recvXStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "recvX must be 2-dimension, but got %lu dim",
-        recvXStorageShape->GetStorageShape().GetDimNum()),
+            recvXStorageShape->GetStorageShape().GetDimNum()),
         return false);
     OP_LOGD(nodeName, "recvX dim0 = %ld", recvXStorageShape->GetStorageShape().GetDim(0));
     OP_LOGD(nodeName, "recvX dim1 = %ld", recvXStorageShape->GetStorageShape().GetDim(1));
@@ -180,7 +180,7 @@ static bool CheckInputTensorDim(gert::TilingContext *context, const char *nodeNa
     OP_TILING_CHECK(epRecvCountStorageShape == nullptr, OP_LOGE(nodeName, "epRecvCount is null."), return false);
     OP_TILING_CHECK(epRecvCountStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "epRecvCount must be 2-dimension, but got %lu dim",
-        epRecvCountStorageShape->GetStorageShape().GetDimNum()),
+            epRecvCountStorageShape->GetStorageShape().GetDimNum()),
         return false);
     OP_LOGD(nodeName, "epRecvCount dim0 = %ld", epRecvCountStorageShape->GetStorageShape().GetDim(0));
     OP_LOGD(nodeName, "epRecvCount dim1 = %ld", epRecvCountStorageShape->GetStorageShape().GetDim(1));
@@ -188,7 +188,7 @@ static bool CheckInputTensorDim(gert::TilingContext *context, const char *nodeNa
     OP_TILING_CHECK(topkWeightsStorageShape == nullptr, OP_LOGE(nodeName, "topkWeights is null."), return false);
     OP_TILING_CHECK(topkWeightsStorageShape->GetStorageShape().GetDimNum() != TWO_DIMS,
         OP_LOGE(nodeName, "topkWeights must be 2-dimension, but got %lu dim",
-        topkWeightsStorageShape->GetStorageShape().GetDimNum()),
+            topkWeightsStorageShape->GetStorageShape().GetDimNum()),
         return false);
     OP_LOGD(nodeName, "topkWeights dim0 = %ld", topkWeightsStorageShape->GetStorageShape().GetDim(0));
     OP_LOGD(nodeName, "topkWeights dim1 = %ld", topkWeightsStorageShape->GetStorageShape().GetDim(1));
@@ -211,7 +211,7 @@ static bool CheckOutputTensorDim(gert::TilingContext *context, const char *nodeN
             return false);
         OP_TILING_CHECK(sendCostStatsStorageShape->GetStorageShape().GetDimNum() != ONE_DIM,
             OP_LOGE(nodeName, "combine sendCostStatsShape must be 1-dimension, but got %lu dim",
-            sendCostStatsStorageShape->GetStorageShape().GetDimNum()),
+                sendCostStatsStorageShape->GetStorageShape().GetDimNum()),
             return false);
     }
     return true;
@@ -238,7 +238,7 @@ static bool CheckTensorDataType(gert::TilingContext *context, const char *nodeNa
     OP_TILING_CHECK(epRecvCountsDesc == nullptr, OP_LOGE(nodeName, "epRecvCountsDesc is null."), return false);
     OP_TILING_CHECK((epRecvCountsDesc->GetDataType() != ge::DT_INT32),
         OP_LOGE(nodeName, "epRecvCounts dataType is invalid, dataType should be int32, but is %d",
-        static_cast<ge::DataType>(epRecvCountsDesc->GetDataType())),
+            static_cast<ge::DataType>(epRecvCountsDesc->GetDataType())),
         return false);
     auto topkWeightsDesc = context->GetInputDesc(TOPK_WEIGHTS_INDEX);
     OP_TILING_CHECK(topkWeightsDesc == nullptr, OP_LOGE(nodeName, "topkWeightsDesc is null."), return false);
@@ -303,7 +303,7 @@ static bool CheckTensorShape(gert::TilingContext *context, MoeCombineNormalZbTil
     int64_t moeExpertNum = static_cast<int64_t>(tilingData.moeCombineNormalInfo.moeExpertNum);
     OP_TILING_CHECK((topkWeightsDim1 <= 0) || (topkWeightsDim1 > K_MAX || (topkWeightsDim1 > moeExpertNum)),
         OP_LOGE(nodeName, "topkWeights's dim1(K) should be in (0, min(%ld, moeExpertNum %ld)], "
-        "but got topkWeights's dim1=%ld.", K_MAX, moeExpertNum, topkWeightsDim1), return false);
+            "but got topkWeights's dim1=%ld.", K_MAX, moeExpertNum, topkWeightsDim1), return false);
     tilingData.moeCombineNormalInfo.k = static_cast<uint32_t>(topkWeightsDim1);
 
     // Validate recvX dims and set h
@@ -340,7 +340,7 @@ static bool CheckAttrs(gert::TilingContext *context, MoeCombineNormalZbTilingDat
     // moeExpertNum must be evenly divisible across ranks
     OP_TILING_CHECK(moeExpertNum % epWorldSize != 0,
         OP_LOGE(nodeName, "moeExpertNum should be divisible by epWorldSize, "
-        "but got moeExpertNum=%d, epWorldSize=%d.", moeExpertNum, epWorldSize), return false);
+            "but got moeExpertNum=%d, epWorldSize=%d.", moeExpertNum, epWorldSize), return false);
     localMoeExpertNum = moeExpertNum / epWorldSize;
     OP_TILING_CHECK(localMoeExpertNum <= 0,
         OP_LOGE(nodeName, "localMoeExpertNum is invalid, localMoeExpertNum = %d", localMoeExpertNum),
@@ -349,7 +349,7 @@ static bool CheckAttrs(gert::TilingContext *context, MoeCombineNormalZbTilingDat
     // When tp=2, experts per MoE rank must equal 1
     OP_TILING_CHECK((localMoeExpertNum > 1) && (tpWorldSize > 1),
         OP_LOGE(nodeName, "Cannot support multi-moeExpert %d in a rank when tpWorldSize = %d > 1",
-        localMoeExpertNum, tpWorldSize),
+            localMoeExpertNum, tpWorldSize),
         return false);
     tilingData.moeCombineNormalInfo.moeExpertPerRankNum = localMoeExpertNum;
 
@@ -367,10 +367,10 @@ static bool CheckAttrs(gert::TilingContext *context, MoeCombineNormalZbTilingDat
         (*globalBsPtr != 0) && ((*globalBsPtr < static_cast<int64_t>(epWorldSize) * topkWeightsDim0) ||
         ((*globalBsPtr) % (static_cast<int64_t>(epWorldSize)) != 0)),
         OP_LOGE(nodeName,
-        "globalBS is invalid, only "
-        "support 0 or maxBs(maxBs is the largest bs on all ranks) * epWorldSize, but got globalBS=%ld, "
-        "bs=%ld, epWorldSize=%u.",
-        *globalBsPtr, topkWeightsDim0, epWorldSize),
+            "globalBS is invalid, only "
+            "support 0 or maxBs(maxBs is the largest bs on all ranks) * epWorldSize, but got globalBS=%ld, "
+            "bs=%ld, epWorldSize=%u.",
+            *globalBsPtr, topkWeightsDim0, epWorldSize),
         return false);
     tilingData.moeCombineNormalInfo.globalBs = static_cast<uint32_t>(*globalBsPtr);
     OP_LOGD(nodeName, "*globalBsPtr = %ld, bs = %ld, epWorldSize = %u\n", *globalBsPtr, topkWeightsDim0, epWorldSize);

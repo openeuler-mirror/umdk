@@ -29,8 +29,10 @@ env_version = os.getenv("CAM_WHL_VERSION", "209.0.0.B001")
 torch_path = os.path.dirname(torch.__file__)
 torch_npu_spec = importlib.util.find_spec("torch_npu")
 torch_npu_path = os.path.dirname(torch_npu_spec.origin)
+shmem_home_path = os.environ.get("SHMEM_HOME_PATH")
 print(f"torch_path: {torch_path}")
 print(f"torch_npu_path: {torch_npu_path}")
+print(f"shmem_home_path: {shmem_home_path}")
 PYTORCH_NPU_INSTALL_PATH = os.path.dirname(os.path.abspath(torch_npu_spec.origin))
 architecture = str(platform.machine())
 if architecture.startswith("x86"):
@@ -113,41 +115,61 @@ if "ENABLE_COV" in os.environ and os.environ.get("ENABLE_COV") == "1":
 print(compile_args)
 
 exts = []
+
+include_dirs = [
+    os.path.join(torch_npu_path, "include"),
+    os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
+    os.path.join(torch_npu_path, "include/third_party/acl/inc"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "hccl"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "runtime"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "msprof"),
+    os.path.join(torch_path, "include"),
+    os.path.join(os.path.dirname(__file__), "./", "pytorch_extension"),
+]
+
+library_dirs = [
+    os.path.join(torch_path, "lib"),
+    os.path.join(torch_npu_path, "lib"),
+    os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64"),
+]
+
+libraries = [
+    "torch_npu",
+    "gcov",
+    "runtime",
+    "torch",
+    "ascendcl",
+    "profapi",
+]
+
+sources = [
+    "./fused_deep_moe.cpp",
+    "./get_dispatch_layout.cpp",
+    "./moe_dispatch_prefill.cpp",
+    "./moe_combine_prefill.cpp",
+    "./get_dispatch_layout_zb.cpp",
+    "./moe_dispatch_prefill_zb.cpp",
+    "./moe_combine_prefill_zb.cpp",
+    "./pybind.cpp",
+    "./pytorch_extension/NPUBridge.cpp",
+    "./pytorch_extension/NPUStorageImpl.cpp",
+]
+
+if shmem_home_path:
+    include_dirs.append(os.path.join(shmem_home_path, "shmem", "include"))
+    library_dirs.append(os.path.join(shmem_home_path, "shmem", "lib"))
+    libraries.append("shmem")
+    compile_args.append("-DSHMEM_ENABLED")
+
 ext1 = NpuExtension(
     name="umdk_cam_op_lib",
-    include_dirs=[
-        os.path.join(torch_npu_path, "include"),
-        os.path.join(torch_npu_path, "include/third_party/acl/inc/acl/"),
-        os.path.join(torch_npu_path, "include/third_party/acl/inc"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "hccl"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "runtime"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "include", "experiment", "msprof"),
-        os.path.join(torch_path, "include"),
-        os.path.join(os.path.dirname(__file__), "./", "pytorch_extension")],
-
-    library_dirs=[
-        os.path.join(torch_path, "lib"),
-        os.path.join(torch_npu_path, "lib"),
-        os.path.join(os.environ["ASCEND_HOME_PATH"], f"{arch}-linux", "lib64")],
-    libraries=[
-        "torch_npu",
-        "gcov",
-        "runtime",
-        "torch",
-        "ascendcl",
-        "profapi"],
-    sources=["./fused_deep_moe.cpp",
-             "./get_dispatch_layout.cpp",
-             "./moe_dispatch_prefill.cpp",
-             "./moe_combine_prefill.cpp",
-             "./pybind.cpp",
-             "./pytorch_extension/NPUBridge.cpp",
-             "./pytorch_extension/NPUStorageImpl.cpp",
-            ],
-    
-    extra_compile_args = compile_args,
-    extra_link_args = [
+    include_dirs=include_dirs,
+    library_dirs=library_dirs,
+    libraries=libraries,
+    sources=sources,
+    extra_compile_args=compile_args,
+    extra_link_args=[
         "-s", "-Wl,-z,relro,-z,now"
     ],
 )
