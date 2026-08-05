@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <time.h>
+#include <execinfo.h>
 
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
@@ -398,6 +399,83 @@ static void qbuf_dbg_print_summary(void)
                 s, g_qbuf_pool.block_sizes[s], (unsigned long long)cnt, avg, mx);
     }
 }
+// ===== NON-POOL POINTER DIAGNOSTIC =====
+// When umq_qbuf_data_to_head() is called with a pointer that does not belong to
+// any normal/expansion/escape pool, log a one-shot diagnostic (pointer value,
+// pool regions, call stack) to help identify the upstream caller. This catches
+// use-after-free, external-memory-misroute (e.g. brpc IOBuf passing non-UB
+// memory to ubsocket_iobuf_deallocate), and cross-pool misuse.
+// Rate-limited to first N occurrences per process to avoid log flood.
+#define QBUF_NON_POOL_PTR_LOG_LIMIT 32
+static volatile uint32_t g_non_pool_ptr_log_count = 0;
+
+void qbuf_log_non_pool_pointer(const char *caller, void *data)
+{
+    uint32_t n = __atomic_add_fetch(&g_non_pool_ptr_log_count, 1, __ATOMIC_RELAXED);
+    if (n > QBUF_NON_POOL_PTR_LOG_LIMIT) {
+        return; // rate-limited: stop printing after first N occurrences
+    }
+
+    UMQ_VLOG_ERR(VLOG_UMQ, "=== NON-POOL POINTER DETECTED (occurrence %u) ===\n", n);
+    UMQ_VLOG_ERR(VLOG_UMQ,
+        "Caller %s passed data=%p, but it does not belong to any normal/tiny/expansion pool.\n",
+        caller, data);
+    UMQ_VLOG_ERR(VLOG_UMQ, "mode=%s size_class_count=%u per_sc_block_count=%llu\n",
+        g_qbuf_pool.mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE",
+        g_qbuf_pool.size_class_count,
+        (unsigned long long)g_qbuf_pool.per_sc_block_count);
+    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        UMQ_VLOG_ERR(VLOG_UMQ,
+            "  sc=%u blk_size=%u data_region=[%p, %p) header_region_start=%p\n",
+            sc, g_qbuf_pool.block_sizes[sc],
+            (void *)g_qbuf_pool.data_region_start[sc],
+            (void *)g_qbuf_pool.data_region_end[sc],
+            (void *)g_qbuf_pool.header_region_start[sc]);
+    }
+    UMQ_VLOG_ERR(VLOG_UMQ,
+        "  expansion_without_data_block_num=%llu escape_buf_cnt=%llu\n",
+        (unsigned long long)g_qbuf_pool.exp_pool_without_date.exp_total_block_num,
+        (unsigned long long)__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED));
+
+    /* Dump RX pool and tiny pool ranges (extern from their respective modules) */
+    extern void *umq_rx_io_buf_addr(void);
+    extern uint64_t umq_rx_io_buf_size(void);
+    UMQ_VLOG_ERR(VLOG_UMQ, "  rx_pool=[%p, %p) tiny_pool_inited=%d\n",
+        (void *)umq_rx_io_buf_addr(),
+        (void *)((char *)umq_rx_io_buf_addr() + umq_rx_io_buf_size()),
+        g_qbuf_pool.inited);
+
+    /* Dump first 32 bytes at data pointer to inspect Block header layout.
+     * If data is a valid IOBuf::Block, we should see:
+     *   offset  0: nshared (int32), offset 4: flags (uint16), offset 6: abi_check (uint16)
+     *   offset  8: size (uint32), offset 12: cap (uint32)
+     *   offset 16: u.portal_next/data_meta (ptr/uint64), offset 24: data (ptr)
+     * If flags has IOBUF_BLOCK_FLAGS_UB (bit 2) set, this Block was created by
+     * create_ub_block and should have been found in the pool. */
+    if (data != NULL) {
+        uint64_t *raw = (uint64_t *)data;
+        uint16_t flags = *((uint16_t *)((char *)data + 4));
+        UMQ_VLOG_ERR(VLOG_UMQ,
+            "  raw data at %p: flags=0x%04x (UB=%d TINY=%d ESCAPE=%d USER_DATA=%d)\n"
+            "  [0]=0x%016llx [1]=0x%016llx [2]=0x%016llx [3]=0x%016llx\n",
+            data, flags,
+            (flags >> 2) & 1, (flags >> 3) & 1, (flags >> 4) & 1, flags & 1,
+            (unsigned long long)raw[0], (unsigned long long)raw[1],
+            (unsigned long long)raw[2], (unsigned long long)raw[3]);
+    }
+
+    /* Dump call stack. Build has -rdynamic (CMakeLists.txt:19) so
+     * backtrace_symbols_fd will produce function names; otherwise use
+     * `addr2line <binary> <addr>` to resolve. */
+    void *frames[32];
+    int nframes = backtrace(frames, 32);
+    if (nframes > 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "  call stack (%d frames):\n", nframes);
+        backtrace_symbols_fd(frames, nframes, 2);
+    }
+    UMQ_VLOG_ERR(VLOG_UMQ, "=== END NON-POOL POINTER DIAGNOSTIC ===\n");
+}
+
 // Global expansion pool id allocator (shared by all size_class, CAS-based, range [257, 1023))
 static urpc_id_generator_t g_global_exp_id_gen;
 // Lookup table: expansion slot id -> slot* (indexed by [id - QBUF_POOL_EXP_SLOT_ID_MIN])
@@ -1790,7 +1868,6 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
 {
     int ret;
     uint32_t batch_cnt = get_batch_count(sc);
-    uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
 
     if (g_qbuf_pool.disable_scale_cap) {
         g_dbg_expansion_happened = false; // 本次alloc开始前重置expansion标志(sticky:一旦为true不再变回false)
@@ -2649,8 +2726,17 @@ static inline umq_buf_t *escape_data_to_head(void *data)
     if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
         return NULL;
     }
+    /* Escape bufs are allocated via memalign(blk_size, blk_size + sizeof(umq_buf_t)),
+     * so buf_data is always blk_size-aligned. Skip any size_class where data is not
+     * aligned to block_sizes[i] — the candidate address would be invalid and
+     * dereferencing candidate->buf_data would SEGV (observed with large block_sizes
+     * where data + block_sizes[i] falls outside any mapped region). */
     for (uint32_t i = 0; i < g_qbuf_pool.size_class_count; i++) {
-        umq_buf_t *candidate = (umq_buf_t *)((char *)data + g_qbuf_pool.block_sizes[i]);
+        uint32_t blk_size = g_qbuf_pool.block_sizes[i];
+        if (((uintptr_t)data & (blk_size - 1)) != 0) {
+            continue;
+        }
+        umq_buf_t *candidate = (umq_buf_t *)((char *)data + blk_size);
         if (candidate->buf_data == (char *)data && candidate->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
             return candidate;
         }
@@ -2717,14 +2803,23 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
                 uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
                 uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
                 uint64_t id = offset / blk_size;
-                umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
-                /* Validate that the computed qbuf actually contains 'data'.
-                 * buf_data_to_size_class can return false positives for
-                 * expansion-pool blocks whose addresses happen to fall within
-                 * a normal-pool data_region's address range. */
-                if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
-                    candidate->buf_data + blk_size > (char *)data) {
-                    return candidate;
+                /* Guard: if id exceeds per_sc_block_count, candidate points outside
+                 * header_region and dereferencing candidate->buf_data would SEGV.
+                 * This happens when buf_data_to_size_class returns a false positive
+                 * for an expansion/escape buf whose address falls within a normal
+                 * pool's data_region range but with a mismatched offset. */
+                if (id < g_qbuf_pool.per_sc_block_count) {
+                    umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
+                    /* Validate that data falls within the block identified by id.
+                     * Note: candidate->buf_data may have a headroom offset (e.g.
+                     * sizeof(Block)=32 for RX zero-copy bufs), so we must compare
+                     * against the block start (data_region_start + id * blk_size),
+                     * not against candidate->buf_data directly. */
+                    char *blk_start = (char *)g_qbuf_pool.data_region_start[sc] + id * blk_size;
+                    if ((char *)data >= blk_start && (char *)data < blk_start + blk_size &&
+                        candidate->buf_data >= blk_start && candidate->buf_data < blk_start + blk_size) {
+                        return candidate;
+                    }
                 }
                 /* Fall through to escape / expansion path. */
             }
@@ -2737,6 +2832,9 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
             esc->buf_data + esc->buf_size > (char *)data) {
             return esc;
         }
+        /* Not in normal/expansion/escape pools. Caller (umq_data_to_head) will
+         * fallthrough to tiny pool / expansion pool and log diagnostic if all
+         * lookups fail. */
         return NULL;
     }
 
@@ -2747,8 +2845,12 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
             uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
             uint64_t id = offset / blk_size;
             umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_region_start[sc] + id * blk_size);
-            /* Validate (see SPLIT mode comment above). */
-            if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
+            /* Guard: ensure candidate stays within data_region bounds, and data
+             * falls within the candidate block. (headroom-aware, see SPLIT mode). */
+            if ((char *)candidate >= g_qbuf_pool.data_region_start[sc] &&
+                (char *)candidate + blk_size <= g_qbuf_pool.data_region_end[sc] &&
+                candidate->buf_data != NULL &&
+                candidate->buf_data <= (char *)data &&
                 candidate->buf_data + blk_size > (char *)data) {
                 return candidate;
             }
