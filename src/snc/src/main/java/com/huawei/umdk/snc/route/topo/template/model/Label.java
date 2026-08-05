@@ -91,4 +91,33 @@ public class Label implements  Cloneable{
         return true;
     }
 
+    public String addChassis(int chassisIndex) {
+        int index = 0;
+        StringBuilder label = new StringBuilder();
+        for (Map.Entry<String, String> entry : names.entrySet()) {
+            if (index != 0) {
+                label.append(delimiter);
+            }
+            label.append(entry.getKey()).append(mediateChar).append(entry.getValue());
+            index++;
+            if (index == 1) {
+                label.append("|").append("chassis").append(mediateChar).append(chassisIndex);
+            }
+        }
+        return label.toString();
+    }
+
+    public static int getL1SwIndex(String labelDes) {
+        Label label = new Label();
+        label.refreshAllNames(labelDes);
+        String index = label.getNames().get("index");
+        if (index == null || index.isEmpty()) {
+            throw new IllegalArgumentException("label not found : " + labelDes);
+        }
+        return Integer.parseInt(index);
+    }
+
+    public static String getL1SwLabel(int index) {
+        return "type:l1_sw|index:" + index;
+    }
 }

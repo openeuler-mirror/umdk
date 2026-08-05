@@ -33,6 +33,13 @@ public class NextHopPort implements Cloneable {
         this.pathType = pathType;
     }
 
+    public NextHopPort(NextHopPort nhp) {
+        this.cost = nhp.getCost();
+        this.outPortId = nhp.getOutPortId();
+        this.outPortName = nhp.getOutPortName();
+        this.pathType = nhp.getPathType();
+    }
+
     @Override
     public NextHopPort clone() {
         try {

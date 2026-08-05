@@ -10,18 +10,19 @@
 package com.huawei.umdk.snc.route.topo.template.model;
 
 import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
-@Getter
+@Data
 @AllArgsConstructor
 @EqualsAndHashCode(of = {"addr", "maskLen", "mask"})
 public class Prefix {
-    private final long addr;
+    private long addr;
 
-    private final int maskLen;
+    private int maskLen;
 
-    private final long mask;
+    private long mask;
 
     @Override
     public String toString() {
