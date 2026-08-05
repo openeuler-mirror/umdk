@@ -165,7 +165,7 @@ static void nl_unexpose_device_by_dev_name(char *dev_name, int ns_fd)
     }
 }
 
-static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns_fd)
+static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns_fd, bool eid_sharing)
 {
     int ret = 0;
     int ue_idx = 0;
@@ -177,14 +177,16 @@ static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns
         return ret;
     }
 
-    printf("Setting EID index %d in bonding device %s, netns %d\n",
-        bonding_info->bonding_eid_idx, bonding_info->dev_name, ns_fd);
-    ret = admin_nl_set_eid_ns(bonding_info->dev_name, bonding_info->bonding_eid_idx, ns_fd);
-    if (ret != 0) {
-        printf("Failed to set EID index %d in bonding device %s, netns %d, ret=%d\n", bonding_info->bonding_eid_idx,
-               bonding_info->dev_name, ns_fd, ret);
-        admin_nl_unexpose_dev_ns(bonding_info->dev_name, ns_fd);
-        return ret;
+    if (!eid_sharing) {
+        printf("Setting EID index %d in bonding device %s, netns %d\n",
+               bonding_info->bonding_eid_idx, bonding_info->dev_name, ns_fd);
+        ret = admin_nl_set_eid_ns(bonding_info->dev_name, bonding_info->bonding_eid_idx, ns_fd);
+        if (ret != 0) {
+            printf("Failed to set EID index %d in bonding device %s, netns %d, ret=%d\n",
+                   bonding_info->bonding_eid_idx, bonding_info->dev_name, ns_fd, ret);
+            admin_nl_unexpose_dev_ns(bonding_info->dev_name, ns_fd);
+            return ret;
+        }
     }
 
     for (ue_idx = 0; ue_idx < IODIE_NUM; ue_idx++) {
@@ -200,12 +202,16 @@ static int expose_agg_device(admin_urma_topo_bonding_dev_t *bonding_info, int ns
             goto unexpose_agg_dev;
         }
 
-        printf("Setting EID index %d in primary device %s, netns %d\n", dev_info->primary_eid_idx, dev_info->dev_name,
-               ns_fd);
+        if (eid_sharing) {
+            continue;
+        }
+
+        printf("Setting EID index %d in primary device %s, netns %d\n",
+               dev_info->primary_eid_idx, dev_info->dev_name, ns_fd);
         ret = admin_nl_set_eid_ns(dev_info->dev_name, dev_info->primary_eid_idx, ns_fd);
         if (ret != 0) {
-            printf("Failed to set EID index %d in primary device %s, netns %d, ret=%d\n", dev_info->primary_eid_idx,
-                   dev_info->dev_name, ns_fd, ret);
+            printf("Failed to set EID index %d in primary device %s, netns %d, ret=%d\n",
+                   dev_info->primary_eid_idx, dev_info->dev_name, ns_fd, ret);
             admin_nl_unexpose_dev_ns(dev_info->dev_name, ns_fd);
             goto unexpose_agg_dev;
         }
@@ -243,14 +249,27 @@ static int admin_cmd_agg_expose(urma_eid_t *eid, int ns_fd)
     admin_urma_topo_bonding_dev_t bonding_dev;
     int ret;
 
-    (void)ns_fd;
     ret = admin_cmd_get_topo_bonding_dev_by_eid(eid, &bonding_dev);
     if (ret != 0) {
         (void)printf("Failed to get topo bonding dev by eid, ret=%d.\n", ret);
         return ret;
     }
-    ret = expose_agg_device(&bonding_dev, ns_fd);
-    return 0;
+
+    admin_show_system_ctx_t ctx = {0};
+    ret = admin_nl_get_system_info(&ctx);
+    if (ret != 0) {
+        (void)printf("Failed to get EID sharing status, ret=%d.\n", ret);
+        return ret;
+    }
+    if (ctx.ret != 0) {
+        (void)printf("Failed to get EID sharing status, context_ret=%d.\n", ctx.ret);
+        return ctx.ret;
+    }
+    if (ctx.eid_ns_mode) {
+        (void)printf("EID sharing is enabled, skip setting EID namespace.\n");
+    }
+
+    return expose_agg_device(&bonding_dev, ns_fd, ctx.eid_ns_mode);
 }
 
 static int cmd_agg_expose(admin_config_t *cfg)
