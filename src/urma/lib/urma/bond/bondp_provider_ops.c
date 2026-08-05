@@ -457,9 +457,11 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         }
     }
 
-    if (bondp_fb_init(bdp_ctx) != 0) {
-        URMA_LOG_ERR("Failed to init failback context\n");
-        goto HC_UNINIT;
+    if (g_bondp_env.enable_failback) {
+        if (bondp_fb_init(bdp_ctx) != 0) {
+            URMA_LOG_ERR("Failed to init failback context\n");
+            goto HC_UNINIT;
+        }
     }
 
     URMA_LOG_DEBUG("Finish to create ctx, dev_name=%s, eid_idx=%u.\n",
@@ -573,10 +575,12 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
         }
     }
 
-    ret = bondp_fb_init(bdp_ctx);
-    if (ret != 0) {
-        URMA_LOG_ERR("Failed to recreate failback context, ret=%d\n", ret);
-        bondp_hc_uninit(bdp_ctx);
+    if (g_bondp_env.enable_failback) {
+        ret = bondp_fb_init(bdp_ctx);
+        if (ret != 0) {
+            URMA_LOG_ERR("Failed to recreate failback context, ret=%d\n", ret);
+            bondp_hc_uninit(bdp_ctx);
+        }
     }
 
 EXIT:
