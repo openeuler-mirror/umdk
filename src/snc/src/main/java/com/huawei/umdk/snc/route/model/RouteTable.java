@@ -20,4 +20,14 @@ import java.util.Map;
 public class RouteTable {
     @NonNull
     private final Map<Prefix, RouteEntry> routeEntries = new HashMap<>();
+
+    public void addRouteTable(RouteTable routeTable) {
+        for (Map.Entry<Prefix, RouteEntry> entry : routeTable.routeEntries.entrySet()) {
+            Prefix prefix = entry.getKey();
+            RouteEntry routeEntry = entry.getValue();
+            RouteEntry newRouteEntry = new RouteEntry(prefix);
+            newRouteEntry.copyNhpSet(routeEntry);
+            routeEntries.put(prefix, newRouteEntry);
+        }
+    }
 }

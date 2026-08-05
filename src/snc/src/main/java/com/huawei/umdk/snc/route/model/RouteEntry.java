@@ -102,4 +102,16 @@ public class RouteEntry {
             .min()
             .orElse(0);
     }
+
+    private void copySingleNhpSet(Set<NextHopPort> dstSet, Set<NextHopPort> srcSet) {
+        for (NextHopPort nhp : srcSet) {
+            dstSet.add(new NextHopPort(nhp));
+        }
+    }
+    public void copyNhpSet(RouteEntry entry) {
+        copySingleNhpSet(nhpSet, entry.nhpSet);
+        copySingleNhpSet(shortestNhp, entry.shortestNhp);
+        copySingleNhpSet(secondNhp, entry.secondNhp);
+        copySingleNhpSet(otherNhp, entry.otherNhp);
+    }
 }

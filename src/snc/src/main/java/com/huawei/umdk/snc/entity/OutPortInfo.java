@@ -27,4 +27,5 @@ public class OutPortInfo {
     private Integer preference;
     private Integer tag;
     private String protocol;
+    private boolean active;
 }
