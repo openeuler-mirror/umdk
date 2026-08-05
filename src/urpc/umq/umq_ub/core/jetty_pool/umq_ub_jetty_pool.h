@@ -68,7 +68,7 @@ void umq_ub_jetty_pool_put_free_node(jetty_pool_node_t *node);
 int umq_ub_jetty_node_add(jetty_pool_node_t *node);
 int umq_ub_jetty_node_remove(jetty_pool_node_t *node);
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void);
-int umq_ub_jetty_node_free(jetty_pool_node_t *node);
+int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event);
 int umq_ub_jetty_pool_get_eventfd(void);
 // Register a jetty-availability callback; returns the node (pass to unregister later) or NULL.
 umq_ub_jetty_avail_cb_node_t *umq_ub_jetty_pool_register_avail_cb(umq_ub_jetty_avail_cb_t cb, void *user_data);
