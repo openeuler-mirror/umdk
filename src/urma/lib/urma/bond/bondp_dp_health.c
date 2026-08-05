@@ -991,8 +991,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     URMA_LOG_DEBUG("Health check tjetty unregistered, node_idx=%u.\n", node->node_idx);
 }
 
-void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty,
-                                uint32_t skip_local_idx, uint32_t skip_target_idx)
+void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty)
 {
     if (bdp_tjetty == NULL || !bdp_tjetty->hc_registered) {
         return;
@@ -1013,15 +1012,8 @@ void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty,
     bondp_target_jetty_t *cur = NULL;
     pthread_rwlock_rdlock(&node->lock);
     UB_LIST_FOR_EACH (cur, hc_entry, &node->tjetty_list) {
-        bondp_p_target_jetty_t *skip_p_tjetty = bondp_find_p_tjetty(cur, skip_local_idx, skip_target_idx);
-        if (skip_p_tjetty != NULL) {
-            atomic_store(&skip_p_tjetty->valid, false);
-        }
         for (uint32_t li = 0; li < URMA_UBAGG_DEV_MAX_NUM; ++li) {
             for (uint32_t ti = 0; ti < URMA_UBAGG_DEV_MAX_NUM; ++ti) {
-                if (li == skip_local_idx && ti == skip_target_idx) {
-                    continue;
-                }
                 if (node->hc_tjetty[li][ti] == NULL) {
                     continue;
                 }
