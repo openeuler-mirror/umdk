@@ -296,6 +296,9 @@ public class RouteInstantiationService {
     }
 
     private static int extractRackNumber(String rack) {
+        if (rack == null) {
+            throw new IllegalArgumentException("rack is null");
+        }
         String numPart = rack.replaceAll("\\D", "");
         if (numPart.isEmpty()) {
             throw new IllegalArgumentException("invalid rack format: " + rack);

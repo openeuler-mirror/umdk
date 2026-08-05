@@ -9,48 +9,44 @@
 
 package com.huawei.umdk.snc;
 
+import com.huawei.umdk.snc.entity.NpuDevice;
+import com.huawei.umdk.snc.entity.RoutingEntry;
+import com.huawei.umdk.snc.entity.SuperNode;
+import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.route.model.RouteTable;
+import com.huawei.umdk.snc.route.service.RouteInstantiationService;
 import com.huawei.umdk.snc.route.service.RouteMspService;
-import com.huawei.umdk.snc.route.topo.template.model.SncNode;
-import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
 import lombok.Getter;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
+@Getter
 public class C3SncService {
     private static final Logger log = new Logger(C3SncService.class);
 
     private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList("128_npu_rack.json",
         "128_npu_inter_rack.json");
 
-    private static final Integer TOPOLOGY_NODE_MAX_COUNT = 8192;
+    private final Map<String, SncTopology> topologyMap = new HashMap<>();
 
-    private static final Integer TOPOLOGY_PORT_MAX_COUNT = 30;
+    private final Map<String, Map<String, RouteTable>> routeTemplateMap = new HashMap<>();
 
-    private static final Integer TOPOLOGY_ADDRESS_MAX_COUNT = 10;
+    // 超节点的路由模板
+    private final Map<String, RouteTable> routes = new HashMap<>();
 
-    @Getter
-    private final SncTopology topology;
+    // 真实上线的超节点的路由
+    private final Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
 
-    public C3SncService(SncTopology topology) {
-        checkTopology(topology);
-        this.topology = topology;
-        log.info("create snc service success with topology");
+    private volatile boolean routeCalculated = false;
+
+    public C3SncService() {
     }
 
     public static void registerLogCallback(LogCallback logCallback) {
@@ -58,100 +54,87 @@ public class C3SncService {
         log.info("register snc log callback success");
     }
 
-    private void checkSncPort(SncNode node) {
-        String nodeKey = node.getLabel().toString();
-        Map<Integer, SncPort> portMap = node.getPortMap();
-        if (portMap.isEmpty()) {
-            throw new IllegalArgumentException(String.format("Node %s port is empty", nodeKey));
-        }
+    private static void calculateDefaultTemplateRoute(Map<String, SncTopology> topologyMap,
+        Map<String, Map<String, RouteTable>> topologyRouteMap) {
+        for (String filePath : TOPO_TEMPLATE_FILES) {
+            SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
+            String xpodType = topology.getLabel().getNames().get("type");
+            if (xpodType == null) {
+                throw new IllegalArgumentException("find invalid xpod type");
+            }
+            Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
+            log.info("calculate default route template success");
 
-        int portNum = portMap.size();
-        if (portNum > TOPOLOGY_PORT_MAX_COUNT) {
-            throw new IllegalArgumentException(String.format("node %s port number is too big %s", nodeKey,
-                    portNum));
-        }
-
-        for (Map.Entry<Integer, SncPort> portEntry : portMap.entrySet()) {
-            Integer srcPortId = portEntry.getKey();
-            SncPort sncPort = portEntry.getValue();
-            if (srcPortId == null || sncPort == null) {
-                throw new IllegalArgumentException(String.format("node %s port entry key or value is null",
-                    nodeKey));
+            if (topologyMap != null) {
+                topologyMap.put(xpodType, topology);
             }
 
-            if (!srcPortId.equals(sncPort.getId())) {
-                throw new IllegalArgumentException(String.format("node %s port entry key %s and id %s is not equal",
-                    nodeKey, srcPortId, sncPort.getId()));
+            if (topologyRouteMap != null) {
+                topologyRouteMap.put(xpodType, routeMap);
             }
-
-            if (sncPort.getId() < 0 || sncPort.getId() > TOPOLOGY_PORT_MAX_COUNT) {
-                throw new IllegalArgumentException(String.format("node %s port index is too big %s",
-                    nodeKey, sncPort.getId()));
-            }
-
-            int addressNum = sncPort.getAddrList().size();
-            if (addressNum > TOPOLOGY_ADDRESS_MAX_COUNT) {
-                throw new IllegalArgumentException(String.format("node %s port index %s address number is too big %s",
-                    nodeKey, sncPort.getId(), addressNum));
-            }
-
-            Integer peerPortId = sncPort.getPeerPortId();
-            if (peerPortId < 0 || peerPortId > TOPOLOGY_PORT_MAX_COUNT) {
-                throw new IllegalArgumentException(String.format("node %s peer port index is too big %s",
-                    nodeKey, peerPortId));
-            }
-        }
-    }
-
-    private void checkTopology(SncTopology topology) {
-        if (topology == null) {
-            throw new IllegalArgumentException("topology is null");
-        }
-
-        if (topology.getNodeMap().isEmpty()) {
-            throw new IllegalArgumentException("node is empty");
-        }
-
-        if (topology.getNodeMap().size() > TOPOLOGY_NODE_MAX_COUNT) {
-            throw new IllegalArgumentException("topology node number is too big");
-        }
-
-        for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
-            String nodeKey = entry.getKey();
-            SncNode node = entry.getValue();
-            if (nodeKey == null || node == null) {
-                throw new IllegalArgumentException("node entry key or value is null");
-            }
-
-            if (!nodeKey.equals(node.getLabel().toString())) {
-                throw new IllegalArgumentException(String.format("node %s key and label %s is not equal", nodeKey,
-                        node.getLabel()));
-            }
-
-            int addressNum = node.getAddrList().size();
-            if (addressNum > TOPOLOGY_ADDRESS_MAX_COUNT) {
-                throw new IllegalArgumentException(String.format("node %s address is too big %s", nodeKey,
-                        addressNum));
-            }
-
-            checkSncPort(node);
         }
     }
 
     public static Map<String, Map<String, RouteTable>> routeMSP() {
         // Map<topology_type, <node label, route>>
         Map<String, Map<String, RouteTable>> topologyRouteMap = new HashMap<>();
+        calculateDefaultTemplateRoute(null, topologyRouteMap);
+        return topologyRouteMap;
+    }
 
-        for (String filePath : TOPO_TEMPLATE_FILES) {
-            SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
-            Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
-            String xpodType = topology.getLabel().getNames().get("type");
-            if (xpodType == null) {
-                throw new IllegalArgumentException("find invalid xpod type");
-            }
-            topologyRouteMap.put(xpodType, routeMap);
+    // 路由计算加实例化
+    private synchronized void routeCalculate() {
+        if (routeCalculated) {
+            log.info("route has calculated");
+            return;
         }
 
-        return topologyRouteMap;
+        topologyMap.clear();
+        routeTemplateMap.clear();
+        routes.clear();
+
+        calculateDefaultTemplateRoute(topologyMap, routeTemplateMap);
+
+        RouteInstantiationService.instantiateXpodRoute(topologyMap, routeTemplateMap, routes);
+
+        routeCalculated = true;
+    }
+
+    public void makeRoutes(SuperNode superNode) {
+        if (superNode == null) {
+            throw new IllegalArgumentException("superNode is null");
+        }
+
+        RouteInstantiationService service = new RouteInstantiationService();
+
+        routeCalculate();
+
+        if (superNode.getNpuDevices() != null) {
+            for (NpuDevice npuDevice : superNode.getNpuDevices().values()) {
+                service.makeNpuRoutes(npuDevice, routes, instantiationRouteMap);
+            }
+        }
+
+        if (superNode.getSwDevices() != null) {
+            for (SwDevice swDevice : superNode.getSwDevices().values()) {
+                service.makeSwRoutes(swDevice, routes, instantiationRouteMap);
+            }
+        }
+
+        log.info("make routes success for %s", superNode.getName());
+    }
+
+    public Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex) {
+        if (deviceName == null) {
+            throw new IllegalArgumentException("device info is null");
+        }
+
+        String key = deviceName + "#" + chipIndex;
+        Map<String, RoutingEntry> routingEntries = instantiationRouteMap.get(key);
+        if (routingEntries == null) {
+            throw new IllegalArgumentException("not found route for " + key);
+        }
+
+        return routingEntries;
     }
 }

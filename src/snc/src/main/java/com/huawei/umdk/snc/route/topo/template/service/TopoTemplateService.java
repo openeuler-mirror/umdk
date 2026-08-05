@@ -35,10 +35,17 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 public class TopoTemplateService {
     private static final Logger log = new Logger(TopoTemplateService.class);
+
+    private static final Integer TOPOLOGY_NODE_MAX_COUNT = 8192;
+
+    private static final Integer TOPOLOGY_PORT_MAX_COUNT = 128;
+
+    private static final Integer TOPOLOGY_ADDRESS_MAX_COUNT = 10;
 
     private static final int MASK_LEN = 32;
 
@@ -111,6 +118,86 @@ public class TopoTemplateService {
         return topology;
     }
 
+    private static void checkSncPort(SncNode node) {
+        String nodeKey = node.getLabel().toString();
+        Map<Integer, SncPort> portMap = node.getPortMap();
+        if (portMap.isEmpty()) {
+            throw new IllegalArgumentException(String.format("Node %s port is empty", nodeKey));
+        }
+
+        int portNum = portMap.size();
+        if (portNum > TOPOLOGY_PORT_MAX_COUNT) {
+            throw new IllegalArgumentException(String.format("node %s port number is too big %s", nodeKey,
+                portNum));
+        }
+
+        for (Map.Entry<Integer, SncPort> portEntry : portMap.entrySet()) {
+            Integer srcPortId = portEntry.getKey();
+            SncPort sncPort = portEntry.getValue();
+            if (srcPortId == null || sncPort == null) {
+                throw new IllegalArgumentException(String.format("node %s port entry key or value is null",
+                    nodeKey));
+            }
+
+            if (!srcPortId.equals(sncPort.getId())) {
+                throw new IllegalArgumentException(String.format("node %s port entry key %s and id %s is not equal",
+                    nodeKey, srcPortId, sncPort.getId()));
+            }
+
+            if (sncPort.getId() < 0 || sncPort.getId() > TOPOLOGY_PORT_MAX_COUNT) {
+                throw new IllegalArgumentException(String.format("node %s port index is too big %s",
+                    nodeKey, sncPort.getId()));
+            }
+
+            int addressNum = sncPort.getAddrList().size();
+            if (addressNum > TOPOLOGY_ADDRESS_MAX_COUNT) {
+                throw new IllegalArgumentException(String.format("node %s port index %s address number is too big %s",
+                    nodeKey, sncPort.getId(), addressNum));
+            }
+
+            Integer peerPortId = sncPort.getPeerPortId();
+            if (peerPortId < 0 || peerPortId > TOPOLOGY_PORT_MAX_COUNT) {
+                throw new IllegalArgumentException(String.format("node %s peer port index is too big %s",
+                    nodeKey, peerPortId));
+            }
+        }
+    }
+
+    private static void checkTopology(SncTopology topology) {
+        if (topology == null) {
+            throw new IllegalArgumentException("topology is null");
+        }
+
+        if (topology.getNodeMap() == null || topology.getNodeMap().isEmpty()) {
+            throw new IllegalArgumentException("node is null or empty");
+        }
+
+        if (topology.getNodeMap().size() > TOPOLOGY_NODE_MAX_COUNT) {
+            throw new IllegalArgumentException("topology node number is too big");
+        }
+
+        for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
+            String nodeKey = entry.getKey();
+            SncNode node = entry.getValue();
+            if (nodeKey == null || node == null) {
+                throw new IllegalArgumentException("node entry key or value is null");
+            }
+
+            if (!nodeKey.equals(node.getLabel().toString())) {
+                throw new IllegalArgumentException(String.format("node %s key and label %s is not equal", nodeKey,
+                    node.getLabel()));
+            }
+
+            int addressNum = node.getAddrList().size();
+            if (addressNum > TOPOLOGY_ADDRESS_MAX_COUNT) {
+                throw new IllegalArgumentException(String.format("node %s address is too big %s", nodeKey,
+                    addressNum));
+            }
+
+            checkSncPort(node);
+        }
+    }
+
     public static SncTopology parseTemplateFile(String name) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("jsonStr is null or empty");
@@ -129,7 +216,9 @@ public class TopoTemplateService {
         log.info("parse template file success");
 
         TemplateLoader templateLoader = JSON.parseObject(jsonStr, TemplateLoader.class);
-        return genTopology(templateLoader);
+        SncTopology topology =  genTopology(templateLoader);
+        checkTopology(topology);
+        return topology;
     }
 
 
