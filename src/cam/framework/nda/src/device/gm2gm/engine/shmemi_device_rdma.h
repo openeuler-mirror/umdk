@@ -14,27 +14,13 @@
 #include "device/shmem_def.h"
 #include "utils/shmemi_kernel_debug.h"
 
-enum class aclshmemi_rdma_backend_t : uint32_t {
-    IN_DIE = 0,
-    XSCALE
-};
+enum class aclshmemi_rdma_backend_t : uint32_t { IN_DIE = 0, XSCALE, HNS_1825 };
 
-enum class aclshmemi_rdma_opcode_t : uint32_t {
-    OP_RDMA_READ = 0,
-    OP_RDMA_WRITE,
-    OP_RDMA_WRITE_WITH_IMM
-};
+enum class aclshmemi_rdma_opcode_t : uint32_t { OP_RDMA_READ = 0, OP_RDMA_WRITE, OP_RDMA_WRITE_WITH_IMM };
 
-enum class aclshmemi_rdma_atomic_op_t : uint32_t {
-    OP_ATOMIC_FA = 0,
-    OP_ATOMIC_CAS
-};
+enum class aclshmemi_rdma_atomic_op_t : uint32_t { OP_ATOMIC_FA = 0, OP_ATOMIC_CAS };
 
-enum class aclshmemi_rdma_db_mode_t : int32_t {
-    INVALID_DB = -1,
-    HW_DB = 0,
-    SW_DB
-};
+enum class aclshmemi_rdma_db_mode_t : int32_t { INVALID_DB = -1, HW_DB = 0, SW_DB };
 struct aclshmemi_rdma_info {
     uint32_t qp_num;  // number of QP per connection
     uint64_t sq_ptr;  // pointer to send queue address array of size [PE_NUM][qp_num]
@@ -59,10 +45,14 @@ struct aclshmemi_rdma_sq_ctx {
     uint64_t head_addr; // work queue head (Producer Index) address
     uint64_t tail_addr; // work queue tail (Consumer Index) address
     aclshmemi_rdma_db_mode_t db_mode;
-    uint64_t db_addr;  // doorbell address
+    uint64_t db_addr;  // doorbell address (legacy, kept for backward compatibility)
     uint32_t sl;       // service level
     uint64_t amo_addr; // addr for atomic operation
     uint32_t amo_lkey; // lkey for amo_addr
+    // hns1825 (Ascend950) specific fields
+    uint64_t db_sw_addr; // software shadow doorbell address (used by hns_1825)
+    uint8_t mtu_shift;   // MTU shift for WQE size calculation (used by hns_1825)
+    uint8_t reserved[7]; // padding
 };
 
 struct aclshmemi_rdma_cq_ctx {
@@ -73,11 +63,13 @@ struct aclshmemi_rdma_cq_ctx {
     uint64_t head_addr; // work queue head (Producer Index) address
     uint64_t tail_addr; // work queue tail (Consumer Index) address
     aclshmemi_rdma_db_mode_t db_mode;
-    uint64_t db_addr; // doorbell address
+    uint64_t db_addr; // doorbell address (used by XSCALE/indie/hns_1825)
+    // hns1825 (Ascend950) specific fields
+    uint64_t db_sw_addr; // software shadow doorbell address
 };
 
 struct aclshmemi_rdma_sge {
-    __gm__ uint8_t *addr;
+    __gm__ uint8_t* addr;
     uint64_t length;
     uint32_t lkey;
 };
@@ -124,23 +116,23 @@ struct aclshmemi_rdma_send_wr {
     uint32_t imm_data;
 
     // ---- Remote side ----
-    __gm__ uint8_t *remote_addr;
+    __gm__ uint8_t* remote_addr;
     uint32_t rkey;
 
     // ---- Local side ----
-    __gm__ uint8_t *local_addr;
+    __gm__ uint8_t* local_addr;
     uint64_t message_len;
     uint32_t lkey;
 
     // ---- Local side(Multi-sge) ----
     uint32_t num_sge;
-    aclshmemi_rdma_sge *sg_list;
+    aclshmemi_rdma_sge* sg_list;
 
     // ---- Atomic ----
     aclshmemi_rdma_atomic_params atomic;
 };
 
-ACLSHMEM_DEVICE __gm__ aclshmemi_rdma_info *aclshmemi_qp_info_fetch();
+ACLSHMEM_DEVICE __gm__ aclshmemi_rdma_info* aclshmemi_qp_info_fetch();
 
 /**
  * @brief Asynchronous RDMA Write function.
@@ -156,7 +148,7 @@ ACLSHMEM_DEVICE __gm__ aclshmemi_rdma_info *aclshmemi_qp_info_fetch();
  */
 template <typename T>
 ACLSHMEM_DEVICE void aclshmemi_roce_write(
-    __gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
+    __gm__ T* dst, __gm__ T* src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
     AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
 
 /**
@@ -173,12 +165,12 @@ ACLSHMEM_DEVICE void aclshmemi_roce_write(
  */
 template <typename T>
 ACLSHMEM_DEVICE void aclshmemi_roce_read(
-    __gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
+    __gm__ T* dst, __gm__ T* src, uint32_t pe, uint32_t qp_idx, uint64_t message_len,
     AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
 
 /**
- * @brief RDMA Quiet function. This synchronous function ensures all previous RDMA WQEs are completed
- * (data has arrived at the destination NIC).
+ * @brief RDMA Quiet function for a single QP. This synchronous function ensures all previous RDMA WQEs
+ * on the specified QP are completed (data has arrived at the destination NIC).
  *
  * @param pe                     [in] PE number of the remote PE.
  * @param qp_idx                 [in] QP index in multi-QP scenario (default 0 for single QP)
@@ -186,8 +178,49 @@ ACLSHMEM_DEVICE void aclshmemi_roce_read(
  * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
  * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
  */
-ACLSHMEM_DEVICE void aclshmemi_roce_quiet(uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> ub_local64,
-                                          AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+ACLSHMEM_DEVICE void aclshmemi_roce_quiet(
+    uint32_t pe, uint32_t qp_idx, AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32,
+    uint32_t sync_id);
+
+/**
+ * @brief RDMA Quiet function for all QPs of a PE. This synchronous function ensures all previous RDMA WQEs
+ * on all QPs are completed (data has arrived at the destination NIC).
+ *
+ * @param pe                     [in] PE number of the remote PE.
+ * @param ub_local64             [in] temporary UB local tensor of uint64_t used as workspace
+ * @param ub_local32             [in] temporary UB local tensor of uint32_t used as workspace
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ */
+ACLSHMEM_DEVICE void aclshmemi_roce_quiet(
+    uint32_t pe, AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32,
+    uint32_t sync_id);
+
+/**
+ * @brief RDMA Sync function. Performs a synchronization operation on the specified team,
+ * ensuring all PEs in the team reach the sync point before proceeding.
+ * Uses RDMA-based dissemination algorithm with highlevel signal operations.
+ *
+ * @param team              [in] Pointer to the team on which to perform synchronization.
+ * @param buf               [in] Pointer on local UB, available space larger than 128 Bytes.
+ * @param sync_id           [in] ID used to Sync S\\MTE3 Event.
+ */
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_team_sync(aclshmemx_team_t* team, __ubuf__ T* buf, uint32_t sync_id);
+
+/**
+ * @brief RDMA Barrier function with explicit UB buffer and sync_id. Performs a barrier operation
+ * on the specified team, ensuring all previous RDMA operations are completed and all PEs in the team
+ * reach the barrier point before proceeding. First performs quiet on all QPs for all PEs in the team,
+ * then performs a sync operation.
+ * This version allows the caller to explicitly provide UB buffer and sync_id, avoiding resource
+ * conflicts with the default rdma_config in device_state.
+ *
+ * @param team                   [in] Pointer to the team on which to perform barrier.
+ * @param buf                    [in] Pointer on local UB, available space larger than 128 Bytes.
+ * @param sync_id                [in] ID used to Sync S\\MTE3 Event.
+ */
+template <typename T>
+ACLSHMEM_DEVICE void aclshmemi_roce_barrier(aclshmemx_team_t* team, __ubuf__ T* buf, uint32_t sync_id);
 
 /**
  * @brief Asynchronous RDMA Atomic Fetch and Add function.
@@ -208,9 +241,9 @@ ACLSHMEM_DEVICE void aclshmemi_roce_quiet(uint32_t pe, uint32_t qp_idx, AscendC:
  * @return T 0 for success, non-zero for failure
  */
 template <typename T, bool IS_MASKED>
-ACLSHMEM_DEVICE T aclshmemi_roce_amo_add(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t add_val,
-                                         uint64_t boundary, AscendC::LocalTensor<uint64_t> ub_local64,
-                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_add(
+    __gm__ T* dst, __gm__ T* src, uint32_t pe, uint32_t qp_idx, uint64_t add_val, uint64_t boundary,
+    AscendC::LocalTensor<uint64_t> ub_local64, AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
 
 /**
  * @brief Asynchronous RDMA Atomic Compare and Swap function.
@@ -232,9 +265,9 @@ ACLSHMEM_DEVICE T aclshmemi_roce_amo_add(__gm__ T *dst, __gm__ T *src, uint32_t 
  * @return T 0 for success, non-zero for failure
  */
 template <typename T, bool IS_MASKED>
-ACLSHMEM_DEVICE T aclshmemi_roce_amo_cas(__gm__ T *dst, __gm__ T *src, uint32_t pe, uint32_t qp_idx, uint64_t swap_val,
-                                         uint64_t comp_val, uint64_t swap_mask, uint64_t comp_mask,
-                                         AscendC::LocalTensor<uint64_t> ub_local64,
-                                         AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
+ACLSHMEM_DEVICE T aclshmemi_roce_amo_cas(
+    __gm__ T* dst, __gm__ T* src, uint32_t pe, uint32_t qp_idx, uint64_t swap_val, uint64_t comp_val,
+    uint64_t swap_mask, uint64_t comp_mask, AscendC::LocalTensor<uint64_t> ub_local64,
+    AscendC::LocalTensor<uint32_t> ub_local32, uint32_t sync_id);
 
 #endif // ACLSHMEMI_DEVICE_RDMA_H
