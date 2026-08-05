@@ -250,6 +250,25 @@ inline CqContextRoceV1 ExtractCqContextRoceV1(const CqContext& ctx)
     (void)memcpy_s(&v1, sizeof(v1), ctx.contextInfo.raws, sizeof(v1));
     return v1;
 }
+// 用于判断 HcommChannelDesc 是否存在 roceAttr.cqAttrFlags 字段
+template <typename T, typename = void>
+struct HasCqAttrFlagsField : std::false_type {};
+
+template <typename T>
+struct HasCqAttrFlagsField<T, std::void_t<decltype(T::roceAttr.cqAttrFlags)>> : std::true_type {};
+
+constexpr static bool IsHcommSupportCqOverrun() { return HasCqAttrFlagsField<HcommChannelDesc>::value; }
+
+// 辅助函数：设置 HcommChannelDesc 的 cqAttrFlags 的值
+// 通过函数模板特化的时机来使得编译时期可以根据 HasCqOverrunField 是否特定字段来设置 cqAttrFlags
+template <typename DescT>
+inline void SetChannelDescCqAttrFlags(DescT& desc, uint32_t cqAttrFlags)
+{
+    if constexpr (IsHcommSupportCqOverrun()) {
+        desc.roceAttr.cqAttrFlags = cqAttrFlags;
+    }
+    // 字段不存在时，什么都不做
+}
 
 } // namespace shm
 
