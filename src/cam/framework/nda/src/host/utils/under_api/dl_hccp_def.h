@@ -32,6 +32,7 @@ constexpr uint32_t HCCP_MAX_INTERFACE_NAME_LEN = 256;
 
 struct ra_rdma_ops;
 struct rdma_lite_cq;
+struct rdma_lite_cq;
 struct rdma_lite_qp;
 struct ra_rdma_handle;
 struct rdma_lite_wc;
@@ -197,8 +198,8 @@ struct HccpRaGetIfAttr {
 };
 
 struct HccpIfaddrInfo {
-    HccpIpAddr ip;          /* Address of interface */
-    struct in_addr mask;    /* Netmask of interface */
+    HccpIpAddr ip;       /* Address of interface */
+    struct in_addr mask; /* Netmask of interface */
 };
 
 struct HccpInterfaceInfo {
@@ -336,6 +337,10 @@ struct AiQpRMAWQ {
     uint32_t sl{0};
     uint64_t atomicAddr{0}; // device addr for atomic fetch or swapped data
     uint32_t atomicLkey{0}; // lkey for atomicAddr
+    // (Ascend950) hns1825-specific fields
+    uint64_t dbSwVa{0};  // software shadow doorbell address
+    uint8_t mtuShift{0}; // MTU shift for WQE size calculation
+    uint8_t reserved[7]; // padding
 };
 
 struct AiQpRMACQ {
@@ -347,6 +352,8 @@ struct AiQpRMACQ {
     uint64_t tailAddr{0};
     DBMode dbMode{DBMode::INVALID_DB}; // 0-hw/1-sw
     uint64_t dbAddr{0};
+    // (Ascend950) hns1825-specific fields
+    uint64_t dbSwVa{0}; // software shadow doorbell address
 };
 
 struct RdmaMemRegionInfo {
