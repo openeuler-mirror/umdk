@@ -528,6 +528,12 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
      * 退出路径下 jetty 资源由 urma/OS 回收，node 本身为 calloc 所得，直接 free 安全。
      * 与 release_thread_cache 的 g_tls_dtors_running 快速路径保持一致。 */
     if (g_tls_dtors_running) {
+        /* TLS 析构先于 ubsocket_uninit（g_ubsocket_exiting 仍为 false）。此时 worker
+         * 线程的 poll 回调链可能在 free(node) 后继续调 HandleTxCompletion→SendSimpleCtrl
+         * →umq_post→umq_ub_post_tx 读已 free 的 node（heap-use-after-free）。同步置退出
+         * 标志使 umq_ub_post_tx/poll 守卫生效，跳过对已 free node 的访问。 */
+        g_ubsocket_exiting = true;
+        __sync_synchronize();
         free(node);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
         return UMQ_SUCCESS;
