@@ -262,6 +262,14 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     int ret = UMQ_SUCCESS;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     uint32_t wr_cnt_limit = UMQ_BATCH_SIZE;
+    /* 进程退出期跳过 post：与 umq_ub_poll_tx_single/umq_ub_poll_fc_tx/round_robin
+     * 守卫一致。退出期 release 路径会回收 jetty node 并释放 jfc，poll 回调
+     * (HandleTxCompletion->SendSimpleCtrl) 触发的 umq_post 读 queue->jetty_node
+     * 或调 urma post 会 UAF/SEGV。退出期无需 post，交还 qbuf 安全。 */
+    if (g_ubsocket_exiting) {
+        *bad_qbuf = qbuf;
+        return -UMQ_ERR_ENODEV;
+    }
     if (queue->bind_ctx == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), umq has not been binded\n", queue->umq_id);
         *bad_qbuf = qbuf;
@@ -2125,6 +2133,13 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
 
 static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
 {
+    /* 进程退出期跳过 poll：与 umq_ub_poll_tx_single/umq_ub_poll_fc_tx 守卫一致。
+     * 退出期 release 路径会 umq_ub_jetty_node_free 回收 node，round_robin 仍读
+     * node_list[]->is_jetty_err 会与 release 竞争 heap-use-after-free。 */
+    if (g_ubsocket_exiting) {
+        return 0;
+    }
+
     umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
     if (jetty_node_list == NULL || jetty_node_list->bitmap == NULL) {
         return 0;
