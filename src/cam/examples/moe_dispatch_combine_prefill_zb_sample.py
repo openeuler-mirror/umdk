@@ -1,16 +1,16 @@
 #
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
-# Description: Example for ZB normal layout/dispatch/combine.
-#   Flow: get_dispatch_layout_zb -> moe_dispatch_prefill_zb (fused notify+dispatch)
-#         -> (identity expert) -> moe_combine_prefill_zb
-#   moe_dispatch_prefill_zb matches master moe_dispatch_prefill wrapping style.
+# Description: Example for ZB normal layout/dispatch/combine via ZbBuffer.
+#   Flow: ZbBuffer.get_dispatch_layout -> dispatch (fused notify+dispatch)
+#         -> (identity / dequant writeback) -> combine
 # Create: 2026-08-01
 # Note:
 # History: 2026-08-01 create normal zb dispatch/combine example file
+#          2026-08-05 switch to ZbBuffer session API (SHMEM owned by Buffer)
 #
 # Prereq:
-#   1) Install CAM run package (ZB kernels) and umdk_cam_op_lib whl with *_zb pybind
+#   1) Install CAM run package (ZB kernels) and umdk_cam_op_lib whl with ZbBuffer
 #   2) Install Ascend SHMEM and export SHMEM_HOME_PATH if needed
 #   3) source CANN / CAM set_env
 #
@@ -21,14 +21,21 @@
 # Optional env:
 #   SHMEM_IP_PORT=tcp://127.0.0.1:8666
 #   SHMEM_MEM_SIZE=4294967296
+#   ZB_QUANT_MODE=0|2
+#   ZB_BENCH_ITERS=N   # if >0, time N dispatch+combine rounds (quant dequant is prebuilt)
 #   Empirical shmem memory size ≈ 2 × batch_size × world_size × 7168 × 2
+#
+# Quant / perf note:
+#   Host dequant is done once after the first dispatch and cached as prebuilt_expert_out.
+#   Later rounds (correctness re-run / ZB_BENCH_ITERS) reuse that tensor — combine only
+#   copy_s it into the SHMEM slot. Do NOT put dequant inside a timed combine loop.
 #
 
 import os
 import random
+import time
 
 import numpy as np
-import shmem as shm
 import torch
 import torch.distributed as dist
 import torch_npu
@@ -81,6 +88,11 @@ def gen_scales(batch_size, topk):
     return arr
 
 
+def _dequant_identity(recv_x_i8, scales, data_type):
+    """Host-side dequant (identity expert). combine() copies into SHMEM slot."""
+    return (recv_x_i8.to(torch.float32) * scales.unsqueeze(1)).to(data_type)
+
+
 CASE_8RANK = {
     "moe_expert_num": 32,
     "topk": 4,
@@ -98,91 +110,12 @@ CASE_16RANK = {
 }
 
 
-class PrefillZbModule(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(
-        self,
-        x,
-        topk_idx,
-        topk_weights,
-        comm_meta_ptr,
-        ep_world_size,
-        ep_rank_id,
-        moe_expert_num,
-        quant_mode,
-        global_bs,
-    ):
-        # topk_idx: int32 for layout / dispatch / combine.
-        # 1) layout — num_tokens_per_expert is SHMEM (needed by notify AllGather).
-        num_tokens_per_expert, send_token_idx = torch.ops.umdk_cam_op_lib.get_dispatch_layout_zb(
-            topk_idx,
-            moe_expert_num,
-            ep_world_size,
-        )
-
-        # 2) fused notify + dispatch (same as master moe_dispatch_prefill / deepep).
-        recv_x, dynamic_scales_out, put_offset, total_recv_tokens, _recv_per_exp = (
-            torch.ops.umdk_cam_op_lib.moe_dispatch_prefill_zb(
-                x,
-                topk_idx,
-                send_token_idx,
-                num_tokens_per_expert,
-                ep_world_size,
-                ep_rank_id,
-                moe_expert_num,
-                quant_mode,
-                global_bs,
-                comm_meta_ptr,
-            )
-        )
-
-        # Slice to actual received tokens. total_recv_tokens is device tensor.
-        torch.npu.synchronize()
-        actual_recv = int(total_recv_tokens.cpu().item())
-        if actual_recv <= 0:
-            actual_recv = 1
-        recv_x = recv_x[:actual_recv]
-        if quant_mode == 2:
-            dynamic_scales_out = dynamic_scales_out[:actual_recv]
-
-        # quant_mode=2: pybind already allocated SHMEM int8 recv_x + float scales;
-        # dispatch wrote into those outputs directly. combine needs BF16/FP16 expert
-        # output (real expert would write that) — not int8 recv_x, and not a host-side
-        # dequant copy. This sample only identity-combines the non-quant path.
-        if quant_mode == 2:
-            torch.npu.synchronize()
-            return None, actual_recv, recv_x, dynamic_scales_out
-
-        # 4) identity expert + 5) combine (bf16/fp16 recv_x)
-        expert_out = recv_x
-        combine_x = torch.ops.umdk_cam_op_lib.moe_combine_prefill_zb(
-            expert_out,
-            put_offset,  # ep_recv_counts
-            topk_weights,
-            topk_idx,
-            send_token_idx,
-            comm_meta_ptr,
-            ep_world_size,
-            ep_rank_id,
-            1,  # tp_world_size
-            0,  # tp_rank_id
-            moe_expert_num,
-            global_bs,
-        )
-        # Keep SHMEM tensors (recv_x / num_tokens_per_expert) alive until kernels finish.
-        torch.npu.synchronize()
-        return combine_x, actual_recv, recv_x, None
-
-
 def test_base_test(local_rank_id, ep_world_size):
     rank = local_rank_id
     world_size = ep_world_size
 
     case = CASE_8RANK if world_size <= 8 else CASE_16RANK
     if world_size not in (8, 16):
-        # Fallback: require experts divisible by ranks.
         case = {
             "moe_expert_num": world_size,
             "topk": min(4, world_size),
@@ -195,12 +128,14 @@ def test_base_test(local_rank_id, ep_world_size):
     topk = case["topk"]
     hidden_size = case["hidden_size"]
     batch_size = case["batch_size"]
-    quant_mode = case["quant_mode"]
+    quant_mode = int(os.environ.get("ZB_QUANT_MODE", str(case["quant_mode"])))
     data_type = torch.bfloat16
     global_bs = batch_size * world_size
+    use_quant = quant_mode == 2
 
     assert moe_expert_num % world_size == 0, "moe_expert_num must be divisible by ep_world_size"
     assert world_size >= 2, "ep_world_size must be >= 2 for ZB normal ops"
+    assert quant_mode in (0, 2), f"unsupported quant_mode={quant_mode}"
 
     x_np = np.array(gen_x(rank, batch_size, hidden_size), dtype=float).reshape(batch_size, hidden_size)
     x = torch.tensor(x_np, dtype=data_type, device="npu")
@@ -213,86 +148,106 @@ def test_base_test(local_rank_id, ep_world_size):
     scales_np = np.array(gen_scales(batch_size, topk), dtype=np.float32).reshape(batch_size, topk)
     topk_weights = torch.tensor(scales_np, dtype=torch.float32, device="npu")
 
-    # SHMEM / ZB init (must be after torch.npu.set_device)
-    # New Ascend SHMEM Python API uses aclshmem_* names (not shmem_*).
-    #
-    # ZB kernels treat comm_meta_ptr as a symmetric GVA meta region (sync flags).
-    # Do NOT malloc the whole local_mem_size for it — leave heap space for
-    # pybind SHMEM tensors (recv_x / num_tokens_per_expert / recv_data).
     ip_port = os.environ.get("SHMEM_IP_PORT", "tcp://127.0.0.1:8666")
     local_mem_size = int(os.environ.get("SHMEM_MEM_SIZE", str(1024**3)))
-    # Align with deepep Buffer / fused Buffer::EXT_INFO_SIZE (~1–2MB meta).
-    meta_bytes = int(os.environ.get("SHMEM_META_SIZE", str(2 * 1024 * 1024)))
 
-    ret = shm.set_conf_store_tls(False, "")
-    if ret != 0:
-        raise ValueError("[ERROR] set_conf_store_tls failed")
-
-    init_attrs = shm.InitAttr()
-    init_attrs.my_rank = rank
-    init_attrs.n_ranks = world_size
-    init_attrs.local_mem_size = local_mem_size
-    init_attrs.ip_port = ip_port
-    if hasattr(shm, "OpEngineType"):
-        init_attrs.option_attr.data_op_engine_type = shm.OpEngineType.MTE
-
-    shm_ret = shm.aclshmem_init(init_attrs)
-    if shm_ret != 0:
-        raise ValueError("[ERROR] aclshmem_init failed")
-
-    # Meta region for ZbSyncFlag (must be SHMEM-symmetric and zeroed).
-    meta_elems = meta_bytes // 4
-    comm_meta = shm.aclshmem_create_tensor((meta_elems,), torch.int32, device_id=rank)
-    comm_meta.zero_()
-    comm_meta_ptr = int(comm_meta.data_ptr())
-
+    # ZbBuffer owns aclshmem_init, meta GVA, named SHMEM slots, and finalize.
+    buf = umdk_cam_op_lib.ZbBuffer(
+        rank,
+        world_size,
+        local_mem_size,
+        ip_port,
+        hidden_size,
+        moe_expert_num,
+        use_quant,
+        global_bs,
+    )
     try:
-        mod = PrefillZbModule().npu()
-        combine_x, actual_recv, recv_x, scales = mod(
-            x=x,
-            topk_idx=topk_idx,
-            topk_weights=topk_weights,
-            comm_meta_ptr=comm_meta_ptr,
-            ep_world_size=world_size,
-            ep_rank_id=rank,
-            moe_expert_num=moe_expert_num,
-            quant_mode=quant_mode,
-            global_bs=global_bs,
+        # ---- 1) first dispatch: build layout/handle + (quant) prebuilt expert_out ----
+        num_tokens_per_expert, send_token_idx = buf.get_dispatch_layout(topk_idx)
+        recv_x, scales, handle = buf.dispatch(
+            x, topk_idx, send_token_idx, num_tokens_per_expert, quant_mode
         )
+        actual_recv = int(recv_x.size(0))
+
+        # Quant: dequant ONCE. Fixed inputs → same recv packing each round, so this
+        # bf16 tensor can be reused for combine / bench without re-dequant.
+        # Note: expandx and combine_x share SHMEM; each later dispatch overwrites that
+        # block as int8, so combine still copy_s prebuilt_expert_out into the slot —
+        # that copy is cheap vs host dequant and must stay outside the dequant path.
+        prebuilt_expert_out = None
+        if use_quant:
+            assert recv_x.dtype == torch.int8, f"quant recv_x dtype={recv_x.dtype}"
+            assert scales.dtype == torch.float32
+            prebuilt_expert_out = _dequant_identity(recv_x, scales, data_type)
+            torch.npu.synchronize()
+            dist.barrier()
+            expert_out = prebuilt_expert_out
+        else:
+            expert_out = recv_x
+
+        # ---- 2) correctness (uses prebuilt on quant path) ----
+        combine_x = buf.combine(expert_out, topk_weights, topk_idx, handle)
         torch.npu.synchronize()
 
-        if quant_mode == 2:
-            assert recv_x.dtype == torch.int8, f"quant recv_x dtype={recv_x.dtype}"
-            assert scales is not None and scales.dtype == torch.float32
-            assert scales.numel() == actual_recv
+        out_cpu = combine_x.cpu().to(torch.float).numpy()
+        expect_out = x_np.astype(float)
+        rtol = 1e-2 if use_quant else 5e-3
+        atol = 1e-2 if use_quant else 5e-3
+        allclose_nparray(expect_out, out_cpu, rtol=rtol, atol=atol, msg=f"rank{rank}")
+
+        if use_quant:
             print(
-                f"[rank {rank}] normal zb quant dispatch passed, actual_recv={actual_recv}, "
-                f"recv_x={tuple(recv_x.shape)} int8, scales={tuple(scales.shape)}",
+                f"[rank {rank}] zb buffer quant dispatch+prebuilt-dequant+combine passed, "
+                f"actual_recv={actual_recv}, combine_shape={tuple(combine_x.shape)}",
                 flush=True,
             )
         else:
-            out_cpu = combine_x.cpu().to(torch.float).numpy()
-            # With normalized topk_weights (sum=1) and identity expert, combine ~= x.
-            expect_out = x_np.astype(float)
-            allclose_nparray(expect_out, out_cpu, rtol=5e-3, atol=5e-3, msg=f"rank{rank}")
             print(
-                f"[rank {rank}] normal zb sample passed, actual_recv={actual_recv}, "
+                f"[rank {rank}] zb buffer sample passed, actual_recv={actual_recv}, "
                 f"combine_shape={tuple(combine_x.shape)}",
                 flush=True,
             )
+
+        # ---- 3) optional perf loop: no dequant inside timed region ----
+        bench_iters = int(os.environ.get("ZB_BENCH_ITERS", "0"))
+        if bench_iters > 0:
+            # warmup
+            for _ in range(min(5, bench_iters)):
+                num_tokens_per_expert, send_token_idx = buf.get_dispatch_layout(topk_idx)
+                recv_x, scales, handle = buf.dispatch(
+                    x, topk_idx, send_token_idx, num_tokens_per_expert, quant_mode
+                )
+                expert_out = prebuilt_expert_out if use_quant else recv_x
+                _ = buf.combine(expert_out, topk_weights, topk_idx, handle)
+            torch.npu.synchronize()
+            dist.barrier()
+
+            t0 = time.perf_counter()
+            for _ in range(bench_iters):
+                num_tokens_per_expert, send_token_idx = buf.get_dispatch_layout(topk_idx)
+                recv_x, scales, handle = buf.dispatch(
+                    x, topk_idx, send_token_idx, num_tokens_per_expert, quant_mode
+                )
+                # quant: reuse prebuilt_expert_out — do not call _dequant_identity here
+                expert_out = prebuilt_expert_out if use_quant else recv_x
+                _ = buf.combine(expert_out, topk_weights, topk_idx, handle)
+            torch.npu.synchronize()
+            elapsed_ms = (time.perf_counter() - t0) * 1e3
+            print(
+                f"[rank {rank}] zb buffer bench iters={bench_iters} "
+                f"avg={(elapsed_ms / bench_iters):.3f} ms "
+                f"(layout+dispatch+combine; quant dequant prebuilt)",
+                flush=True,
+            )
     finally:
-        # free via tensor API when available; otherwise free data_ptr
-        if hasattr(shm, "aclshmem_free_tensor"):
-            shm.aclshmem_free_tensor(comm_meta)
-        else:
-            shm.aclshmem_free(comm_meta_ptr)
-        shm.aclshmem_finalize()
+        del buf
 
 
 if __name__ == "__main__":
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
-    # shmem init must come after torch.npu.set_device (or any other aclInit device action)
+    # shmem init inside ZbBuffer must come after torch.npu.set_device
     torch.npu.set_device(local_rank)
     dist.init_process_group(backend="hccl", rank=local_rank)
     test_base_test(local_rank, world_size)

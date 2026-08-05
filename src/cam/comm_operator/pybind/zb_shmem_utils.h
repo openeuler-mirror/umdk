@@ -56,8 +56,8 @@ inline at::Tensor CreateTensorFromShmem(const std::vector<int64_t> &shape, at::S
             "Ensure aclshmem is initialized and local_mem_size has enough free space.");
     }
 
-    // torch_npu from_blob (see torch_npu/csrc/aten/common/from_blob.h). No deleter overload
-    // in current packages — memory is reclaimed by aclshmem_finalize / process exit.
+    // torch_npu from_blob without deleter — caller (ZbBuffer) must aclshmem_free the VA
+    // before aclshmem_finalize.
     auto options = torch::TensorOptions().dtype(dtype).device(device);
     return at_npu::native::from_blob(devPtr, c10::IntArrayRef(shape), options);
 #else
