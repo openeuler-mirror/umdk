@@ -442,12 +442,15 @@ static inline uint32_t buf_data_to_size_class(void *buf_data)
     if (count == 0) {
         return UMQ_QBUF_SIZE_CLASS_MAX;
     }
-    if (data < g_qbuf_pool.data_region_start[0]) {
-        return UMQ_QBUF_SIZE_CLASS_MAX;
-    }
+    // Data regions are laid out in descending block_size order (larger SC at lower addresses),
+    // so data_region_start[]/end[] are NOT monotonic in sc. Search every non-lazy region for one
+    // that contains buf_data. count <= UMQ_QBUF_SIZE_CLASS_MAX(16), so O(count) is acceptable on
+    // the data_to_head path (free/lookup, not core alloc fast path).
     for (uint32_t i = 0; i < count; i++) {
-        if (g_qbuf_pool.data_region_end[i] == NULL) continue;
-        if (data < g_qbuf_pool.data_region_end[i]) {
+        if (g_qbuf_pool.data_region_end[i] == NULL) {
+            continue;
+        }
+        if (data >= g_qbuf_pool.data_region_start[i] && data < g_qbuf_pool.data_region_end[i]) {
             return i;
         }
     }
@@ -1391,7 +1394,51 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
     if (nonlazy_count == 0) {
         g_qbuf_pool.per_sc_block_count = 0;
     } else {
-        g_qbuf_pool.per_sc_block_count = cfg->total_size / (sum_block_sizes + (uint64_t)nonlazy_count * per_blk_overhead);
+        // Compute per_sc_block_count by exactly simulating the real layout. The old closed-form
+        // division `total_size / denom` omits per-SC data-region alignment padding between non-lazy
+        // SCs; with multiple SCs of differing block sizes the real layout overflows total_size.
+        // Layout is written in DESCENDING block_size order (see init_split_mode_layout /
+        // init_combine_mode_layout): since block_sizes[i] = base * mult^i with mult a power of two,
+        // each larger block_size is an exact multiple of every smaller one, so a descending layout
+        // makes every prev_end already aligned to the next SC's block_size -> padding is always 0.
+        // layout_end(N) is then linear in N (= N * denom), so the closed-form value is the max N
+        // and the decrement loop below exits in one iteration. The simulation is kept as a
+        // defensive guard against future non-multiple block_size configurations (it would shrink
+        // N until the layout fits). One-shot init, perf-insensitive.
+        uint32_t order[UMQ_QBUF_SIZE_CLASS_MAX];
+        uint32_t order_cnt = 0;
+        for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
+            uint32_t i = (uint32_t)si;
+            if (g_qbuf_pool.lazy_sc_mask & (1U << i)) {
+                continue;
+            }
+            order[order_cnt++] = i;
+        }
+        uint64_t per_sc = cfg->total_size / (sum_block_sizes + (uint64_t)nonlazy_count * per_blk_overhead);
+        while (per_sc > 0) {
+            uint64_t data_end = 0;
+            uint64_t hdr_size = 0;
+            for (uint32_t k = 0; k < order_cnt; k++) {
+                uint32_t bs = g_qbuf_pool.block_sizes[order[k]];
+                data_end = (data_end + bs - 1) & ~((uint64_t)bs - 1);
+                data_end += per_sc * bs;
+                if (cfg->mode == UMQ_BUF_SPLIT) {
+                    hdr_size += per_sc * sizeof(umq_buf_t);
+                }
+            }
+            uint64_t layout_end = data_end;
+            if (cfg->mode == UMQ_BUF_SPLIT) {
+                layout_end += hdr_size;
+                if (cfg->disable_scale_cap) {
+                    layout_end += (uint64_t)nonlazy_count * per_sc * UMQ_EMPTY_HEADER_COEFFICIENT * sizeof(umq_buf_t);
+                }
+            }
+            if (layout_end <= cfg->total_size) {
+                break;
+            }
+            per_sc--;
+        }
+        g_qbuf_pool.per_sc_block_count = per_sc;
     }
 
     return 0;
@@ -1399,19 +1446,39 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
 
 static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
 {
-    // Layout B: centralized data, headers, ext
+    // Layout B: centralized data, headers, ext. Data regions are laid out in DESCENDING
+    // block_size order: block_sizes[i] = base * mult^i with mult a power of two, so every
+    // larger block_size is an exact multiple of every smaller one; placing larger SCs first
+    // keeps prev_end aligned to each subsequent (smaller) block_size, eliminating per-SC
+    // alignment padding. The sc index space is left untouched (block_sizes[block_pool[]],
+    // data_region_start[] etc. still indexed by sc); only the write order changes.
     uint64_t blk_nums[UMQ_QBUF_SIZE_CLASS_MAX];
     uint64_t total_blk_num = 0;
     uint64_t total_header_size = 0;
     char *data_ptr = (char *)cfg->buf_addr;
 
-    for (uint32_t sc = 0; sc < count; sc++) {
+    // Build descending (largest block_size first) write order over non-lazy SCs only.
+    uint32_t order[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint32_t order_cnt = 0;
+    for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
+        uint32_t sc = (uint32_t)si;
         if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
-            blk_nums[sc] = 0;
-            g_qbuf_pool.data_region_start[sc] = NULL;
-            g_qbuf_pool.data_region_end[sc] = NULL;
             continue;
         }
+        order[order_cnt++] = sc;
+    }
+
+    // Initialize bookkeeping for ALL SCs first (lazy SCs get zero regions), then write
+    // non-lazy data regions in descending order.
+    for (uint32_t sc = 0; sc < count; sc++) {
+        blk_nums[sc] = 0;
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            g_qbuf_pool.data_region_start[sc] = NULL;
+            g_qbuf_pool.data_region_end[sc] = NULL;
+        }
+    }
+    for (uint32_t k = 0; k < order_cnt; k++) {
+        uint32_t sc = order[k];
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = g_qbuf_pool.per_sc_block_count;
         blk_nums[sc] = blk_num;
@@ -1428,20 +1495,15 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     g_qbuf_pool.ext_header_buffer = data_ptr + total_header_size;
     g_qbuf_pool.total_block_num = total_blk_num;
 
+    // Header region is laid out in the same descending order as data regions. header_region_start[sc]
+    // still indexes by sc; the physical placement just follows `order[]`.
     char *header_cur = (char *)g_qbuf_pool.header_buffer;
     (void)memset(g_qbuf_pool.header_region_start, 0, sizeof(g_qbuf_pool.header_region_start));
-    for (uint32_t sc = 0; sc < count; sc++) {
+    for (uint32_t k = 0; k < order_cnt; k++) {
+        uint32_t sc = order[k];
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = blk_nums[sc];
         g_qbuf_pool.header_region_start[sc] = header_cur;
-        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
-            g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
-            g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
-            uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
-            if (exp_blk_cnt == 0) exp_blk_cnt = 1;
-            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
-            continue;
-        }
         for (uint64_t i = 0; i < blk_num; i++) {
             umq_buf_t *buf = (umq_buf_t *)(header_cur + i * sizeof(umq_buf_t));
             buf->umqh = UMQ_INVALID_HANDLE;
@@ -1463,6 +1525,18 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool SPLIT: sc=%u blk_size=%u num=%lu data_region=[%p,%p)\n", sc, blk_size,
                      (unsigned long)blk_num, (void *)g_qbuf_pool.data_region_start[sc],
                      (void *)g_qbuf_pool.data_region_end[sc]);
+    }
+    // Lazy SCs: zero block pool counts + expansion trigger (no data region allocated).
+    for (uint32_t sc = 0; sc < count; sc++) {
+        if (!(g_qbuf_pool.lazy_sc_mask & (1U << sc))) {
+            continue;
+        }
+        uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
+        g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
+        g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
+        uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
+        if (exp_blk_cnt == 0) exp_blk_cnt = 1;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
     }
 
     if (cfg->disable_scale_cap) {
@@ -1487,17 +1561,34 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
 
 static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
 {
+    // Data regions are laid out in DESCENDING block_size order (same rationale as SPLIT:
+    // block_sizes[i] = base * mult^i with mult a power of two -> larger SCs are exact
+    // multiples of smaller ones -> descending order makes every prev_end already aligned
+    // to the next SC's block_size, eliminating alignment padding). The sc index space is
+    // untouched; only the write order changes.
     uint64_t blk_nums[UMQ_QBUF_SIZE_CLASS_MAX];
     uint64_t total_blk_num = 0;
     char *data_ptr = (char *)cfg->buf_addr;
 
-    for (uint32_t sc = 0; sc < count; sc++) {
+    uint32_t order[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint32_t order_cnt = 0;
+    for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
+        uint32_t sc = (uint32_t)si;
         if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
-            blk_nums[sc] = 0;
-            g_qbuf_pool.data_region_start[sc] = NULL;
-            g_qbuf_pool.data_region_end[sc] = NULL;
             continue;
         }
+        order[order_cnt++] = sc;
+    }
+
+    for (uint32_t sc = 0; sc < count; sc++) {
+        blk_nums[sc] = 0;
+        if (g_qbuf_pool.lazy_sc_mask & (1U << sc)) {
+            g_qbuf_pool.data_region_start[sc] = NULL;
+            g_qbuf_pool.data_region_end[sc] = NULL;
+        }
+    }
+    for (uint32_t k = 0; k < order_cnt; k++) {
+        uint32_t sc = order[k];
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = g_qbuf_pool.per_sc_block_count;
         blk_nums[sc] = blk_num;
@@ -2551,6 +2642,13 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 
 static inline umq_buf_t *escape_data_to_head(void *data)
 {
+    /* Escape-pool blocks are only allocated when g_total_escape_buf_cnt > 0. Without this guard
+     * the speculative dereference of (data + block_size) below would read out-of-bounds for
+     * pointers that belong to other pools (e.g. rx / tiny), which allocate their data buffers
+     * independently and do not place a umq_buf_t header right after each data block. */
+    if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+        return NULL;
+    }
     for (uint32_t i = 0; i < g_qbuf_pool.size_class_count; i++) {
         umq_buf_t *candidate = (umq_buf_t *)((char *)data + g_qbuf_pool.block_sizes[i]);
         if (candidate->buf_data == (char *)data && candidate->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
@@ -2603,22 +2701,33 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
         return NULL;
     }
 
+    /* Fast path only applies to blocks inside the main pool's allocated buffer. Pointers
+     * belonging to other pools (rx / tiny / escape) would otherwise be misclassified by
+     * buf_data_to_size_class, yielding an out-of-bounds candidate header read. The main
+     * pool buffer spans [data_buffer, data_buffer + total_size) regardless of the
+     * descending block_size write order used inside. */
+    char *pool_start = (char *)g_qbuf_pool.data_buffer;
+    char *pool_end = pool_start + g_qbuf_pool.total_size;
+    bool in_main_pool = ((char *)data >= pool_start && (char *)data < pool_end);
+
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
-        uint32_t sc = buf_data_to_size_class(data);
-        if (sc < UMQ_QBUF_SIZE_CLASS_MAX) {
-            uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
-            uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
-            uint64_t id = offset / blk_size;
-            umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
-            /* Validate that the computed qbuf actually contains 'data'.
-             * buf_data_to_size_class can return false positives for
-             * expansion-pool blocks whose addresses happen to fall within
-             * a normal-pool data_region's address range. */
-            if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
-                candidate->buf_data + blk_size > (char *)data) {
-                return candidate;
+        if (in_main_pool) {
+            uint32_t sc = buf_data_to_size_class(data);
+            if (sc < UMQ_QBUF_SIZE_CLASS_MAX) {
+                uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
+                uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
+                uint64_t id = offset / blk_size;
+                umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.header_region_start[sc] + id * sizeof(umq_buf_t));
+                /* Validate that the computed qbuf actually contains 'data'.
+                 * buf_data_to_size_class can return false positives for
+                 * expansion-pool blocks whose addresses happen to fall within
+                 * a normal-pool data_region's address range. */
+                if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
+                    candidate->buf_data + blk_size > (char *)data) {
+                    return candidate;
+                }
+                /* Fall through to escape / expansion path. */
             }
-            /* Fall through to escape / expansion path. */
         }
 
         /* Always try expansion pool / escape lookup. Expansion-pool blocks
@@ -2631,18 +2740,20 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
         return NULL;
     }
 
-    uint32_t sc = buf_data_to_size_class(data);
-    if (sc < UMQ_QBUF_SIZE_CLASS_MAX) {
-        uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
-        uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
-        uint64_t id = offset / blk_size;
-        umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_region_start[sc] + id * blk_size);
-        /* Validate (see SPLIT mode comment above). */
-        if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
-            candidate->buf_data + blk_size > (char *)data) {
-            return candidate;
+    if (in_main_pool) {
+        uint32_t sc = buf_data_to_size_class(data);
+        if (sc < UMQ_QBUF_SIZE_CLASS_MAX) {
+            uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
+            uint64_t offset = (uint64_t)(uintptr_t)data - (uint64_t)(uintptr_t)g_qbuf_pool.data_region_start[sc];
+            uint64_t id = offset / blk_size;
+            umq_buf_t *candidate = (umq_buf_t *)(uintptr_t)(g_qbuf_pool.data_region_start[sc] + id * blk_size);
+            /* Validate (see SPLIT mode comment above). */
+            if (candidate->buf_data != NULL && candidate->buf_data <= (char *)data &&
+                candidate->buf_data + blk_size > (char *)data) {
+                return candidate;
+            }
+            /* Fall through to escape / expansion path. */
         }
-        /* Fall through to escape / expansion path. */
     }
 
     return umq_qbuf_data_to_head_escape(data);
