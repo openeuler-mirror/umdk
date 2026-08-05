@@ -422,7 +422,6 @@ urma_jfc_t *bondp_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *cfg)
     bdp_jfc->dev_num = bdp_ctx->dev_num;
     atomic_init(&bdp_jfc->lasted_polled_jfc_idx, 0);
     atomic_init(&bdp_jfc->fast_return_count, 0);
-    atomic_init(&bdp_jfc->rearm_mask, 0);
     atomic_init(&bdp_jfc->use_cnt.atomic_cnt, 0);
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
