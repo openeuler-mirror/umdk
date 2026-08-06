@@ -60,6 +60,13 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 int urma_open_cdev(char *path);
+
+/* Register a log callback with all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_register_log_func_to_providers(urma_log_cb_t func);
+/* Unregister the log callback from all loaded providers. */
+void urma_unregister_log_func_to_providers(void);
+
 urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, uint32_t len);
 urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,

@@ -138,6 +138,43 @@ int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
     return 0;
 }
 
+/* Register the log callback with all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_register_log_func_to_providers(urma_log_cb_t func)
+{
+    if (func == NULL) {
+        return;
+    }
+    urma_driver_t *driver, *next;
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
+        if (driver->ops == NULL || driver->ops->register_log_func == NULL) {
+            continue;
+        }
+        urma_status_t ret = driver->ops->register_log_func(func);
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Register log func to provider %s failed, ret=%d.\n",
+                         driver->ops->name ? driver->ops->name : "unknown", ret);
+        }
+    }
+}
+
+/* Unregister the log callback from all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_unregister_log_func_to_providers(void)
+{
+    urma_driver_t *driver, *next;
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
+        if (driver->ops == NULL || driver->ops->unregister_log_func == NULL) {
+            continue;
+        }
+        urma_status_t ret = driver->ops->unregister_log_func();
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Unregister log func from provider %s failed, ret=%d.\n",
+                         driver->ops->name ? driver->ops->name : "unknown", ret);
+        }
+    }
+}
+
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
 static bool urma_validate_driver(struct dirent *dent)
 {
@@ -230,6 +267,11 @@ urma_status_t urma_init(urma_init_attr_t *conf)
 #endif
 
     (void)pthread_spin_init(&g_dev_list_lock, PTHREAD_PROCESS_PRIVATE);
+    /* Compensate: a callback registered before init could not be forwarded
+     * (providers not loaded yet); now they are. */
+    if (urma_is_log_func_registered()) {
+        urma_register_log_func_to_providers(urma_get_log_func());
+    }
     urma_driver_t *driver, *next;
     UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
         if (driver->ops->init == NULL || driver->ops->init(conf) != URMA_SUCCESS) {

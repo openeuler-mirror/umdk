@@ -38,6 +38,10 @@ extern "C" {
 #define URMA_LOG_RL_INITIALIZING   0x02
 
 int urma_log_init(void);
+/* Return the currently registered log callback (default if none registered). */
+urma_log_cb_t urma_get_log_func(void);
+/* Return true if a non-default log callback has been registered. */
+bool urma_is_log_func_registered(void);
 void urma_getenv_log_level(void);
 void urma_getenv_log_separator(void);
 bool urma_log_drop(urma_vlog_level_t level);
