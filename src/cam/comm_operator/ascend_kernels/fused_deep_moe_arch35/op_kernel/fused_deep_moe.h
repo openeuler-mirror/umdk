@@ -71,8 +71,8 @@ CATLASS_DEVICE void DispatchMxGmm1SwigluQuantFunc(
         GM_ADDR gmShareSwigluOut, GM_ADDR gmShareD, GM_ADDR gmShareDScale,
     // dispatch and quant, when EXEC_FLAG_DEEP_FUSE.
     GM_ADDR gmX, GM_ADDR gmExpertIds, GM_ADDR xActiveMask, GM_ADDR gmMoeSmoothScales, GM_ADDR gmShareSmoothScales,
-        GM_ADDR gmExpandIdx, GM_ADDR gmEpSendCount, GM_ADDR gmExpertTokenNums, GM_ADDR gmAllRankSendCount,
-    const FusedDeepMoeInfo &fusedDeepMoeInfo, const IPCDataOffset &ipcDataOffset)
+        GM_ADDR gmExpandIdx, GM_ADDR gmEpSendCount, GM_ADDR gmExpertTokenNums,
+    const FusedDeepMoeInfo &fusedDeepMoeInfo)
 {
     static_assert((std::is_same_v<ElementA, float8_e5m2_t> ||
         std::is_same_v<ElementA, float8_e4m3_t> || std::is_same_v<ElementA, float4_e2m1x2_t> ||
@@ -126,8 +126,8 @@ CATLASS_DEVICE void DispatchMxGmm1SwigluQuantFunc(
         gmShareA, gmShareB, layoutShareB, gmShareAScale, gmShareBScale, layoutShareMxScaleB,
             gmShareSwapSpace /* ptrShareC */, layoutShareC, gmShareSwigluOut, gmShareD, gmShareDScale,
         gmX, gmExpertIds, xActiveMask, gmMoeSmoothScales, gmShareSmoothScales, gmExpandIdx, gmEpSendCount,
-            gmExpertTokenNums, gmAllRankSendCount,
-        fusedDeepMoeInfo, ipcDataOffset
+            gmExpertTokenNums,
+        fusedDeepMoeInfo
     };
 
     MatmulKernel kernel;
@@ -147,7 +147,7 @@ CATLASS_DEVICE void MxGmm2CastCombineFunc(
     Catlass::GemmCoord sharedProblemShape,
     GM_ADDR gmShareA, GM_ADDR gmShareB, GM_ADDR gmShareAScale, GM_ADDR gmShareBScale, GM_ADDR gmShareSwapSpace,
         GM_ADDR gmShareD,
-    MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> *combiner)
+    void *combiner)
 {
     static_assert((std::is_same_v<ElementA, float8_e5m2_t> ||
         std::is_same_v<ElementA, float8_e4m3_t> || std::is_same_v<ElementA, float4_e2m1x2_t> ||
@@ -227,8 +227,6 @@ public:
     __aicore__ inline void Process();
 
 private:
-    __gm__ Mc2Kernel::HcclOpParam *winContext_;
-
     GM_ADDR gmX_;
     GM_ADDR gmexpertIds_;
     GM_ADDR gmWeight1_;
@@ -243,13 +241,11 @@ private:
     GM_ADDR gmShareWeight2Scale_;
     GM_ADDR gmShareOutput_;
     GM_ADDR gmExpertTokenNums_;
+    GM_ADDR workspaceGM_;
     GM_ADDR gmSmoothScales_;
     GM_ADDR gmShareSmoothScales_;
     GM_ADDR gmexpertScales_;
     GM_ADDR xActiveMask_;
-
-    GM_ADDR workspaceGM_;
-    GM_ADDR ipcGM_;
 
     uint32_t maxTokenNum_{0};
     uint32_t shareGmm1OutputDim_{0};
@@ -261,7 +257,6 @@ private:
     uint32_t gmm2InputDim_{0};
     uint32_t globalRankId_{0};
     uint32_t winSizePerRank_{0};
-    uint32_t epRankId_{0};
     uint32_t epRankSize_{0};
     uint32_t moeExpertNumPerRank_{0};
     uint32_t globalBs_{0};
@@ -287,7 +282,6 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     GM_ADDR workspaceGM, AscendC::TPipe *pipe, const FusedDeepMoeTilingData *tilingData)
 {
     tpipe_ = pipe;
-    winContext_ = (__gm__ Mc2Kernel::HcclOpParam *)AscendC::GetHcclContext<AscendC::HCCL_GROUP_ID_0>();
 
     gmSmoothScales_ = expert_smooth_scales;
     gmShareSmoothScales_ = share_smooth_scales;
@@ -312,14 +306,12 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Init(
     gmexpertScales_ = expert_scales;
     xActiveMask_ = x_active_mask;
     tilingData_ = tilingData;
-    epRankId_ = tilingData->fusedDeepMoeInfo.epRankId;
     epRankSize_ = tilingData->fusedDeepMoeInfo.epRankSize;
     moeExpertNumPerRank_ = tilingData->fusedDeepMoeInfo.moeExpertNumPerRank;
     globalBs_ = tilingData->fusedDeepMoeInfo.globalBs;
     bs_ = tilingData->fusedDeepMoeInfo.bs;
     topK_ = tilingData->fusedDeepMoeInfo.k;
     maxBs_ = globalBs_ / epRankSize_;
-    ipcGM_ = Mc2Kernel::GetBaseWindAddrByRankId(winContext_, epRankId_, epRankId_);
 
     maxTokenNum_ = maxBs_ * epRankSize_ * (topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_);
     shareGmm1OutputDim_ = tilingData->fusedDeepMoeInfo.shareGmm1HLen;
@@ -351,20 +343,19 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmShareX2Scale = workspaceGM_ + tilingData_->workSpaceOffset.shareX2ScaleOffset;
     GM_ADDR gmShareMm2SwapSpace = workspaceGM_ + tilingData_->workSpaceOffset.shareMm2SwapSpaceOffset;
 
-    GM_ADDR gmX1 = ipcGM_ + tilingData_->ipcDataOffset.x1TokenOffset;
-    GM_ADDR gmX1Scale = ipcGM_ + tilingData_->ipcDataOffset.x1ScaleOffset;
+    GM_ADDR gmX1 = workspaceGM_ + tilingData_->workSpaceOffset.x1TokenOffset;
+    GM_ADDR gmX1Scale = workspaceGM_ + tilingData_->workSpaceOffset.x1ScaleOffset;
     GM_ADDR gmGmm1SwapSpace = workspaceGM_ + tilingData_->workSpaceOffset.gmm1SwapSpaceOffset;
     GM_ADDR gmSwigluOut = workspaceGM_ + tilingData_->workSpaceOffset.swigluOffset;
     GM_ADDR gmX2 = workspaceGM_ + tilingData_->workSpaceOffset.x2TokenOffset;
     GM_ADDR gmX2Scale = workspaceGM_ + tilingData_->workSpaceOffset.x2ScaleOffset;
     GM_ADDR gmGmm2SwapSpace = workspaceGM_ + tilingData_->workSpaceOffset.gmm2SwapSpaceOffset;
 
-    GM_ADDR gmGmm2DepOut = nullptr;
+    GM_ADDR gmGmm2DepOut = workspaceGM_ + tilingData_->workSpaceOffset.y2TokenOffset;
+    GM_ADDR gmGroupList = workspaceGM_ + tilingData_->workSpaceOffset.groupListOffset;
     GM_ADDR gmExpandIdx = workspaceGM_ + tilingData_->workSpaceOffset.expandIdxOffset;
-    GM_ADDR gmAllRankSendCount = workspaceGM_ + tilingData_->workSpaceOffset.allRankSendCountOffset;
     GM_ADDR gmEpSendCount = workspaceGM_ + tilingData_->workSpaceOffset.epSendCountOffset;
-    GM_ADDR gmEpTokenCount = workspaceGM_ + tilingData_->workSpaceOffset.epTokenCountOffset;
-    GM_ADDR gmGroupList = gmExpertTokenNums_;
+    GM_ADDR gmReserved = workspaceGM_ + tilingData_->workSpaceOffset.reservedOffset;
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         if constexpr (g_coreType == AscendC::AIV) {
@@ -396,8 +387,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         gmShareX1, gmShareWeight1_, gmShareX1Scale, gmShareWeight1Scale_, gmShareMm1SwapSpace, gmShareSwigluOut,
             gmShareX2, gmShareX2Scale,
         gmX_, gmexpertIds_, xActiveMask_, gmSmoothScales_, gmShareSmoothScales_, gmExpandIdx, gmEpSendCount,
-            gmExpertTokenNums_, gmAllRankSendCount,
-        tilingData_->fusedDeepMoeInfo, tilingData_->ipcDataOffset);
+            gmExpertTokenNums_,
+        tilingData_->fusedDeepMoeInfo);
     AscendC::PipeBarrier<PIPE_ALL>();
     Arch::CrossCoreFlag gmm1AivFinished{0};
     if constexpr (g_coreType == AscendC::AIV) {
@@ -409,7 +400,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> combiner;
     if (g_coreType == AscendC::AIV) {
         combiner.Init(gmGmm2DepOut, gmexpertIds_, gmExpandIdx, gmEpSendCount, nullptr, gmexpertScales_, xActiveMask_,
-                      gmOutput_, nullptr, nullptr, gmAllRankSendCount, gmEpTokenCount, tilingData_);
+                      gmOutput_, nullptr, nullptr, tilingData_);
     }
     MxGmm2CastCombineFunc<TemplateMC2TypeFunc, ElementA, ElementB, Gmm2L1TileShape, Gmm2L0TileShape,
         Gmm2EpilogueTileShape, Gmm2BlockScheduler>(

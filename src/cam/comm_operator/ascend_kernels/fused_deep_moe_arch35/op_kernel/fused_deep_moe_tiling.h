@@ -20,18 +20,12 @@
     #define ENABLE_REUSE_MEMORY
 #endif
 namespace Cam {
-
-struct IPCDataOffset {
-    int64_t x1TokenOffset;
-    int64_t x1ScaleOffset;
-    int64_t x1FlagOffset;
-    int64_t y2TokenOffset;
-};
-
 struct WorkSpaceOffset {
     // MM1/GMM1-Swiglu input
     int64_t shareX1TokenOffset;
+    int64_t x1TokenOffset;
     int64_t shareX1ScaleOffset;
+    int64_t x1ScaleOffset;
     // MM1/GMM1-Swiglu output
     int64_t shareSwigluOffset;
     int64_t swigluOffset;
@@ -41,15 +35,15 @@ struct WorkSpaceOffset {
     int64_t shareX2ScaleOffset;
     int64_t x2ScaleOffset;
 
-    int64_t shareMm1SwapSpaceOffset; // Swap space for C->V data exchange
-    int64_t shareMm2SwapSpaceOffset; // Swap space for C->V data exchange
-    int64_t gmm1SwapSpaceOffset; // Swap space for C->V data exchange
-    int64_t gmm2SwapSpaceOffset; // Swap space for C->V data exchange
-    int64_t shallowY2TokenOffset; // For shallow fusion; dequantized, no scale
-    int64_t expandIdxOffset; // Remote token index during dispatch
-    int64_t epSendCountOffset; // Column-wise prefix sum; token offset within each rank in dispatch
-    int64_t allRankSendCountOffset; // Tokens sent from all ranks to all experts
-    int64_t epTokenCountOffset; // Row-wise prefix sum; infer source rank of a token in combine
+    int64_t shareMm1SwapSpaceOffset; // 交换空间，用于C->V数据交换
+    int64_t shareMm2SwapSpaceOffset; // 交换空间，用于C->V数据交换
+    int64_t gmm1SwapSpaceOffset; // 交换空间，用于C->V数据交换
+    int64_t gmm2SwapSpaceOffset; // 交换空间，用于C->V数据交换
+    int64_t y2TokenOffset; // 浅融合使用，已反量化无scale
+    int64_t groupListOffset; // 各专家token数前缀和形式
+    int64_t expandIdxOffset; // dispatch时token在远端索引
+    int64_t epSendCountOffset; // 各专家从各个rank收到的token数
+    int64_t reservedOffset;    // 预留空间
 };
 
 struct FusedDeepMoeInfo {
@@ -76,7 +70,6 @@ struct FusedDeepMoeTilingData {
     Mc2InitTiling mc2InitTiling;
     Mc2CcTiling mc2CcTiling;
     FusedDeepMoeInfo fusedDeepMoeInfo;
-    IPCDataOffset ipcDataOffset;
     WorkSpaceOffset workSpaceOffset;
 };
 
