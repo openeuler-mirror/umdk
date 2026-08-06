@@ -489,6 +489,10 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         int index = 0;
         urma_jfs_wr_t *vwr = (urma_jfs_wr_t *)wr;
         while (vwr != NULL) {
+            if (index >= BONDP_MAX_WR_LIST_NUM) {
+                URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM);
+                return URMA_EINVAL;
+            }
             urma_jfs_wr_t *pwr = &prealloc_wr_list[index];
             urma_sge_t *src_sge = prealloc_sge[index];
             uint32_t src_num_sge = jfs_wr_src_num_sge(vwr);
@@ -507,10 +511,6 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
             }
             vwr = vwr->next;
             index++;
-            if (index >= BONDP_MAX_WR_LIST_NUM - 1) {
-                URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM - 1);
-                return URMA_EINVAL;
-            }
         }
         if (!atomic_load(&bdp_comp->valid[send_idx])) {
             continue;
@@ -807,6 +807,10 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
     int index = 0;
     urma_jfr_wr_t *vwr = (urma_jfr_wr_t *)wr;
     while (vwr != NULL) {
+        if (index >= BONDP_MAX_WR_LIST_NUM) {
+            URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM);
+            return URMA_EINVAL;
+        }
         urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
         ret = copy_jfr_wr(vwr, pwr, prealloc_src_sge[index], BONDP_MAX_SGE_NUM);
         if (ret != 0) {
@@ -819,10 +823,6 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
 
         vwr = vwr->next;
         index++;
-        if (index >= BONDP_MAX_WR_LIST_NUM - 1) {
-            URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM - 1);
-            return URMA_EINVAL;
-        }
     }
 
     ret = comp_post_recv(bdp_comp, recv_idx, prealloc_wr_list, bad_wr, 1);
