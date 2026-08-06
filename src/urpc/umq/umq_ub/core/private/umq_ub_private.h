@@ -452,7 +452,6 @@ typedef struct jetty_pool_node {
     volatile uint64_t umq_ref;          // owner umq_id (hi 32) + ref_cnt (lo 32), single atomic access
     volatile uint32_t tx_outstanding;
     volatile uint32_t state;            // Track node state (atomic CAS operations)
-    volatile uint32_t borrow_count;     // WRs posted in current borrow cycle (atomic — concurrent post)
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
     bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
     bool is_jetty_err;
