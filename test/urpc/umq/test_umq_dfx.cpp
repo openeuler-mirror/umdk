@@ -56,8 +56,7 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithDisableFc)
 TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcAtomic)
 {
     ub_queue_t queue = {0};
-    queue.flow_control.enabled = true;
-    queue.flow_control.local_rx_depth = TEST_QUEUE_RX_DEPTH;
+    queue.rx_depth = TEST_QUEUE_RX_DEPTH;
     jfr_ctx_t io_jfr_ctx =  {0};
     urma_jetty_t jetty;
     jetty.jetty_id.id = 0;
@@ -71,7 +70,7 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcAtomic)
     queue.jetty[UB_QUEUE_JETTY_IO] = &jetty;
     queue.dev_ctx = &dev_ctx;
 
-    int ret = umq_ub_flow_control_init(&queue.flow_control, &queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
+    int ret = umq_ub_flow_control_init(&queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
     ASSERT_EQ(ret, 0);
     umq_t umq = {
         .mode = UMQ_TRANS_MODE_UB,
@@ -87,8 +86,7 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcAtomic)
 TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
 {
     ub_queue_t queue = {0};
-    queue.flow_control.enabled = true;
-    queue.flow_control.local_rx_depth = TEST_QUEUE_RX_DEPTH;
+    queue.rx_depth = TEST_QUEUE_RX_DEPTH;
     jfr_ctx_t io_jfr_ctx =  {0};
     urma_jetty_t jetty;
     jetty.jetty_id.id = 0;
@@ -102,7 +100,7 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
     queue.jetty[UB_QUEUE_JETTY_IO] = &jetty;
     queue.dev_ctx = &dev_ctx;
 
-    int ret = umq_ub_flow_control_init(&queue.flow_control, &queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
+    int ret = umq_ub_flow_control_init(&queue, UMQ_FEATURE_ENABLE_FLOW_CONTROL, &cfg);
     ASSERT_EQ(ret, 0);
     umq_t umq = {
         .mode = UMQ_TRANS_MODE_UB,
@@ -112,5 +110,5 @@ TEST_F(DfxTest, UmqStatsFlowControlGetTestWithEnableFcNonAtomic)
     umq_flow_control_stats_t flow_control_stats = {0};
     ret = umq_stats_flow_control_get((uint64_t)(uintptr_t)(&umq), &flow_control_stats);
     EXPECT_EQ(ret, UMQ_SUCCESS);
-    umq_ub_flow_control_uninit(queue);
+    umq_ub_flow_control_uninit(&queue);
 }

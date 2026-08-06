@@ -29,7 +29,7 @@ typedef union umq_ub_fc_user_ctx {
 } umq_ub_fc_user_ctx_t;
 
 uint16_t umq_ub_flow_control_threashold_modify(uint16_t threashold, uint8_t ratio);
-int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
+int umq_ub_flow_control_init(ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg);
 void umq_ub_flow_control_uninit(ub_queue_t *queue);
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info);
 void umq_ub_rx_consumed_inc(bool lock_free, volatile uint64_t *var, uint64_t count);
@@ -51,7 +51,7 @@ void umq_ub_credit_pending_req_remove_by_queue(ub_credit_pending_queue_t *pq, ub
 
 static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
 {
-    if (win == 0 || !fc->enabled) {
+    if (win == 0 || fc == NULL) {
         return;
     }
 
@@ -60,7 +60,7 @@ static inline void umq_ub_window_inc(ub_flow_control_t *fc, uint16_t win)
 
 static inline void umq_ub_credit_received_inc(ub_flow_control_t *fc, uint16_t win)
 {
-    if (win == 0 || !fc->enabled) {
+    if (win == 0 || fc == NULL) {
         return;
     }
 
@@ -69,7 +69,7 @@ static inline void umq_ub_credit_received_inc(ub_flow_control_t *fc, uint16_t wi
 
 static inline uint16_t umq_ub_window_dec(ub_flow_control_t *fc, ub_queue_t *queue, uint16_t win)
 {
-    if (win == 0 || !fc->enabled) {
+    if (win == 0 || fc == NULL) {
         return win;
     }
 
@@ -111,7 +111,7 @@ static ALWAYS_INLINE bool umq_ub_fc_eagain_check_fatal(struct ub_flow_control *f
 
 static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t *fc, ub_queue_t *queue)
 {
-    if (!fc->enabled) {
+    if (fc == NULL) {
         return UMQ_SUCCESS;
     }
     if (queue->checker != NULL) {
@@ -145,6 +145,9 @@ static ALWAYS_INLINE void umq_ub_permission_release(struct ub_flow_control *fc)
 
 static ALWAYS_INLINE void umq_ub_fc_packet_stats(ub_flow_control_t *fc, uint32_t cnt, ub_packet_stats_type_t type)
 {
+    if (fc == NULL) {
+        return;
+    }
     fc->ops.packet_stats(fc, cnt, type);
 }
 
