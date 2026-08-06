@@ -8,7 +8,7 @@
  */
 #include <string.h>
 
-#include "aclnnInner_dispatch_layout.h"
+#include "aclnnInner_dispatch_layout_zb.h"
 #include "graph/types.h"
 #include "aclnn_dispatch_layout_zb.h"
 
@@ -28,9 +28,9 @@ aclnnStatus aclnnDispatchLayoutZbGetWorkspaceSize(const aclTensor *topkIdx, int6
     const aclTensor *numTokensPerExpert, const aclTensor *isTokenInRank, const aclTensor *notifySendData,
     const aclTensor *sendTokenIdx, uint64_t *workspaceSize, aclOpExecutor **executor)
 {
-    return aclnnInnerDispatchLayoutGetWorkspaceSize(topkIdx, numTokens, numRanks, numExperts, numTopk, localRankSize,
-        numTokensPerRank, numTokensPerExpert, isTokenInRank, notifySendData, sendTokenIdx, workspaceSize,
-        executor);
+    return aclnnInnerDispatchLayoutZbGetWorkspaceSize(topkIdx, numTokens, numRanks, numExperts, numTopk,
+        localRankSize, numTokensPerRank, numTokensPerExpert, isTokenInRank, notifySendData, sendTokenIdx,
+        workspaceSize, executor);
 }
 
 aclnnStatus aclnnDispatchLayoutZb(void *workspace, uint64_t workspaceSize, aclOpExecutor *executor,
@@ -39,7 +39,7 @@ aclnnStatus aclnnDispatchLayoutZb(void *workspace, uint64_t workspaceSize, aclOp
     if (NnopbaseSetHcclServerType) {
         NnopbaseSetHcclServerType(executor, NNOPBASE_HCCL_SERVER_TYPE_MTE);
     }
-    return aclnnInnerDispatchLayout(workspace, workspaceSize, executor, stream);
+    return aclnnInnerDispatchLayoutZb(workspace, workspaceSize, executor, stream);
 }
 
 #ifdef __cplusplus
