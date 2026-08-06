@@ -25,6 +25,8 @@ static urma_provider_ops_t g_bondp_provider_ops = {
     .create_context = bondp_create_context,
     .delete_context = bondp_delete_context,
     .get_uasid = NULL,
+    .register_log_func = NULL,
+    .unregister_log_func = NULL,
 };
 
 static __attribute__((constructor)) void urma_provider_bond_init(void)

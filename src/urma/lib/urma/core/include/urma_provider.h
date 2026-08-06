@@ -209,6 +209,9 @@ typedef struct urma_provider_ops {
     urma_context_t *(*create_context)(urma_device_t *dev, uint32_t eid_index, int dev_fd);
     urma_status_t (*delete_context)(urma_context_t *ctx);
     urma_status_t (*get_uasid)(uint32_t *uasid); /* obsolete */
+    /* Log Ops */
+    urma_status_t (*register_log_func)(urma_log_cb_t func);
+    urma_status_t (*unregister_log_func)(void);
 } urma_provider_ops_t;
 
 typedef struct urma_import_tseg_cfg {
