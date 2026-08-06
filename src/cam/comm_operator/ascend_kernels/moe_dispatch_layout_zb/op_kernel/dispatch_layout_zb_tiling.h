@@ -6,8 +6,8 @@
  * Note:
  * History: 2026-06-10 create dispatch layout tiling data header file
  */
-#ifndef DISPATCH_LAYOUT_TILING_H
-#define DISPATCH_LAYOUT_TILING_H
+#ifndef DISPATCH_LAYOUT_ZB_TILING_H
+#define DISPATCH_LAYOUT_ZB_TILING_H
 
 #include "kernel_tiling/kernel_tiling.h"
 
@@ -26,4 +26,4 @@ struct DispatchLayoutTilingData {
     DispatchLayoutInfo dispatchLayoutInfo;
 };
 
-#endif
+#endif  // DISPATCH_LAYOUT_ZB_TILING_H

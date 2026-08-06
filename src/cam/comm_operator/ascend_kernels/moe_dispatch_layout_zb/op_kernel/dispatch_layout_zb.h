@@ -6,8 +6,8 @@
  * Note:
  * History: 2026-06-10 create dispatch layout operator kernel function header file
  */
-#ifndef DISPATCH_LAYOUT_H
-#define DISPATCH_LAYOUT_H
+#ifndef DISPATCH_LAYOUT_ZB_H
+#define DISPATCH_LAYOUT_ZB_H
 
 #include <climits>
 #include "kernel_operator.h"
@@ -16,7 +16,7 @@
 #include "data_copy.h"
 #include "sync_collectives.h"
 #include "moe_distribute_base.h"
-#include "dispatch_layout_tiling.h"
+#include "dispatch_layout_zb_tiling.h"
 namespace MoeDispatchLayout {
 
 constexpr uint32_t UB_32_ALIGN = 32U;
@@ -273,4 +273,4 @@ private:
 };
 }  // namespace MoeDispatchLayout
 
-#endif  // DISPATCH_LAYOUT_H
+#endif  // DISPATCH_LAYOUT_ZB_H

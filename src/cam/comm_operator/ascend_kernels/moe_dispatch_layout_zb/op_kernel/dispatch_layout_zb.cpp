@@ -7,12 +7,12 @@
  * History: 2026-06-10 create dispatch layout function implementation file
  */
 #include "kernel_operator.h"
-#include "dispatch_layout_tiling.h"
-#include "dispatch_layout.h"
+#include "dispatch_layout_zb_tiling.h"
+#include "dispatch_layout_zb.h"
 
 #define TILING_KEY_INT 23
 
-extern "C" __global__ __aicore__ void dispatch_layout(GM_ADDR topkIdx, GM_ADDR numTokensPerRank,
+extern "C" __global__ __aicore__ void dispatch_layout_zb(GM_ADDR topkIdx, GM_ADDR numTokensPerRank,
     GM_ADDR numTokensPerExpert, GM_ADDR isTokenInRank, GM_ADDR notifySendData, GM_ADDR sendTokenIdx,
     GM_ADDR workspace, GM_ADDR tiling)
 {

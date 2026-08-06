@@ -9,9 +9,9 @@
 #include "register/op_def_registry.h"
 
 namespace ops {
-class DispatchLayout : public OpDef {
+class DispatchLayoutZb : public OpDef {
 public:
-    explicit DispatchLayout(const char *name) : OpDef(name)
+    explicit DispatchLayoutZb(const char *name) : OpDef(name)
     {
         this->Input("topk_idx")
             .ParamType(REQUIRED)
@@ -66,5 +66,5 @@ public:
     }
 };
 
-OP_ADD(DispatchLayout);
+OP_ADD(DispatchLayoutZb);
 }  // namespace ops

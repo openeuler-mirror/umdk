@@ -23,7 +23,7 @@
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "tiling/hccl/hccl_tiling.h"
-#include "../op_kernel/dispatch_layout_tiling.h"
+#include "../op_kernel/dispatch_layout_zb_tiling.h"
 
 using namespace ge;
 namespace {
@@ -198,14 +198,14 @@ static ge::graphStatus DispatchLayoutTilingFunc(gert::TilingContext *context)
     return ret;
 }
 
-struct DispatchLayoutCompileInfo {};
-ge::graphStatus TilingParseForDispatchLayout(gert::TilingParseContext *context)
+struct DispatchLayoutZbCompileInfo {};
+ge::graphStatus TilingParseForDispatchLayoutZb(gert::TilingParseContext *context)
 {
     (void)context;
     return ge::GRAPH_SUCCESS;
 }
 
-IMPL_OP_OPTILING(DispatchLayout)
+IMPL_OP_OPTILING(DispatchLayoutZb)
     .Tiling(DispatchLayoutTilingFunc)
-    .TilingParse<DispatchLayoutCompileInfo>(TilingParseForDispatchLayout);
+    .TilingParse<DispatchLayoutZbCompileInfo>(TilingParseForDispatchLayoutZb);
 }  // namespace optiling
