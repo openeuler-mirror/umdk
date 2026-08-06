@@ -1393,7 +1393,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         return CONVERT_SKIP;
     }
 
-    if (is_rnr_retry_cr(cr) && !bdp_comp->modify_to_error) {
+    if (g_bondp_env.enable_rnr_retry && is_rnr_retry_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         if (wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
             wr_entry->bdp_comp != bdp_comp ||
