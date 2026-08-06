@@ -1234,6 +1234,10 @@ int check_local_cfg(perftest_config_t *cfg)
             LOG_ERROR("Invalid config: --bond_level iodie requires --ctp.\n");
             return -1;
         }
+        if (cfg->sge_num > 1) {
+            LOG_ERROR("Bonding device only supports sge_num=1, got: %u.\n", cfg->sge_num);
+            return -1;
+        }
     }
 
     if (cfg->priority != PERFTEST_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {
