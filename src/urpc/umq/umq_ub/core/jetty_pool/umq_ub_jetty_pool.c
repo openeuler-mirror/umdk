@@ -513,7 +513,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     return NULL;
 }
 
-int umq_ub_jetty_node_free(jetty_pool_node_t *node)
+int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
 {
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
     if (!g_jetty_pool_inited || cache == NULL) {
@@ -568,7 +568,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         uint64_t value = (uint64_t)pool->active_count;
         (void)pthread_spin_unlock(&pool->lock);
 
-        if ((value % pool->notify_threshold) < cnt) {
+        if (should_report_event && (value % pool->notify_threshold) < cnt) {
             if (eventfd_write(pool->event_fd, value) != 0) {
                 UMQ_VLOG_WARN(VLOG_UMQ, "eventfd_write failed, errno: %d\n", errno);
             }
@@ -577,7 +577,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
     }
 
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
-    return UMQ_SUCCESS;
+    return 1;
 }
 
 int umq_ub_jetty_pool_get_eventfd(void)

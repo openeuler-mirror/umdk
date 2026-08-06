@@ -682,6 +682,7 @@ typedef struct umq_io_option {
     umq_io_direction_t io_direction;
     uint32_t tp_handle_idx;
     uint64_t tag_timestamp;
+    uint32_t tp_handle_free_num;
 } umq_io_option_t;
 
 #define UMQ_TP_CREATE_FLAG_USED_PORTS          (1)        // enable arg used ports when create transport pool resource
