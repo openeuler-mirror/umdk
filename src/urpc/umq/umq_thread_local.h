@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define UMQ_THREAD_ID_RANGE_DEFAULT 32u
+#define UMQ_THREAD_ID_RANGE_DEFAULT 8u
 #define UMQ_THREAD_ID_MAX           256u
 #define UMQ_THREAD_ID_INVALID       0xFFFFFFFFu
 
