@@ -34,7 +34,7 @@
 // All post paths (jfs_send, jetty_send, jfr_recv, jetty_recv) are sequential
 // within a thread, share one thread_local copy to minimize TLS memory.
 // sge[][BONDP_MAX_SGE_NUM + 1] is split per WR: src takes front, dst takes the rest.
-// Constraint: src_num_sge + dst_num_sge <= 33 (one of them is always 1).
+// Constraint: src_num_sge + dst_num_sge <= BONDP_MAX_SGE_NUM + 1 (both are always 1).
 static thread_local struct {
     union {
         urma_jfs_wr_t jfs[BONDP_MAX_WR_LIST_NUM];
