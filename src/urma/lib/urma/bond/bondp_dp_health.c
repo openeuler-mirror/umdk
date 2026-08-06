@@ -57,8 +57,9 @@ typedef struct bondp_hc_node {
     std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
 #endif
 
-    pthread_rwlock_t lock; /* Protects tjetty_list and hc_tjetty */
+    pthread_rwlock_t lock; /* Protects tjetty_list, hc_tjetty and hc_tseg */
     struct bondp_target_jetty *hc_tjetty[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
+    urma_target_seg_t *hc_tseg[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     struct ub_list tjetty_list;
     uint8_t no_cqe_round[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
     bool probe_checked[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
@@ -286,7 +287,7 @@ static void hc_probe_link(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node,
     }
 
     urma_target_jetty_t *tjetty = p_tjetty->p_tjetty;
-    urma_target_seg_t *tseg = p_tjetty->p_check_tseg;
+    urma_target_seg_t *tseg = node->hc_tseg[local_idx][target_idx];
     if (tjetty == NULL || tseg == NULL) {
         return;
     }
@@ -411,6 +412,7 @@ static int hc_init_node(bondp_hc_node_t *node, uint32_t node_idx)
     node->node_idx = node_idx;
     ub_list_init(&node->tjetty_list);
     (void)memset(node->hc_tjetty, 0, sizeof(node->hc_tjetty));
+    (void)memset(node->hc_tseg, 0, sizeof(node->hc_tseg));
     (void)memset(node->no_cqe_round, 0, sizeof(node->no_cqe_round));
     (void)memset(node->probe_checked, 0, sizeof(node->probe_checked));
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
@@ -437,6 +439,19 @@ static void hc_destroy_node(bondp_hc_node_t *node)
         ub_list_remove(&tjetty->hc_entry);
         tjetty->hc_registered = false;
         tjetty->hc_node_idx = 0;
+    }
+
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+            if (node->hc_tseg[i][j] == NULL) {
+                continue;
+            }
+            if (urma_unimport_seg(node->hc_tseg[i][j]) == URMA_SUCCESS) {
+                node->hc_tseg[i][j] = NULL;
+            } else {
+                URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+            }
+        }
     }
 
     pthread_rwlock_destroy(&node->lock);
@@ -817,29 +832,8 @@ int bondp_hc_fill_seg_info(const bondp_context_t *bdp_ctx,
     return 0;
 }
 
-urma_status_t bondp_hc_unimport_tseg(bondp_target_jetty_t *bdp_tjetty)
-{
-    if (bdp_tjetty == NULL) {
-        return URMA_FAIL;
-    }
-
-    urma_status_t ret = URMA_SUCCESS;
-    for (uint32_t i = 0; i < bdp_tjetty->p_tjetty_count; ++i) {
-        urma_target_seg_t *tseg = bdp_tjetty->p_tjettys[i].p_check_tseg;
-        if (tseg == NULL) {
-            continue;
-        }
-        bdp_tjetty->p_tjettys[i].p_check_tseg = NULL;
-        if (urma_unimport_seg(tseg) != URMA_SUCCESS) {
-            URMA_LOG_ERR("Failed to unimport health probe seg, path_idx=%u.\n", i);
-            ret = URMA_FAIL;
-        }
-    }
-    return ret;
-}
-
-int bondp_hc_import_tseg(const bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
-                         const urma_bond_id_info_out_t *rjetty_info)
+int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty,
+                             const urma_bond_id_info_out_t *rjetty_info)
 {
     if (bdp_ctx == NULL || bdp_tjetty == NULL || rjetty_info == NULL) {
         return -EINVAL;
@@ -847,99 +841,8 @@ int bondp_hc_import_tseg(const bondp_context_t *bdp_ctx, bondp_target_jetty_t *b
     if (bdp_ctx->hc_ctx == NULL || !rjetty_info->is_health_check_enable) {
         return 0;
     }
-
-    urma_import_seg_flag_t flag = {
-        .bs.cacheable = URMA_NON_CACHEABLE,
-        .bs.mapping = URMA_SEG_NOMAP,
-        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
-    };
-    for (uint32_t k = 0; k < bdp_tjetty->p_tjetty_count; ++k) {
-        bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[k];
-        if (path->p_tjetty == NULL) {
-            continue;
-        }
-        uint32_t i = path->local_indice;
-        uint32_t j = path->remote_indice;
-        if (bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        const urma_seg_base_t *base = &rjetty_info->health_check_seg.slaves[j];
-        if (base->len == 0) {
-            continue;
-        }
-
-        urma_seg_t seg = {0};
-        bondp_seg_base_to_seg(base, &seg);
-        path->p_check_tseg = urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
-        if (path->p_check_tseg == NULL) {
-            URMA_LOG_ERR("Failed to import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
-            (void)bondp_hc_unimport_tseg(bdp_tjetty);
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static bool hc_tjetty_has_probe_path(const bondp_target_jetty_t *bdp_tjetty)
-{
-    for (uint32_t i = 0; i < bdp_tjetty->p_tjetty_count; ++i) {
-        if (bdp_tjetty->p_tjettys[i].p_tjetty != NULL && bdp_tjetty->p_tjettys[i].p_check_tseg != NULL) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static void hc_register_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t *bdp_tjetty)
-{
-    for (uint32_t k = 0; k < bdp_tjetty->p_tjetty_count; ++k) {
-        if (bdp_tjetty->p_tjettys[k].p_tjetty == NULL || bdp_tjetty->p_tjettys[k].p_check_tseg == NULL) {
-            continue;
-        }
-        uint32_t i = bdp_tjetty->p_tjettys[k].local_indice;
-        uint32_t j = bdp_tjetty->p_tjettys[k].remote_indice;
-        if (node->hc_tjetty[i][j] != NULL) {
-            continue;
-        }
-        node->hc_tjetty[i][j] = bdp_tjetty;
-        node->no_cqe_round[i][j] = 0;
-    }
-}
-
-static bondp_target_jetty_t *hc_find_tjetty_for_path(bondp_hc_node_t *node, uint32_t local_idx,
-                                                     uint32_t target_idx)
-{
-    bondp_target_jetty_t *tjetty = NULL;
-
-    UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
-        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(tjetty, local_idx, target_idx);
-        if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL && p_tjetty->p_check_tseg != NULL) {
-            return tjetty;
-        }
-    }
-    return NULL;
-}
-
-static void hc_unregister_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t *bdp_tjetty)
-{
-    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
-            if (node->hc_tjetty[i][j] != bdp_tjetty) {
-                continue;
-            }
-            node->hc_tjetty[i][j] = hc_find_tjetty_for_path(node, i, j);
-            node->no_cqe_round[i][j] = 0;
-        }
-    }
-}
-
-int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
-{
-    if (bdp_ctx == NULL || bdp_tjetty == NULL || bdp_tjetty->hc_registered) {
+    if (bdp_tjetty->hc_registered) {
         return -1;
-    }
-    if (bdp_ctx->hc_ctx == NULL) {
-        return 0;
     }
 
     bondp_hc_ctx_t *hc_ctx = bdp_ctx->hc_ctx;
@@ -952,16 +855,156 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
     }
     bondp_hc_node_t *node = &hc_ctx->nodes[node_idx];
 
+    urma_import_seg_flag_t flag = {
+        .bs.cacheable = URMA_NON_CACHEABLE,
+        .bs.mapping = URMA_SEG_NOMAP,
+        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
+    };
+
+    bool any_registered = false;
+
+    /* Slot check and seg import must be atomic under the write lock to prevent
+     * duplicate imports when multiple tjettys target the same [i][j] slot. */
     pthread_rwlock_wrlock(&node->lock);
-    if (hc_tjetty_has_probe_path(bdp_tjetty)) {
+    for (uint32_t k = 0; k < bdp_tjetty->p_tjetty_count; ++k) {
+        bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[k];
+        if (path->p_tjetty == NULL) {
+            continue;
+        }
+        uint32_t i = path->local_indice;
+        uint32_t j = path->remote_indice;
+        const urma_seg_base_t *base = &rjetty_info->health_check_seg.slaves[j];
+        if (bdp_ctx->p_ctxs[i] == NULL || base->len == 0) {
+            continue;
+        }
+        any_registered = true;
+        path->hc_va = base->ubva.va;
+        path->hc_token_id = base->token_id;
+        if (node->hc_tjetty[i][j] != NULL) {
+            continue;
+        }
+
+        /* Register the tjetty at this path slot */
+        node->hc_tjetty[i][j] = bdp_tjetty;
+        node->no_cqe_round[i][j] = 0;
+
+        /* Import health probe seg at node level if not already present */
+        if (node->hc_tseg[i][j] == NULL) {
+            urma_seg_t seg = {0};
+            bondp_seg_base_to_seg(base, &seg);
+            node->hc_tseg[i][j] = urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
+            if (node->hc_tseg[i][j] == NULL) {
+                URMA_LOG_ERR("Failed to import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+                /* Rollback: unregister paths and unimport segs from this call */
+                for (uint32_t rk = 0; rk <= k; ++rk) {
+                    uint32_t ri = bdp_tjetty->p_tjettys[rk].local_indice;
+                    uint32_t rj = bdp_tjetty->p_tjettys[rk].remote_indice;
+                    if (node->hc_tjetty[ri][rj] != bdp_tjetty) {
+                        continue;
+                    }
+                    if (node->hc_tseg[ri][rj] != NULL) {
+                        if (urma_unimport_seg(node->hc_tseg[ri][rj]) == URMA_SUCCESS) {
+                            node->hc_tseg[ri][rj] = NULL;
+                        } else {
+                            URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u.\n", ri, rj);
+                        }
+                    }
+                    node->hc_tjetty[ri][rj] = NULL;
+                }
+                pthread_rwlock_unlock(&node->lock);
+                return -1;
+            }
+        }
+    }
+
+    if (any_registered) {
         bdp_tjetty->hc_registered = true;
         bdp_tjetty->hc_node_idx = node_idx;
         ub_list_push_back(&node->tjetty_list, &bdp_tjetty->hc_entry);
-        hc_register_tjetty_path(node, bdp_tjetty);
     }
     pthread_rwlock_unlock(&node->lock);
+
     URMA_LOG_DEBUG("Health check tjetty registered, node_idx=%u.\n", node->node_idx);
     return 0;
+}
+
+static bondp_target_jetty_t *hc_find_tjetty_for_path(bondp_hc_node_t *node, uint32_t local_idx,
+                                                     uint32_t target_idx)
+{
+    bondp_target_jetty_t *tjetty = NULL;
+
+    UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
+        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(tjetty, local_idx, target_idx);
+        if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL && p_tjetty->hc_va != 0) {
+            return tjetty;
+        }
+    }
+    return NULL;
+}
+
+static void hc_unregister_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t *bdp_tjetty,
+                                      bondp_context_t *bdp_ctx)
+{
+    urma_import_seg_flag_t flag = {
+        .bs.cacheable = URMA_NON_CACHEABLE,
+        .bs.mapping = URMA_SEG_NOMAP,
+        .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
+    };
+
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; ++j) {
+            if (node->hc_tjetty[i][j] != bdp_tjetty) {
+                continue;
+            }
+            if (node->hc_tseg[i][j] != NULL) {
+                if (urma_unimport_seg(node->hc_tseg[i][j]) != URMA_SUCCESS) {
+                    URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+                    node->hc_tjetty[i][j] = NULL;
+                    atomic_store(&node->valid[i][j], false);
+                    continue;
+                }
+                node->hc_tseg[i][j] = NULL;
+            }
+
+            bondp_target_jetty_t *backup = hc_find_tjetty_for_path(node, i, j);
+            node->hc_tjetty[i][j] = backup;
+            node->no_cqe_round[i][j] = 0;
+
+            if (backup == NULL) {
+                continue;
+            }
+
+            /* Backup found: re-import seg using backup's va and token_id.
+             * eid/uasid come from the backup's physical target jetty;
+             * len and attr are fixed for health check segs. */
+            const bondp_p_target_jetty_t *backup_path = bondp_find_p_tjetty_const(backup, i, j);
+            if (backup_path == NULL || backup_path->p_tjetty == NULL || bdp_ctx->p_ctxs[i] == NULL) {
+                continue;
+            }
+            urma_seg_t seg = {
+                .ubva = {
+                    .eid = backup_path->p_tjetty->id.eid,
+                    .uasid = backup_path->p_tjetty->id.uasid,
+                    .va = backup_path->hc_va,
+                },
+                .len = HC_PROBE_SEG_LEN,
+                .attr = {
+                    .bs = {
+                        .token_policy = URMA_TOKEN_NONE,
+                        .cacheable = URMA_NON_CACHEABLE,
+                        .access = URMA_ACCESS_WRITE | URMA_ACCESS_READ,
+                    },
+                },
+                .token_id = backup_path->hc_token_id,
+            };
+            node->hc_tseg[i][j] = urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
+            if (node->hc_tseg[i][j] == NULL) {
+                URMA_LOG_ERR("Failed to re-import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+                node->hc_tjetty[i][j] = NULL;
+                atomic_store(&node->valid[i][j], false);
+            }
+        }
+    }
 }
 
 void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
@@ -984,7 +1027,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
 
     pthread_rwlock_wrlock(&node->lock);
     ub_list_remove(&bdp_tjetty->hc_entry);
-    hc_unregister_tjetty_path(node, bdp_tjetty);
+    hc_unregister_tjetty_path(node, bdp_tjetty, bdp_ctx);
     bdp_tjetty->hc_registered = false;
     bdp_tjetty->hc_node_idx = 0;
     pthread_rwlock_unlock(&node->lock);
