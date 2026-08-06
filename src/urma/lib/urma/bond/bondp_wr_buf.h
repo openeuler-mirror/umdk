@@ -16,8 +16,8 @@
 
 #include "urma_types.h"
 
-#define BONDP_MAX_SGE_NUM             (32)
-#define BONDP_BATCH_POST_MAX_NUM      (280)
+#define BONDP_MAX_SGE_NUM             (1)
+#define BONDP_BATCH_POST_MAX_NUM      (256)
 
 #ifdef __cplusplus
 extern "C" {

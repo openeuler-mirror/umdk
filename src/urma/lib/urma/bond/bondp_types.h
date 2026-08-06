@@ -29,7 +29,7 @@
 
 #define BONDP_MAX_NUM_JETTYS          (10240)
 #define BONDP_MAX_NUM_RSEGS           (10240)
-#define BONDP_MAX_WR_LIST_NUM         (300)
+#define BONDP_MAX_WR_LIST_NUM         (256)
 #define PRIMARY_EID_NUM               (2)
 #define PORT_EID_MAX_NUM_PER_DEV      (9)
 #define PORT_EID_MAX_NUM              (PORT_EID_MAX_NUM_PER_DEV * PRIMARY_EID_NUM)
