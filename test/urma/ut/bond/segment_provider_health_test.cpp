@@ -611,11 +611,11 @@ TEST(UrmaBondTest, HealthV2PublicApisHonorDisabledAndInvalidContracts)
     EXPECT_EQ(0, bondp_hc_fill_seg_info(&fixture.ctx, &segInfo, &enabled));
     EXPECT_FALSE(enabled);
 
-    EXPECT_EQ(-EINVAL, bondp_hc_import_tseg(nullptr, &fixture.target, &idInfo));
-    EXPECT_EQ(-EINVAL, bondp_hc_import_tseg(&fixture.ctx, nullptr, &idInfo));
-    EXPECT_EQ(-EINVAL, bondp_hc_import_tseg(&fixture.ctx, &fixture.target, nullptr));
-    EXPECT_EQ(0, bondp_hc_import_tseg(&fixture.ctx, &fixture.target, &idInfo));
-    EXPECT_EQ(URMA_SUCCESS, bondp_hc_unimport_tseg(&fixture.target));
-    EXPECT_EQ(URMA_FAIL, bondp_hc_unimport_tseg(nullptr));
+    EXPECT_EQ(-EINVAL, bondp_hc_register_tjetty(nullptr, &fixture.target, &idInfo));
+    EXPECT_EQ(-EINVAL, bondp_hc_register_tjetty(&fixture.ctx, nullptr, &idInfo));
+    EXPECT_EQ(-EINVAL, bondp_hc_register_tjetty(&fixture.ctx, &fixture.target, nullptr));
+    EXPECT_EQ(0, bondp_hc_register_tjetty(&fixture.ctx, &fixture.target, &idInfo));
+    bondp_hc_unregister_tjetty(&fixture.ctx, &fixture.target);
+    bondp_hc_unregister_tjetty(&fixture.ctx, nullptr);
 
 }
