@@ -8,15 +8,20 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include <cstdlib>
-
 #include "mem_entity_def.h"
 #include "shmemi_logger.h"
+#include "shmemi_scope_guard.h"
 #include "dl_acl_api.h"
+#include "dl_hcomm_api.h"
+#include "dl_hcomm_def.h"
 #include "device_rdma_common.h"
 #include "device_rdma_helper.h"
 #include "transport/topo/topo_reader.h"
 #include "device_rdma_transport_manager_v2.h"
+
+#include <chrono>
+#include <cstdlib>
+#include <thread>
 
 namespace shm {
 namespace transport {
@@ -24,16 +29,22 @@ namespace device {
 
 constexpr uint32_t RDMA_PORT_PREFIX = 60032;
 constexpr uint32_t MAX_RANKS_PER_NIC = 16;
-constexpr uint32_t ATOMIC_MAX_NUM = 128;
-constexpr uint32_t RDMA_NOTIFY_NUM = 3;
-constexpr uint32_t RDMA_QUEUE_NUM = 1;
-constexpr uint32_t ENDPOINT_DESC_COUNT = 1;
-constexpr uint32_t QP_COUNT = 1;
-constexpr uint32_t MEMORY_ALIGNMENT = 512;
-constexpr uint8_t RDMA_TC_MIN = 0;
-constexpr uint8_t RDMA_TC_MAX = 255;
-constexpr uint8_t RDMA_SL_MIN = 0;
-constexpr uint8_t RDMA_SL_MAX = 7;
+constexpr uint32_t ATOMIC_MAX_NUM = 128;            // 最大的 atomic 并发数
+constexpr uint32_t RDMA_NOTIFY_NUM = 3;             // 通道通知数量
+constexpr uint32_t RDMA_QUEUE_NUM = 1;              // 每个通道的 RoCE 队列数
+constexpr uint32_t ENDPOINT_DESC_COUNT = 1;         // 端点描述符数量
+constexpr uint32_t QP_COUNT = 1;                    // QP 数量
+constexpr uint32_t SEND_RECV_QUEUE_COUNT = 2;       // 每个 rank 的 WQ(sq+rq)与 CQ(scq+rcq)数量
+constexpr uint32_t ATOMIC_LOCAL_BUFFER_INDEX = 1;   // atomic 内存位于 localBufferAddr 数组的第 2 个槽位
+constexpr int32_t ROCE_V1_DB_MODE_HW = 0;          // 旧版格式 dbMode=0 表示硬件 doorbell (HW_DB)
+constexpr uint32_t MEMORY_ALIGNMENT = 4096;         // HNS 1825 atomic MR 注册需要 4K 对齐
+constexpr uint8_t RDMA_TC_MIN = 0;                  // RoCE TC 最小值
+constexpr uint8_t RDMA_TC_MAX = 255;                // RoCE TC 最大值
+constexpr uint8_t RDMA_SL_MIN = 0;                  // RoCE SL 最小值
+constexpr uint8_t RDMA_SL_MAX = 7;                  // RoCE SL 最大值
+// 非阻塞建链状态轮询参数(按通道个数缩放)
+constexpr uint32_t CHANNEL_STATUS_POLL_INTERVAL_PER_CH_MS = 10;   // 单通道单次轮询间隔(ms)
+constexpr uint32_t CHANNEL_STATUS_POLL_TIMEOUT_PER_CH_MS = 60000; // 单通道建链就绪等待超时(ms) = 1min
 
 RdmaTransportManagerV2::~RdmaTransportManagerV2()
 {
@@ -63,7 +74,7 @@ Result RdmaTransportManagerV2::OpenDevice(const TransportOptions& options)
     SHM_ASSERT_LOG_AND_RETURN(
         ret == 0 && phyId >= 0,
         "AclrtGetPhyDevIdByLogicDevId() return=" << ret << ", userId=" << userId << ", logicDeviceId=" << logicId
-                                                   << ", output phyId=" << phyId,
+                                                 << ", output phyId=" << phyId,
         ACLSHMEM_INNER_ERROR);
     phyId_ = static_cast<uint32_t>(phyId);
 
@@ -102,7 +113,7 @@ Result RdmaTransportManagerV2::OpenDevice(const TransportOptions& options)
 
 Result RdmaTransportManagerV2::BuildEndpointDesc(EndpointDesc& desc)
 {
-    EndpointDescInit(&desc, 1);
+    EndpointDescInit(&desc, ENDPOINT_DESC_COUNT);
 
     desc.protocol = COMM_PROTOCOL_ROCE;
     if (deviceIp_.type == IpV4) {
@@ -138,7 +149,7 @@ Result RdmaTransportManagerV2::CreateEndpoint()
     SHM_LOG_DEBUG(
         "rank[" << rankId_ << "] HcommEndpointCreate, protocol=COMM_PROTOCOL_ROCE, locType=ENDPOINT_LOC_TYPE_HOST"
                 << ", devPhyId=" << phyId_);
-    HcommResult hret = HcommEndpointCreate(&endpointDesc, &endpointHandle_);
+    HcommResult hret = DlHcommApi::HcommEndpointCreate(&endpointDesc, &endpointHandle_);
     if (hret != 0) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] HcommEndpointCreate failed: " << hret);
         return ACLSHMEM_INNER_ERROR;
@@ -151,7 +162,7 @@ Result RdmaTransportManagerV2::CreateEndpoint()
 void RdmaTransportManagerV2::DestroyEndpoint()
 {
     if (atomicMemHandle_ != nullptr && endpointHandle_ != nullptr) {
-        HcommResult hret = HcommMemUnreg(endpointHandle_, atomicMemHandle_);
+        HcommResult hret = DlHcommApi::HcommMemUnreg(endpointHandle_, atomicMemHandle_);
         if (hret != 0) {
             SHM_LOG_WARN("rank[" << rankId_ << "] HcommMemUnreg for atomic memory failed: " << hret);
         }
@@ -160,7 +171,7 @@ void RdmaTransportManagerV2::DestroyEndpoint()
     }
 
     if (endpointHandle_ != nullptr) {
-        HcommResult hret = HcommEndpointDestroy(endpointHandle_);
+        HcommResult hret = DlHcommApi::HcommEndpointDestroy(endpointHandle_);
         if (hret != 0) {
             SHM_LOG_WARN("rank[" << rankId_ << "] HcommEndpointDestroy failed: " << hret);
         }
@@ -180,7 +191,7 @@ void RdmaTransportManagerV2::DestroyEndpoint()
 
 Result RdmaTransportManagerV2::CloseDevice()
 {
-    HcommChannelDestroy(reinterpret_cast<const ChannelHandle*>(channelPtrs_.data()), channelPtrs_.size());
+    DlHcommApi::HcommChannelDestroy(reinterpret_cast<const ChannelHandle*>(channelPtrs_.data()), channelPtrs_.size());
     channelPtrs_.clear();
 
     ClearAllRegisterMRs();
@@ -197,17 +208,18 @@ Result RdmaTransportManagerV2::RegisterMemoryRegion(const TransportMemoryRegion&
 
     CommMem commMem{};
     if ((mr.flags & REG_MR_FLAG_HBM) || IsVirtualAddressNpu(mr.addr)) {
-        commMem.type = COMM_MEM_TYPE_DEVICE;
+        commMem.type = CommMemType::DEVICE;
     } else {
-        commMem.type = COMM_MEM_TYPE_HOST;
+        commMem.type = CommMemType::HOST;
     }
     commMem.addr = reinterpret_cast<void*>(static_cast<ptrdiff_t>(mr.addr));
     commMem.size = mr.size;
 
     HcommMemHandle memHandle = nullptr;
     SHM_LOG_DEBUG(
-        "rank[" << rankId_ << "] HcommMemReg, addr=" << mr.addr << ", size=" << mr.size << ", type=" << commMem.type);
-    HcommResult hret = HcommMemReg(endpointHandle_, "HcclBuffer", &commMem, &memHandle);
+        "rank[" << rankId_ << "] HcommMemReg, addr=" << mr.addr << ", size=" << mr.size
+                << ", type=" << static_cast<int32_t>(commMem.type));
+    HcommResult hret = DlHcommApi::HcommMemReg(endpointHandle_, "HcclBuffer", &commMem, &memHandle);
     if (hret != 0) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] HcommMemReg failed: " << hret);
         return ACLSHMEM_INNER_ERROR;
@@ -231,7 +243,7 @@ Result RdmaTransportManagerV2::UnregisterMemoryRegion(uint64_t addr)
         return ACLSHMEM_INVALID_PARAM;
     }
 
-    HcommResult hret = HcommMemUnreg(endpointHandle_, pos->second.memHandle);
+    HcommResult hret = DlHcommApi::HcommMemUnreg(endpointHandle_, pos->second.memHandle);
     if (hret != 0) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] HcommMemUnreg failed: " << hret);
         return ACLSHMEM_INNER_ERROR;
@@ -244,7 +256,7 @@ Result RdmaTransportManagerV2::UnregisterMemoryRegion(uint64_t addr)
 void RdmaTransportManagerV2::ClearAllRegisterMRs()
 {
     for (auto it = registeredMRs_.begin(); it != registeredMRs_.end(); ++it) {
-        HcommResult hret = HcommMemUnreg(endpointHandle_, it->second.memHandle);
+        HcommResult hret = DlHcommApi::HcommMemUnreg(endpointHandle_, it->second.memHandle);
         if (hret != 0) {
             SHM_LOG_WARN("rank[" << rankId_ << "] HcommMemUnreg addr=" << it->first << " failed: " << hret);
         }
@@ -292,23 +304,17 @@ Result RdmaTransportManagerV2::Connect()
     }
 
     uint32_t channelNum = rankCount_ - 1;
+
     std::vector<HcommChannelDesc> channelDescs(channelNum);
-    HcommChannelDescInit(channelDescs.data(), channelNum);
-
-    uint8_t roceTc = GetEnvUint8("HCCL_RDMA_TC", DEFAULT_RDMA_TC, 0, 255, true);
-    uint8_t roceSl = GetEnvUint8("HCCL_RDMA_SL", DEFAULT_RDMA_SL, 0, 7);
-
-    auto prepareRet = PrepareChannelDescs(channelDescs, roceTc, roceSl);
-    if (prepareRet != ACLSHMEM_SUCCESS) {
-        return prepareRet;
+    auto desc_init_ret = ShmemHcommChannelDescInit(channelDescs.data(), channelNum);
+    if (desc_init_ret != 0) {
+        SHM_LOG_ERROR("HcommChannelDescInit failed, ret = " << desc_init_ret);
+        return ACLSHMEM_INNER_ERROR;
     }
 
-    return CreateChannelsAndFillInfo(channelDescs, channelNum);
-}
+    uint8_t roceTc = GetEnvUint8("HCCL_RDMA_TC", DEFAULT_RDMA_TC, RDMA_TC_MIN, RDMA_TC_MAX, true);
+    uint8_t roceSl = GetEnvUint8("HCCL_RDMA_SL", DEFAULT_RDMA_SL, RDMA_SL_MIN, RDMA_SL_MAX);
 
-Result RdmaTransportManagerV2::PrepareChannelDescs(std::vector<HcommChannelDesc> &channelDescs, uint8_t roceTc,
-                                                   uint8_t roceSl)
-{
     uint32_t chIdx = 0;
     for (uint32_t remoteRank = 0; remoteRank < rankCount_; ++remoteRank) {
         if (remoteRank == rankId_) {
@@ -322,6 +328,7 @@ Result RdmaTransportManagerV2::PrepareChannelDescs(std::vector<HcommChannelDesc>
         }
 
         channelDescs[chIdx].remoteEndpoint.protocol = COMM_PROTOCOL_ROCE;
+
         if (rankIt->second.network.type == IpV4) {
             channelDescs[chIdx].remoteEndpoint.commAddr.type = COMM_ADDR_TYPE_IP_V4;
             channelDescs[chIdx].remoteEndpoint.commAddr.addr = rankIt->second.network.ip.ipv4.sin_addr;
@@ -329,13 +336,14 @@ Result RdmaTransportManagerV2::PrepareChannelDescs(std::vector<HcommChannelDesc>
             channelDescs[chIdx].remoteEndpoint.commAddr.type = COMM_ADDR_TYPE_IP_V6;
             channelDescs[chIdx].remoteEndpoint.commAddr.addr6 = rankIt->second.network.ip.ipv6.sin6_addr;
         }
-        channelDescs[chIdx].notifyNum = RDMA_NOTIFY_NUM;
+        channelDescs[chIdx].notifyNum = 3;
         channelDescs[chIdx].exchangeAllMems = true;
-        channelDescs[chIdx].roceAttr.queueNum = RDMA_QUEUE_NUM;
+        channelDescs[chIdx].roceAttr.queueNum = 1;
         channelDescs[chIdx].roceAttr.tc = roceTc;
         channelDescs[chIdx].roceAttr.sl = roceSl;
+        channelDescs[chIdx].roceAttr.retryCnt = DEFAULT_ROCE_RETRY_CNT;
+        channelDescs[chIdx].roceAttr.retryInterval = DEFAULT_ROCE_RETRY_INTERVAL;
         channelDescs[chIdx].socket = nullptr;
-
         bool isServer = (rankId_ < remoteRank);
         channelDescs[chIdx].role = isServer ? HCOMM_SOCKET_ROLE_SERVER : HCOMM_SOCKET_ROLE_CLIENT;
         uint32_t serverRank = isServer ? rankId_ : remoteRank;
@@ -344,19 +352,14 @@ Result RdmaTransportManagerV2::PrepareChannelDescs(std::vector<HcommChannelDesc>
             RDMA_PORT_PREFIX + (serverRank % MAX_RANKS_PER_NIC) * MAX_RANKS_PER_NIC + (clientRank % MAX_RANKS_PER_NIC));
         ++chIdx;
     }
-    return ACLSHMEM_SUCCESS;
-}
 
-Result RdmaTransportManagerV2::CreateChannelsAndFillInfo(std::vector<HcommChannelDesc> &channelDescs,
-                                                         uint32_t channelNum)
-{
     channelPtrs_.resize(channelNum);
 
     if (!RegisterAtomicMemory()) {
         return ACLSHMEM_INNER_ERROR;
     }
 
-    auto hcommRet = HcommChannelCreate(
+    auto hcommRet = DlHcommApi::HcommChannelCreate(
         endpointHandle_, COMM_ENGINE_AIV, channelDescs.data(), channelNum,
         reinterpret_cast<ChannelHandle*>(channelPtrs_.data()));
     if (hcommRet != 0) {
@@ -365,12 +368,74 @@ Result RdmaTransportManagerV2::CreateChannelsAndFillInfo(std::vector<HcommChanne
     }
     SHM_LOG_DEBUG("rank[" << rankId_ << "] HcommChannelCreate success, channelNum=" << channelNum);
 
+    auto channelGuard = shm::utils::make_scope_guard(channelPtrs_.data(), [this, channelNum](ChannelHandle*) {
+        DlHcommApi::HcommChannelDestroy(reinterpret_cast<const ChannelHandle*>(channelPtrs_.data()), channelNum);
+        channelPtrs_.clear();
+    });
+
+    const uint32_t pollIntervalMs = channelNum * CHANNEL_STATUS_POLL_INTERVAL_PER_CH_MS;
+    const uint32_t pollTimeoutMs = channelNum * CHANNEL_STATUS_POLL_TIMEOUT_PER_CH_MS;
+    std::vector<int32_t> statusList(channelNum, HCOMM_CHANNEL_STATUS_CONNECTING);
+    bool allReady = false;
+    bool connectFailed = false;
+    uint32_t elapsedMs = 0;
+    while (elapsedMs <= pollTimeoutMs) {
+        auto statusRet = DlHcommApi::HcommChannelGetStatus(channelPtrs_.data(), channelNum, statusList.data());
+        if (statusRet != 0) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] HcommChannelGetStatus failed: " << statusRet);
+            return ACLSHMEM_INNER_ERROR;
+        }
+
+        allReady = true;
+        connectFailed = false;
+        for (uint32_t i = 0; i < channelNum; ++i) {
+            const int32_t status = statusList[i];
+            if (status == HCOMM_CHANNEL_STATUS_READY) {
+                continue;
+            }
+            allReady = false;
+            if (status == HCOMM_CHANNEL_STATUS_CONNECTING) {
+                continue; // 建链中，继续等待
+            }
+            if (status == HCOMM_CHANNEL_STATUS_FAILED) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] channel[" << i << "] connect failed, status=" << status);
+                connectFailed = true;
+            } else if (status == HCOMM_CHANNEL_STATUS_TIMEOUT) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] channel[" << i << "] connect timeout, status=" << status);
+                connectFailed = true;
+            } else {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] channel[" << i << "] unknown status=" << status);
+                connectFailed = true;
+            }
+        }
+        if (allReady) {
+            break;
+        }
+        if (connectFailed) {
+            SHM_LOG_ERROR(
+                "rank[" << rankId_ << "] channel connect failed, stop polling, channelNum=" << channelNum
+                        << ", elapsedMs=" << elapsedMs);
+            return ACLSHMEM_INNER_ERROR;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(pollIntervalMs));
+        elapsedMs += pollIntervalMs;
+    }
+
+    if (!allReady) {
+        SHM_LOG_ERROR(
+            "rank[" << rankId_ << "] wait channel connect timeout, channelNum=" << channelNum << ", pollIntervalMs="
+                    << pollIntervalMs << ", pollTimeoutMs=" << pollTimeoutMs << ", elapsedMs=" << elapsedMs);
+        return ACLSHMEM_INNER_ERROR;
+    }
+    SHM_LOG_DEBUG("rank[" << rankId_ << "] all channels connected, elapsedMs=" << elapsedMs);
+
     auto fillRet = FillRdmaInfo();
     if (fillRet != ACLSHMEM_SUCCESS) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] FillRdmaInfo failed: " << fillRet);
         return fillRet;
     }
 
+    channelGuard.release();
     SHM_LOG_INFO("rank[" << rankId_ << "] Connect success, created " << channelNum << " channels");
     return ACLSHMEM_SUCCESS;
 }
@@ -421,63 +486,112 @@ int RdmaTransportManagerV2::ValidateRanksPerNic() const
         if (network.type == IpV4) {
             sameIp = (network.ip.ipv4.sin_addr.s_addr == deviceIp_.ip.ipv4.s_addr);
         } else {
-            sameIp = (memcmp(&network.ip.ipv6.sin6_addr, &deviceIp_.ip.ipv6,
-                             sizeof(deviceIp_.ip.ipv6)) == 0);
+            sameIp = (memcmp(&network.ip.ipv6.sin6_addr, &deviceIp_.ip.ipv6, sizeof(deviceIp_.ip.ipv6)) == 0);
         }
         if (sameIp) {
             sameIpCount++;
             if (sameIpCount > MAX_RANKS_PER_NIC) {
-                SHM_LOG_ERROR("rank[" << rankId_ << "] ranks per NIC/IP exceeded: " << sameIpCount
-                                       << " > " << MAX_RANKS_PER_NIC << ", conflict rank: " << entry.first);
+                SHM_LOG_ERROR(
+                    "rank[" << rankId_ << "] ranks per NIC/IP exceeded: " << sameIpCount << " > " << MAX_RANKS_PER_NIC
+                            << ", conflict rank: " << entry.first);
                 return ACLSHMEM_INVALID_PARAM;
             }
         }
     }
-    SHM_LOG_DEBUG("rank[" << rankId_ << "] ranks on same NIC/IP: " << sameIpCount
-                          << ", max allowed: " << MAX_RANKS_PER_NIC);
+    SHM_LOG_DEBUG(
+        "rank[" << rankId_ << "] ranks on same NIC/IP: " << sameIpCount << ", max allowed: " << MAX_RANKS_PER_NIC);
     return ACLSHMEM_SUCCESS;
 }
 
 void RdmaTransportManagerV2::CopyAiWQInfo(struct AiQpRMAWQ& dest, const SqContext& src) noexcept
 {
-    const auto& roceSq = src.contextInfo.roceSq;
-    dest.wqn = roceSq.qpn;
-    dest.bufAddr = roceSq.sqVa;
-    dest.wqeSize = roceSq.wqeSize;
-    dest.depth = roceSq.depth;
-    dest.headAddr = roceSq.headAddr;
-    dest.tailAddr = roceSq.tailAddr;
-    dest.sl = roceSq.sl;
-    dest.dbAddr = roceSq.dbVa;
-    dest.dbMode = static_cast<shm::DBMode>(roceSq.dbMode);
-    SHM_LOG_DEBUG(
-        "rank[" << rankId_ << "] CopyAiWQInfo, wqn=" << dest.wqn << ", bufAddr=0x" << std::hex << dest.bufAddr
-                << std::dec << ", wqeSize=" << dest.wqeSize << ", depth=" << dest.depth << ", headAddr=0x" << std::hex
-                << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex << dest.tailAddr << std::dec << ", sl="
-                << dest.sl << ", dbAddr=0x" << std::hex << dest.dbAddr << std::dec << ", dbMode=" << int(dest.dbMode));
+    if (IsRoceSqV2Format(src)) {
+        // 新版格式 (2026-07-07 及之后 CANN)
+        const auto& roceSq = src.contextInfo.roceSq;
+        dest.wqn = roceSq.qpn;
+        dest.bufAddr = roceSq.sqVa;
+        dest.wqeSize = roceSq.wqeSize;
+        dest.depth = roceSq.depth;
+        dest.headAddr = roceSq.headAddr;
+        dest.tailAddr = roceSq.tailAddr;
+        dest.sl = roceSq.sl;
+        dest.dbAddr = roceSq.dbHwVa;
+        dest.dbSwVa = roceSq.dbSwVa;
+        dest.mtuShift = roceSq.mtuShift;
+        dest.dbMode = DBMode::SW_DB; // 新版默认软件doorbell
+        SHM_LOG_DEBUG(
+            "rank[" << rankId_ << "] CopyAiWQInfo(V2), wqn=" << dest.wqn << ", bufAddr=0x" << std::hex << dest.bufAddr
+                    << std::dec << ", wqeSize=" << dest.wqeSize << ", depth=" << dest.depth << ", headAddr=0x"
+                    << std::hex << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex << dest.tailAddr << std::dec
+                    << ", sl=" << dest.sl << ", dbAddr=0x" << std::hex << dest.dbAddr << ", dbSwVa=0x" << std::hex
+                    << dest.dbSwVa << std::dec << ", mtuShift=" << static_cast<int>(dest.mtuShift));
+    } else {
+        // 旧版格式 (2026-07-07 之前 CANN) - 回退兼容
+        auto v1 = ExtractSqContextRoceV1(src);
+        dest.wqn = v1.qpn;
+        dest.bufAddr = v1.sqVa;
+        dest.wqeSize = v1.wqeSize;
+        dest.depth = v1.depth;
+        dest.headAddr = v1.headAddr;
+        dest.tailAddr = v1.tailAddr;
+        dest.sl = v1.sl;
+        dest.dbAddr = v1.dbVa;
+        dest.dbSwVa = 0;   // 旧版无软doorbell
+        dest.mtuShift = 0; // 旧版无此字段，填0
+        dest.dbMode = (v1.dbMode == ROCE_V1_DB_MODE_HW) ? DBMode::HW_DB : DBMode::SW_DB;
+        SHM_LOG_DEBUG(
+            "rank[" << rankId_ << "] CopyAiWQInfo(V1 fallback), wqn=" << dest.wqn << ", bufAddr=0x" << std::hex
+                    << dest.bufAddr << std::dec << ", wqeSize=" << dest.wqeSize << ", depth=" << dest.depth
+                    << ", headAddr=0x" << std::hex << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex
+                    << dest.tailAddr << std::dec << ", sl=" << dest.sl << ", dbAddr=0x" << std::hex << dest.dbAddr
+                    << std::dec << ", dbMode=" << static_cast<int>(v1.dbMode));
+    }
 }
 
 void RdmaTransportManagerV2::CopyAiCQInfo(struct AiQpRMACQ& dest, const CqContext& src) noexcept
 {
-    const auto& roceCq = src.contextInfo.roceCq;
-    dest.cqn = roceCq.cqn;
-    dest.bufAddr = roceCq.cqVa;
-    dest.cqeSize = roceCq.cqeSize;
-    dest.depth = roceCq.cqDepth;
-    dest.headAddr = roceCq.headAddr;
-    dest.tailAddr = roceCq.tailAddr;
-    dest.dbAddr = roceCq.dbVa;
-    dest.dbMode = static_cast<shm::DBMode>(roceCq.dbMode);
-    SHM_LOG_DEBUG(
-        "rank[" << rankId_ << "] CopyAiCQInfo, cqn=" << dest.cqn << ", bufAddr=0x" << std::hex << dest.bufAddr
-                << std::dec << ", cqeSize=" << dest.cqeSize << ", depth=" << dest.depth << ", headAddr=0x" << std::hex
-                << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex << dest.tailAddr << std::dec
-                << ", dbAddr=0x" << std::hex << dest.dbAddr << std::dec << ", dbMode=" << int(dest.dbMode));
+    if (IsRoceCqV2Format(src)) {
+        // 新版格式 (2026-07-07 之后 CANN)
+        const auto& roceCq = src.contextInfo.roceCq;
+        dest.cqn = roceCq.cqn;
+        dest.bufAddr = roceCq.cqVa;
+        dest.cqeSize = roceCq.cqeSize;
+        dest.depth = roceCq.cqDepth;
+        dest.headAddr = roceCq.headAddr;
+        dest.tailAddr = roceCq.tailAddr;
+        dest.dbAddr = roceCq.dbHwVa;
+        dest.dbSwVa = roceCq.dbSwVa;
+        dest.dbMode = DBMode::SW_DB; // 新版默认软件doorbell
+        SHM_LOG_DEBUG(
+            "rank[" << rankId_ << "] CopyAiCQInfo(V2), cqn=" << dest.cqn << ", bufAddr=0x" << std::hex << dest.bufAddr
+                    << std::dec << ", cqeSize=" << dest.cqeSize << ", depth=" << dest.depth << ", headAddr=0x"
+                    << std::hex << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex << dest.tailAddr << std::dec
+                    << ", dbAddr=0x" << std::hex << dest.dbAddr << ", dbSwVa=0x" << std::hex << dest.dbSwVa
+                    << std::dec);
+    } else {
+        // 旧版格式 (2026-07-07 之前 CANN) - 回退兼容
+        auto v1 = ExtractCqContextRoceV1(src);
+        dest.cqn = v1.cqn;
+        dest.bufAddr = v1.cqVa;
+        dest.cqeSize = v1.cqeSize;
+        dest.depth = v1.cqDepth;
+        dest.headAddr = v1.headAddr;
+        dest.tailAddr = v1.tailAddr;
+        dest.dbAddr = v1.dbVa;
+        dest.dbSwVa = 0; // 旧版无软doorbell
+        dest.dbMode = (v1.dbMode == ROCE_V1_DB_MODE_HW) ? DBMode::HW_DB : DBMode::SW_DB;
+        SHM_LOG_DEBUG(
+            "rank[" << rankId_ << "] CopyAiCQInfo(V1 fallback), cqn=" << dest.cqn << ", bufAddr=0x" << std::hex
+                    << dest.bufAddr << std::dec << ", cqeSize=" << dest.cqeSize << ", depth=" << dest.depth
+                    << ", headAddr=0x" << std::hex << dest.headAddr << std::dec << ", tailAddr=0x" << std::hex
+                    << dest.tailAddr << std::dec << ", dbAddr=0x" << std::hex << dest.dbAddr << std::dec
+                    << ", dbMode=" << static_cast<int>(v1.dbMode));
+    }
 }
 
 void RdmaTransportManagerV2::FillQpPreSettingCopyInfo(AiQpRMAQueueInfo*& copyInfo)
 {
-    copyInfo->count = 1;
+    copyInfo->count = QP_COUNT;
     copyInfo->sq = (AiQpRMAWQ*)(void*)(copyInfo + 1);
     copyInfo->rq = (AiQpRMAWQ*)(void*)(copyInfo->sq + rankCount_);
     copyInfo->scq = (AiQpRMACQ*)(void*)(copyInfo->rq + rankCount_);
@@ -533,17 +647,9 @@ Result RdmaTransportManagerV2::FillRdmaInfo()
 Result RdmaTransportManagerV2::GetRdmaInfoFromChannelEntity(
     AiQpRMAQueueInfo* copyInfo, const std::vector<ChannelHandle>& channelPtrs)
 {
-    auto ret = ReadLocalBufferInfo(copyInfo, channelPtrs);
-    if (ret != ACLSHMEM_SUCCESS) {
-        return ret;
-    }
-    return ReadRemoteBufferInfo(copyInfo, channelPtrs);
-}
-
-Result RdmaTransportManagerV2::ReadLocalBufferInfo(AiQpRMAQueueInfo *copyInfo,
-                                                   const std::vector<ChannelHandle> &channelPtrs)
-{
     ChannelEntity hostEntity{};
+    bool localInfoRead = false;
+
     for (const auto& channelPtr : channelPtrs) {
         if (channelPtr == 0) {
             continue;
@@ -562,34 +668,33 @@ Result RdmaTransportManagerV2::ReadLocalBufferInfo(AiQpRMAQueueInfo *copyInfo,
                 ACL_MEMCPY_DEVICE_TO_HOST);
             if (aclRet != 0) {
                 SHM_LOG_ERROR("rank[" << rankId_ << "] copy local buffer from device failed: " << aclRet);
-                continue;
+            } else {
+                copyInfo->mr[rankId_].lkey = localBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.lkey;
+                copyInfo->mr[rankId_].rkey = localBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.rkey;
+                localInfoRead = true;
             }
-            copyInfo->mr[rankId_].lkey = localBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.lkey;
-            copyInfo->mr[rankId_].rkey = localBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.rkey;
         }
         if (hostEntity.localBufferNum > 1) {
             RegedBufferEntity atomicLocalBuffer{};
-            auto ret = DlAclApi::AclrtMemcpy(&atomicLocalBuffer, sizeof(RegedBufferEntity),
-                                             reinterpret_cast<RegedBufferEntity *>(hostEntity.localBufferAddr) + 1,
-                                             sizeof(RegedBufferEntity), ACL_MEMCPY_DEVICE_TO_HOST);
-            if (ret == 0) {
+            aclRet = DlAclApi::AclrtMemcpy(
+                &atomicLocalBuffer, sizeof(RegedBufferEntity),
+                reinterpret_cast<RegedBufferEntity*>(hostEntity.localBufferAddr) + ATOMIC_LOCAL_BUFFER_INDEX,
+                sizeof(RegedBufferEntity), ACL_MEMCPY_DEVICE_TO_HOST);
+            if (aclRet != 0) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] pre-read atomic local buffer failed: " << aclRet);
+            } else {
                 atomicLkey_ = atomicLocalBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.lkey;
                 SHM_LOG_DEBUG("rank[" << rankId_ << "] atomicLkey=" << atomicLkey_);
-            } else {
-                SHM_LOG_ERROR("rank[" << rankId_ << "] pre-read atomic local buffer failed: " << ret);
             }
         }
-        if (hostEntity.localBufferNum > 0 && hostEntity.localBufferAddr != nullptr) {
-            return ACLSHMEM_SUCCESS;
-        }
+        break;
     }
-    SHM_LOG_ERROR("rank[" << rankId_ << "] failed to read local buffer info from any channel entity");
-    return ACLSHMEM_INNER_ERROR;
-}
 
-Result RdmaTransportManagerV2::ReadRemoteBufferInfo(AiQpRMAQueueInfo *copyInfo,
-                                                    const std::vector<ChannelHandle> &channelPtrs)
-{
+    if (!localInfoRead) {
+        SHM_LOG_ERROR("rank[" << rankId_ << "] failed to read local buffer info from any channel entity");
+        return ACLSHMEM_INNER_ERROR;
+    }
+
     bool remoteInfoRead = false;
     for (auto it = rankInfo_.begin(); it != rankInfo_.end(); ++it) {
         auto& map = it->second.memoryMap;
@@ -601,93 +706,96 @@ Result RdmaTransportManagerV2::ReadRemoteBufferInfo(AiQpRMAQueueInfo *copyInfo,
         if (it->first == rankId_) {
             continue;
         }
-        if (ReadSingleRemoteRank(copyInfo, channelPtrs, it->first) == ACLSHMEM_SUCCESS) {
-            remoteInfoRead = true;
+
+        uint32_t channelIdx = it->first;
+        if (channelIdx > rankId_) {
+            channelIdx--;
         }
+        if (channelIdx >= channelPtrs.size()) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] channel index " << channelIdx << " out of range");
+            continue;
+        }
+
+        ChannelHandle channelPtr = channelPtrs[channelIdx];
+        if (channelPtr == 0) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] channel ptr is null for channel " << channelIdx);
+            continue;
+        }
+
+        hostEntity = {};
+        auto aclRet = DlAclApi::AclrtMemcpy(
+            &hostEntity, sizeof(ChannelEntity), reinterpret_cast<void*>(channelPtr), sizeof(ChannelEntity),
+            ACL_MEMCPY_DEVICE_TO_HOST);
+        if (aclRet != 0) {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] copy channel entity from device failed: " << aclRet);
+            continue;
+        }
+
+        if (hostEntity.remoteBufferNum > 0 && hostEntity.remoteBufferAddr != nullptr) {
+            RegedBufferEntity remoteBuffer{};
+            aclRet = DlAclApi::AclrtMemcpy(
+                &remoteBuffer, sizeof(RegedBufferEntity), hostEntity.remoteBufferAddr, sizeof(RegedBufferEntity),
+                ACL_MEMCPY_DEVICE_TO_HOST);
+            if (aclRet != 0) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] copy remote buffer from device failed: " << aclRet);
+                continue;
+            }
+            copyInfo->mr[it->first].lkey = remoteBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.lkey;
+            copyInfo->mr[it->first].rkey = remoteBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.rkey;
+            remoteInfoRead = true;
+        } else {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] remoteBufferNum = 0 || remoteBufferAddr is null");
+            continue;
+        }
+
+        // 填充sq信息
+        if (hostEntity.sqNum > 0 && hostEntity.sqContextAddr != nullptr) {
+            std::vector<SqContext> sqContexts(hostEntity.sqNum);
+            aclRet = DlAclApi::AclrtMemcpy(
+                sqContexts.data(), sizeof(SqContext) * hostEntity.sqNum, hostEntity.sqContextAddr,
+                sizeof(SqContext) * hostEntity.sqNum, ACL_MEMCPY_DEVICE_TO_HOST);
+            if (aclRet != 0) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] copy sq context from device failed: " << aclRet);
+                continue;
+            }
+
+            CopyAiWQInfo(copyInfo->sq[it->first], sqContexts[0]);
+        } else {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] sqNum = 0 || sqContextAddr is null");
+        }
+
+        // 填充cq信息
+        if (hostEntity.cqNum > 0 && hostEntity.cqContextAddr != nullptr) {
+            std::vector<CqContext> cqContexts(hostEntity.cqNum);
+            aclRet = DlAclApi::AclrtMemcpy(
+                cqContexts.data(), sizeof(CqContext) * hostEntity.cqNum, hostEntity.cqContextAddr,
+                sizeof(CqContext) * hostEntity.cqNum, ACL_MEMCPY_DEVICE_TO_HOST);
+            if (aclRet != 0) {
+                SHM_LOG_ERROR("rank[" << rankId_ << "] copy cq context from device failed: " << aclRet);
+                continue;
+            }
+
+            CopyAiCQInfo(copyInfo->scq[it->first], cqContexts[0]);
+        } else {
+            SHM_LOG_ERROR("rank[" << rankId_ << "] cqNum = 0 || cqContextAddr is null");
+        }
+
+        // atomicSizePerRank 每个rank的atomic内存大小
+        size_t atomicSizePerRank = ATOMIC_MAX_NUM * sizeof(uint64_t);
+        copyInfo->sq[it->first].atomicAddr =
+            reinterpret_cast<uint64_t>(static_cast<char*>(atomicSharedMemory_) + it->first * atomicSizePerRank);
+        copyInfo->sq[it->first].atomicLkey = atomicLkey_;
+        copyInfo->rq[it->first].atomicAddr =
+            reinterpret_cast<uint64_t>(static_cast<char*>(atomicSharedMemory_) + it->first * atomicSizePerRank);
+        copyInfo->rq[it->first].atomicLkey = atomicLkey_;
     }
+
     if (!remoteInfoRead && rankCount_ > 1) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] failed to read remote buffer info from any channel entity");
         return ACLSHMEM_INNER_ERROR;
     }
-    return ACLSHMEM_SUCCESS;
-}
 
-Result RdmaTransportManagerV2::ReadSingleRemoteRank(AiQpRMAQueueInfo *copyInfo,
-                                                    const std::vector<ChannelHandle> &channelPtrs, uint32_t rankId)
-{
-    uint32_t channelIdx = rankId;
-    if (channelIdx > rankId_) {
-        channelIdx--;
-    }
-    if (channelIdx >= channelPtrs.size()) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] channel index " << channelIdx << " out of range");
-        return ACLSHMEM_INNER_ERROR;
-    }
-    ChannelHandle channelPtr = channelPtrs[channelIdx];
-    if (channelPtr == 0) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] channel ptr is null for channel " << channelIdx);
-        return ACLSHMEM_INNER_ERROR;
-    }
-    ChannelEntity hostEntity{};
-    auto aclRet = DlAclApi::AclrtMemcpy(&hostEntity, sizeof(ChannelEntity), reinterpret_cast<void *>(channelPtr),
-                                        sizeof(ChannelEntity), ACL_MEMCPY_DEVICE_TO_HOST);
-    if (aclRet != 0) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] copy channel entity from device failed: " << aclRet);
-        return ACLSHMEM_INNER_ERROR;
-    }
-    if (hostEntity.remoteBufferNum == 0 || hostEntity.remoteBufferAddr == nullptr) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] remoteBufferNum = 0 || remoteBufferAddr is null");
-        return ACLSHMEM_INNER_ERROR;
-    }
-    RegedBufferEntity remoteBuffer{};
-    aclRet = DlAclApi::AclrtMemcpy(&remoteBuffer, sizeof(RegedBufferEntity), hostEntity.remoteBufferAddr,
-                                   sizeof(RegedBufferEntity), ACL_MEMCPY_DEVICE_TO_HOST);
-    if (aclRet != 0) {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] copy remote buffer from device failed: " << aclRet);
-        return ACLSHMEM_INNER_ERROR;
-    }
-    copyInfo->mr[rankId].lkey = remoteBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.lkey;
-    copyInfo->mr[rankId].rkey = remoteBuffer.bufferInfo.rma.protectionInfo.memInfo.roce.rkey;
-    FillSqCqAtomicInfo(copyInfo, hostEntity, rankId);
     return ACLSHMEM_SUCCESS;
-}
-
-void RdmaTransportManagerV2::FillSqCqAtomicInfo(AiQpRMAQueueInfo *copyInfo, const ChannelEntity &hostEntity,
-                                                uint32_t rankId)
-{
-    if (hostEntity.sqNum > 0 && hostEntity.sqContextAddr != nullptr) {
-        std::vector<SqContext> sqContexts(hostEntity.sqNum);
-        auto aclRet =
-            DlAclApi::AclrtMemcpy(sqContexts.data(), sizeof(SqContext) * hostEntity.sqNum, hostEntity.sqContextAddr,
-                                  sizeof(SqContext) * hostEntity.sqNum, ACL_MEMCPY_DEVICE_TO_HOST);
-        if (aclRet == 0) {
-            CopyAiWQInfo(copyInfo->sq[rankId], sqContexts[0]);
-        } else {
-            SHM_LOG_ERROR("rank[" << rankId_ << "] copy sq context from device failed: " << aclRet);
-        }
-    } else {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] sqNum = 0 || sqContextAddr is null");
-    }
-    if (hostEntity.cqNum > 0 && hostEntity.cqContextAddr != nullptr) {
-        std::vector<CqContext> cqContexts(hostEntity.cqNum);
-        auto aclRet =
-            DlAclApi::AclrtMemcpy(cqContexts.data(), sizeof(CqContext) * hostEntity.cqNum, hostEntity.cqContextAddr,
-                                  sizeof(CqContext) * hostEntity.cqNum, ACL_MEMCPY_DEVICE_TO_HOST);
-        if (aclRet == 0) {
-            CopyAiCQInfo(copyInfo->scq[rankId], cqContexts[0]);
-        } else {
-            SHM_LOG_ERROR("rank[" << rankId_ << "] copy cq context from device failed: " << aclRet);
-        }
-    } else {
-        SHM_LOG_ERROR("rank[" << rankId_ << "] cqNum = 0 || cqContextAddr is null");
-    }
-    size_t atomicSizePerRank = ATOMIC_MAX_NUM * sizeof(uint64_t);
-    copyInfo->sq[rankId].atomicAddr =
-        reinterpret_cast<uint64_t>(static_cast<char *>(atomicSharedMemory_) + rankId * atomicSizePerRank);
-    copyInfo->sq[rankId].atomicLkey = atomicLkey_;
-    copyInfo->rq[rankId].atomicAddr =
-        reinterpret_cast<uint64_t>(static_cast<char *>(atomicSharedMemory_) + rankId * atomicSizePerRank);
-    copyInfo->rq[rankId].atomicLkey = atomicLkey_;
 }
 
 void RdmaTransportManagerV2::PrintHostInfo(AiQpRMAQueueInfo& copyInfo)
@@ -705,7 +813,7 @@ bool RdmaTransportManagerV2::ReserveRdmaInfoSpace() noexcept
     // reserve qp info space
     if (qpInfo_ == nullptr) {
         void* ptr = nullptr;
-        auto oneQpSize = 2U * (sizeof(AiQpRMAWQ) + sizeof(AiQpRMACQ)) + sizeof(RdmaMemRegionInfo);
+        auto oneQpSize = SEND_RECV_QUEUE_COUNT * (sizeof(AiQpRMAWQ) + sizeof(AiQpRMACQ)) + sizeof(RdmaMemRegionInfo);
         qpInfoSize_ = sizeof(AiQpRMAQueueInfo) + oneQpSize * rankCount_;
         auto ret = DlAclApi::AclrtMalloc(&ptr, qpInfoSize_, 0);
         if (ret != 0) {
@@ -720,7 +828,8 @@ bool RdmaTransportManagerV2::ReserveRdmaInfoSpace() noexcept
     // reserve atomic info space
     if (atomicSharedMemory_ == nullptr) {
         void* ptr = nullptr;
-        uint32_t atomicSize = ATOMIC_MAX_NUM * sizeof(uint64_t) * rankCount_; // 128 是最大的 atomic 并发数
+        uint32_t atomicSize = ATOMIC_MAX_NUM * sizeof(uint64_t) * rankCount_;
+        // HNS 1825 atomic MR 注册需要 4K 对齐。
         atomicSize = ALIGN_UP(atomicSize, MEMORY_ALIGNMENT);
         auto ret = DlAclApi::AclrtMalloc(&ptr, atomicSize, 0);
         if (ret != 0) {
@@ -746,10 +855,11 @@ bool RdmaTransportManagerV2::RegisterAtomicMemory() noexcept
     }
 
     uint32_t atomicSize = ATOMIC_MAX_NUM * sizeof(uint64_t) * rankCount_;
+    // HNS 1825 atomic MR 注册需要 4K 对齐。
     atomicSize = ALIGN_UP(atomicSize, MEMORY_ALIGNMENT);
 
     CommMem commMem{};
-    commMem.type = COMM_MEM_TYPE_DEVICE;
+    commMem.type = CommMemType::DEVICE;
     commMem.addr = atomicSharedMemory_;
     commMem.size = atomicSize;
 
@@ -757,7 +867,7 @@ bool RdmaTransportManagerV2::RegisterAtomicMemory() noexcept
     SHM_LOG_DEBUG(
         "rank[" << rankId_ << "] HcommMemReg for atomic memory, addr=" << atomicSharedMemory_
                 << ", size=" << atomicSize);
-    HcommResult hret = HcommMemReg(endpointHandle_, "AtomicBuffer", &commMem, &memHandle);
+    HcommResult hret = DlHcommApi::HcommMemReg(endpointHandle_, "AtomicBuffer", &commMem, &memHandle);
     if (hret != 0) {
         SHM_LOG_ERROR("rank[" << rankId_ << "] HcommMemReg for atomic memory failed: " << hret);
         return false;

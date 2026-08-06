@@ -28,15 +28,15 @@ cd "$MODULE_BUILD_OUT_PATH"
 
 rm -rf shmem
 # Download and build the shmem package
-SHMEM_COMMIT_HASH="7573f42e06259d538d52652858bbcc950d58da2e"
+SHMEM_COMMIT_HASH="e7063f6e7cf9b043c5d483ee2b8c9e203bdbb5fa"
 git clone https://gitcode.com/cann/shmem
 cd shmem
 git checkout "${SHMEM_COMMIT_HASH}" -b nda-base
 cd ..
 
 # Override the rdma_backends
-cp -rf ${CAM_NDA_ROOT}/src/device/gm2gm/engine/rdma_backends/* ${SHMEM_ROOT}/src/device/gm2gm/engine/rdma_backends
-cp -f ${CAM_NDA_ROOT}/include/device/shmem_def.h ${SHMEM_ROOT}/include/device/shmem_def.h
+cp -rf ${CAM_NDA_ROOT}/src/* ${SHMEM_ROOT}/src
+cp -rf ${CAM_NDA_ROOT}/include/* ${SHMEM_ROOT}/include
 
 # Build shmem
 cd shmem
