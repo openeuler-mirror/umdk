@@ -23,6 +23,7 @@
 #include "urma_opcode.h"
 #include "urma_types.h"
 
+#include "urma_private.h"
 #include "urma_log.h"
 
 pthread_mutex_t g_urma_log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -50,6 +51,16 @@ static urma_log_cb_t g_urma_log_func = urma_default_log_func;
 static urma_loc_log_cb g_urma_loc_log_func = NULL;
 static bool g_use_loc_log = false;
 
+urma_log_cb_t urma_get_log_func(void)
+{
+    return g_urma_log_func;
+}
+
+bool urma_is_log_func_registered(void)
+{
+    return g_urma_log_func != urma_default_log_func;
+}
+
 urma_status_t urma_register_log_func(urma_log_cb_t func)
 {
     if (func == NULL) {
@@ -59,6 +70,8 @@ urma_status_t urma_register_log_func(urma_log_cb_t func)
     g_urma_log_func = func;
     g_urma_loc_log_func = NULL;
     g_use_loc_log = false;
+    /* No-op before urma_init (g_driver_list empty); urma_init compensates. */
+    urma_register_log_func_to_providers(func);
     URMA_LOG_INFO("registered log successfully.\n");
     return URMA_SUCCESS;
 }
@@ -78,6 +91,7 @@ urma_status_t urma_register_loc_log_func(urma_loc_log_cb func)
 urma_status_t urma_unregister_log_func(void)
 {
     URMA_LOG_INFO("Unregistered log successfully.\n");
+    urma_unregister_log_func_to_providers();
     g_urma_log_func = urma_default_log_func;
     g_urma_loc_log_func = NULL;
     g_use_loc_log = false;
