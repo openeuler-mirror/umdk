@@ -449,8 +449,8 @@ typedef struct jetty_pool_node {
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
     urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
     urma_jfce_t *jfs_jfce;
-    volatile uint32_t tx_outstanding;
     volatile uint64_t umq_ref;          // owner umq_id (hi 32) + ref_cnt (lo 32), single atomic access
+    volatile uint32_t tx_outstanding;
     volatile uint32_t state;            // Track node state (atomic CAS operations)
     volatile uint32_t borrow_count;     // WRs posted in current borrow cycle (atomic — concurrent post)
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
@@ -642,7 +642,8 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
 
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
 int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor);
-int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
+int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx,
+                      umq_io_option_t *option);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);

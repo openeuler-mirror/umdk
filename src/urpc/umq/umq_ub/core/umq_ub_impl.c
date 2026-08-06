@@ -2050,6 +2050,7 @@ int umq_ub_post_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_io_option_t *option,
     int ret;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+    option->tp_handle_free_num = 0;
 
     if (option->io_direction == UMQ_IO_TX) {
         ret = umq_ub_post_tx(umqh_tp, qbuf, bad_qbuf, option);
@@ -2072,7 +2073,7 @@ int umq_ub_poll_impl(uint64_t umqh_tp, umq_io_option_t *option, umq_buf_t **buf,
     int ret;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-
+    option->tp_handle_free_num = 0;
     if (option->io_direction == UMQ_IO_RX) {
         ret = umq_ub_poll_rx(umqh_tp, buf, max_buf_count, option);
     } else if (option->io_direction == UMQ_IO_TX) {
