@@ -233,10 +233,12 @@ typedef struct bondp_comp {
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     atomic_uint msn;
+    atomic_uint rnr_retry_cnt;
 #else
     std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_uint msn;
+    std::atomic_uint rnr_retry_cnt;
 #endif
 #ifndef __cplusplus
     atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
