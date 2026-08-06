@@ -352,6 +352,7 @@ struct AiQpRMACQ {
     uint64_t tailAddr{0};
     DBMode dbMode{DBMode::INVALID_DB}; // 0-hw/1-sw
     uint64_t dbAddr{0};
+    uint32_t cqAttrFlags{0};
     // (Ascend950) hns1825-specific fields
     uint64_t dbSwVa{0}; // software shadow doorbell address
 };

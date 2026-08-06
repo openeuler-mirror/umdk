@@ -88,9 +88,14 @@ private:
     void* atomicSharedMemory_{nullptr};
     HcommMemHandle atomicMemHandle_{nullptr};
     uint32_t atomicLkey_{0};
+    uint32_t cqAttrFlags_{0}; // 默认不启用 cq overrun 功能
+
+private:
+    static constexpr uint32_t SHMEM_IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN = 2; // IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN = 1 << 1
 };
 } // namespace device
 } // namespace transport
 } // namespace shm
 
 #endif // MF_HYBRID_DEVICE_RDMA_TRANSPORT_MANAGER_V2_H
+

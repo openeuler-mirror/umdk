@@ -64,6 +64,7 @@ struct aclshmemi_rdma_cq_ctx {
     uint64_t tail_addr; // work queue tail (Consumer Index) address
     aclshmemi_rdma_db_mode_t db_mode;
     uint64_t db_addr; // doorbell address (used by XSCALE/indie/hns_1825)
+    uint32_t cq_attr_flags;
     // hns1825 (Ascend950) specific fields
     uint64_t db_sw_addr; // software shadow doorbell address
 };
