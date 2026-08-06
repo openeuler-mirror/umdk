@@ -15,19 +15,23 @@ static size_t FillSingleRjettyExt(urma_rjetty_t *remote, uint32_t localIdx, uint
     auto *extHdr = bondp_rjetty_get_priv_ext(remote);
     auto *ext = reinterpret_cast<urma_bond_jetty_ext_v0_t *>(extHdr->data);
     auto *localIndices = reinterpret_cast<uint8_t *>(ext->data);
-    auto *targetEntry = reinterpret_cast<bondp_rjetty_target_ctx_t *>(ext->data + 1);
+    size_t extLen = sizeof(*ext) + 1 + sizeof(bondp_rjetty_target_ctx_t);
 
-    std::memset(ext, 0, sizeof(*ext) + 1 + sizeof(*targetEntry));
+    std::memset(ext, 0, extLen);
     ext->version = BONDP_RJETTY_EXT_VERSION_V0;
     ext->mask = BONDP_RJETTY_EXT_MASK_LOCAL_CTX | BONDP_RJETTY_EXT_MASK_TARGET_CTX;
     ext->local_ctx_cnt = 1;
     ext->target_ctx_cnt = 1;
     localIndices[0] = static_cast<uint8_t>(localIdx);
-    targetEntry->target_idx = static_cast<uint8_t>(targetIdx);
-    targetEntry->slave_id = slaveId;
+
+    bondp_rjetty_target_ctx_t entry = {};
+    entry.target_idx = static_cast<uint8_t>(targetIdx);
+    entry.eid = slaveId.eid;
+    entry.jetty_id = slaveId.id;
+    std::memcpy(ext->data + 1, &entry, sizeof(entry));
 
     remote->flag.bs.has_user_info = 1;
-    extHdr->len = static_cast<uint32_t>(sizeof(*ext) + 1 + sizeof(*targetEntry));
+    extHdr->len = static_cast<uint32_t>(extLen);
     return extHdr->len;
 }
 } // namespace
@@ -186,12 +190,15 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
     urma_token_t token = {};
     urma_import_seg_flag_t flag = {};
     urma_target_seg_t *target = nullptr;
+    constexpr uint32_t kPeerCnt = 1;
+    constexpr size_t kExtLen = sizeof(urma_bond_seg_ext_v0_t) +
+                               sizeof(bondp_seg_peer_ctx_t) * kPeerCnt;
     auto *remote = static_cast<urma_seg_t *>(std::calloc(1, sizeof(urma_seg_t) +
-        sizeof(bondp_seg_ext_priv_t) + sizeof(urma_bond_seg_ext_t)));
+        sizeof(bondp_seg_ext_priv_t) + kExtLen));
     ASSERT_NE(nullptr, remote);
     bondp_seg_set_user_info(remote, true);
     auto *segExt = bondp_seg_get_priv_ext(remote);
-    auto *ext = reinterpret_cast<urma_bond_seg_ext_t *>(segExt->data);
+    auto *ext = reinterpret_cast<urma_bond_seg_ext_v0_t *>(segExt->data);
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.seg_cache_enable = true;
@@ -200,13 +207,18 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
     remote->ubva.va = 0x100000;
     remote->len = 4096;
     remote->token_id = 0x71;
-    segExt->len = sizeof(*ext) - 1;
+    segExt->len = (uint32_t)(kExtLen - 1);
+    ext->peer_cnt = kPeerCnt;
     EXPECT_EQ(nullptr, bondp_import_seg(&fixture.ctx.v_ctx, remote, &token, 0x300000, flag));
-    segExt->len = sizeof(*ext);
-    ext->peer_p_seg[0].ubva.eid = MakeEid(0x802);
-    ext->peer_p_seg[0].ubva.va = 0x200000;
-    ext->peer_p_seg[0].len = 4096;
-    ext->peer_p_seg[0].token_id = 0x72;
+    segExt->len = (uint32_t)kExtLen;
+    ext->version = 0;
+    ext->mask = 0;
+    ext->peer_cnt = kPeerCnt;
+    bondp_seg_peer_ctx_t entry = {};
+    entry.peer_idx = 0;
+    entry.eid = MakeEid(0x802);
+    entry.token_id = 0x72;
+    std::memcpy(ext->data, &entry, sizeof(entry));
 
     topo[0].is_current = true;
     CopyEidToTopo(topo[0].agg_devs[0].agg_eid, MakeEid(0x800));
