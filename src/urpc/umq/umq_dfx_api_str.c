@@ -133,8 +133,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              cfg->expansion_threshold, "batch_count", cfg->batch_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "expansion_mem_size_max",
                              cfg->expansion_mem_size_max, "exp_total_mem_pool_size", cfg->exp_total_mem_pool_size);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", "tls_expand_qbuf_pool_depth",
-                             cfg->tls_expand_qbuf_pool_depth);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "tls_qbuf_pool_depth",
+                             cfg->tls_qbuf_pool_depth, "tls_expand_qbuf_pool_depth", cfg->tls_expand_qbuf_pool_depth);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "exp_slot_used_count",
                              info->exp_slot_used_count);
     }
@@ -153,28 +153,24 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         if (info->sc_count == 0) {
             continue;
         }
-        const uint64_t pool_base = (uint64_t)info->sc_info[0].data_region_start;
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                              "                       Per-SizeClass State [%s, sc_count=%u]\n",
                              umq_qbuf_pool_type_name(info->type), info->sc_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-4s %-10s %-12s %-12s %-12s %-10s %-10s %-10s %-14s %-14s %-14s\n", "sc", "blk_size",
-                             "data_off", "data_len", "header_off", "g_w_data", "g_wo_data", "exp_count",
-                             "exp_total_blk", "exp_total_exp", "exp_total_shrink");
+                             "%-4s %-10s %-10s %-10s %-10s %-14s %-14s %-14s %-10s %-8s %-10s %-10s\n",
+                             "sc", "blk_size", "glbl_free", "hdr_free", "exp_slots",
+                             "exp_total_blk", "exp_total_exp", "exp_total_shrink", "glbl_total", "cap", "exp_free", "trig_expand");
         for (uint32_t sc = 0; sc < info->sc_count; sc++) {
             const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
-            uint64_t data_off = (uint64_t)sci->data_region_start - pool_base;
-            uint64_t data_len = (uint64_t)sci->data_region_end - (uint64_t)sci->data_region_start;
-            uint64_t header_off = (uint64_t)sci->header_region_start - pool_base;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                                 "%-4u %-10u 0x%-10lx 0x%-10lx 0x%-10lx %-10lu %-10lu %-10u %-14lu %-14lu %-14lu\n", sc,
-                                 sci->blk_size, (unsigned long)data_off, (unsigned long)data_len,
-                                 (unsigned long)header_off, (unsigned long)sci->buf_cnt_with_data,
-                                 (unsigned long)sci->buf_cnt_without_data, sci->exp_expansion_count,
+                                 "%-4u %-10u %-10lu %-10lu %-10u %-14lu %-14lu %-14lu %-10lu %-8lu %-10lu %-10lu\n", sc,
+                                 sci->blk_size, (unsigned long)sci->buf_cnt_with_data,
+                                 (unsigned long)sci->buf_cnt_without_data, sci->exp_slots,
                                  (unsigned long)sci->exp_total_block_num, (unsigned long)sci->exp_total_expansion_count,
-                                 (unsigned long)sci->exp_total_shrink_count);
+                                 (unsigned long)sci->exp_total_shrink_count, (unsigned long)sci->global_total,
+                                 (unsigned long)sci->capacity, (unsigned long)sci->exp_free_blk, (unsigned long)sci->trigger_expand);
         }
     }
 
@@ -202,6 +198,38 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "partial_slot_count: WithData=%u WithoutData=%u\n",
                          qbuf_pool_stats->exp_pool_with_data.partial_slot_count,
                          qbuf_pool_stats->exp_pool_without_data.partial_slot_count);
+
+    // Per-SC Expansion Slot Detail
+    for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
+        const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
+        if (info->sc_count == 0) continue;
+        int has_exp = 0;
+        for (uint32_t sc = 0; sc < info->sc_count; sc++) {
+            if (info->sc_info[sc].exp_slots > 0 || info->sc_info[sc].exp_total_expansion_count > 0) {
+                has_exp = 1;
+                break;
+            }
+        }
+        if (!has_exp) continue;
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                             "                       Per-SC Expansion Detail [%s]\n",
+                             umq_qbuf_pool_type_name(info->type));
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4s %-10s %-10s %-14s %-14s %-14s %-14s\n",
+                             "sc", "blk_size", "exp_slots", "exp_total_blk", "exp_free_blk", "exp_expand_cnt", "exp_shrink_cnt");
+        for (uint32_t sc = 0; sc < info->sc_count; sc++) {
+            const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
+            if (sci->exp_slots == 0 && sci->exp_total_expansion_count == 0) continue;
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-4u %-10u %-10u %-14lu %-14lu %-14lu %-14lu\n",
+                                 sc, sci->blk_size, sci->exp_slots,
+                                 (unsigned long)sci->exp_total_block_num,
+                                 (unsigned long)sci->exp_free_blk,
+                                 (unsigned long)sci->exp_total_expansion_count,
+                                 (unsigned long)sci->exp_total_shrink_count);
+        }
+    }
 
     // === Per-Thread TLS Pool Stats (WithData) ===
     // Column rename: AccAlloc -> AccAllocCnt, AccFree -> AccFreeCnt (Cnt suffix
