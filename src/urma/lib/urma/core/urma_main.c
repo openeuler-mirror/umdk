@@ -221,7 +221,7 @@ static int urma_open_drivers(void)
     strcat(dl_dir, "/urma");
     DIR *dir = opendir(dl_dir);
     if (dir == NULL) {
-        URMA_LOG_ERR("Failed to open liburma dir %s\n", dl_dir);
+        URMA_LOG_WARN("liburma dir %s not exist\n", dl_dir);
         return 0;
     }
 
