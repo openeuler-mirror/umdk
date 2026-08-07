@@ -1472,9 +1472,6 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
     uint64_t per_blk_overhead = 0;
     if (cfg->mode == UMQ_BUF_SPLIT) {
         per_blk_overhead = sizeof(umq_buf_t);
-        if (cfg->disable_scale_cap) {
-            per_blk_overhead = (UMQ_EMPTY_HEADER_COEFFICIENT + 1) * sizeof(umq_buf_t);
-        }
     }
     if (nonlazy_count == 0) {
         g_qbuf_pool.per_sc_block_count = 0;
@@ -1514,9 +1511,7 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
             uint64_t layout_end = data_end;
             if (cfg->mode == UMQ_BUF_SPLIT) {
                 layout_end += hdr_size;
-                if (cfg->disable_scale_cap) {
-                    layout_end += (uint64_t)nonlazy_count * per_sc * UMQ_EMPTY_HEADER_COEFFICIENT * sizeof(umq_buf_t);
-                }
+                layout_end += (uint64_t)UMQ_EMPTY_HEADER_COEFFICIENT * QBUF_POOL_DEFAULT_EXPANSION_COUNT * sizeof(umq_buf_t);
             }
             if (layout_end <= cfg->total_size) {
                 break;
@@ -1624,8 +1619,8 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
     }
 
-    if (cfg->disable_scale_cap) {
-        uint64_t head_without_data_count = total_blk_num * UMQ_EMPTY_HEADER_COEFFICIENT;
+    {
+        uint64_t head_without_data_count = (uint64_t)UMQ_EMPTY_HEADER_COEFFICIENT * umq_qbuf_expansion_count();
         for (uint64_t i = 0; i < head_without_data_count; i++) {
             umq_buf_t *head_buf = id_to_buf_without_data_split((char *)g_qbuf_pool.ext_header_buffer, i);
             head_buf->umqh = UMQ_INVALID_HANDLE;
@@ -1735,18 +1730,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 
     uint64_t max_umq_buf_pool_size = cfg->umq_buf_pool_max_size == 0 ? QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE :
                                                                        cfg->umq_buf_pool_max_size;
-    uint64_t without_data_expand_mem_size = 0;
-    if (cfg->mode == UMQ_BUF_SPLIT) {
-        without_data_expand_mem_size =
-            (uint32_t)sizeof(umq_buf_t) * UMQ_EMPTY_HEADER_COEFFICIENT * umq_qbuf_expansion_count();
-    }
 
-    if (!cfg->disable_scale_cap && max_umq_buf_pool_size < g_total_len + without_data_expand_mem_size) {
-        UMQ_VLOG_INFO(VLOG_UMQ,
-                      "max buf pool size %llu is too small to support expand without data buf, required %llu\n",
-                      max_umq_buf_pool_size, g_total_len + without_data_expand_mem_size);
-        return -UMQ_ERR_EINVAL;
-    }
 
     int sc_ret = init_size_class_config(cfg, max_umq_buf_pool_size);
     if (sc_ret != 0) {
