@@ -501,11 +501,46 @@ static inline uint32_t umq_qbuf_pool_shrink_threshold(void)
     return QBUF_POOL_SHRINK_THRESHOLD;
 }
 
-// batch size when fetch from global or return to global; uniform 64 across all size_class
+// Adaptive batch count: per size_class fetch granularity.
+//
+// Problem: a uniform batch_count (e.g. 64) is unreasonable for large blocks.
+//   64 x 1M = 64MB per fetch, which is 2x the entire expansion slot (32MB),
+//   causing expansion pools to drain instantly and triggering frequent re-expansion.
+//
+// Algorithm: batch = TARGET_FETCH_BYTES / block_sizes[sc], clamped to [MIN, MAX].
+//   - TARGET_FETCH_BYTES = 4MB: each fetch moves roughly 4MB of memory regardless
+//     of block size, keeping TLS pool refill rate balanced across size classes.
+//   - MIN = 4: prevents degenerate single-block fetches for very large blocks.
+//   - MAX = 64: preserves original batch size for small blocks where it works well.
+//
+// Resulting batch counts per size class:
+//   sc=0  4K   -> 4M/4K   = 1024 -> clamp to 64
+//   sc=1  64K  -> 4M/64K  = 64
+//   sc=1  128K -> 4M/128K = 32
+//   sc=1  256K -> 4M/256K = 16
+//   sc=1  512K -> 4M/512K = 8
+//   sc=2  1M   -> 4M/1M   = 4
+//
 static inline uint32_t get_batch_count(uint32_t sc)
 {
-    (void)sc;
-    return QBUF_POOL_BATCH_CNT;
+    if (sc >= g_qbuf_pool.size_class_count) {
+        return QBUF_POOL_BATCH_CNT_MIN;
+    }
+
+    uint32_t blk_sz = g_qbuf_pool.block_sizes[sc];
+    if (blk_sz == 0) {
+        return QBUF_POOL_BATCH_CNT;
+    }
+
+    uint32_t cnt = (uint32_t)(QBUF_POOL_TARGET_FETCH_BYTES / blk_sz);
+
+    if (cnt < QBUF_POOL_BATCH_CNT_MIN) {
+        cnt = QBUF_POOL_BATCH_CNT_MIN;
+    } else if (cnt > QBUF_POOL_BATCH_CNT) {
+        cnt = QBUF_POOL_BATCH_CNT;
+    }
+
+    return cnt;
 }
 
 // find smallest i where block_sizes[i] >= need; if need > max, return count-1
