@@ -236,6 +236,8 @@ TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
     queue_info.rjetty->trans_mode = URMA_TM_RM;
     umq_ub_bind_fc_info_t fc_info;
     memset(&fc_info, 0, sizeof(fc_info));
+    ub_flow_control_t fc_node;
+    memset(&fc_node, 0, sizeof(fc_node));
     umq_ub_ctx_t dev_ctx;
     memset(&dev_ctx, 0, sizeof(dev_ctx));
     queue.dev_ctx = &dev_ctx;
@@ -251,7 +253,7 @@ TEST_F(UmqUBTest, test_umq_ub_bind_info_check)
     info.dev_info = &dev;
     ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
 
-    queue.flow_control.enabled = true;
+    queue.flow_control = &fc_node;
     info.queue_info = &queue_info;
     ASSERT_NE(umq_ub_bind_info_check(&queue, &info), 0);
 
