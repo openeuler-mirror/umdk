@@ -618,7 +618,7 @@ static int umq_ub_fc_msg_retry_list_init(ub_queue_t *queue)
     if (is_umq_ub_share_rq(queue->create_flag)) {
         umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
         ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
-        queue->flow_control.fc_msg_retry_list = main_queue->flow_control.fc_msg_retry_list;
+        queue->flow_control->fc_msg_retry_list = main_queue->flow_control->fc_msg_retry_list;
         return UMQ_SUCCESS;
     } else if (is_umq_ub_main_queue(queue->create_flag)) {
         list_size = UMQ_UB_FC_MSG_RETRY_LIST_SIZE_MAIN;
@@ -663,7 +663,7 @@ static int umq_ub_fc_msg_retry_list_init(ub_queue_t *queue)
     }
 
     retry_list->inited = true;
-    queue->flow_control.fc_msg_retry_list = retry_list;
+    queue->flow_control->fc_msg_retry_list = retry_list;
     return UMQ_SUCCESS;
 
 CLOSE_FD:
@@ -680,7 +680,7 @@ FREE_RETRY_LIST:
 // Free the fc_msg_retry list (only the owning umq; sub/logic umq share the main's).
 static void umq_ub_fc_msg_retry_list_uninit(ub_queue_t *queue)
 {
-    umq_ub_fc_msg_retry_list_t *retry_list = queue->flow_control.fc_msg_retry_list;
+    umq_ub_fc_msg_retry_list_t *retry_list = queue->flow_control->fc_msg_retry_list;
     if (retry_list == NULL || !retry_list->inited || is_umq_ub_share_rq(queue->create_flag)) {
         return;
     }
@@ -696,22 +696,30 @@ static void umq_ub_fc_msg_retry_list_uninit(ub_queue_t *queue)
     retry_list->nodes = NULL;
     retry_list->inited = false;
     free(retry_list);
-    queue->flow_control.fc_msg_retry_list = NULL;
+    queue->flow_control->fc_msg_retry_list = NULL;
 }
 
-int umq_ub_flow_control_init(ub_flow_control_t *fc, ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
+int umq_ub_flow_control_init(ub_queue_t *queue, uint32_t feature, umq_flow_control_cfg_t *cfg)
 {
     int ret = UMQ_SUCCESS;
-    memset(fc, 0, sizeof(ub_flow_control_t));
-    fc->enabled = (feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0;
-    if (!fc->enabled) {
+    if ((feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) == 0) {
+        queue->flow_control = NULL;
         return UMQ_SUCCESS;
     }
+
+    ub_flow_control_t *fc = (ub_flow_control_t *)calloc(1, sizeof(ub_flow_control_t));
+    if (fc == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc ub_flow_control_t failed\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+    fc->enabled = true;
+    queue->flow_control = fc;
+
     if ((queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0) {
         // main queue initializes credit pool
         ret = umq_ub_credit_pool_init(queue, feature, cfg);
         if (ret != UMQ_SUCCESS) {
-            return ret;
+            goto FREE_FC;
         }
     }
 
@@ -808,16 +816,22 @@ UNINIT_CREDIT_POOL:
     if ((queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) == 0) {
         umq_ub_credit_pool_uninit(queue);
     }
+FREE_FC:
+    free(fc);
+    queue->flow_control = NULL;
     return ret;
 }
 
 void umq_ub_flow_control_uninit(ub_queue_t *queue)
 {
-    if (!queue->flow_control.enabled) {
+    ub_flow_control_t *fc = queue->flow_control;
+    if (fc == NULL) {
         return;
     }
     umq_ub_fc_msg_retry_list_uninit(queue);
 
+    free(fc);
+    queue->flow_control = NULL;
     UMQ_VLOG_INFO(VLOG_UMQ, "umq flow control uninit success\n");
 }
 
@@ -838,9 +852,9 @@ int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info)
 
 void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
+    ub_flow_control_t *fc = queue->flow_control;
 
-    if (recharge_count == 0 || !fc->enabled) {
+    if (recharge_count == 0 || fc == NULL) {
         return;
     }
 
@@ -849,7 +863,7 @@ void umq_ub_shared_credit_recharge(ub_queue_t *queue, uint16_t recharge_count)
         return;
     }
     credit->ops.available_credit_inc(credit, recharge_count);
-    if (queue->flow_control.enabled) {
+    if (queue->flow_control != NULL) {
         umq_ub_credit_pending_queue_process(credit);
     }
 }
@@ -880,8 +894,8 @@ static urma_status_t umq_ub_flow_control_try_post_send(ub_queue_t *queue, urma_j
 
 int umq_ub_shared_credit_req_send(ub_queue_t *queue)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
-    if (!fc->enabled || queue->bind_ctx == NULL) {
+    ub_flow_control_t *fc = queue->flow_control;
+    if (fc == NULL || queue->bind_ctx == NULL) {
         return UMQ_SUCCESS;
     }
 
@@ -944,7 +958,7 @@ int umq_ub_shared_credit_req_send(ub_queue_t *queue)
         /* a successful send breaks any ongoing EAGAIN streak */
         __atomic_store_n(&fc->fc_eagain_start_us, 0, __ATOMIC_RELEASE);
         umq_ub_post_release_jetty_node(queue, 0);
-        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
+        umq_ub_fc_packet_stats(queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
     } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
@@ -1014,7 +1028,7 @@ static int umq_ub_shared_credit_resp_send(ub_queue_t *queue, uint16_t notify, ui
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
         umq_ub_post_release_jetty_node(queue, 0);
-        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
+        umq_ub_fc_packet_stats(queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
     } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
@@ -1061,7 +1075,7 @@ static uint16_t allocate_credits_by_load(uint64_t pool_allocated, uint16_t rx_de
 
 int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
+    ub_flow_control_t *fc = queue->flow_control;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t credits_per_request = imm->flow_control.window;
     uint64_t pool_allocated;
@@ -1070,9 +1084,9 @@ int umq_ub_shared_credit_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
     } else {
         pool_allocated = __atomic_load_n(&credit->stats_u64[CREDIT_POOL_ALLOCATED_UNLIMITED], __ATOMIC_ACQUIRE);
     }
-    uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, queue->flow_control.local_rx_depth);
+    uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, queue->flow_control->local_rx_depth);
     uint16_t reply_count =
-        allocate_credits_by_load(pool_allocated, queue->flow_control.local_rx_depth, credits_per_request);
+        allocate_credits_by_load(pool_allocated, queue->flow_control->local_rx_depth, credits_per_request);
     uint16_t allocated_count = credit->ops.available_credit_dec(credit, reply_count);
     (void)fc->ops.local_rx_allocated_inc(fc, allocated_count);
     int ret = umq_ub_shared_credit_resp_send(queue, allocated_count, (uint16_t)imm->flow_control.seq, ratio);
@@ -1109,7 +1123,7 @@ static uint16_t umq_ub_next_credit_req_count_update(uint16_t reply_credits,
 
 void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
+    ub_flow_control_t *fc = queue->flow_control;
     uint16_t reply_credits = imm->flow_control.window;
     uint16_t credits_per_request = fc->credits_per_request;
     fc->peer_ratio = imm->flow_control.ratio;
@@ -1121,8 +1135,8 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 
 int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
-    if (!fc->enabled || queue->bind_ctx == NULL || queue->checker == NULL) {
+    ub_flow_control_t *fc = queue->flow_control;
+    if (fc == NULL || queue->bind_ctx == NULL || queue->checker == NULL) {
         return UMQ_SUCCESS;
     }
     uint64_t timestamp = get_timestamp_us();
@@ -1138,7 +1152,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
     } else {
         return_threshold = umq_ub_flow_control_threashold_modify((uint16_t)fc->min_reserved_credit, fc->peer_ratio);
     }
-    if (diff < queue->flow_control.timeout_us || remote_credit <= return_threshold) {
+    if (diff < queue->flow_control->timeout_us || remote_credit <= return_threshold) {
         return UMQ_SUCCESS;
     }
     if (!umq_ub_permission_acquire(fc)) {
@@ -1210,7 +1224,7 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
         /* record req send time so an unresponsive peer (rsp never returns) can be detected as timeout */
         __atomic_store_n(&fc->credit_req_send_time, get_timestamp_us(), __ATOMIC_RELEASE);
         umq_ub_post_release_jetty_node(queue, 0);
-        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
+        umq_ub_fc_packet_stats(queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
     } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
@@ -1230,8 +1244,8 @@ int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 
 static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_credit, uint8_t seq)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
-    if (!fc->enabled || queue->bind_ctx == NULL) {
+    ub_flow_control_t *fc = queue->flow_control;
+    if (fc == NULL || queue->bind_ctx == NULL) {
         return UMQ_SUCCESS;
     }
     int ret = umq_ub_poll_fc_tx(queue, NULL, 0, 0, NULL);
@@ -1253,7 +1267,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     } else {
         pool_allocated = __atomic_load_n(&pool->stats_u64[CREDIT_POOL_ALLOCATED_UNLIMITED], __ATOMIC_ACQUIRE);
     }
-    uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, queue->flow_control.local_rx_depth);
+    uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, queue->flow_control->local_rx_depth);
     umq_ub_imm_t imm = {
         .flow_control = {
             .type = IMM_TYPE_CONTROL_MSG,
@@ -1285,7 +1299,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
     umq_trace_sub_record(UMQ_TRACE_TYPE_POLL, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
     if (status == URMA_SUCCESS) {
         umq_ub_post_release_jetty_node(queue, 0);
-        umq_ub_fc_packet_stats(&queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
+        umq_ub_fc_packet_stats(queue->flow_control, 1, UB_PACKET_STATS_TYPE_SEND);
         return UMQ_SUCCESS;
     } else if (status == URMA_EAGAIN || status == URMA_ENOMEM) {
         umq_ub_post_release_jetty_node(queue, 1);
@@ -1300,7 +1314,7 @@ static int umq_ub_shared_credit_return_ack(ub_queue_t *queue, uint16_t return_cr
 
 int umq_ub_shared_credit_return_req_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
+    ub_flow_control_t *fc = queue->flow_control;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t return_credit = imm->flow_control.window;
     uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
@@ -1348,7 +1362,7 @@ uint64_t umq_ub_rx_consumed_exchange(bool lock_free, volatile uint64_t *var, uin
 
 void umq_ub_credit_clean_up(ub_queue_t *queue)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
+    ub_flow_control_t *fc = queue->flow_control;
     ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     uint16_t actual_return_credit = __atomic_exchange_n(&fc->local_rx_posted, 0, __ATOMIC_ACQ_REL);
     uint64_t consumed_credit = umq_ub_rx_consumed_load(queue->dev_ctx->io_lock_free,
@@ -1367,8 +1381,8 @@ void umq_ub_credit_clean_up(ub_queue_t *queue)
 
 void umq_ub_idle_credit_flush(ub_queue_t *queue, uint32_t cnt)
 {
-    ub_flow_control_t *fc = &queue->flow_control;
-    if (cnt != 0 && fc->enabled) {
+    ub_flow_control_t *fc = queue->flow_control;
+    if (cnt != 0 && fc != NULL) {
         ub_credit_pool_t *credit = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
         bool use_atomic_window = queue->dev_ctx->flow_control.use_atomic_window;
         if (use_atomic_window) {
@@ -1428,7 +1442,7 @@ void umq_ub_credit_pending_queue_process(ub_credit_pool_t *pool)
         pending_count--;
         ub_pending_credit_req_t *head = OBJ_CONTAINING(list_node, (ub_pending_credit_req_t *)NULL, req_node);
         ub_queue_t *req_queue = head->queue;
-        ub_flow_control_t *req_fc = &req_queue->flow_control;
+        ub_flow_control_t *req_fc = req_queue->flow_control;
         uint16_t allocated = pool->ops.available_credit_dec(pool, head->requested);
         if (allocated == 0) {
             urpc_list_push_back(&pq->pending_list, list_node);
@@ -1436,7 +1450,7 @@ void umq_ub_credit_pending_queue_process(ub_credit_pool_t *pool)
         }
         (void)req_fc->ops.local_rx_allocated_inc(req_fc, allocated);
         uint16_t pool_allocated = __atomic_load_n(&pool->stats_u16[CREDIT_POOL_ALLOCATED], __ATOMIC_ACQUIRE);
-        uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, req_queue->flow_control.local_rx_depth);
+        uint8_t ratio = umq_ub_fc_raito_to_imm(pool_allocated, req_queue->flow_control->local_rx_depth);
         int ret = umq_ub_shared_credit_resp_send(req_queue, allocated, head->seq, ratio);
         if (ret != UMQ_SUCCESS) {
             pool->ops.available_credit_return(pool, allocated);
@@ -1465,7 +1479,7 @@ int umq_ub_credit_pending_req_enqueue(ub_credit_pending_queue_t *pq, ub_queue_t 
         return -UMQ_ERR_ENOBUFS;
     }
 
-    ub_pending_credit_req_t *node = &(queue->flow_control.pending_req);
+    ub_pending_credit_req_t *node = &queue->flow_control->pending_req;
     node->queue = queue;
     node->requested = requested;
     node->seq = seq;
@@ -1484,8 +1498,8 @@ void umq_ub_credit_pending_req_remove_by_queue(ub_credit_pending_queue_t *pq, ub
         return;
     }
     (void)util_mutex_lock(pq->lock);
-    if (urpc_list_is_in_list(&queue->flow_control.pending_req.req_node)) {
-        urpc_list_remove(&queue->flow_control.pending_req.req_node);
+    if (urpc_list_is_in_list(&queue->flow_control->pending_req.req_node)) {
+        urpc_list_remove(&queue->flow_control->pending_req.req_node);
         umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
         pq->pending_count--;
     }
