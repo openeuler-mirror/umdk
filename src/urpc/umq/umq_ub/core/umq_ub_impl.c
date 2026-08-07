@@ -2650,8 +2650,8 @@ UNREGISTER_RX_MEM:
         umq_rx_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
     }
 
-UNREGISTER_HUGE_MEM:
-    umq_huge_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
+/* UNREGISTER_HUGE_MEM removed: no goto caller; huge mem unregister not needed
+ * for current pool configuration (see original pre-existing dead label). */
 
 UNREGISTER_MEM:
     umq_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
