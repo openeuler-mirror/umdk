@@ -110,6 +110,11 @@ typedef struct umq_qbuf_sc_info {
     uint64_t exp_total_block_num;  // exp_pool_with_data[sc].exp_total_block_num
     uint64_t exp_total_expansion_count; // exp_pool_with_data[sc].total_expansion_count
     uint64_t exp_total_shrink_count;    // exp_pool_with_data[sc].total_shrink_count
+    uint64_t global_total;         // total blocks in global pool for this sc (init + expansion)
+    uint64_t capacity;             // block_pool[sc] init capacity (per_sc_block_count)
+    uint32_t exp_slots;            // number of expansion pool slots for this sc
+    uint64_t exp_free_blk;         // free blocks in expansion pool for this sc
+    uint64_t trigger_expand;        // async expansion threshold (exp_pool_with_data[sc].trigger_expand_block_num)
 } umq_qbuf_sc_info_t;
 
 /* Multi-level size_class pool configuration. These fields were previously hidden
@@ -125,6 +130,7 @@ typedef struct umq_qbuf_pool_config {
     uint64_t expansion_mem_size_max;     // cap on expansion memory
     uint64_t exp_total_mem_pool_size;    // current total expansion pool memory
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 1/2 of tls_qbuf_pool_depth)
+    uint64_t tls_qbuf_pool_depth;         // global TLS depth cap (per-SC for normal pool; default ~1.5K)
     uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
 } umq_qbuf_pool_config_t;
 

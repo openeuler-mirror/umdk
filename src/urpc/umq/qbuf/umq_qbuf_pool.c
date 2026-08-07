@@ -16,6 +16,9 @@
 
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
+#include "umq_dfx_api.h"
+#include "umq_tiny_qbuf_pool.h"
+#include "umq_huge_qbuf_pool.h"
 #include "umq_vlog.h"
 #ifndef UMQ_QBUF_DEBUG
 #undef UMQ_VLOG_DEBUG
@@ -224,6 +227,7 @@ typedef struct qbuf_debug_stats {
     uint64_t alloc_lc_ns_max[QBUF_LC_PATHS];     // max ns per path
     // per-size-class timing (alloc only, with_data)
     uint64_t alloc_sc_count[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t free_sc_count[UMQ_QBUF_SIZE_CLASS_MAX];  // per-sc cumulative free count (with_data)
     uint64_t alloc_sc_ns_total[UMQ_QBUF_SIZE_CLASS_MAX];
     uint64_t alloc_sc_ns_max[UMQ_QBUF_SIZE_CLASS_MAX];
 } qbuf_debug_stats_t;
@@ -389,14 +393,17 @@ static void qbuf_dbg_print_summary(void)
         fprintf(stderr, "  %-20s: count=%-8llu avg=%.1f us  max=%.1f us\n",
                 qbuf_lc_labels[p], (unsigned long long)cnt, avg, mx);
     }
-    // per size_class
-    fprintf(stderr, "[UMQ TIMING] alloc by size_class:\n");
-    for (uint32_t s = 0; s < g_qbuf_pool.size_class_count; s++) {
-        uint64_t cnt = g_dbg_stats.alloc_sc_count[s];
-        double avg = cnt > 0 ? (double)(g_dbg_stats.alloc_sc_ns_total[s] / cnt) / 1000.0 : 0.0;
-        double mx = (double)g_dbg_stats.alloc_sc_ns_max[s] / 1000.0;
-        fprintf(stderr, "  sc=%-2u blk=%-8u: count=%-8llu avg=%.1f us  max=%.1f us\n",
-                s, g_qbuf_pool.block_sizes[s], (unsigned long long)cnt, avg, mx);
+    {
+        umq_qbuf_pool_stats_t pool_stats;
+        memset(&pool_stats, 0, sizeof(pool_stats));
+        umq_qbuf_pool_info_get(&pool_stats);
+        umq_tiny_qbuf_pool_info_get(&pool_stats);
+        umq_huge_qbuf_pool_info_get(&pool_stats);
+        char pool_buf[16384]; /* 16KB: stats_to_str output can be large */
+        int ret = umq_qbuf_pool_stats_to_str(&pool_stats, pool_buf, sizeof(pool_buf));
+        if (ret > 0) {
+            fprintf(stderr, "[UMQ TIMING] pool state:\n%s\n", pool_buf);
+        }
     }
 }
 // ===== NON-POOL POINTER DIAGNOSTIC =====
@@ -2669,6 +2676,9 @@ void umq_qbuf_free(umq_buf_list_t *list)
         local_pool->buf_cnt_with_data[sc] += cnt;
         (void)pthread_spin_unlock(&local_pool->list_lock);
 
+        if (qbuf_debug_on())
+            g_dbg_stats.free_sc_count[sc] += 1;  // per-release_batch call count (same granularity as alloc_sc_count++)
+
         uint32_t batch_cnt = get_batch_count(sc);
         uint64_t cap_cnt = g_qbuf_pool.disable_scale_cap ? (uint64_t)QBUF_POOL_TLS_MAX :
                                                            local_pool->capacity_with_data[sc];
@@ -2917,6 +2927,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_info->config.exp_total_mem_pool_size =
         __atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED);
     qbuf_pool_info->config.tls_expand_qbuf_pool_depth = g_qbuf_pool.tls_expand_qbuf_pool_depth;
+    qbuf_pool_info->config.tls_qbuf_pool_depth = g_qbuf_pool.tls_qbuf_pool_depth;
     /* batch_count: actual effective batch granularity used by fetch_from_global
      * / return_to_global paths (currently uniform across all sc via
      * umq_qbuf_pool_batch_cnt() / get_batch_count(sc), both return
@@ -2938,6 +2949,20 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         sci->exp_total_block_num = e->exp_total_block_num;
         sci->exp_total_expansion_count = e->total_expansion_count;
         sci->exp_total_shrink_count = e->total_shrink_count;
+        /* new DFX fields: global_total, capacity, exp_slots, exp_free_blk */
+        sci->global_total = g_qbuf_pool.per_sc_block_count + e->exp_total_block_num;
+        sci->capacity = g_qbuf_pool.per_sc_block_count;
+        /* count expansion slots and free blocks for this sc */
+        uint32_t slot_cnt = 0;
+        uint64_t exp_free = 0;
+        qbuf_expansion_pool_slot_t *slot;
+        URPC_LIST_FOR_EACH(slot, node, &e->slot_list) {
+            slot_cnt++;
+            exp_free += slot->free_block_cnt;
+        }
+        sci->exp_slots = slot_cnt;
+        sci->exp_free_blk = exp_free;
+        sci->trigger_expand = e->trigger_expand_block_num;
     }
 
     uint64_t total_buf_cnt_with_data = 0;
