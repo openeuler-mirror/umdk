@@ -820,15 +820,24 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     {
         cur_node->buf_data = (char *)floor_to_align(cur_node->buf_data, block_size) + headroom_size_temp;
         cur_node->buf_size = block_size + (uint32_t)sizeof(umq_buf_t);
-        cur_node->headroom_size = headroom_size_temp;
         cur_node->total_data_size = total_data_size;
-        cur_node->first_fragment = first_fragment;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
+        /* Combined 4-byte write for headroom_size (lo 16 bits) +
+         * first_fragment:1 + alloc_state:1 (next 2 bits) + rsvd1:14 (top 14 bits).
+         * Replaces the separate headroom_size store + first_fragment bit
+         * assignment + alloc_state bit assignment with a single 4-byte store
+         * (single SIMD/STP on aarch64 instead of 3 separate STR+BFI/UBFX). */
+        const uint16_t alloc_state_val = QBUF_ALLOC_STATE_ALLOCATED;
+        const uint32_t hs_field = ((uint32_t)headroom_size_temp) |
+                                  ((uint32_t)(uint16_t)first_fragment << 16) |
+                                  ((uint32_t)alloc_state_val << 17);
+        /* Defensive check (preserved from original): double-allocated buf warning. */
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
         }
-        cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
+        __builtin_memcpy((char *)cur_node + offsetof(umq_buf_t, headroom_size),
+                         &hs_field, sizeof(hs_field));
 
         remaining_size -= cur_node->data_size;
         if (remaining_size == 0) {
@@ -895,15 +904,20 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     {
         cur_node->buf_data = cur_node->data + headroom_size_temp;
         cur_node->buf_size = block_size;
-        cur_node->headroom_size = headroom_size_temp;
         cur_node->total_data_size = total_data_size;
-        cur_node->first_fragment = first_fragment;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
+        /* Combined 4-byte write for headroom_size + first_fragment:1 + alloc_state:1.
+         * See umq_qbuf_alloc_data_with_split for the rationale. */
+        const uint16_t alloc_state_val = QBUF_ALLOC_STATE_ALLOCATED;
+        const uint32_t hs_field = ((uint32_t)headroom_size_temp) |
+                                  ((uint32_t)(uint16_t)first_fragment << 16) |
+                                  ((uint32_t)alloc_state_val << 17);
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
             uint64_t buf_id = umq_buf_to_id((char *)cur_node, param->shm, true);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu in with_data pool already allocated\n", buf_id);
         }
-        cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
+        __builtin_memcpy((char *)cur_node + offsetof(umq_buf_t, headroom_size),
+                         &hs_field, sizeof(hs_field));
 
         remaining_size -= cur_node->data_size;
         if (remaining_size == 0) {
