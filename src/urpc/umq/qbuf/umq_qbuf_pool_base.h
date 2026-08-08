@@ -825,7 +825,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
         cur_node->total_data_size = total_data_size;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         /* Combined 4-byte write for headroom_size (lo 16 bits) +
-         * first_fragment:1 + alloc_state:1 (next 2 bits) + rsvd1:14 (top 14 bits).
+         * first_fragment:1 + alloc_state:1 + is_coalesced_small:1 + rsvd1:13 (top 15 bits).
          * Replaces the separate headroom_size store + first_fragment bit
          * assignment + alloc_state bit assignment with a single 4-byte store
          * (single SIMD/STP on aarch64 instead of 3 separate STR+BFI/UBFX). */

@@ -411,7 +411,8 @@ struct umq_buf {
     uint16_t headroom_size;      // size of umq buf headroom
     uint16_t first_fragment : 1; // first piece of each batch buf
     uint16_t alloc_state : 1;    // 0: free; 1: allocated
-    uint16_t rsvd1 : 14;
+    uint16_t is_coalesced_small : 1; // 1: coalesced SMALL_DATA buf (no brpc Block to DecRef in CQE)
+    uint16_t rsvd1 : 13;
 
     uint32_t token_id : 20;            // token_id for reference operation
     uint32_t mempool_without_data : 1; // 0 : with data, 1 : without data
