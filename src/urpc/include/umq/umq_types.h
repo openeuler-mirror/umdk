@@ -380,6 +380,11 @@ typedef enum umq_state {
     QUEUE_STATE_MAX
 } umq_state_t;
 
+typedef enum umq_buf_ref_id_type {
+    UMQ_BUF_REF_ID_TYPE_UMQ_ID,
+    UMQ_BUF_REF_ID_TYPE_TP_HANDEL,
+} umq_buf_buf_ref_id_type_t;
+
 /**
  * layout: | umq_buf_t | headroom | data |  unuse |
  * buf_size = sizeof(umq_buf_t) + headroom_size + data_size +  sizeof(unuse)
@@ -409,8 +414,10 @@ struct umq_buf {
 
     uint64_t status : 32;                 // umq_buf_status_t
     uint64_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
-    uint64_t umq_id : 18;
-    uint64_t rsvd3 : 12;
+
+    uint64_t rsvd3 : 11;
+    uint64_t buf_ref_id_type : 1;          // 0: enable umq_id, invalid to user, 1: enable tphandel
+    uint64_t buf_ref_id : 18;              // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
 
     uint64_t rsvd4;
 

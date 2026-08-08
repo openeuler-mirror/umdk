@@ -124,7 +124,8 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
         .io_imm.umq_id = queue->remote_umq_id,
         .io_imm.user_data = 0
     };
-    buffer->umq_id = queue->umq_id;
+    buffer->buf_ref_id_type = UMQ_BUF_REF_ID_TYPE_UMQ_ID;
+    buffer->buf_ref_id =  queue->umq_id;
     switch (buf_pro->opcode) {
         case UMQ_OPC_READ:
             if (!umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
@@ -1569,11 +1570,11 @@ static void umq_ub_on_tx_done(ub_queue_t *queue, umq_buf_t *buf, bool failed)
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
     bool opcode_consume_rqe =
         buf_pro->opcode == UMQ_OPC_SEND || buf_pro->opcode == UMQ_OPC_SEND_IMM || buf_pro->opcode == UMQ_OPC_WRITE_IMM;
-    if (failed && opcode_consume_rqe) {
-        ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, buf->umq_id);
+    if (failed && opcode_consume_rqe && buf->buf_ref_id_type == UMQ_BUF_REF_ID_TYPE_UMQ_ID) {
+        ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, buf->buf_ref_id);
         if (real_queue != NULL) {
             umq_ub_window_inc(real_queue->flow_control, 1);
-            umq_ub_put_real_queue(queue, buf->umq_id);
+            umq_ub_put_real_queue(queue, buf->buf_ref_id);
         }
     }
 
@@ -1860,6 +1861,35 @@ static void umq_ub_process_cr_err_for_jetty_pool(ub_queue_t *queue, urma_cr_t *c
     }
 }
 
+static ALWAYS_INLINE uint64_t umq_get_buf_ref_id_type(umq_io_option_t *option)
+{
+    if (option != NULL && (option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0) {
+        return UMQ_BUF_REF_ID_TYPE_TP_HANDEL;
+    }
+    return UMQ_BUF_REF_ID_TYPE_UMQ_ID;
+}
+
+static int32_t umq_ub_fill_fc_tx_buf(
+    ub_queue_t *queue, umq_buf_t **buf, umq_io_option_t *option, umq_buf_status_t status)
+{
+    if (buf == NULL)  {
+        return 0;
+    }
+
+    int32_t fill_buf_cnt = (int32_t)umq_ub_fill_fc_buf(queue, buf, status);
+    if (fill_buf_cnt == 0) {
+        return 0;
+    }
+
+    if (option == NULL) {
+        return fill_buf_cnt;
+    }
+
+    (*buf)->buf_ref_id_type = umq_get_buf_ref_id_type(option);
+    (*buf)->buf_ref_id = option->tp_handle_idx;
+    return fill_buf_cnt;
+}
+
 int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx,
                       umq_io_option_t *option)
 {
@@ -1922,11 +1952,8 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
             umq_buf_status_t fc_err_status = is_fatal ? UMQ_FAKE_BUF_FC_ERR_FATAL : UMQ_FAKE_BUF_FC_ERR;
 
             ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, obj.bs.umq_id);
-            if (buf != NULL) {
-                qbuf_cnt += (int32_t)umq_ub_fill_fc_buf(real_queue, &buf[qbuf_cnt], fc_err_status);
-            }
+            qbuf_cnt += umq_ub_fill_fc_tx_buf(real_queue, &buf[qbuf_cnt], option, fc_err_status);
             failed_cnt++;
-
             if (real_queue == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u) sub queue has been destroyed\n", obj.bs.umq_id);
                 continue;
@@ -2060,6 +2087,8 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
         buf[qbuf_cnt]->status = (umq_buf_status_t)cr[i].status;
         umq_ub_on_tx_done(queue, buf[qbuf_cnt], (cr[i].status != URMA_CR_SUCCESS));
         if (process_tx_msg(buf[qbuf_cnt]) == UMQ_SUCCESS) {
+            buf[qbuf_cnt]->buf_ref_id_type = umq_get_buf_ref_id_type(option);
+            buf[qbuf_cnt]->buf_ref_id = tp_handle_idx;
             ++qbuf_cnt;
         }
     }
