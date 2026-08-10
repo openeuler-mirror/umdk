@@ -66,6 +66,7 @@ bool is_perftest_force_quit(void)
 static int fill_dev_info(umq_dev_assign_t *dev_info, umq_perftest_config_t *cfg)
 {
     uint32_t addr;
+    int ret = 0;
     if (strlen(cfg->config.dev_name) != 0) {
         LOG_PRINT("umq perftest init with dev: %s\n", cfg->config.dev_name);
         dev_info->assign_mode = UMQ_DEV_ASSIGN_MODE_DEV;
@@ -74,7 +75,11 @@ static int fill_dev_info(umq_dev_assign_t *dev_info, umq_perftest_config_t *cfg)
     } else if (inet_pton(AF_INET, cfg->config.local_ip, &addr) == 1) {
         LOG_PRINT("umq perftest init with ipv4: %s\n", cfg->config.local_ip);
         dev_info->assign_mode = UMQ_DEV_ASSIGN_MODE_IPV4;
-        memcpy(dev_info->ipv4.ip_addr, cfg->config.local_ip, strlen(cfg->config.local_ip));
+        ret = snprintf(dev_info->ipv4.ip_addr, UMQ_IPV4_SIZE, "%s", cfg->config.local_ip);
+        if (ret < 0 || ret >= UMQ_IPV4_SIZE) {
+            LOG_PRINT("snprintf ipv4 failed\n");
+            return -1;
+        }
     } else {
         LOG_PRINT("umq perftest init with ipv6: %s\n", cfg->config.local_ip);
         dev_info->assign_mode = UMQ_DEV_ASSIGN_MODE_IPV6;
