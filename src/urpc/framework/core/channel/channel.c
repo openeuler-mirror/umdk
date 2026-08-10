@@ -167,6 +167,7 @@ int channel_free(uint32_t urpc_chid)
         URPC_LIB_LOG_ERR("get channel[%u] failed\n", urpc_chid);
         return -URPC_ERR_EINVAL;
     }
+    g_urpc_channels[urpc_chid] = NULL;
 
     queue_node_t *cur_node, *next_node;
     URPC_SLIST_FOR_EACH_SAFE(cur_node, &channel->r_queue_nodes_head, node, next_node) {
@@ -210,7 +211,6 @@ int channel_free(uint32_t urpc_chid)
     if (URPC_LIKELY(is_feature_enable(URPC_TIMER_FEATURE_FLAG))) {
         urpc_timer_pool_delete(urpc_chid, false);
     }
-    g_urpc_channels[urpc_chid] = NULL;
 
     if (!urpc_list_is_empty(&channel->mem_info_list)) {
         (void)pthread_rwlock_wrlock(&channel->mem_info_lock);
@@ -521,6 +521,10 @@ int channel_remove_remote_queue_async(urpc_channel_info_t *channel, queue_t *que
 int channel_get_local_queue_info(uint64_t qh, queue_info_t *queue_info)
 {
     queue_t *queue = (queue_t *)(uintptr_t)qh;
+    if (queue == NULL || queue->ops == NULL) {
+        URPC_LIB_LOG_ERR("qh invalid\n");
+        return -URPC_ERR_EINVAL;
+    }
     return queue->ops->query_local_queue(queue, queue_info);
 }
 
