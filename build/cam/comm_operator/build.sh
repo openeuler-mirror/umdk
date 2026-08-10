@@ -170,6 +170,7 @@ if [ $ENABLE_SRC_BUILD -eq 1 ]; then
 fi
 
 if [ $ENABLE_PYBIND_BUILD -eq 1 ]; then
+    build_cam_comm
     bash $MODULE_SCRIPTS_PATH/build_pybind.sh
 fi
 
