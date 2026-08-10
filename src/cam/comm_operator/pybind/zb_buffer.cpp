@@ -96,11 +96,11 @@ ZbBuffer::ZbBuffer(int64_t rank, int64_t numRanks, int64_t localMemSize, const s
 
     InitShmem(localMemSize, ipPort);
     // Mark initialized before slot alloc so dtor / catch path can finalize SHMEM + meta
-    // if PreallocateSlots throws (avoids leak flagged by resource scanners).
+    // if PreallocateLayoutNotifySlots throws (avoids leak flagged by resource scanners).
     initialized_ = true;
     try {
         c10::Device device(c10::DeviceType::PrivateUse1, static_cast<c10::DeviceIndex>(rank));
-        PreallocateSlots(device);
+        PreallocateLayoutNotifySlots(device);
     } catch (...) {
         FreeSlots();
         FinalizeShmem();
@@ -161,20 +161,36 @@ void ZbBuffer::InitShmem(int64_t localMemSize, const std::string &ipPort)
 #endif
 }
 
-void ZbBuffer::PreallocateSlots(c10::Device device)
+void ZbBuffer::PreallocateLayoutNotifySlots(c10::Device device)
 {
     const int64_t E = numExperts_;
     const int64_t R = numRanks_;
-    const int64_t H = hidden_;
-    const int64_t T = globalBs_;
 
+    // layout output / notify input
     numTokensPerExpert_ = CreateTensorFromShmem({E}, at::kInt, device);
     numTokensPerExpert_.zero_();
 
+    // notify SHMEM workspace / output
     recvData_ = CreateTensorFromShmem({R, E}, at::kInt, device);
+}
 
+void ZbBuffer::EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device device)
+{
+    if (dtype != at::kBFloat16 && dtype != at::kHalf) {
+        throw std::runtime_error("ZbBuffer: x dtype must be torch.bfloat16 or torch.float16");
+    }
+    if (combineX_.defined()) {
+        if (dtype != dtype_) {
+            throw std::runtime_error("ZbBuffer: x dtype does not match Buffer session dtype from first dispatch");
+        }
+        return;
+    }
+
+    dtype_ = dtype;
+    const int64_t H = hidden_;
+    const int64_t T = globalBs_;
     // expandx and combine_x share one physical SHMEM block (deepep-style).
-    combineX_ = CreateTensorFromShmem({T, H}, at::kBFloat16, device);
+    combineX_ = CreateTensorFromShmem({T, H}, dtype_, device);
     if (useQuant_) {
         auto charOpts = torch::TensorOptions().dtype(at::kChar).device(device);
         expandx_ = at_npu::native::from_blob(combineX_.data_ptr(), c10::IntArrayRef({T, H}), charOpts);
@@ -259,6 +275,10 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> ZbBuffer::dispatch(const at::Tens
     }
 
     auto device = x.device();
+    if (numTokensPerExpert_.defined() && device != numTokensPerExpert_.device()) {
+        throw std::runtime_error("ZbBuffer: x device must match Buffer layout/notify slot device");
+    }
+    EnsureDispatchCombineSlots(x.scalar_type(), device);
     int64_t numLocalExperts = numExperts_ / numRanks_;
     int64_t topkNum = topkIdx.size(1);
     int64_t localRankSize = numRanks_;
@@ -316,7 +336,7 @@ at::Tensor ZbBuffer::combine(const at::Tensor &expertOut, const at::Tensor &topk
         throw std::runtime_error("ZbBuffer: expert_out shape exceeds combine SHMEM slot");
     }
     if (expertOut.scalar_type() != combineX_.scalar_type()) {
-        throw std::runtime_error("ZbBuffer: expert_out dtype must match combine slot (bf16)");
+        throw std::runtime_error("ZbBuffer: expert_out dtype must match combine slot (bf16/fp16)");
     }
 
     // Publish expert output into the symmetric combine slot when needed.
