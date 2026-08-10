@@ -157,8 +157,8 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
  *
  *   Bits   | Field       | Bits | Description
  *   -------|-------------|------|--------------------------------
- *   0-19   | user_data   | 20   | User-defined custom data
- *   20-21  | reserved    | 2    | Reserved
+ *   0-20   | user_data   | 21   | User-defined custom data
+ *   21-21  | reserved    | 1    | Reserved
  *   22-37  | vjetty_id   | 16   | Virtual jetty identifier (0-65535)
  *   38-39  | cr_opcode   | 2    | Operation code tag (0-3)
  *   40-63  | msn         | 24   | Message sequence number (0-16M)
@@ -166,8 +166,8 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
  * Use encode_imm_data() and decode_imm_data() to pack/unpack fields.
  */
 
-#define IMM_USER_BITS      20
-#define IMM_RESERVED_BITS  2
+#define IMM_USER_BITS      21
+#define IMM_RESERVED_BITS  1
 #define IMM_VJETTY_ID_BITS 16
 #define IMM_CR_OPCODE_BITS 2
 #define IMM_MSN_BITS       24
