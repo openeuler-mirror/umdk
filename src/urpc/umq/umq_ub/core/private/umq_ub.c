@@ -1724,7 +1724,7 @@ jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_qu
         goto DELETE_JFR;
     }
 
-    if (is_umq_ub_main_queue(queue->create_flag)) {
+    if (!is_umq_ub_share_rq(queue->create_flag)) {
         umq_qbuf_set_tls_expand_qbuf_pool_depth(umq_ub_pjfr_depth(queue));
     }
 
