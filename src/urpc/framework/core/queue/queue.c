@@ -410,7 +410,11 @@ int queue_slab_init(queue_local_t *local_q)
         }
 
         uint32_t size = ctx_infos[i].size + sizeof(queue_ctx_head_t);
-        char *buf = urpc_dbuf_malloc(URPC_DBUF_TYPE_QUEUE, size * num);
+        uint64_t total_size = (uint64_t)size * num;
+        if (total_size > UINT32_MAX) {
+            goto ERROR;
+        }
+        char *buf = urpc_dbuf_malloc(URPC_DBUF_TYPE_QUEUE, (uint32_t)total_size);
         if (buf == NULL) {
             goto ERROR;
         }
