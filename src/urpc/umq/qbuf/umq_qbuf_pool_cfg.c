@@ -9,6 +9,24 @@
 #include "umq_qbuf_pool_helper.h"
 #include "umq_tiny_qbuf_pool.h"
 
+static uint64_t __attribute__((unused)) umq_normal_pool_supported_block_count(
+    umq_buf_mode_t mode, uint64_t normal_pool_size, uint64_t nodata_mem_size)
+{
+    uint32_t block_size = umq_buf_size_small();
+    if (block_size == 0) {
+        return 0;
+    }
+
+    if (mode == UMQ_BUF_SPLIT) {
+        uint64_t one_block_size = (uint64_t)sizeof(umq_buf_t) + block_size;
+        return (normal_pool_size - nodata_mem_size) / one_block_size;
+    }
+    if (mode == UMQ_BUF_COMBINE) {
+        return normal_pool_size / block_size;
+    }
+    return 0;
+}
+
 static uint64_t umq_without_data_expand_mem_size(const umq_buf_pool_cfg_t *cfg, umq_buf_mode_t mode)
 {
     if (mode != UMQ_BUF_SPLIT) {
@@ -34,6 +52,8 @@ static int umq_tiny_pool_cfg_check(const umq_init_cfg_t *cfg, uint64_t init_size
                                                                                cfg->buf_pool_cfg.tiny_pool_block_count;
 
     if (tiny_block_count < QBUF_POOL_BATCH_CNT || tiny_block_count < cfg->buf_pool_cfg.tls_tiny_pool_depth) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tiny block count %llu is less than QBUF_POOL_BATCH_CNT or tls_tiny_pool_depth %llu\n",
+            tiny_block_count, cfg->buf_pool_cfg.tls_tiny_pool_depth);
         return -UMQ_ERR_EINVAL;
     }
 
