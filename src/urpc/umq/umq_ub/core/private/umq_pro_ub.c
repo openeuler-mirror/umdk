@@ -439,7 +439,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             *bad_qbuf = qbuf;
             goto RECOVER_WINDOW;
         }
-        if (!is_read_only && fc->enabled) {
+        if (!is_read_only && fc != NULL && fc->enabled) {
             jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
             uint32_t prev = __atomic_fetch_add(&jetty_node->borrow_count, wr_cnt_limit, __ATOMIC_ACQ_REL);
             uint32_t total = prev + wr_cnt_limit;
