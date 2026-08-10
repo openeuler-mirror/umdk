@@ -36,7 +36,8 @@ public:
     std::tuple<at::Tensor, at::Tensor> get_dispatch_layout(const at::Tensor &topkIdx);
 
     // Fused notify + dispatch. Returns (recv_x, scales, handle=put_offset).
-    // recv_x / scales are views into preallocated slots sliced to actual_recv.
+    // recv_x / scales are views into slots sliced to actual_recv.
+    // First call allocates combine/expand slots from x.dtype (bf16 or fp16).
     std::tuple<at::Tensor, at::Tensor, at::Tensor> dispatch(const at::Tensor &x, const at::Tensor &topkIdx,
         const at::Tensor &sendTokenIdx, const at::Tensor &numTokensPerExpert, int64_t quantMode);
 
@@ -46,7 +47,8 @@ public:
 
 private:
     void InitShmem(int64_t localMemSize, const std::string &ipPort);
-    void PreallocateSlots(c10::Device device);
+    void PreallocateLayoutNotifySlots(c10::Device device);
+    void EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device device);
     void FreeSlots();
     void FinalizeShmem();
 
@@ -56,6 +58,7 @@ private:
     int64_t numExperts_{0};
     int64_t globalBs_{0};
     bool useQuant_{false};
+    at::ScalarType dtype_{at::ScalarType::Undefined};
     bool initialized_{false};
 
     void *metaPtr_{nullptr};

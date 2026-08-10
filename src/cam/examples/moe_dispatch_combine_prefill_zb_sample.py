@@ -22,6 +22,7 @@
 #   SHMEM_IP_PORT=tcp://127.0.0.1:8666
 #   SHMEM_MEM_SIZE=4294967296
 #   ZB_QUANT_MODE=0|2
+#   ZB_DTYPE=bfloat16|float16   # dtype of x (Buffer follows x.dtype)
 #   ZB_BENCH_ITERS=N   # if >0, time N dispatch+combine rounds (quant dequant is prebuilt)
 #   Empirical shmem memory size ≈ 2 × batch_size × world_size × 7168 × 2
 #
@@ -129,7 +130,16 @@ def test_base_test(local_rank_id, ep_world_size):
     hidden_size = case["hidden_size"]
     batch_size = case["batch_size"]
     quant_mode = int(os.environ.get("ZB_QUANT_MODE", str(case["quant_mode"])))
-    data_type = torch.bfloat16
+    dtype_name = os.environ.get("ZB_DTYPE", "bfloat16").lower()
+    dtype_map = {
+        "bfloat16": torch.bfloat16,
+        "bf16": torch.bfloat16,
+        "float16": torch.float16,
+        "fp16": torch.float16,
+        "half": torch.float16,
+    }
+    assert dtype_name in dtype_map, f"unsupported ZB_DTYPE={dtype_name}, expect bfloat16|float16"
+    data_type = dtype_map[dtype_name]
     global_bs = batch_size * world_size
     use_quant = quant_mode == 2
 
@@ -171,7 +181,7 @@ def test_base_test(local_rank_id, ep_world_size):
         actual_recv = int(recv_x.size(0))
 
         # Quant: dequant ONCE. Fixed inputs → same recv packing each round, so this
-        # bf16 tensor can be reused for combine / bench without re-dequant.
+        # tensor (same dtype as x) can be reused for combine / bench without re-dequant.
         # Note: expandx and combine_x share SHMEM; each later dispatch overwrites that
         # block as int8, so combine still copy_s prebuilt_expert_out into the slot —
         # that copy is cheap vs host dequant and must stay outside the dequant path.
