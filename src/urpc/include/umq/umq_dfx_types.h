@@ -338,10 +338,6 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_RJETTY_GET,
     /* record point for transport rjetty put */
     UMQ_PERF_RECORD_TRANSPORT_RJETTY_PUT,
-    /* record point for transport jetty node alloc */
-    UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE,
-    /* record point for transport jetty node free */
-    UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE,
     /* record point for transport route path get */
     UMQ_PERF_RECORD_TRANSPORT_PATH_GET,
     /* record point for transport import */
@@ -352,6 +348,10 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY,
     /* record point for transport bind */
     UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY,
+    /* record point for transport jetty node alloc */
+    UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE,
+    /* record point for transport jetty node free */
+    UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE,
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
 
