@@ -101,3 +101,38 @@ The currently supported attributes and their configurable value are listed in th
 **Note**
 1. The actual corking size will not exceed half of the send buffer size. If a larger value is configured, it will not take effect. Instead, half of the send buffer size will be used as the effective corking size.
 2. It is recommended that users configure this parameter according to their needs after module mounting. The configuration takes effect immediately upon being set.
+
+### 2.3 UMS Runtime Module Parameters
+For the semantics, valid values, and load-time configuration of UMS kernel module parameters, see [UMS User Guide - 3.4 Kernel Module Parameter Configuration](./UMS%20User%20Guide.md#34-kernel-module-parameter-configuration). This section only describes the runtime access methods.
+
+**Load-time only parameters (permission 0)**
+
+The following parameters cannot be read or written after the UMS kernel module is loaded and running. They can only be specified at module load time (via `insmod`/`modprobe` command parameters, or by writing to `/etc/modprobe.d/ums.conf`):
+
+| Parameter | Runtime Behavior |
+| --------- | ---------------- |
+| `ub_token_mode` | Not readable or writable; parsed once at load time, the effective value must be confirmed from kernel logs |
+| `ub_token_disable` | **Deprecated**, not readable or writable; mapped once at load time to `ub_token_mode` (`0`→LEGACY, `1`→DISABLE) |
+
+To check the effective token mode after loading, confirm via kernel logs: the module prints `ub_token_mode=SECURE/LEGACY/DISABLE(<value>)` at load time.
+```bash
+dmesg | grep "UMS_" | grep "ub_token_mode="
+```
+
+**Readable and writable parameters (permission 0644)**
+
+The following parameters specify the UID/GID of processes allowed to register as ums_agent (effective only when `ub_token_mode=0`, i.e., SECURE mode). They can be queried and modified via `/sys/module/ums/parameters/<parameter>`:
+```bash
+# Query
+cat /sys/module/ums/parameters/ums_agent_uid
+cat /sys/module/ums/parameters/ums_agent_gid
+
+# Modify (only writable when ums_agent is offline; writing while ums_agent is online returns -EBUSY)
+echo <UID> > /sys/module/ums/parameters/ums_agent_uid
+echo <GID> > /sys/module/ums/parameters/ums_agent_gid
+```
+
+| Parameter | sysfs Permission | Runtime Behavior |
+| --------- | ---------------- | ---------------- |
+| `ums_agent_uid` | 0644 | Readable; writable only when ums_agent is offline, writing while online returns `-EBUSY` |
+| `ums_agent_gid` | 0644 | Readable; writable only when ums_agent is offline, writing while online returns `-EBUSY` |
