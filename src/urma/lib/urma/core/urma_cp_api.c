@@ -506,7 +506,7 @@ urma_status_t urma_alloc_jfc(urma_context_t *urma_ctx, urma_jfc_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfc == NULL || buf == NULL || len == 0) {
+    if (jfc == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -542,7 +542,7 @@ urma_status_t urma_set_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_
 
 urma_status_t urma_get_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfc == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfc == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -876,19 +876,6 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
         return URMA_EINVAL;
     }
 
-    if (urma_check_trans_mode_valid(cfg->trans_mode) != true) {
-        URMA_LOG_ERR("Invalid parameter, trans_mode=%d.\n", (int)cfg->trans_mode);
-        return URMA_EINVAL;
-    }
-
-    uint32_t order_type = cfg->flag.bs.order_type;
-    if (urma_convert_order_type(cfg->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)cfg->trans_mode, cfg->flag.bs.order_type);
-        return URMA_EINVAL;
-    }
-    cfg->flag.bs.order_type = order_type;
-
     /* urma_alloc_jfs alloc memory for jetty context, so we just check the validity of input parameters,
      * while detailed cfg parameters will be check in urma_active_jfs.
      */
@@ -905,7 +892,7 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfs == NULL || buf == NULL || len == 0) {
+    if (jfs == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -943,7 +930,7 @@ urma_status_t urma_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_
 
 urma_status_t urma_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfs == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfs == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -1347,14 +1334,6 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
         return URMA_EINVAL;
     }
 
-    uint32_t order_type = cfg->flag.bs.order_type;
-    if (urma_convert_order_type(cfg->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)cfg->trans_mode, cfg->flag.bs.order_type);
-        return URMA_EINVAL;
-    }
-    cfg->flag.bs.order_type = order_type;
-
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfr);
     /* urma_alloc_jfr alloc memory for jetty context, so we just check the validity of input parameters,
@@ -1370,7 +1349,7 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
 
 urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfr == NULL || buf == NULL || len == 0) {
+    if (jfr == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -1407,7 +1386,7 @@ urma_status_t urma_set_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_
 
 urma_status_t urma_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jfr == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jfr == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -2439,26 +2418,6 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
         return URMA_EINVAL;
     }
 
-    // Convert jfs order_type
-    uint32_t jfs_order_type = cfg->jfs_cfg.flag.bs.order_type;
-    if (urma_convert_order_type(cfg->jfs_cfg.trans_mode, &jfs_order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert jfs order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)cfg->jfs_cfg.trans_mode, cfg->jfs_cfg.flag.bs.order_type);
-        return URMA_EINVAL;
-    }
-    cfg->jfs_cfg.flag.bs.order_type = jfs_order_type;
-
-    // Convert jfr order_type if not shared
-    if (cfg->flag.bs.share_jfr == URMA_NO_SHARE_JFR && cfg->jfr_cfg != NULL) {
-        uint32_t jfr_order_type = cfg->jfr_cfg->flag.bs.order_type;
-        if (urma_convert_order_type(cfg->jfr_cfg->trans_mode, &jfr_order_type) != 0) {
-            URMA_LOG_ERR("Failed to convert jfr order_type for trans_mode=%d, order_type=%u.\n",
-                         (int)cfg->jfr_cfg->trans_mode, cfg->jfr_cfg->flag.bs.order_type);
-            return URMA_EINVAL;
-        }
-        cfg->jfr_cfg->flag.bs.order_type = jfr_order_type;
-    }
-
     urma_ops_t *ops = NULL;
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jetty);
     /* urma_alloc_jetty alloc memory for jetty context, so we just check the validity of input parameters,
@@ -2485,7 +2444,7 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
 urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jetty == NULL || buf == NULL || len == 0) {
+    if (jetty == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -2546,7 +2505,7 @@ urma_status_t urma_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, u
 
 urma_status_t urma_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len)
 {
-    if (jetty == NULL || buf == NULL || opt == 0 || len == 0) {
+    if (jetty == NULL || buf == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
