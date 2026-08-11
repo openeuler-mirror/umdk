@@ -25,7 +25,7 @@ typedef struct umq_qbuf_pool_plan {
     uint64_t rx_io_buf_size;
     uint32_t rx_block_count;
     uint64_t normal_io_buf_size;
-    uint64_t normal_pool_budget_size;
+    uint64_t normal_pool_max_size;
 } umq_qbuf_pool_plan_t;
 
 typedef enum umq_pool_type {

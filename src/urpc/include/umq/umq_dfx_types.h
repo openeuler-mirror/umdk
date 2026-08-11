@@ -30,7 +30,7 @@ extern "C" {
 /* Maximum number of size_class levels exposed via DFX. Mirrors UMQ_QBUF_SIZE_CLASS_MAX
  * in the internal umq_qbuf_pool_base.h; duplicated here because the internal header
  * is not visible to public DFX consumers. */
-#define UMQ_DFX_QBUF_SIZE_CLASS_MAX (16u)
+#define UMQ_DFX_QBUF_SIZE_CLASS_MAX UMQ_SIZE_CLASS_MAX  /* backward compat alias */
 
 typedef struct umq_packet_stats {
     uint64_t send_cnt;               // number of packets sent
@@ -92,7 +92,9 @@ typedef struct umq_expansion_pool_stats {
     uint64_t exp_total_free_block_num; // number of free blocks in the expansion pool
     uint64_t exp_total_mem_size;       // total memory of the expansion pool
     uint64_t exp_used_mem_size;        // used memory of the expansion pool
-    uint64_t total_expansion_count;    // cumulative number of expansions
+    uint64_t total_expansion_count;       // cumulative expansion count
+    uint64_t sync_expansion_count;        // expansion in alloc hot path (caller blocked)
+    uint64_t async_expansion_count;       // expansion by background prefill    // cumulative number of expansions
     uint64_t total_shrink_count;       // cumulative number of contractions
 } umq_expansion_pool_stats_t;
 
@@ -121,7 +123,7 @@ typedef struct umq_qbuf_sc_info {
  * inside the static g_qbuf_pool state and not exposed via DFX. */
 typedef struct umq_qbuf_pool_config {
     uint32_t size_class_count;           // 1..UMQ_DFX_QBUF_SIZE_CLASS_MAX
-    uint32_t size_class_step_multiplier; // block_size[i] = base * mult^i
+    uint32_t explicit_block_sizes[UMQ_SIZE_CLASS_MAX];   // [0..count-1] ascending block sizes
     uint64_t per_sc_block_count;         // per-sc total block count (uniform across sc levels)
     uint8_t disable_scale_cap;           // expansion/shrink switch (1 = disabled)
     uint8_t disable_malloc_escape;       // escape mechanism switch (1 = disabled)
@@ -148,14 +150,14 @@ typedef enum umq_qbuf_pool_type {
 typedef struct umq_local_qbuf_pool_stats {
     umq_qbuf_pool_type_t type;                // qbuf pool type
     uint64_t tid;                             // thread ID
-    uint64_t capacity_with_data;              // with-data local pool capacity in BYTES (multi-level size_class sum)
+    uint64_t capacity_with_data;              // with-data local pool capacity in buffer COUNT (sum of per-SC high-water mark caps)
     uint64_t buf_cnt_with_data;               // number of with-data buffers in the local memory pool
     uint64_t capacity_without_data;           // capacity of without-data buffer in the local memory pool
     uint64_t buf_cnt_without_data;            // number of without-data buffer in the local memory pool
     uint64_t tls_fetch_cnt_with_data;         // total number of times buffer(withdata) acquired from the global pool
     uint64_t tls_fetch_buf_cnt_with_data;     // total number of buffer(withdata) acquired from the global pool
     uint64_t tls_fetch_cnt_without_data;      // total number of times buffer(nodata) acquired from the global pool
-    uint64_t tls_fetch_buf_cnt_without_data;  // total number of buffer(withdata) acquired from the global pool
+    uint64_t tls_fetch_buf_cnt_without_data;  // total number of buffer(nodata) acquired from the global pool
     uint64_t tls_return_cnt_with_data;        // total number of times buffer(withdata) returned to the global pool
     uint64_t tls_return_buf_cnt_with_data;    // total number of buffer(withdata) returned to the global pool
     uint64_t tls_return_cnt_without_data;     // total number of times buffer(nodata) returned to the global pool
