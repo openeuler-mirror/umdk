@@ -32,6 +32,7 @@
 
 #define MAX_SO_NAME_LEN     (32)
 #define MAX_FUNCNAME_LEN    (32)
+
 typedef struct umq_framework {
     umq_trans_mode_t mode;
     bool enable;

@@ -535,7 +535,7 @@ static void umq_ub_disconnect_jetty(ub_queue_t *queue, ub_bind_ctx_t *ctx, ub_qu
 
 static uint32_t max_msg_size_get(ub_queue_t *queue)
 {
-    if (queue->tp_type != URMA_CTP || UMQ_CTP_MAX_BUF_SIZE > queue->dev_ctx->dev_attr.dev_cap.max_msg_size) {
+    if (queue->tp_type != URMA_CTP || queue->dev_ctx->dev_attr.dev_cap.max_msg_size < UMQ_CTP_MAX_BUF_SIZE) {
         return queue->dev_ctx->dev_attr.dev_cap.max_msg_size;
     }
     return UMQ_CTP_MAX_BUF_SIZE;
