@@ -14,6 +14,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/** Maximum number of size_class levels in a qbuf pool.
+ * Used throughout umq_types.h, umq_dfx_types.h, and internal headers
+ * instead of the magic number 16. */
+#define UMQ_SIZE_CLASS_MAX (16u)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -290,13 +295,14 @@ typedef struct umq_buf_pool_cfg {
         tls_qbuf_pool_depth; // TLS pool depth cap (count-based, per-SC for normal pool; single-level for tiny/huge/shm)
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 1/2 of tls_qbuf_pool_depth
 
-    // multi-level size_class: 0 = use defaults. block_size[i] = base * step_multiplier^i
-    uint32_t size_class_count;           // 0 = default (2), range 1..16
-    uint32_t size_class_step_multiplier; // 0 = default (16), power of 2
+    // Multi-level size_class: explicit_block_sizes[0..size_class_count-1]
+    // specifies each SC's block size in ascending order.
+    uint32_t size_class_count;           // 0 = default (2), range 1..UMQ_SIZE_CLASS_MAX
+    uint32_t explicit_block_sizes[UMQ_SIZE_CLASS_MAX];   // [0..count-1] ascending block sizes, e.g. {4096, 32768, 131072}
+    uint32_t per_sc_weights[UMQ_SIZE_CLASS_MAX];         // [0..count-1] allocation weight, default {2,1,1} for 4K-heavy
     uint64_t expansion_size;             // 0 = default (32MB), per-expansion memory size
     uint32_t expansion_threshold;        // 0 = default (30), water level percentage [1,100] that triggers expansion
 
-    uint64_t lazy_init_block_size_threshold; // 0 = disabled (no lazy init), default 1048576 (1MB)
     bool disable_scale_cap; // expansion and shrink switch
     // escape
     bool disable_malloc_escape; // disable the escape mechanism
