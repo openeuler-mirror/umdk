@@ -110,3 +110,38 @@ sysctl -w net.ums.[属性名]=[值]
 **注意**
 1. 聚合大小实际使用时不会超过发送缓冲区的一半。如果配置过大，该字段的配置不会生效，会直接使用发送缓冲区的一半的值作为实际聚合大小。
 2. 建议用户根据需求在模块挂载后进行配置，配置后生效一次。
+
+### 2.3 UMS 运行时模块参数
+UMS 内核模块参数的语义、取值与加载时配置详见 [UMS User Guide - 3.4 内核模块参数配置](./UMS%20User%20Guide.ch.md#34-内核模块参数配置)，本节仅说明运行时访问方式。
+
+**仅加载时指定的参数（权限 0）**
+
+以下参数在 UMS 内核模块加载运行后不可读写，只能在模块加载时指定（通过 `insmod`/`modprobe` 命令传参，或写入 `/etc/modprobe.d/ums.conf`）：
+
+| 参数名 | 运行时行为 |
+| ------ | ---------- |
+| `ub_token_mode` | 不可读写；加载时一次性解析，实际生效值需从内核日志确认 |
+| `ub_token_disable` | **已废弃**，不可读写；加载时一次性映射为 `ub_token_mode`（`0`→LEGACY，`1`→DISABLE） |
+
+如需查看加载后实际生效的 token 模式，可通过内核日志确认：模块加载时会打印 `ub_token_mode=SECURE/LEGACY/DISABLE(<值>)`。
+```bash
+dmesg | grep "UMS_" | grep "ub_token_mode="
+```
+
+**可读写参数（权限 0644）**
+
+以下参数指定允许注册为 ums_agent 的进程 UID/GID（仅 `ub_token_mode=0` 即 SECURE 模式下生效）。可通过 `/sys/module/ums/parameters/<参数名>` 查询与修改：
+```bash
+# 查询
+cat /sys/module/ums/parameters/ums_agent_uid
+cat /sys/module/ums/parameters/ums_agent_gid
+
+# 修改（仅 ums_agent 离线时可修改，ums_agent 在线时写入返回 -EBUSY）
+echo <UID> > /sys/module/ums/parameters/ums_agent_uid
+echo <GID> > /sys/module/ums/parameters/ums_agent_gid
+```
+
+| 参数名 | sysfs 权限 | 运行时行为 |
+| ------ | ---------- | ---------- |
+| `ums_agent_uid` | 0644 | 可读；ums_agent 离线时可写，在线时写入返回 `-EBUSY` |
+| `ums_agent_gid` | 0644 | 可读；ums_agent 离线时可写，在线时写入返回 `-EBUSY` |
