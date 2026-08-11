@@ -713,7 +713,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .data_size = umq_buf_size_small(),
         .headroom_size = cfg->headroom_size,
         .mode = cfg->buf_mode,
-        .umq_buf_pool_max_size = buf_pool_plan.normal_pool_budget_size,
+        .umq_buf_pool_max_size = buf_pool_plan.normal_pool_max_size,
         .seg_ops =
             {
                 .register_seg_callback = umq_ub_register_seg_callback,
@@ -724,11 +724,15 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
         .disable_malloc_escape = cfg->buf_pool_cfg.disable_malloc_escape,
         .size_class_count = cfg->buf_pool_cfg.size_class_count,
-        .size_class_step_multiplier = cfg->buf_pool_cfg.size_class_step_multiplier,
         .expansion_size = cfg->buf_pool_cfg.expansion_size,
         .expansion_threshold = cfg->buf_pool_cfg.expansion_threshold,
-        .lazy_init_block_size_threshold = cfg->buf_pool_cfg.lazy_init_block_size_threshold,
     };
+    memcpy(qbuf_cfg.explicit_block_sizes,
+           cfg->buf_pool_cfg.explicit_block_sizes,
+           sizeof(uint32_t) * cfg->buf_pool_cfg.size_class_count);
+    memcpy(qbuf_cfg.per_sc_weights,
+           cfg->buf_pool_cfg.per_sc_weights,
+           sizeof(uint32_t) * cfg->buf_pool_cfg.size_class_count);
     ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool init failed, status: %d\n", ret);
@@ -1658,6 +1662,21 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     (void)util_rwlock_destroy(queue->wait_ack_import.lock);
     queue->wait_ack_import.lock = NULL;
     (void)pthread_spin_destroy(&queue->get_jetty_node_lock);
+
+    /* Logic UMQ: return borrowed jetty pool node before freeing the queue.
+     * During teardown g_ubsocket_exiting blocks the poll path that normally
+     * releases the node via umq_ub_poll_release_jetty_node, so destroy is the
+     * only remaining opportunity to return it.  Without this the node stays
+     * IN_USE, causing Clean()->node_remove CAS failure and cascading URMA
+     * delete-jfr/jfc/jfce errors (harmless but noisy). */
+    if (is_umq_ub_logic_queue(queue->create_flag) && queue->jetty_node != 0) {
+        jetty_pool_node_t *node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
+        __atomic_store_n(&queue->jetty_node, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&node->umq_ref, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&node->tx_outstanding, 0, __ATOMIC_RELEASE);
+        (void)umq_ub_jetty_node_free(node, false);
+    }
+
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
     umq_ub_queue_ctx_list_remove(&queue->qctx_node);
     umq_dec_ref(queue->dev_ctx->io_lock_free, &queue->dev_ctx->ref_cnt, 1);

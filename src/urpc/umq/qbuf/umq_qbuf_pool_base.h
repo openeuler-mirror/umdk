@@ -44,7 +44,7 @@ extern "C" {
 // middle = small * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL, and big = middle * UMQ_QBUF_SIZE_MULTIPLE_INTERVAL
 #define UMQ_QBUF_SIZE_MULTIPLE_INTERVAL (4)
 // Multi-level size_class support: block_size[i] = base x mult^i, i = 0..count-1
-#define UMQ_QBUF_SIZE_CLASS_MAX (16)
+#define UMQ_QBUF_SIZE_CLASS_MAX UMQ_SIZE_CLASS_MAX  /* backward compat, prefer UMQ_SIZE_CLASS_MAX */
 #define QBUF_ALLOC_STATE_FREE 0          // define qbuf free state
 #define QBUF_ALLOC_STATE_ALLOCATED 1     // define qbuf allocated state
 #define QBUF_POOL_MEMPOOL_ID_MAX (1023)  // escape mempool id: 1023, other memopool id must not exceed 1023
@@ -52,11 +52,11 @@ extern "C" {
 
 // Multi-level size_class defaults
 #define QBUF_POOL_DEFAULT_SIZE_CLASS_COUNT (2)
-#define QBUF_POOL_DEFAULT_STEP_MULTIPLIER (16)
+// QBUF_POOL_DEFAULT_STEP_MULTIPLIER removed (replaced by explicit_block_sizes[])
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
-#define QBUF_POOL_DEFAULT_LAZY_INIT_BLOCK_SIZE_THRESHOLD (1024U * 1024U)
+// Lazy SCs now controlled by per_sc_weights[sc]==0 (no reserve, expansion pool only)
 
 // Expansion pool global shared id range [257, 1023), table size 766
 #define QBUF_POOL_EXP_SLOT_ID_MIN (257)
@@ -78,6 +78,7 @@ extern "C" {
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 #define QBUF_POOL_MAX_BLOCK_SIZE (1024U * 1024U)
+#define QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA (4 * 1024 * 1024)
 
 typedef struct mempool_segment_ops {
     int (*register_seg_callback)(uint8_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
@@ -97,15 +98,18 @@ typedef struct qbuf_pool_cfg {
     uint32_t expansion_threshold; // water level percentage (1-100) that triggers expansion, default 30
     mempool_segment_ops_t seg_ops;
 
-    // multi-level size_class config: block_size[i] = data_size * size_class_step_multiplier^i
+    // Multi-level size_class config: explicit_block_sizes[0..size_class_count-1]
+    // specifies each SC's block size in ascending order. Caller must always fill valid values.
+    // Constraints: each size must be 4096*2^n, ascending, and larger size must be exact multiple
+    // of smaller size (required for memory layout alignment).
     uint32_t size_class_count;           // 1..UMQ_QBUF_SIZE_CLASS_MAX, default 2
-    uint32_t size_class_step_multiplier; // power of 2, default 16
+    uint32_t explicit_block_sizes[UMQ_QBUF_SIZE_CLASS_MAX]; // [0..count-1] ascending block sizes
+    uint32_t per_sc_weights[UMQ_QBUF_SIZE_CLASS_MAX];       // [0..count-1] weight for per-SC block allocation, default all-1 (equal)
 
     // thread local qbuf pool (count-based depth cap)
     uint64_t tls_qbuf_pool_depth; // TLS depth cap (count-based, per-SC for normal pool; single-level for tiny/huge/shm)
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 1/2 of tls_qbuf_pool_depth
 
-    uint64_t lazy_init_block_size_threshold; // 0 = disabled, default 1MB
     bool disable_scale_cap; // expansion and shrink switch
     // escape
     bool disable_malloc_escape; // disable the escape mechanism
@@ -292,26 +296,6 @@ static ALWAYS_INLINE uint32_t allocate_batch(umq_buf_list_t *input, uint32_t n, 
 }
 
 // release input to output and return count of elements released
-static ALWAYS_INLINE uint32_t release_to_global(umq_buf_list_t *input, umq_buf_list_t *output)
-{
-    uint32_t cnt = 0;
-    umq_buf_t *cur_node;
-    umq_buf_t *last_node = NULL;
-    QBUF_LIST_FOR_EACH(cur_node, input)
-    {
-        ++cnt;
-        last_node = cur_node;
-    }
-
-    umq_buf_t *output_head = QBUF_LIST_FIRST(output);
-    // switch head node
-    QBUF_LIST_FIRST(output) = QBUF_LIST_FIRST(input);
-    // set output
-    QBUF_LIST_NEXT(last_node) = output_head;
-    return cnt;
-}
-
-// release input to output and return count of elements released
 static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_t *output, bool shm)
 {
     uint32_t cnt = 0;
@@ -352,6 +336,8 @@ int expand_global_pool(bool with_data, uint32_t sc);
 // 线程局部标志: 当fetch_from_global走expansion pool或mmap扩容时置true
 // 用于umq_normal_qbuf_alloc区分_lc=1(fetch_global) vs _lc=2(fetch_expansion)
 extern __thread bool g_dbg_expansion_happened;
+extern int g_qbuf_debug_enabled;
+static inline bool qbuf_debug_on(void) { return __builtin_expect(__atomic_load_n(&g_qbuf_debug_enabled, __ATOMIC_RELAXED), 0) != 0; }
 #endif
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, umq_buf_list_t *local_head,
@@ -456,7 +442,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
 #ifdef UMQ_QBUF_DEBUG
         // 统计expansion pool路径: 从预分配的expansion slot中取到buf
         // 置flag让alloc层知道此申请走的是expansion而非纯global pool
-        if (_exp_cnt > 0) g_dbg_expansion_happened = true;
+        if (qbuf_debug_on() && _exp_cnt > 0) g_dbg_expansion_happened = true;
 #endif
     }
     while (count < batch_count) {
@@ -470,7 +456,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
 #ifdef UMQ_QBUF_DEBUG
         // 统计mmap扩容路径: expand_global_pool成功调用了mmap分配新内存
         // 这是最慢的路径(通常>1ms)，置flag让alloc层记录为_lc=2
-        g_dbg_expansion_happened = true;
+        if (qbuf_debug_on()) g_dbg_expansion_happened = true;
 #endif
 
         count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
@@ -657,44 +643,6 @@ static ALWAYS_INLINE void qbuf_tls_capacity_self_shrink(global_block_pool_t *glo
     }
 }
 
-// flush polled buf to global
-/* DEPRECATED: This function bypasses mempool_id routing and blindly prepends to global_head.
- * Use return_to_global instead, which calls return_list_to_pools to correctly route
- * expansion-pool buffers back to their slots based on mempool_id.
- * DO NOT call this function — it is dead code retained for reference only.
- * If revived, expansion-pool buffers would leak into the base pool and never be reclaimed. */
-static ALWAYS_INLINE void return_qbuf_to_global(global_block_pool_t *global_pool, umq_buf_t *buf, bool with_data)
-{
-    uint32_t cnt = 0;
-    umq_buf_t *cur_node = NULL;
-    umq_buf_t *last_node = NULL;
-
-    uint64_t *global_buf_cnt;
-    umq_buf_list_t *global_head;
-
-    (void)pthread_spin_lock(&global_pool->global_mutex);
-    if (with_data) {
-        global_buf_cnt = &global_pool->buf_cnt_with_data;
-        global_head = &global_pool->head_with_data;
-    } else {
-        global_buf_cnt = &global_pool->buf_cnt_without_data;
-        global_head = &global_pool->head_without_data;
-    }
-
-    cur_node = buf;
-    while (cur_node != NULL) {
-        last_node = cur_node;
-        cur_node = QBUF_LIST_NEXT(cur_node);
-        cnt++;
-    }
-    // switch head node
-    umq_buf_t *head = QBUF_LIST_FIRST(global_head); // record original head node
-    QBUF_LIST_FIRST(global_head) = buf;             // switch head node
-    QBUF_LIST_NEXT(last_node) = head;               // append head node to last node
-    *global_buf_cnt += cnt;
-
-    (void)pthread_spin_unlock(&global_pool->global_mutex);
-}
 
 static ALWAYS_INLINE umq_buf_t *id_to_buf_with_data_split(char *addr, uint64_t id)
 {

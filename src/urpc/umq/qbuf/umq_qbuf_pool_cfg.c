@@ -33,7 +33,7 @@ static uint64_t umq_without_data_expand_mem_size(const umq_buf_pool_cfg_t *cfg, 
         return 0;
     }
 
-    uint64_t expansion_block_count = QBUF_POOL_DEFAULT_EXPANSION_COUNT;
+    uint64_t expansion_block_count = QBUF_POOL_DEFAULT_EXPANSION_COUNT; /* must match umq_qbuf_expansion_count() */
     return (uint64_t)sizeof(umq_buf_t) * UMQ_EMPTY_HEADER_COEFFICIENT * expansion_block_count;
 }
 
@@ -113,28 +113,29 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         return -UMQ_ERR_EINVAL;
     }
 
-    // Validate: init_size >= rx + tiny + sum(nonlazy_block_sizes) * tls_qbuf_pool_depth
+    // Validate: init_size >= rx + tiny (minimum for pool to function).
+    // tls_qbuf_pool_depth is a per-thread cap, not a hard minimum for global pool.
+    // per_sc_block_count in init_size_class_config will auto-fit to available memory.
     if (!cfg->buf_pool_cfg.disable_scale_cap && cfg->buf_pool_cfg.tls_qbuf_pool_depth > 0) {
         uint64_t required = plan->rx_io_buf_size + plan->tiny_io_buf_size;
-        uint32_t base = umq_buf_size_small();
         uint32_t count = (cfg->buf_pool_cfg.size_class_count == 0) ? QBUF_POOL_DEFAULT_SIZE_CLASS_COUNT :
                                                                      cfg->buf_pool_cfg.size_class_count;
-        uint32_t mult = (cfg->buf_pool_cfg.size_class_step_multiplier == 0) ?
-                            QBUF_POOL_DEFAULT_STEP_MULTIPLIER :
-                            cfg->buf_pool_cfg.size_class_step_multiplier;
-        uint64_t lazy_threshold = QBUF_POOL_DEFAULT_LAZY_INIT_BLOCK_SIZE_THRESHOLD;
+        uint64_t tls_required = 0;
         for (uint32_t i = 0; i < count; i++) {
-            uint64_t bs = (uint64_t)base << (i * (uint32_t)__builtin_ctz(mult));
-            if (bs >= lazy_threshold) {
+            // Skip zero-reserve SCs (per_sc_weights[i]==0 means no initial blocks)
+            if (i < UMQ_QBUF_SIZE_CLASS_MAX && cfg->buf_pool_cfg.per_sc_weights[i] == 0) {
                 continue;
             }
-            required += bs * cfg->buf_pool_cfg.tls_qbuf_pool_depth;
+            uint64_t bs = cfg->buf_pool_cfg.explicit_block_sizes[i];
+            tls_required += bs * cfg->buf_pool_cfg.tls_qbuf_pool_depth;
         }
+        required += tls_required;
         if (init_size < required) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "init_size %llu < required %llu (rx %llu + tiny %llu + nonlazy*depth %llu)\n",
+            UMQ_VLOG_WARN(VLOG_UMQ, "init_size %llu < tls_ideal %llu (rx %llu + tiny %llu + nonlazy*depth %llu), "
+                         "per-sc block count will be reduced to fit\n",
                          init_size, required, plan->rx_io_buf_size, plan->tiny_io_buf_size,
-                         required - plan->rx_io_buf_size - plan->tiny_io_buf_size);
-            return -UMQ_ERR_EINVAL;
+                         tls_required);
+            // Don't fail - let init_size_class_config auto-adjust per_sc_block_count
         }
     }
 
@@ -154,6 +155,6 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         return -UMQ_ERR_EINVAL;
     }
 
-    plan->normal_pool_budget_size = max_umq_buf_pool_size - plan->tiny_io_buf_size;
+    plan->normal_pool_max_size = max_umq_buf_pool_size - plan->tiny_io_buf_size;
     return UMQ_SUCCESS;
 }
