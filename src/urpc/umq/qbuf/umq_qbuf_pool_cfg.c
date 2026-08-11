@@ -28,17 +28,6 @@ static uint64_t umq_normal_pool_supported_block_count(
     return 0;
 }
 
-static uint64_t umq_without_data_expand_mem_size(const umq_buf_pool_cfg_t *cfg, umq_buf_mode_t mode)
-{
-    if (mode != UMQ_BUF_SPLIT) {
-        return 0;
-    }
-
-    uint64_t expansion_block_count = cfg->expansion_block_count == 0 ?
-        QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count;
-    return (uint64_t)sizeof(umq_buf_t) * UMQ_EMPTY_HEADER_COEFFICIENT * expansion_block_count;
-}
-
 static uint64_t umq_init_buf_pool_size(const umq_buf_pool_cfg_t *cfg)
 {
     return cfg->umq_mem_pool_init_size == 0 ? UMQ_BUF_DEFAULT_TOTAL_SIZE : cfg->umq_mem_pool_init_size;
@@ -99,7 +88,10 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         return ret;
     }
 
-    uint64_t without_data_expand_mem_size = umq_without_data_expand_mem_size(&cfg->buf_pool_cfg, cfg->buf_mode);
+    uint64_t without_data_expand_mem_size = 0;
+    if (cfg->buf_mode == UMQ_BUF_SPLIT) {
+        without_data_expand_mem_size = QBUF_POOL_INITIAL_NODATA_BUF_CNT * sizeof(umq_buf_t);
+    }
     plan->normal_io_buf_size = init_size - plan->tiny_io_buf_size;
     if (plan->normal_io_buf_size < without_data_expand_mem_size) {
         UMQ_VLOG_INFO(VLOG_UMQ, "normal buf pool init size %llu < support without data buf, required %llu\n",
