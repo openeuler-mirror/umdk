@@ -1222,6 +1222,9 @@ typedef struct urma_provider_ops {
     urma_context_t *(*create_context)(urma_device_t *dev, uint32_t eid_index, int dev_fd);
     urma_status_t (*delete_context)(urma_context_t *ctx);
     urma_status_t (*get_uasid)(uint32_t *uasid); /* obsolete */
+    /* Log Ops */
+    urma_status_t (*register_log_func)(urma_log_cb_t func);
+    urma_status_t (*unregister_log_func)(void);
 } urma_provider_ops_t;
 \`\`\`
 
@@ -3644,7 +3647,7 @@ Import remote JFR information, including registering its token locally.
 
 @param[in] [Required] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
 
-@param[in] [Required] token_value: token_value to put into output jetty/protection table;
+@param[in] [Required] token_value: token to put into output jetty/protection table;
 
 5. Return Value
 
