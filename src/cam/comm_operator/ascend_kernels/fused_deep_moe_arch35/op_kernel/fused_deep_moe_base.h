@@ -30,22 +30,4 @@ __aicore__ inline void SPIN_WAIT_CYCLES()
     AscendC::Nop<SLEEP_CYCLE>();
 }
 
-namespace IPCStateOffset {
-    constexpr uint64_t AI_CORE_STATE_OFFSET = 0;
-    namespace DispatchgGmm1 {
-        constexpr uint64_t LOCAL_SEND_COUNT_OFFSET = 16 * 1024;
-        constexpr uint64_t SEND_COUNT_FLAG_OFFSET = 20 * 1024;
-        constexpr uint64_t MAX_SEND_COUNT_SIZE = 32 * 1024;
-        constexpr uint64_t GROUP_TOKEN_NUM_OFFSET = 84 * 1024;
-        constexpr uint64_t GROUP_INFO_SIZE = 32;
-        constexpr uint64_t SOFT_SYNC_OFFSET = 212 * 1024;
-        constexpr uint64_t SHARE_QUANT_SOFT_SYNC_OFFSET = 276 * 1024;
-    }
-    namespace Gmm2Combine {
-        constexpr uint64_t SYNC_FLAG_OFFSET = 277 * 1024;
-        constexpr uint64_t COMBINE_SEND_FLAG_OFFSET = 341 * 1024;
-    }
-    constexpr uint64_t SPACE_END_OFFSET = 373 * 1024;
-}
-
 #endif  // FUSED_DEEP_MOE_BASE_H

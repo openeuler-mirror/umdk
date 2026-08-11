@@ -131,8 +131,6 @@ class DecodeMoeOps(torch.nn.Module):
         self.with_share = None
         self.with_smooth = None
         self._checkout_datas(weight_datas, share_weight_datas)
-        self._process_share_weights_after_loading(share_weight_datas)
-        self._process_weights_after_loading(weight_datas)
 
     def _checkout_datas(self, weight_datas, share_weight_datas):
         gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale, smooth_scales = weight_datas
@@ -183,6 +181,11 @@ class SmallOps(DecodeMoeOps):
         super().__init__(ep_hcomm_info, meta_info, weight_datas, share_weight_datas)
         self.shared_expert_rank_num = 0
         self.tp_hcomm_info = ""
+        if self.enable_nz:
+            print("[WARN] small ops is not adapted to NZ format! Using ND weight!")
+        self.enable_nz = False
+        self._process_share_weights_after_loading(share_weight_datas)
+        self._process_weights_after_loading(weight_datas)
 
     def share_compute(self, x):
         output_dtype = x.dtype
@@ -305,7 +308,6 @@ class SmallOps(DecodeMoeOps):
             if debug:
                 expand_x, dynamic_scales, y1_fp, swiglu_out, x2, x2_scale, y2_fp, ep_send_counts = temp_tensors
                 valid_token_num = expert_token_nums.sum().item()
-                # print(f"{valid_token_num= }")
                 expand_x, dynamic_scales, y1_fp, swiglu_out, x2, x2_scale, y2_fp = expand_x[:valid_token_num], dynamic_scales[:valid_token_num], y1_fp[:valid_token_num], swiglu_out[:valid_token_num], x2[:valid_token_num], x2_scale[:valid_token_num], y2_fp[:valid_token_num]
                 expand_x_list.append(expand_x)
                 dynamic_scales_list.append(dynamic_scales)
@@ -329,7 +331,6 @@ class SmallOps(DecodeMoeOps):
             if debug:
                 expand_x, dynamic_scales, y1_fp, swiglu_out, x2, x2_scale, y2_fp, ep_send_counts = temp_tensors
                 valid_token_num = expert_token_nums.sum().item()
-                # print(f"{valid_token_num= }")
                 expand_x, dynamic_scales, y1_fp, swiglu_out, x2, x2_scale, y2_fp = expand_x[:valid_token_num], dynamic_scales[:valid_token_num], y1_fp[:valid_token_num], swiglu_out[:valid_token_num], x2[:valid_token_num], x2_scale[:valid_token_num], y2_fp[:valid_token_num]
                 expand_x_list.append(expand_x)
                 dynamic_scales_list.append(dynamic_scales)
@@ -398,7 +399,6 @@ class SmallOps(DecodeMoeOps):
             global_bs=self.global_batch_size,
             expert_token_nums_type=1,  # 0: prefix sum, 1: per-expert counts
             y_dtype=act_dtype,
-            # scales_dtype=torch.float8_e8m0fnu
         )
         expand_x, dynamic_scales, assist_info_for_combine, expert_token_nums, ep_send_counts, tp_send_counts, expand_scales = outputs
         output_dtype = x.dtype
@@ -471,6 +471,8 @@ class FusionOp(DecodeMoeOps):
                  weight_datas,
                  share_weight_datas):
         super().__init__(ep_hcomm_info, meta_info, weight_datas, share_weight_datas)
+        self._process_share_weights_after_loading(share_weight_datas)
+        self._process_weights_after_loading(weight_datas)
 
     def _apply_ops(self, x, expert_ids, expert_scales, x_active_mask):
         # bias: framework/pybind alignment only for arch35 (unused by kernel)
@@ -489,8 +491,8 @@ class FusionOp(DecodeMoeOps):
             expert_smooth_scales=self.smooth_scales,
             share_smooth_scales=self.share_smooth_scales_fp32,
             x_active_mask=x_active_mask,
-            gmm1_bias=[],
-            gmm2_bias=[],
+            gmm1_bias=[expert_scales], # DYNAMIC INPUT must not be empty
+            gmm2_bias=[expert_scales], # DYNAMIC INPUT must not be empty 
             share_gmm1_bias=None,
             share_gmm2_bias=None,
             group_ep=self.ep_hcomm_info,
@@ -522,16 +524,16 @@ class FusionOp(DecodeMoeOps):
         gmm2_weight_scale = convert_tensor_into_parameter(gmm2_weight_scale)
         if self.dynamic_eplb:
             self.gmm1_weight = [
-                weight.clone().view(torch.int8) for weight in gmm1_weight.unbind(dim=0)
+                weight.clone() for weight in gmm1_weight.unbind(dim=0)
             ]
             self.gmm1_weight_scale = [
-                weight.clone().view(torch.int8) for weight in gmm1_weight_scale.unbind(dim=0)
+                weight.clone() for weight in gmm1_weight_scale.unbind(dim=0)
             ]
             self.gmm2_weight = [
-                weight.clone().view(torch.int8) for weight in gmm2_weight.unbind(dim=0)
+                weight.clone() for weight in gmm2_weight.unbind(dim=0)
             ]
             self.gmm2_weight_scale = [
-                weight.clone().view(torch.int8) for weight in gmm2_weight_scale.unbind(dim=0)
+                weight.clone() for weight in gmm2_weight_scale.unbind(dim=0)
             ]
         else:
             self.gmm1_weight = [gmm1_weight]
@@ -565,7 +567,7 @@ def generate_datas(batch_size,
     x = torch.rand([actual_bs, token_hidden_size]) * 10 - 5
 
     # random expert_ids
-    score = torch.rand(batch_size, moe_expert_num)
+    score = torch.rand(actual_bs, moe_expert_num)
     expert_ids = torch.topk(score, k=top_k)[1].to(torch.int32)
 
     # Absolute uniform expert_ids

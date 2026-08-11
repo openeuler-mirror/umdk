@@ -84,52 +84,6 @@ public:
     }
 
     CATLASS_DEVICE
-    void ShmemCalRecv(int64_t ubOffset, GM_ADDR gmAllEpRecvCount, GM_ADDR gmAllExpertTokenNums)
-    {
-        AscendC::LocalTensor<int32_t> allExpertTokenNumsTensor = resource.ubBuf.template GetBufferByByte<int32_t>(
-            ubOffset);
-        AscendC::GlobalTensor<int32_t> allExpertTokenNumsGMTensor;
-        allExpertTokenNumsGMTensor.SetGlobalBuffer((__gm__ int32_t *)(calcInfo.gmAllRankSendCount_));
-
-        AscendC::DataCopyExtParams dataCopyParams = {
-            1U,
-            static_cast<uint32_t>(calcInfo.moeExpertNum_ * calcInfo.epWorldSize_ * sizeof(int32_t)),
-            0U,
-            0U,
-            0U
-        };
-        const AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
-        AscendC::DataCopyPad(allExpertTokenNumsTensor, allExpertTokenNumsGMTensor, dataCopyParams, copyPadParams);
-        AscendC::PipeBarrier<PIPE_ALL>();
-
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-
-        AscendC::LocalTensor<int32_t> recvTokenLt = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset +
-            calcInfo.moeExpertNum_ * calcInfo.epWorldSize_ * sizeof(int32_t));
-        AscendC::GlobalTensor<int32_t> recvCountsGlobalTensor;
-        recvCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)(calcInfo.gmEpTokenCount_));
-
-        for (uint32_t srcRank = 0; srcRank < calcInfo.epWorldSize_; ++srcRank) {
-            int32_t rankPrefixSum = 0;
-            for (uint32_t expId = 0; expId < calcInfo.moeExpertNum_; ++expId) {
-                uint32_t index = srcRank * calcInfo.moeExpertNum_ + expId;
-
-                int32_t curCount = allExpertTokenNumsTensor.GetValue(index);
-                rankPrefixSum += curCount;
-                recvTokenLt.SetValue(index, rankPrefixSum);
-            }
-        }
-
-        AscendC::PipeBarrier<PIPE_ALL>();
-
-        AscendC::DataCopyExtParams copyParams{1, static_cast<uint32_t>(calcInfo.moeExpertNum_ *
-            calcInfo.epWorldSize_ * sizeof(int32_t)), 0, 0, 0};
-        AscendC::DataCopyPad(recvCountsGlobalTensor, recvTokenLt, copyParams);
-        AscendC::PipeBarrier<PIPE_ALL>();
-    }
-
-    CATLASS_DEVICE
     BlockEpilogue(Arch::Resource<ArchTag> &resource, MoeDistributeCombineImpl::CombineCalcInfo &calcInfo,
                   Params const &params = Params{})
         : resource(resource),
@@ -166,29 +120,7 @@ public:
             AscendC::DataCopyExtParams epSendCntParams = {1U, static_cast<uint32_t>(epSendCountSize * sizeof(uint32_t)),
                                                           0U, 0U, 0U};
             AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
-            AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM[calcInfo.epRankId_ * calcInfo.moeExpertNum_],
-                epSendCntParams, copyPadParams);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-
-            AlignUbOffset();
-            ShmemCalRecv(ubOffset, calcInfo.allEpRecvCount_, calcInfo.allExpertTokenNums_);
-
-            AlignUbOffset();
-            allEpRecvCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-            ubOffset += calcInfo.epWorldSize_ * calcInfo.moeExpertNum_ *sizeof(uint32_t);
-            AlignUbOffset();
-            AscendC::GlobalTensor<int32_t> allEpRecvCountGM;
-            allEpRecvCountGM.SetGlobalBuffer((__gm__ int32_t *)(calcInfo.gmEpTokenCount_));
-            uint32_t allEpRecvCountSize = calcInfo.epWorldSize_ * calcInfo.moeExpertNum_;
-            AscendC::DataCopyExtParams allEpRecvCountParams = {
-                1U,
-                static_cast<uint32_t>(allEpRecvCountSize * sizeof(uint32_t)),
-                0U,
-                0U,
-                0U
-            };
-            AscendC::DataCopyPad(allEpRecvCountLocal_, allEpRecvCountGM, allEpRecvCountParams, copyPadParams);
+            AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM, epSendCntParams, copyPadParams);
             AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
         }
@@ -205,7 +137,8 @@ public:
 
     CATLASS_DEVICE GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t expertLocalId = 0U)
     {
-        return Mc2Kernel::GetBaseWindAddrByRankId(calcInfo.epWinContext_, rankId, calcInfo.epRankId_);
+        return Mc2Kernel::GetBaseWindAddrByRankId(calcInfo.epWinContext_, rankId, calcInfo.epRankId_) +
+               calcInfo.winDataSizeOffset_ + expertLocalId * calcInfo.expertPerSizeOnWin_ + rankId * OPT_RANK_OFFSET;
     }
 
     CATLASS_DEVICE void SetCombineSendEpRank(uint32_t epRank, uint32_t &remoteEpRank, uint32_t &localEpRank)
@@ -224,23 +157,23 @@ public:
         uint32_t itToken = startToken;
         uint32_t endToken = startToken + tokenNum;
         constexpr uint32_t epRankStart = 0;
-        uint32_t expertId = calcInfo.epRankId_ * calcInfo.moeExpertPerRankNum_ + expertIdx;
         uint32_t sendCount =
             expertIdx == 0 && epRankStart == 0 ? 0 : epSendCountLocal_.GetValue(expertOffset + epRankStart - 1);
         for (uint32_t epRank = epRankStart; epRank < calcInfo.epWorldSize_ && itToken < endToken; ++epRank) {
             uint32_t prevSendCount = sendCount;
             sendCount = epSendCountLocal_.GetValue(expertOffset + epRank);
-            uint32_t dstExpertOffset =
-                expertId == 0 ? 0 : allEpRecvCountLocal_.GetValue(epRank * calcInfo.moeExpertNum_ + expertId - 1);
             if (prevSendCount <= itToken && itToken < sendCount) {
                 uint32_t copyTokenCount = (sendCount < endToken ? sendCount : endToken) - itToken;
                 AscendC::DataCopyExtParams dataCopyParams(copyTokenCount, copyTokenLen, copyTokenSrcStride,
                                                           copyTokenDstStride, 0);
-                GM_ADDR dstCombinSendAddr = (GM_ADDR)(GetWinAddrByRankId(epRank) + calcInfo.combineTokenOffset_) +
-                                                     dstExpertOffset * calcInfo.axisH_ * sizeof(ElementD);
-                AscendC::GlobalTensor<ElementD> dstComBineSendGMTensor;
-                dstComBineSendGMTensor.SetGlobalBuffer((__gm__ ElementD *)dstCombinSendAddr);
-                AscendC::DataCopyPad(dstComBineSendGMTensor[(itToken - prevSendCount) * calcInfo.axisH_ + tokenOffset],
+                uint32_t remoteEpRank;
+                uint32_t localEpRank;
+                SetCombineSendEpRank(epRank, remoteEpRank, localEpRank);
+                GM_ADDR rankGM = GetWinAddrByRankId(remoteEpRank, expertIdx) +
+                                 localEpRank * calcInfo.moeExpertPerRankNum_ * calcInfo.expertPerSizeOnWin_;
+                AscendC::GlobalTensor<ElementD> rankWindow;
+                rankWindow.SetGlobalBuffer((__gm__ ElementD *)rankGM);
+                AscendC::DataCopyPad(rankWindow[(itToken - prevSendCount) * calcInfo.axisH_ + tokenOffset],
                                      ubD[(itToken - startToken) * tileColumn], dataCopyParams);
                 itToken += copyTokenCount;
             }
@@ -348,7 +281,6 @@ private:
     int32_t eventUbDMTE3VList[UB_STAGES];
     int32_t eventUbDVMTE3List[UB_STAGES];
     AscendC::LocalTensor<int32_t> epSendCountLocal_;
-    AscendC::LocalTensor<int32_t> allEpRecvCountLocal_;
 
     size_t ubOffset{0};
     int32_t eventMTE2S{0};

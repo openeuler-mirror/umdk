@@ -9,7 +9,7 @@
 
 #ifndef CAM_MOE_DISTRIBUTE_DISPATCH_H
 #define CAM_MOE_DISTRIBUTE_DISPATCH_H
-#define OPT_RANK_OFFSET 0
+#define OPT_RANK_OFFSET 512
 
 #include "kernel_operator.h"
 #include "kernel_tiling/kernel_tiling.h"
@@ -790,14 +790,15 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Local
         return;
     }
     GetCumSum(statusTensor_, outCountLocal, startExpertId_ + 1);
+    uint32_t index = 0;
     uint32_t beginIdx = 0;
     DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
-    for (uint32_t expertIdx = startExpertId_; expertIdx < endExpertId_; expertIdx++) {
-        uint32_t i = expertIdx - startExpertId_;
+    for (uint32_t index = startExpertId_; index < endExpertId_; index++) {
+        uint32_t i = index - startExpertId_;
         if (i > 0) {
-            outCountLocal.SetValue(i, outCountLocal.GetValue(i - 1) + outCountLocal.GetValue(expertIdx));
+            outCountLocal.SetValue(i, outCountLocal.GetValue(i - 1) + outCountLocal.GetValue(index));
         }
-        uint32_t count = statusTensor_.GetValue(expertIdx * INT32_NUM_PER_BLOCK + 1);
+        uint32_t count = statusTensor_.GetValue(index * INT32_NUM_PER_BLOCK + 1);
         beginIdx = outCountLocal.GetValue(i) - count;
         if constexpr (IsNeedAllgater) {
             gatherCount_ += count;
@@ -805,10 +806,10 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Local
         if (i == 0) {
             preCnt_ = beginIdx;
         }
-        uint32_t winOffset = expertIdx;
+        uint32_t winOffset = index;
         if (moeExpertNumPerRank_ > 1) {
             winOffset =
-                expertIdx % epWorldSize_ * moeExpertNumPerRank_ + expertIdx / epWorldSize_;
+                index % epWorldSize_ * moeExpertNumPerRank_ + index / epWorldSize_;
         }
         GM_ADDR wAddr = (__gm__ uint8_t *)(windowGM_) + winOffset * expertPerSizeOnWin_;
         GlobalTensor<ExpandXOutType> tokGlobal;
