@@ -96,6 +96,12 @@ static inline bool is_empty_eid(const urma_eid_t *eid)
     return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
 }
 
+static inline bool is_empty_eid_raw(const char *eid)
+{
+    urma_eid_t empty = {0};
+    return memcmp(eid, &empty, sizeof(urma_eid_t)) == 0;
+}
+
 static inline bool is_eid_equal(const urma_eid_t *eid1, const urma_eid_t *eid2)
 {
     return !memcmp(eid1, eid2, sizeof(urma_eid_t));

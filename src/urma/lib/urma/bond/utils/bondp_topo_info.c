@@ -73,17 +73,17 @@ static uint32_t count_eid_mappings(const bondp_topo_node_t *topo_infos, uint32_t
         const bondp_topo_node_t *cur_node = &topo_infos[node_idx];
         for (int dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
             const bondp_topo_agg_dev_t *cur_dev = &cur_node->agg_devs[dev_idx];
-            if (is_empty_eid((const urma_eid_t *)cur_dev->agg_eid)) {
+            if (is_empty_eid_raw(cur_dev->agg_eid)) {
                 continue;
             }
             count++;
             for (int iodie_idx = 0; iodie_idx < IODIE_NUM; ++iodie_idx) {
                 const bondp_topo_ue_t *ue_info = &cur_dev->ues[iodie_idx];
-                if (!is_empty_eid((const urma_eid_t *)ue_info->primary_eid)) {
+                if (!is_empty_eid_raw(ue_info->primary_eid)) {
                     count++;
                 }
                 for (int port_idx = 0; port_idx < PORT_NUM; ++port_idx) {
-                    if (!is_empty_eid((const urma_eid_t *)ue_info->port_eid[port_idx])) {
+                    if (!is_empty_eid_raw(ue_info->port_eid[port_idx])) {
                         count++;
                     }
                 }
@@ -99,7 +99,7 @@ static uint32_t count_bonding_eids(const bondp_topo_node_t *topo_infos, uint32_t
     for (uint32_t node_idx = 0; node_idx < node_num; ++node_idx) {
         const bondp_topo_node_t *cur_node = &topo_infos[node_idx];
         for (int dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
-            if (!is_empty_eid((const urma_eid_t *)cur_node->agg_devs[dev_idx].agg_eid)) {
+            if (!is_empty_eid_raw(cur_node->agg_devs[dev_idx].agg_eid)) {
                 count++;
             }
         }
@@ -116,25 +116,26 @@ static int fill_eid_mappings(eid_mapping_entry_t *entries, urma_eid_t *bonding_p
         const bondp_topo_node_t *cur_node = &topo_infos[node_idx];
         for (int dev_idx = 0; dev_idx < DEV_NUM; ++dev_idx) {
             const bondp_topo_agg_dev_t *cur_dev = &cur_node->agg_devs[dev_idx];
-            if (is_empty_eid((const urma_eid_t *)cur_dev->agg_eid)) {
+            if (is_empty_eid_raw(cur_dev->agg_eid)) {
                 continue;
             }
-            bonding_pool[bidx] = *(const urma_eid_t *)cur_dev->agg_eid;
-            entries[idx].key_eid = *(const urma_eid_t *)cur_dev->agg_eid;
+            memcpy(&bonding_pool[bidx], cur_dev->agg_eid, sizeof(bonding_pool[bidx]));
+            entries[idx].key_eid = bonding_pool[bidx];
             entries[idx].bonding_idx = bidx;
             entries[idx].node_idx = node_idx;
             idx++;
             for (int iodie_idx = 0; iodie_idx < IODIE_NUM; ++iodie_idx) {
                 const bondp_topo_ue_t *ue_info = &cur_dev->ues[iodie_idx];
-                if (!is_empty_eid((const urma_eid_t *)ue_info->primary_eid)) {
-                    entries[idx].key_eid = *(const urma_eid_t *)ue_info->primary_eid;
+                if (!is_empty_eid_raw(ue_info->primary_eid)) {
+                    memcpy(&entries[idx].key_eid, ue_info->primary_eid, sizeof(entries[idx].key_eid));
                     entries[idx].bonding_idx = bidx;
                     entries[idx].node_idx = node_idx;
                     idx++;
                 }
                 for (int port_idx = 0; port_idx < PORT_NUM; ++port_idx) {
-                    if (!is_empty_eid((const urma_eid_t *)ue_info->port_eid[port_idx])) {
-                        entries[idx].key_eid = *(const urma_eid_t *)ue_info->port_eid[port_idx];
+                    if (!is_empty_eid_raw(ue_info->port_eid[port_idx])) {
+                        memcpy(&entries[idx].key_eid, ue_info->port_eid[port_idx],
+                               sizeof(entries[idx].key_eid));
                         entries[idx].bonding_idx = bidx;
                         entries[idx].node_idx = node_idx;
                         idx++;
