@@ -286,7 +286,7 @@ int admin_get_ns_fd(const char *ns)
 
     ns_fd = open(path, O_RDONLY | O_CLOEXEC);
     if (ns_fd == -1) {
-        (void)printf("failed to open ns file %s, errno:%d", path, errno);
+        (void)printf("failed to open ns file %s, errno:%d\n", path, errno);
         return ns_fd;
     }
     return ns_fd;
