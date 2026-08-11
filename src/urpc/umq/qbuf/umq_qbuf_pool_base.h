@@ -482,11 +482,9 @@ static ALWAYS_INLINE void qbuf_tls_capacity_sub(uint64_t *local_cap, volatile ui
     if (shrink == 0) {
         return;
     }
-    if (shrink > *local_cap) {
-        shrink = *local_cap;
-    }
-    *local_cap -= shrink;
-    __atomic_fetch_sub(total_cap, shrink, __ATOMIC_ACQ_REL);
+    uint64_t to_shrink = (shrink > *local_cap) ? *local_cap : shrink;
+    *local_cap -= to_shrink;
+    __atomic_fetch_sub(total_cap, to_shrink, __ATOMIC_ACQ_REL);
 }
 
 static ALWAYS_INLINE void qbuf_tls_capacity_self_shrink(global_block_pool_t *global_pool,

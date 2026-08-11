@@ -1426,7 +1426,7 @@ int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor)
     }
 
     uint32_t post_left_num = queue->fc_rx_depth;
-    uint32_t post_round = (queue->fc_rx_depth + UMQ_BATCH_SIZE - 1)/ UMQ_BATCH_SIZE;
+    uint32_t post_round = (queue->fc_rx_depth + UMQ_BATCH_SIZE - 1) / UMQ_BATCH_SIZE;
     for (uint32_t i = 0; i < post_round; i++) {
         uint32_t post_num = post_left_num > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : post_left_num;
         post_left_num -= post_num;

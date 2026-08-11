@@ -298,7 +298,7 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
 
-/* trace type — UMQ top-level operation categories */
+/* trace type - UMQ top-level operation categories */
 typedef enum umq_trace_type {
     UMQ_TRACE_TYPE_POST,                /* umq_post */
     UMQ_TRACE_TYPE_POLL,                /* umq_poll */
@@ -307,7 +307,7 @@ typedef enum umq_trace_type {
     UMQ_TRACE_TYPE_MAX,
 } umq_trace_type_t;
 
-/* urma function type — identifies which URMA API is being timed */
+/* urma function type - identifies which URMA API is being timed */
 typedef enum umq_urma_func_type {
     UMQ_URMA_FUNC_POST_TX,                  /* urma_post_jetty_send_wr */
     UMQ_URMA_FUNC_POST_RX,                  /* urma_post_jetty_recv_wr/urma_post_jfr_wr */
@@ -328,23 +328,23 @@ typedef enum umq_urma_func_type {
 
 #define UMQ_PERF_MAX_SUB_TIME_NUM  (8u)
 
-/* sub-branch timing — one entry per URMA call within a UMQ operation */
+/* sub-branch timing - one entry per URMA call within a UMQ operation */
 typedef struct umq_sub_time {
     uint64_t start_time;                    /* URMA call start timestamp (ns) */
     uint64_t exec_time;                     /* URMA call execution time (delta, ns) */
     umq_urma_func_type_t func_type;         /* which URMA API */
 } umq_sub_time_t;
 
-/* one data item — a single buffer (POST) or completion (POLL) */
+/* one data item - a single buffer (POST) or completion (POLL) */
 typedef struct umq_trace_item {
     uint32_t sub_umq_id;                    /* sub umq id for poll_rx */
     uint32_t msn;                           /* imm msn for traceability */
     uint32_t size;                          /* data size of this item */
 } umq_trace_item_t;
 
-/* core data record — abstracted from post/poll/interrupt specifics */
+/* core data record - abstracted from post/poll/interrupt specifics */
 typedef struct umq_data_record {
-    /* meta — traceability fields */
+    /* meta - traceability fields */
     umq_trace_item_t items[UMQ_BATCH_SIZE]; /* per-buffer/per-completion data */
     uint32_t item_cnt;                      /* number of valid items[] entries */
     uint64_t timestamp;                     /* record creation timestamp (ns) */
@@ -355,7 +355,7 @@ typedef struct umq_data_record {
     uint64_t start_time;                    /* UMQ operation start (ns) */
     uint64_t end_time;                      /* UMQ operation end (ns) */
 
-    /* sub-branch — URMA call timing */
+    /* sub-branch - URMA call timing */
     uint32_t sub_time_cnt;
     umq_sub_time_t sub_time[UMQ_PERF_MAX_SUB_TIME_NUM];
 
