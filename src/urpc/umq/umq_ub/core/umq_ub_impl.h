@@ -38,6 +38,8 @@ void umq_ub_unregister_memory_impl(void);
 
 int umq_ub_log_config_set_impl(umq_log_config_t *config);
 int umq_ub_log_config_reset_impl(void);
+void umq_ub_exiting_set_impl(bool exiting);
+bool umq_ub_exiting_get_impl(void);
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg);
 void umq_ub_huge_qbuf_pool_uninit(void);
 

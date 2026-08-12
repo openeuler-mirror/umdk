@@ -256,6 +256,22 @@ int umq_log_config_set(umq_log_config_t *config);
 int umq_log_config_get(umq_log_config_t *config);
 
 /**
+ * Thread safety function
+ * Set the process exiting flag. Dispatched to every enabled transport backend
+ * via the umq_tp_exiting_set callback; UB backend post/poll entries then skip
+ * resources that may already be released during teardown, avoiding exit-time UAF.
+ * @param[in] exiting: true means the process is exiting
+ */
+void umq_exiting_set(bool exiting);
+
+/**
+ * Thread safety function
+ * Query the process exiting flag from enabled transport backends.
+ * Return true if any backend reports the process is exiting
+ */
+bool umq_exiting_get(void);
+
+/**
  * Add dev for umq, only support ub
  * @param[in] trans_info: transport info;
  * Return: 0 on success, other value on error

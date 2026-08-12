@@ -417,6 +417,31 @@ int umq_log_config_get(umq_log_config_t *config)
     return UMQ_SUCCESS;
 }
 
+void umq_exiting_set(bool exiting)
+{
+    for (uint8_t i = 0; i < UMQ_TRANS_MODE_MAX; i++) {
+        umq_framework_t *umq_fw = &g_umq_fws[i];
+        if (!umq_fw->enable || umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_exiting_set == NULL) {
+            continue;
+        }
+        umq_fw->tp_ops->umq_tp_exiting_set(exiting);
+    }
+}
+
+bool umq_exiting_get(void)
+{
+    for (uint8_t i = 0; i < UMQ_TRANS_MODE_MAX; i++) {
+        umq_framework_t *umq_fw = &g_umq_fws[i];
+        if (!umq_fw->enable || umq_fw->tp_ops == NULL || umq_fw->tp_ops->umq_tp_exiting_get == NULL) {
+            continue;
+        }
+        if (umq_fw->tp_ops->umq_tp_exiting_get()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void framework_uninit(void)
 {
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {
