@@ -2875,7 +2875,6 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
                            mempool_id);
         return -UMQ_ERR_ENODEV;
     }
-    urma_seg_t *seg = &tseg->seg;
 
     umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), 1, queue->umqh, NULL);
     if (send_buf == NULL) {
@@ -2904,15 +2903,20 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
 
     ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(umq_imm_head + 1);
-    import_mempool_info->mempool_seg_flag = seg->attr.value;
-    import_mempool_info->mempool_length = seg->len, import_mempool_info->mempool_token_id = seg->token_id;
-    import_mempool_info->mempool_id = mempool_id;
-    import_mempool_info->mempool_token_value = tseg->user_ctx;
-    (void)memcpy(import_mempool_info->mempool_ubva, &seg->ubva, sizeof(urma_ubva_t));
+    uint32_t ver = queue->dev_ctx->mempool_version[mempool_id];
+    uint32_t cap = (uint32_t)umq_buf_size_small() - (uint32_t)sizeof(umq_imm_head_t);
+    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
+                                           import_mempool_info, cap);
+    if (written == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, fill_seg_ctx failed, mempool_id: %u\n",
+                           EID_ARGS(*eid), id, mempool_id);
+        ret = -UMQ_ERR_EFAULT;
+        goto FREE_BUF;
+    }
 
     urma_sge_t sge = {
         .addr = (uint64_t)(uintptr_t)send_buf->buf_data,
-        .len = sizeof(umq_imm_head_t) + sizeof(ub_import_mempool_info_t),
+        .len = sizeof(umq_imm_head_t) + written,
         .user_tseg = NULL,
         .tseg = queue->dev_ctx->tseg_list[send_buf->mempool_id],
     };
@@ -2943,15 +2947,20 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
-        mempool_info_size < sizeof(ub_import_mempool_info_t)) {
+        mempool_info_size < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     /* Read tseg_list[mempool_id] and mempool_version[mempool_id] under
-     * tseg_list_lock. umq_ub_register_seg writes both under the same lock;
-     * without it, a concurrent (re)registration could publish a new tseg with
-     * a stale version, or expose a torn read of mempool_version — a data race. */
+     * tseg_list_lock, and serialize the seg context under the same lock.
+     * umq_ub_register_seg writes both fields under this lock; without it a
+     * concurrent (re)registration could publish a new tseg with a stale
+     * version, or a concurrent umq_ub_unregister_seg could free the tseg while
+     * urma_get_seg_ctx dereferences it (use-after-free). urma_get_seg_ctx may
+     * take a kernel user_ctl round-trip on bonding devices; this is a
+     * per-control-segment (not per-packet) control path, so holding the
+     * spinlock across it is acceptable and the simpler correct choice. */
     (void)pthread_spin_lock(&queue->dev_ctx->tseg_list_lock);
     urma_target_seg_t *tseg = queue->dev_ctx->tseg_list[mempool_id];
     if (tseg == NULL) {
@@ -2959,17 +2968,24 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u tseg not exist\n", mempool_id);
         return -UMQ_ERR_EINVAL;
     }
-    urma_seg_t *seg = &tseg->seg;
-
+    uint32_t ver = queue->dev_ctx->mempool_version[mempool_id];
     ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)mempool_info;
-    import_mempool_info->mempool_seg_flag = seg->attr.value;
-    import_mempool_info->mempool_length = seg->len;
-    import_mempool_info->mempool_token_id = seg->token_id;
-    import_mempool_info->mempool_id = mempool_id;
-    import_mempool_info->mempool_token_value = tseg->user_ctx;
-    (void)memcpy(import_mempool_info->mempool_ubva, &seg->ubva, sizeof(urma_ubva_t));
-    import_mempool_info->version = queue->dev_ctx->mempool_version[mempool_id];
+    /* out_cap is the total bytes available at @out (header + seg blob), so pass
+     * mempool_info_size unchanged — the helper checks it against HDR + seg_size. */
+    uint32_t cap = mempool_info_size;
+    /* The ubsocket bigdata control packet carries the full variable-length seg
+     * blob (urma_seg_t + has_user_info ext tail on bonding), so the peer imports
+     * via the has_user_info=true branch and reads peer_p_seg[] directly from
+     * the extension — no reliance on the kernel driver reconstructing it. The
+     * caller's buffer (UbsInternalMempoolInfo in ubsocket) reserves slack for
+     * the worst-case extension tail. */
+    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
+                                           import_mempool_info, cap);
     (void)pthread_spin_unlock(&queue->dev_ctx->tseg_list_lock);
+    if (written == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u fill_seg_ctx failed\n", mempool_id);
+        return -UMQ_ERR_EFAULT;
+    }
     return UMQ_SUCCESS;
 }
 
@@ -2978,7 +2994,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
-        mempool_info_size < sizeof(ub_import_mempool_info_t)) {
+        mempool_info_size < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
@@ -2993,13 +3009,16 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
 
     // Reuse the receive-side import path: build a temporary rx-style buffer that
     // carries one ub_import_mempool_info_t, then import it into bind_ctx->tseg_table.
-    uint8_t buf[sizeof(umq_imm_head_t) + sizeof(ub_import_mempool_info_t)] = {0};
+    // mempool_info_size is the actual byte length of the variable-length entry
+    // (header + seg_size bytes, where seg_size may exceed sizeof(urma_seg_t) on
+    // bonding devices), so the buffer and copy must follow it, not sizeof().
+    uint8_t buf[sizeof(umq_imm_head_t) + mempool_info_size];
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)buf;
     umq_imm_head->version = UMQ_IMM_VERSION;
     umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
     umq_imm_head->mempool_num = 1;
     umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
-    (void)memcpy(buf + sizeof(umq_imm_head_t), mempool_info, sizeof(ub_import_mempool_info_t));
+    (void)memcpy(buf + sizeof(umq_imm_head_t), mempool_info, mempool_info_size);
 
     umq_buf_t import_buf;
     (void)memset(&import_buf, 0, sizeof(import_buf));

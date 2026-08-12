@@ -354,6 +354,13 @@ typedef enum umq_perf_record_type {
     UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE,
     /* record point for transport jetty node free */
     UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE,
+    /* record point for transport seg ctx get (urma_get_seg_ctx). Appended at
+     * the end to preserve the numeric values of all pre-existing enum members
+     * (ALLOC_JETTY_NODE etc. keep their original values) so existing perf
+     * consumers / binaries that map by enum value stay aligned. */
+    UMQ_PERF_RECORD_TRANSPORT_SEG_CTX_GET,
+    /* record point for transport seg ctx put (urma_put_seg_ctx) */
+    UMQ_PERF_RECORD_TRANSPORT_SEG_CTX_PUT,
     UMQ_PERF_RECORD_TYPE_MAX,
 } umq_perf_record_type_t;
 

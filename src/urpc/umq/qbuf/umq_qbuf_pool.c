@@ -1378,7 +1378,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 
 }
 
-static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool with_data)
+static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool with_data)
 {
     (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
     exp_pool->inited = false;
@@ -1414,21 +1414,56 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
     }
     (void)pthread_spin_unlock(&exp_pool->shrink_task_list.lock);
 
-    uint64_t start_time = urpc_get_cpu_cycles();
-    uint32_t async_expand_expected = 0;
-    while (!__atomic_compare_exchange_n(&exp_pool->is_expanding, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL,
-                                        __ATOMIC_ACQUIRE) &&
-           ((urpc_get_cpu_cycles() - start_time) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
-        async_expand_expected = 0;
+    /* Wait for async expand to finish. Use independent start_time so that
+     * time spent waiting for expand does not eat into shrink timeout. */
+    uint64_t start_time_expand = urpc_get_cpu_cycles();
+    uint32_t expected = 0;
+    while (!__atomic_compare_exchange_n(&exp_pool->is_expanding, &expected, 1, true, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE) &&
+           ((urpc_get_cpu_cycles() - start_time_expand) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
+        expected = 0;
         usleep(QBUF_POOL_CHECK_ASYNC_PERIOD_US);
     }
+    /* expected == 0 means CAS succeeded (expand done); != 0 means timed out */
+    bool expand_timed_out = (expected != 0);
 
-    async_expand_expected = 0;
-    while (!__atomic_compare_exchange_n(&exp_pool->is_shrinking, &async_expand_expected, 1, true, __ATOMIC_ACQ_REL,
-                                        __ATOMIC_ACQUIRE) &&
-           ((urpc_get_cpu_cycles() - start_time) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
-        async_expand_expected = 0;
+    /* Wait for async shrink to finish. Independent start_time: the shrink
+     * thread (pthread_detach) may outlive the is_expanding wait, so it
+     * must get its own full timeout window, not the leftover from above. */
+    uint64_t start_time_shrink = urpc_get_cpu_cycles();
+    expected = 0;
+    while (!__atomic_compare_exchange_n(&exp_pool->is_shrinking, &expected, 1, true, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE) &&
+           ((urpc_get_cpu_cycles() - start_time_shrink) / urpc_get_cpu_hz()) < QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
+        expected = 0;
         usleep(QBUF_POOL_CHECK_ASYNC_PERIOD_US);
+    }
+    /* expected == 0 means CAS succeeded (shrink done); != 0 means timed out */
+    bool shrink_timed_out = (expected != 0);
+
+    /* Only destroy locks if both async operations have completed.
+     * If either timed out, the detached thread may still be running and
+     * accessing expansion_pool_lock / shrink_task_list.lock. Destroying
+     * them would cause use-after-free when the thread next tries to lock.
+     * Instead, set inited=false (already done above) — the callback
+     * checks exp_pool->inited at loop top and exits. The locks and slots
+     * will be leaked, but this is safer than crashing.
+     * Reset only the flag we successfully claimed via CAS; leave the
+     * timed-out flag as-is so the still-running thread can reset it. */
+    if (expand_timed_out || shrink_timed_out) {
+        if (!expand_timed_out) {
+            __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+        }
+        if (!shrink_timed_out) {
+            __atomic_store_n(&exp_pool->is_shrinking, 0, __ATOMIC_RELEASE);
+        }
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+            "expansion pool async op did not finish within %us (expand=%s, shrink=%s), "
+            "leaking locks to avoid UAF\n",
+            QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S,
+            expand_timed_out ? "TIMEOUT" : "OK",
+            shrink_timed_out ? "TIMEOUT" : "OK");
+        return false;
     }
 
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
@@ -1436,6 +1471,7 @@ static void umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
 
     __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&exp_pool->is_shrinking, 0, __ATOMIC_RELEASE);
+    return true;
 }
 
 static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const qbuf_pool_cfg_t *cfg, bool with_data,
@@ -1496,15 +1532,21 @@ static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
     return UMQ_SUCCESS;
 }
 
-static void umq_qbuf_expansion_pool_uninit(void)
+static bool umq_qbuf_expansion_pool_uninit(void)
 {
     if (g_qbuf_pool.disable_scale_cap) {
-        return;
+        return true;
     }
+    bool all_ok = true;
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
-        umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_with_data[sc], true);
+        if (!umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_with_data[sc], true)) {
+            all_ok = false;
+        }
     }
-    umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_without_date, false);
+    if (!umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_without_date, false)) {
+        all_ok = false;
+    }
+    return all_ok;
 }
 
 static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_buf_pool_size)
@@ -1952,7 +1994,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     return UMQ_SUCCESS;
 
 EXPANSION_POOL_UNINIT:
-    umq_qbuf_expansion_pool_uninit();
+    (void)umq_qbuf_expansion_pool_uninit();
 
 BLOCK_POOL_UNINIT:
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
@@ -1971,11 +2013,11 @@ void umq_qbuf_pool_uninit(void)
         return;
     }
 
-    /* Before printing summary, clean up dangling TLS nodes left by worker
-     * threads that already exited (g_tls_dtors_running fast path skipped
-     * urpc_list_remove). These nodes point to freed TLS storage and would
-     * cause SEGV if traversed. Re-init the list to empty since all worker
-     * threads are already joined at this point. */
+    /* Clear dangling TLS nodes left by worker threads that already exited
+     * (g_tls_dtors_running fast path skipped urpc_list_remove). These nodes
+     * point to freed TLS storage and would cause SEGV if traversed by
+     * release_thread_cache(0) below. Re-init the list to empty since all
+     * worker threads are already joined at this point. */
     (void)pthread_spin_lock(&g_tls_stats_lock);
     urpc_list_init(&g_tls_register_head);
     (void)pthread_spin_unlock(&g_tls_stats_lock);
@@ -1988,7 +2030,7 @@ void umq_qbuf_pool_uninit(void)
 
     (void)pthread_spin_destroy(&g_tls_stats_lock);
 
-    umq_qbuf_expansion_pool_uninit();
+    bool exp_pool_ok = umq_qbuf_expansion_pool_uninit();
 
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         umq_qbuf_block_pool_uninit(&g_qbuf_pool.block_pool[sc]);
@@ -1996,7 +2038,15 @@ void umq_qbuf_pool_uninit(void)
     if (!g_qbuf_pool.disable_scale_cap) {
         urpc_id_generator_uninit(&g_global_exp_id_gen);
     }
-    memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
+    g_qbuf_pool.inited = false;
+    if (exp_pool_ok) {
+        memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
+    } else {
+        /* Skip memset: a detached shrink/expand thread may still be accessing
+         * exp_pool fields inside g_qbuf_pool. Zeroing it would cause UAF. */
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+            "skip memset of g_qbuf_pool: expansion pool async op still running\n");
+    }
 
     for (uint32_t sc = 0; sc < UMQ_QBUF_SIZE_CLASS_MAX; sc++) {
         __atomic_store_n(&g_total_local_cap_with_data_cnt[sc], 0, __ATOMIC_RELAXED);
@@ -2383,15 +2433,6 @@ uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, 
                     "expansion slot free_block_cnt mismatch: claimed=%lu moved=%u, realigning to 0\n",
                     (unsigned long)take_cnt, got);
                 slot->free_block_cnt = 0;
-            }
-            /* realign free_block_cnt with actual list to prevent drift */
-            {
-                uint32_t _rc = 0;
-                umq_buf_t *_rp = QBUF_LIST_FIRST(&slot->free_block_list);
-                while (_rp && _rc < 8200) { _rc++; _rp = QBUF_LIST_NEXT(_rp); }
-                if (_rc != slot->free_block_cnt) {
-                    slot->free_block_cnt = _rc;
-                }
             }
         }
     }
@@ -3291,6 +3332,11 @@ static void umq_flush_tls_nodata_to_global(void)
     UMQ_VLOG_DEBUG(VLOG_UMQ, "TLS_FLUSH_NODATA: global_nodata=%llu exp_total=%llu mpool=0\n",
                    (unsigned long long)g_qbuf_pool.block_pool[0].buf_cnt_without_data,
                    (unsigned long long)g_qbuf_pool.exp_pool_without_date.exp_total_block_num);
+    /* When g_tls_dtors_running is true, TLS nodes in g_tls_register_head may
+     * be dangling (freed memory). Skip traversal to avoid SEGV. */
+    if (g_tls_dtors_running) {
+        return;
+    }
     (void)pthread_spin_lock(&g_tls_stats_lock);
     local_qbuf_pool_t *pool_iter = NULL;
     URPC_LIST_FOR_EACH(pool_iter, tls_node, &g_tls_register_head)
