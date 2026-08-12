@@ -4,10 +4,22 @@
 
 本目录是 UMDK **CAM**（Communication Acceleration for Matrix）下的 **稀疏 KVCache Offload** 特性，面向 DeepSeek-V3.2-Exp 的 DSA（DeepSeek Sparse Attention）结构，把占比较高的 MLA Full KVCache 从设备内存卸载到 Host 内存，从而在长序列场景下释放设备内存压力、提升可支持的 batch size。
 
-该能力从 [cann-recipes-infer](https://gitcode.com/cann/cann-recipes-infer) 迁移而来，并整理为一套可在 UMDK 仓内**端到端运行**的自包含栈（模型 + runner + 配置 + 必要的框架子集），运行在华为 Atlas A3 集群上。
+本目录提供一套可在 UMDK 仓内**端到端运行**的自包含栈（模型 + runner + 配置 + 必要的框架子集），用于在华为 Atlas A3 集群上完成 DeepSeek-V3.2-Exp 的 KVCache Offload 推理。
 
-- KVCache Offload 的方案设计（Prefill 单层 KVCache + 多流 D2H、Decode 阶段 `GatherSelectionKvCache` 按 TopK 从 Host 侧聚合）可参考上游文档 [NPU DeepSeek-V3.2-Exp 推理优化实践](https://gitcode.com/cann/cann-recipes-infer/blob/master/docs/models/deepseek-v3.2-exp/deepseek_v3.2_exp_inference_guide.md) 的 “KVCache Offload” 章节。
-- CAM 组件整体介绍与算子构建见 [CAM README](../../README.md)。
+### 方案设计
+
+使能 W8A8C8 等量化后，MLA Full KVCache 仍占设备内存大头，长序列下 batch size 容易受限于 NPU 显存。KVCache Offload 将 Full KVCache 卸载到 Host 内存，在设备侧只保留稀疏 attention 所需的一小部分 KV，从而释放设备内存、提升可支持的 batch size。方案分为 Prefill 与 Decode 两阶段：
+
+**Prefill 阶段**
+
+- 设备侧仅申请**一层** MLA KVCache 作为临时 buffer；各层完整 KVCache 分配在 Host 内存。
+- 每层 MLA 计算完成后，通过独立 D2H stream/event 异步将该层 KVCache 从设备拷贝到 Host，与后续层计算形成流水重叠。
+
+**Decode 阶段**
+
+- 每层新生成 token 的 KVCache 更新到 Host 侧 Full KVCache。
+- Lightning Indexer 返回当前 token 的 TopK 相关历史 token 位置；`gather_selection_kv_cache` 算子据此从 Host Full KVCache 中 gather 出参与 SFA（Sparse Flash Attention）计算的 KV，写入设备侧 selection cache。
+- 算子利用相邻 decode step 间 TopK 的高命中率：已在设备 selection cache 中的 token 直接复用，仅对 Host 侧新增 token 做 H2D，降低 gather 与传输开销。
 
 > 本特性依赖 CAM 自定义算子库 `umdk_cam_op_lib`（其中需提供 `gather_selection_kv_cache` 等算子）。代码中通过 `import umdk_cam_op_lib` 注册算子，运行前请确保该 whl 已构建并安装（见下文“构建并安装 CAM 算子库”）。
 
