@@ -364,6 +364,19 @@ typedef struct umq_ops {
      * Return 0 on success, error code on failure
      */
     int (*umq_tp_transport_pool_resource_destroy)(uint64_t umqh_tp, uint32_t tp_handle_idx);
+
+    /**
+     * Set the process exiting flag. Once true, backend post/poll paths skip
+     * resources that may already be released during teardown (exit-time UAF guard).
+     * @param[in] exiting: true means the process is exiting
+     */
+    void (*umq_tp_exiting_set)(bool exiting);
+
+    /**
+     * Query the process exiting flag.
+     * Return true if the process is exiting
+     */
+    bool (*umq_tp_exiting_get)(void);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);
