@@ -40,7 +40,7 @@ extern "C" {
 #endif
 
 #define UMQ_MAX_MSG_ID_NUM (1 << 5)
-#define UMQ_ID_ALLOC_SIZE (256 * 1024)
+#define UMQ_ID_ALLOC_SIZE (128 * 1024)
 
 #define UMQ_CONTINUE_FLAG 1
 #define UMQ_MAX_TSEG_NUM (1024)

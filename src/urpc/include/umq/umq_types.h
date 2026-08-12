@@ -207,7 +207,7 @@ typedef struct umq_trans_info {
     umq_dev_assign_t dev_info;
 } umq_trans_info_t;
 
-#define MAX_UMQ_TRANS_INFO_NUM (128)
+#define MAX_UMQ_TRANS_INFO_NUM (16)
 
 /* umq feature */
 #define UMQ_FEATURE_API_BASE                    (0)         // enable base feature. set when use umq_enqueue/umq_dequeue
