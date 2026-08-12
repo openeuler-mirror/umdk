@@ -100,6 +100,9 @@ void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf);
 int umq_thread_closure_register(umq_trans_mode_t trans_mode,
     urpc_thread_closure_type_t type, uint64_t id, void (*closure)(uint64_t id));
 
+int umq_thread_init(void);
+void umq_thread_uninit(void);
+
 #ifdef __cplusplus
 }
 #endif
