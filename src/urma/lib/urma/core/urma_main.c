@@ -65,23 +65,15 @@ static void urma_close_provider(void *handler, const char *file)
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
 static int urma_open_provider(const char file[URMA_MAX_LIB_PATH])
 {
-    int ret;
     char *canonicalized_path = NULL;
 
-    ret = access(file, F_OK | R_OK | X_OK); // Determine permission: exist & read & execute
-    if (ret != 0) {
-        URMA_LOG_ERR("%s doesn't exist or doesn't have permission.\n", file);
-        return -1;
-    }
-
-    /* Resolve symbols only as the code that references them is executed.
-       If the symbol is never referenced, then it is never resolved. */
     canonicalized_path = realpath(file, NULL);
     if (canonicalized_path == NULL) {
-        URMA_LOG_ERR("realpath failed.\n");
+        URMA_LOG_ERR("realpath %s failed, errno=%d.\n", file, errno);
         return -1;
     }
 
+    /* Resolve symbols immediately to report provider dependency issues during load. */
     urma_so_t *so = calloc(1, sizeof(urma_so_t));
     if (so == NULL) {
         free(canonicalized_path);
