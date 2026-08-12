@@ -531,6 +531,12 @@ int umq_stats_trace_start(umq_trace_cfg_t *cfg)
         UMQ_VLOG_ERR(VLOG_UMQ, "cfg invalid\n");
         return -UMQ_ERR_EINVAL;
     }
+
+    int ret = umq_thread_init();
+    if (ret != UMQ_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq thread init failde, ret %d\n", ret);
+        return ret;
+    }
     return umq_trace_start(cfg);
 }
 
