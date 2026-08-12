@@ -280,12 +280,7 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
         return -EINVAL;
     }
 
-    uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
-    if (cnt > 1) {
-        URMA_LOG_WARN("Context already in use, atomic_cnt=%lu, dev_name=%s.\n", cnt, ctx->dev->name);
-        return URMA_EAGAIN;
-    }
-
+    /* this user_ctl opcode may config after urma_ctx used, so do not check ctx atomic_cnt */
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM] = {0};
     uint32_t enabled_count = 0;
