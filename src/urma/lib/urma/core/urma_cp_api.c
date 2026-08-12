@@ -289,11 +289,6 @@ urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
     return URMA_EINVAL;
 }
 
-static inline bool is_empty_eid(urma_eid_t *eid)
-{
-    return eid->in6.interface_id == 0 && eid->in6.subnet_prefix == 0;
-}
-
 
 static inline bool urma_check_trans_mode_valid(urma_transport_mode_t trans_mode)
 {
