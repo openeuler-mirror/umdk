@@ -352,9 +352,9 @@ typedef struct umq_ub_bind_info {
 typedef struct ub_bind_ctx {
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
-    char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
     import_tseg_table_t *tseg_table;
     urpc_bitmap_t tseg_imported;
+    char remote_namespace[0];
 } ub_bind_ctx_t;
 
 struct ub_credit_pool;
