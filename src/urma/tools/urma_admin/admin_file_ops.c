@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -23,6 +24,12 @@
 #include "admin_file_ops.h"
 
 #define ADMIN_RESERVED_JETTY_PARAM_NUM 2
+
+static inline bool is_empty_eid(const urma_eid_t *eid)
+{
+    urma_eid_t empty = {0};
+    return memcmp(eid, &empty, sizeof(urma_eid_t)) == 0;
+}
 
 static int open_file(const char *dir, const char *file, int flag)
 {
@@ -296,7 +303,7 @@ void admin_read_eid_list(const char *sysfs_path, urma_eid_info_t *eid_list, uint
         eid_list[i].eid_index = i;
         if (admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
             urma_str_to_eid(tmp_value, &eid_list[i].eid) != 0) {
-            eid_list[i].eid.in4.prefix = 0; // invalid
+            memset(&eid_list[i].eid, 0, sizeof(urma_eid_t));
         }
     }
 }
@@ -320,7 +327,7 @@ bool admin_is_eid_idx_valid(const char *dev_name, uint32_t eid_index)
     if (admin_merge_sysfs_path(sysfs_path, SYS_CLASS_PATH, dev_name) != 0 ||
         admin_parse_file_str(sysfs_path, tmp_eid, tmp_value, VALUE_LEN_MAX) <= 0 ||
         urma_str_to_eid(tmp_value, &eid_info.eid) != 0 ||
-        eid_info.eid.in4.prefix == 0) {
+        is_empty_eid(&eid_info.eid)) {
         goto free_sysfs_path;
     }
 
