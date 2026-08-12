@@ -1484,6 +1484,8 @@ The bonding device is TP-unaware.
 
 5. Health check and fault failback are only supported by Jetty, not by JFR or JFS. Health check performs periodic probing of link status by creating an out-of-band probe Jetty for each path (reusing JFR receive resources); fault failback, after a recovery is detected, rebuilds the Jetty to switch traffic back to the primary path. Both paths depend on the Jetty object; independently created JFR or JFS do not provide health check or fault failback capabilities.
 
+6. The aggregation-device fault failback scheme requires the user's send and receive Jetty resources to be isolated. A Jetty used for sending must not be exposed as a receive resource that peers can import, and must not be imported by other processes for receive operations. If a Jetty needs to be imported by a peer and used for receive, use a separate receive Jetty to avoid external references to send-side resources during failback rebuild.
+
 - **Aggregation Device Feature List**
 
   1.  Aggregation Device Feature List
