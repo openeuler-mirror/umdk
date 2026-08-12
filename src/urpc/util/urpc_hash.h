@@ -37,7 +37,7 @@ static inline uint32_t urpc_hash_finish(uint32_t hash_value, uint32_t final)
 static inline uint32_t get_unaligned_u32(const uint32_t *ptr)
 {
     const uint8_t *_ptr = (const uint8_t *)ptr;
-    return ntohl((_ptr[0] << 24) | (_ptr[1] << 16) | (_ptr[2] << 8) | _ptr[3]);
+    return ntohl(((uint32_t)_ptr[0] << 24) | (_ptr[1] << 16) | (_ptr[2] << 8) | _ptr[3]);
 }
 
 static inline uint32_t urpc_hash_rot(uint32_t a, uint32_t b)
