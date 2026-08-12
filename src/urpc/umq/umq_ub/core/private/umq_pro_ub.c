@@ -28,9 +28,20 @@
 static __thread urma_jfs_wr_t g_umq_ub_urma_wr[UMQ_BATCH_SIZE];
 static __thread urma_sge_t g_umq_ub_sges[UMQ_BATCH_SIZE][UMQ_MAX_SGE_NUM];
 
-/* 进程退出标志：ubsocket_uninit() 入口置 true。umq_ub_poll_fc_tx 等据此跳过
- * poll，避免 worker 线程在主线程释放 jfc 后仍访问悬空指针。 */
+/* 进程退出标志：ubsocket 经 umq_exiting_set() -> umq_tp_exiting_set 回调置 true。
+ * umq_ub_poll_fc_tx 等据此跳过 poll，避免 worker 线程在主线程释放 jfc 后仍访问悬空指针。 */
 volatile bool g_ubsocket_exiting = false;
+
+void umq_ub_exiting_set_impl(bool exiting)
+{
+    g_ubsocket_exiting = exiting;
+    __sync_synchronize();
+}
+
+bool umq_ub_exiting_get_impl(void)
+{
+    return g_ubsocket_exiting;
+}
 
 int rx_buf_ctx_list_init(rx_buf_ctx_list_t *rx_buf_ctx_list, uint32_t ctx_num)
 {
