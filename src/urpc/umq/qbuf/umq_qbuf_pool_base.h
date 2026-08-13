@@ -56,7 +56,7 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
-// Lazy SCs now controlled by per_sc_weights[sc]==0 (no reserve, expansion pool only)
+// Lazy SCs now controlled by per_sc_block_counts[sc]==0 (no reserve, expansion pool only)
 
 // Expansion pool global shared id range [257, 1021), table size 764.
 // The upper bound excludes reserved ids: UMQ_RX_QBUF_MEMPOOL_ID (1021),
@@ -91,33 +91,27 @@ typedef struct mempool_segment_ops {
 } mempool_segment_ops_t;
 
 typedef struct qbuf_pool_cfg {
-    void *buf_addr;         // buffer addr
-    uint64_t total_size;    // total buffer size
-    uint32_t data_size;     // base block size (smallest size_class, i.e. block_sizes[0])
-    uint32_t headroom_size; // reserve head room size
+    void *buf_addr;
+    uint64_t total_size;
+    uint32_t data_size;
+    uint32_t headroom_size;
     umq_buf_mode_t mode;
-    uint64_t umq_buf_pool_max_size; // default 2G
+    uint64_t umq_buf_pool_max_size;
 
-    // global expansion pool
-    uint64_t expansion_size;      // per-expansion memory size, default 32MB
-    uint32_t expansion_threshold; // water level percentage (1-100) that triggers expansion, default 30
+    uint64_t expansion_size;
+    uint32_t expansion_threshold;
     mempool_segment_ops_t seg_ops;
 
-    // Multi-level size_class config: explicit_block_sizes[0..size_class_count-1]
-    // specifies each SC's block size in ascending order. Caller must always fill valid values.
-    // Constraints: each size must be 4096*2^n, ascending, and larger size must be exact multiple
-    // of smaller size (required for memory layout alignment).
-    uint32_t size_class_count;           // 1..UMQ_QBUF_SIZE_CLASS_MAX, default 2
-    uint32_t explicit_block_sizes[UMQ_QBUF_SIZE_CLASS_MAX]; // [0..count-1] ascending block sizes
-    uint32_t per_sc_weights[UMQ_QBUF_SIZE_CLASS_MAX];       // [0..count-1] weight for per-SC block allocation, default all-1 (equal)
+    uint32_t size_class_count;
+    uint32_t explicit_block_sizes[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t per_sc_block_counts[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t per_sc_tls_qbuf_pool_depth[UMQ_QBUF_SIZE_CLASS_MAX];
 
-    // thread local qbuf pool (count-based depth cap)
-    uint64_t tls_qbuf_pool_depth; // TLS depth cap (count-based, per-SC for normal pool; single-level for tiny/huge/shm)
-    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap, default 1/2 of tls_qbuf_pool_depth
+    uint64_t tls_qbuf_pool_depth;
+    uint64_t tls_expand_qbuf_pool_depth;
 
-    bool disable_scale_cap; // expansion and shrink switch
-    // escape
-    bool disable_malloc_escape; // disable the escape mechanism
+    bool disable_scale_cap;
+    bool disable_malloc_escape;
 } qbuf_pool_cfg_t;
 
 typedef struct qbuf_alloc_param {
