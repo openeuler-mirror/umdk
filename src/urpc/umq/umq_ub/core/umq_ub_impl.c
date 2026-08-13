@@ -1318,6 +1318,8 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto FREE_QUEUE;
     }
 
+    umq_ub_config_bonding_port(dev_ctx, queue);
+
     ub_queue_t *share_rq = NULL;
     if ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
         if (option->share_rq_umqh == UMQ_INVALID_HANDLE) {
