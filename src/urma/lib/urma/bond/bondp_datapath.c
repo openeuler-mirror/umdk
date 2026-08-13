@@ -1403,35 +1403,50 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             put_comp(bdp_comp);
             return CONVERT_SKIP;
         }
-        uint32_t rnr_retry_cnt = atomic_load(&bdp_comp->rnr_retry_cnt);
-        if (rnr_retry_cnt >= g_bondp_env.rnr_retry_max) {
+
+        uint32_t wr_cnt = atomic_load(&bdp_comp->rnr_retry_wr_cnt);
+        uint32_t sleep_cnt = atomic_load(&bdp_comp->rnr_retry_sleep_cnt);
+        if (sleep_cnt >= g_bondp_env.rnr_retry_max) {
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
-            URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
-                         wr_id, rnr_retry_cnt, g_bondp_env.rnr_retry_max);
+            URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu sleep_cnt=%u retry_max=%lu\n",
+                         wr_id, sleep_cnt, g_bondp_env.rnr_retry_max);
             goto CONVERT_CR;
         }
-        uint32_t retry_cnt = atomic_fetch_add(&bdp_comp->rnr_retry_cnt, 1);
-        (void)pthread_spin_unlock(&bdp_comp->send_lock);
 
-        sleep_before_rnr_retry_resend(retry_cnt);
-
-        (void)pthread_spin_lock(&bdp_comp->send_lock);
-        wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
-        if (wr_entry == NULL ||
-            wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
-            wr_entry->bdp_comp != bdp_comp ||
-            wr_entry->send_idx != send_idx ||
-            wr_entry->target_idx != target_idx) {
-            (void)pthread_spin_unlock(&bdp_comp->send_lock);
-            put_comp(bdp_comp);
-            return CONVERT_SKIP;
+        bool need_sleep = (wr_cnt == 0);
+        uint32_t next_wr_cnt = wr_cnt + 1;
+        if (next_wr_cnt >= g_bondp_env.rnr_retry_batch_wr_num) {
+            next_wr_cnt = 0;
         }
-        URMA_LOG_INFO("Resend rnr retry from [%u, %u] to [%u, %u], cr status=%d, retry_cnt=%u, "
-                      "jetty_id=%u, tjetty_id=%u\n",
-                      send_idx, target_idx, send_idx, target_idx, cr->status, retry_cnt,
-                      bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
-        resend_matched_jfs_wrs(bdp_comp, wr_entry->wr_id, send_idx, target_idx,
-                               send_idx, target_idx, "rnr retry");
+        atomic_store(&bdp_comp->rnr_retry_wr_cnt, next_wr_cnt);
+
+        if (need_sleep) {
+            atomic_store(&bdp_comp->rnr_retry_sleep_cnt, sleep_cnt + 1);
+            URMA_LOG_INFO("Sleep before RNR retry resend, path=[%u, %u], cr status=%d, "
+                          "sleep_cnt=%u, jetty_id=%u, tjetty_id=%u\n",
+                          send_idx, target_idx, cr->status, sleep_cnt,
+                          bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            sleep_before_rnr_retry_resend(sleep_cnt);
+
+            (void)pthread_spin_lock(&bdp_comp->send_lock);
+
+            wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
+            if (wr_entry == NULL ||
+                wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+                wr_entry->bdp_comp != bdp_comp ||
+                wr_entry->send_idx != send_idx ||
+                wr_entry->target_idx != target_idx) {
+                (void)pthread_spin_unlock(&bdp_comp->send_lock);
+                put_comp(bdp_comp);
+                return CONVERT_SKIP;
+            }
+        }
+
+        atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
+        if (resend_jfs_wr(bdp_comp, wr_entry, send_idx, target_idx) != 0) {
+            URMA_LOG_ERR("Failed to resend rnr retry jfs wr, wr_id=%lu\n", wr_id);
+        }
         (void)pthread_spin_unlock(&bdp_comp->send_lock);
         put_comp(bdp_comp);
         return CONVERT_SKIP;
@@ -1495,7 +1510,8 @@ CONVERT_CR:
     cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
     if (cr->status == URMA_CR_SUCCESS) {
-        atomic_store(&bdp_comp->rnr_retry_cnt, 0);
+        atomic_store(&bdp_comp->rnr_retry_sleep_cnt, 0);
+        atomic_store(&bdp_comp->rnr_retry_wr_cnt, 0);
     }
 
     pthread_spin_lock(&bdp_comp->send_lock);
