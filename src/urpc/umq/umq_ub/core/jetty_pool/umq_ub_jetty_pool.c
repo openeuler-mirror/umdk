@@ -535,7 +535,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
 
     node->borrow_count = 0;
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
-    urpc_list_push_back(&cache->cache_list, &node->node);
+    urpc_list_push_front(&cache->cache_list, &node->node);
     cache->cached_count++;
 
     // Check if cache exceeds limit, batch return excess to active_q
@@ -555,7 +555,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
             }
         }
 
-        uint32_t cnt = urpc_list_move_n(&cache->cache_list, &pool->active_q, to_mark);
+        uint32_t cnt = urpc_list_move_n_front(&cache->cache_list, &pool->active_q, to_mark);
         pool->active_count += cnt;
         cache->cached_count -= cnt;
         uint64_t value = (uint64_t)pool->active_count;
