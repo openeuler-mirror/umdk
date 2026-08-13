@@ -173,7 +173,7 @@ static umq_info_t *create_one_umq(struct urpc_example_config *cfg, bool is_main_
         .trans_mode = (umq_trans_mode_t)cfg->trans_mode,
         .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
                        UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE |
-                       UMQ_CREATE_FLAG_TP_TYPE,
+                       UMQ_CREATE_FLAG_TP_TYPE | UMQ_CREATE_FLAG_PRIORITY,
         .rx_buf_size = TOOL_EXAMPLE_BUFFER_SIZE,
         .tx_buf_size = TOOL_EXAMPLE_BUFFER_SIZE,
         .rx_depth = TOOL_EXAMPLE_DEPTH,
@@ -181,6 +181,7 @@ static umq_info_t *create_one_umq(struct urpc_example_config *cfg, bool is_main_
         .mode = cfg->poll_mode,
         .tp_mode = cfg->tp_mode,
         .tp_type = cfg->tp_type,
+        .priority = cfg->priority,
     };
 
     umq_ctx_t *umq_ctx = NULL;
