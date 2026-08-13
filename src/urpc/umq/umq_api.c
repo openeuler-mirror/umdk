@@ -60,6 +60,7 @@ static struct {
 static umq_init_cfg_t *g_umq_config;
 static util_external_mutex_lock *g_umq_config_mutex_lock = NULL;
 static umq_io_perf_callback_t g_umq_io_perf_callback = NULL;
+static volatile bool g_umq_thread_is_inited;
 
 static umq_framework_t g_umq_fws[UMQ_TRANS_MODE_MAX] = {
     [UMQ_TRANS_MODE_UB] = {
@@ -501,13 +502,22 @@ TIMER_UNINIT:
 
 static void umq_post_dp_end(void)
 {
+    if (!__atomic_load_n(&g_umq_thread_is_inited, __ATOMIC_ACQUIRE)) {
+        return;
+    }
     urpc_manage_uninit();
 }
 
-static int umq_thread_init(umq_init_cfg_t *cfg)
+int umq_thread_init(void)
 {
+    bool expectation = false;
+    if (!__atomic_compare_exchange_n(&g_umq_thread_is_inited,
+        &expectation, true, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return UMQ_SUCCESS;
+    }
+
     if (urpc_thread_ctx_init() != UMQ_SUCCESS) {
-        return UMQ_FAIL;
+        goto SET_UNINIT;
     }
 
     if (umq_pre_dp_start() != UMQ_SUCCESS) {
@@ -519,11 +529,20 @@ static int umq_thread_init(umq_init_cfg_t *cfg)
 THREAD_CTX_UNINIT:
     urpc_thread_ctx_uninit();
 
+SET_UNINIT:
+    __atomic_store_n(&g_umq_thread_is_inited, false, __ATOMIC_RELEASE);
+
     return UMQ_FAIL;
 }
 
-static void umq_thread_uninit(void)
+void umq_thread_uninit(void)
 {
+    bool expectation = true;
+    if (!__atomic_compare_exchange_n(&g_umq_thread_is_inited,
+        &expectation, false, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+
     urpc_timing_wheel_uninit();
     urpc_thread_ctx_uninit();
 }
@@ -764,9 +783,11 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_ENOMEM;
     }
 
-    ret = umq_thread_init(cfg);
-    if (ret != UMQ_SUCCESS) {
-        goto LOCK_DESTROY;
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0) {
+        ret = umq_thread_init();
+        if (ret != UMQ_SUCCESS) {
+            goto LOCK_DESTROY;
+        }
     }
 
     for (uint8_t fw_i = 0; fw_i < UMQ_TRANS_MODE_MAX; fw_i++) {

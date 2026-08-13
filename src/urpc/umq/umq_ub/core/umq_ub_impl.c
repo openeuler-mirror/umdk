@@ -610,11 +610,13 @@ static int umq_ub_ctx_init_one(umq_ub_ctx_t *ctx, umq_trans_info_t *info, umq_in
         goto FREE_CTX_TABLE;
     }
 
-    ctx->rx_consumed_jetty_table = (volatile uint64_t *)calloc(UMQ_ID_ALLOC_SIZE, sizeof(uint64_t));
-    if (ctx->rx_consumed_jetty_table == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
-        ret = -UMQ_ERR_ENOMEM;
-        goto FREE_CTX_REF_CNT_TABLE;
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0) {
+        ctx->rx_consumed_jetty_table = (volatile uint64_t *)calloc(UMQ_ID_ALLOC_SIZE, sizeof(uint64_t));
+        if (ctx->rx_consumed_jetty_table == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
+            ret = -UMQ_ERR_ENOMEM;
+            goto FREE_CTX_REF_CNT_TABLE;
+        }
     }
 
     ctx->io_lock_free = cfg->io_lock_free;
@@ -835,7 +837,7 @@ ROLLBACK_UB_CTX:
             g_ub_ctx[i].umq_ctx_ref_cnt_table = NULL;
         }
 
-        if (g_ub_ctx[i].rx_consumed_jetty_table) {
+        if (g_ub_ctx[i].rx_consumed_jetty_table ) {
             free((void*)g_ub_ctx[i].rx_consumed_jetty_table);
             g_ub_ctx[i].rx_consumed_jetty_table = NULL;
         }
@@ -886,12 +888,20 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         umq_ub_ctx_imported_info_destroy(&context[i]);
         umq_dec_ref(context[i].io_lock_free, &context[i].ref_cnt, 1);
         umq_symbol_urma()->urma_delete_context(context[i].urma_ctx);
-        free((void *)context[i].umq_ctx_table);
-        context[i].umq_ctx_table = NULL;
-        free((void*)context[i].umq_ctx_ref_cnt_table);
-        context[i].umq_ctx_ref_cnt_table = NULL;
-        free((void*)context[i].rx_consumed_jetty_table);
-        context[i].rx_consumed_jetty_table = NULL;
+        if (context[i].umq_ctx_table != NULL) {
+            free((void *)context[i].umq_ctx_table);
+            context[i].umq_ctx_table = NULL;
+        }
+
+        if (context[i].umq_ctx_ref_cnt_table != NULL) {
+            free((void*)context[i].umq_ctx_ref_cnt_table);
+            context[i].umq_ctx_ref_cnt_table = NULL;
+        }
+
+        if (context[i].rx_consumed_jetty_table != NULL) {
+            free((void*)context[i].rx_consumed_jetty_table);
+            context[i].rx_consumed_jetty_table = NULL;
+        }
         (void)pthread_spin_destroy(&context[i].tseg_list_lock);
     }
 
@@ -2678,11 +2688,14 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
         goto FREE_UMQ_CTX_TBL;
     }
 
-    g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table = (volatile uint64_t *)calloc(UMQ_ID_ALLOC_SIZE, sizeof(uint64_t));
-    if (g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
-        ret = -UMQ_ERR_ENOMEM;
-        goto FREE_UMQ_CTX_REF_TBL;
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0) {
+        g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table =
+            (volatile uint64_t *)calloc(UMQ_ID_ALLOC_SIZE, sizeof(uint64_t));
+        if (g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "calloc rx_consumed_jetty_table failed\n");
+            ret = -UMQ_ERR_ENOMEM;
+            goto FREE_UMQ_CTX_REF_TBL;
+        }
     }
 
     g_ub_ctx[g_ub_ctx_count].io_lock_free = cfg->io_lock_free;
@@ -2737,8 +2750,10 @@ UNREGISTER_MEM:
     umq_qbuf_unregister_seg((uint8_t *)&g_ub_ctx[g_ub_ctx_count], &sge_ops);
 
 FREE_UMQ_CTX_RX_CONSUMED_TBL:
-    free((void *)g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table);
-    g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table = NULL;
+    if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0) {
+        free((void *)g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table);
+        g_ub_ctx[g_ub_ctx_count].rx_consumed_jetty_table = NULL;
+    }
 
 FREE_UMQ_CTX_REF_TBL:
     free((void*)g_ub_ctx[g_ub_ctx_count].umq_ctx_ref_cnt_table);
