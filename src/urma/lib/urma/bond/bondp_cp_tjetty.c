@@ -195,45 +195,17 @@ int bondp_get_rjetty(urma_context_t *ctx, urma_user_ctl_in_t *in,
     return 0;
 }
 
-/* Must mirror the slot-taking logic in bondp_import_pjetty_custom so that
- * bondp_tjetty_ensure_paths pre-allocates an exact-sized p_tjettys[] array. */
 static uint32_t count_connected_pairs(const bondp_context_t *bdp_ctx,
                                       const urma_bond_id_info_out_t *info)
 {
-    if (!bdp_ctx->port_cfg_enable) {
-        uint32_t count = 0;
-        for (uint32_t m = 0; m < info->enabled_count; ++m) {
-            uint32_t target_idx = info->enabled_indices[m];
-            for (uint32_t n = 0; n < bdp_ctx->enabled_count; ++n) {
-                uint32_t local_idx = bdp_ctx->enabled_indices[n];
-                if (info->connected[local_idx][target_idx]) {
-                    count++;
-                }
-            }
-        }
-        return count;
-    }
-
-    uint32_t remote_cnt = info->enabled_count;
-    uint32_t local_cnt = bdp_ctx->port_cfg.enabled_count;
-    bool local_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
     uint32_t count = 0;
-
-    for (uint32_t m = 0; m < remote_cnt; ++m) {
+    for (uint32_t m = 0; m < info->enabled_count; ++m) {
         uint32_t target_idx = info->enabled_indices[m];
-        for (uint32_t n = 0; n < local_cnt; ++n) {
-            uint32_t local_idx = bdp_ctx->port_cfg.enabled_indices[n];
-
-            if (local_used[local_idx]) {
-                continue;
+        for (uint32_t n = 0; n < bdp_ctx->enabled_count; ++n) {
+            uint32_t local_idx = bdp_ctx->enabled_indices[n];
+            if (info->connected[local_idx][target_idx]) {
+                count++;
             }
-            if (!info->connected[local_idx][target_idx]) {
-                continue;
-            }
-
-            count++;
-            local_used[local_idx] = true;
-            break;
         }
     }
     return count;
