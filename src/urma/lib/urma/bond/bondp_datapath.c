@@ -360,17 +360,16 @@ static urma_status_t schedule_send_wr(const urma_jfs_wr_t *wr, bondp_comp_t *bdp
 }
 
 /*
- * Steady-state fast path (lock-free): rebuild_done[] is published (false -> true)
- * only by the async failback worker (bondp_mark_rebuild_done_async). On the vast
- * majority of posts no rebuild has completed, so probe the flags with plain loads
- * and let try_failback() skip send_lock entirely. A rebuild that becomes visible
- * right after this check is picked up by the next post (failback is opportunistic
- * and also has the worker path), so nothing is lost.
+ * Steady-state fast path (lock-free): hc_valid[] is published (false -> true)
+ * only after health probes confirm a rebuilt pjetty path. On the vast majority
+ * of posts no failback is ready, so probe the flags with plain loads and let
+ * try_failback() skip send_lock entirely. A health-check recovery that becomes
+ * visible right after this check is picked up by the next post.
  */
-static inline bool failback_has_pending_rebuild(bondp_comp_t *bdp_comp)
+static inline bool failback_has_hc_valid(bondp_comp_t *bdp_comp)
 {
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        if (atomic_load(&bdp_comp->rebuild_done[i])) {
+        if (atomic_load(&bdp_comp->hc_valid[i])) {
             return true;
         }
     }
@@ -383,29 +382,29 @@ static void try_failback(bondp_comp_t *bdp_comp)
         return;
     }
 
-    /* Skip send_lock and the exchange scan below when nothing is pending. */
-    if (!failback_has_pending_rebuild(bdp_comp)) {
+    /* Skip send_lock and the exchange scan below when nothing is ready. */
+    if (!failback_has_hc_valid(bdp_comp)) {
         return;
     }
 
     pthread_spin_lock(&bdp_comp->send_lock);
 
-    uint32_t rebuilt_cnt = 0;
+    uint32_t recovered_cnt = 0;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-        if (!atomic_exchange(&bdp_comp->rebuild_done[i], false)) {
+        if (!atomic_exchange(&bdp_comp->hc_valid[i], false)) {
             continue;
         }
-        rebuilt_cnt++;
+        recovered_cnt++;
         atomic_store(&bdp_comp->valid[i], true);
     }
 
-    if (rebuilt_cnt == 0) {
+    if (recovered_cnt == 0) {
         pthread_spin_unlock(&bdp_comp->send_lock);
         return;
     }
 
-    URMA_LOG_INFO("Failback triggered on post, vjetty_id=%u rebuilt_cnt=%u\n",
-                  bdp_comp->v_jetty.jetty_id.id, rebuilt_cnt);
+    URMA_LOG_INFO("Failback triggered after health check recovery, vjetty_id=%u recovered_cnt=%u\n",
+                  bdp_comp->v_jetty.jetty_id.id, recovered_cnt);
 
     for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; ++i) {
         const uint64_t resend_wr_id = (uint64_t)i + 1;

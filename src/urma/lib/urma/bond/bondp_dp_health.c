@@ -18,6 +18,7 @@
 #include "urma_log.h"
 
 #include "bondp_cp_tjetty.h"
+#include "bondp_context_table.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
 #include "bondp_worker.h"
@@ -181,6 +182,36 @@ static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t loca
     pthread_rwlock_unlock(&node->lock);
 }
 
+static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t local_idx)
+{
+    if (bdp_ctx == NULL || local_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return;
+    }
+
+    uint32_t ready_cnt = 0;
+    bdp_p_vjetty_id_t *item = NULL;
+
+    pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
+    HMAP_FOR_EACH (item, hmap_node, &bdp_ctx->p_vjetty_id_table.hmap) {
+        bondp_comp_t *comp = item->comp;
+        if (item->key.type != JETTY || comp == NULL ||
+            comp->p_jetty[local_idx] == NULL) {
+            continue;
+        }
+        if (!atomic_exchange(&comp->rebuild_done[local_idx], false)) {
+            continue;
+        }
+        atomic_store(&comp->hc_valid[local_idx], true);
+        ready_cnt++;
+    }
+    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+
+    if (ready_cnt != 0) {
+        URMA_LOG_INFO("Health probe confirmed rebuilt local_idx=%u jettys, ready_cnt=%u.\n",
+                      local_idx, ready_cnt);
+    }
+}
+
 static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urma_cr_t *cr)
 {
     uint32_t node_idx;
@@ -207,6 +238,11 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     if (ok && !prev) {
         URMA_LOG_INFO("Health probe link [%d, %d] recovered.\n", local_idx, target_idx);
         hc_set_tjetty_list_target_valid(node, local_idx, target_idx);
+    }
+    if (ok && bdp_tjetty != NULL) {
+        bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(bdp_tjetty->v_tjetty.urma_ctx,
+                                                      bondp_context_t, v_ctx);
+        hc_set_local_idx_jettys_hc_valid(bdp_ctx, (uint32_t)local_idx);
     }
 
     node->no_cqe_round[local_idx][target_idx] = 0;
