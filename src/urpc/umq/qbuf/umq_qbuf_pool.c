@@ -7,6 +7,7 @@
  * History: 2025-7-26
  */
 
+#include <pthread.h>
 #include <malloc.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -46,6 +47,9 @@
 #define QBUF_POOL_CHECK_ASYNC_PERIOD_US (1000)
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
+
+#define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
+#define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
 
 typedef struct qbuf_expansion_pool_slot {
     urpc_list_t node;    // linkage in exp_pool.slot_list
@@ -904,6 +908,11 @@ static async_shrink_pool_param_t *async_shrink_pop_param(qbuf_expansion_pool_t *
 
 static void *async_shrink_global_pool_callback(void *arg)
 {
+    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
+            QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME, errno);
+    }
+
     qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
     if (exp_pool == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
@@ -1675,7 +1684,7 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
             uint64_t layout_end = data_end;
             if (cfg->mode == UMQ_BUF_SPLIT) {
                 layout_end += hdr_size;
-                layout_end += (uint64_t)UMQ_EMPTY_HEADER_COEFFICIENT * QBUF_POOL_DEFAULT_EXPANSION_COUNT * sizeof(umq_buf_t);
+                layout_end += (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * sizeof(umq_buf_t);
             }
             if (layout_end <= cfg->total_size) {
                 break; // fits!
@@ -1813,7 +1822,7 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     }
 
     {
-        uint64_t head_without_data_count = (uint64_t)UMQ_EMPTY_HEADER_COEFFICIENT * umq_qbuf_expansion_count();
+        uint64_t head_without_data_count = (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT;
         for (uint64_t i = 0; i < head_without_data_count; i++) {
             umq_buf_t *head_buf = id_to_buf_without_data_split((char *)g_qbuf_pool.ext_header_buffer, i);
             head_buf->umqh = UMQ_INVALID_HANDLE;
@@ -2344,6 +2353,11 @@ typedef struct async_expand_pool_param {
 
 static void *async_expand_global_pool_callback(void *arg)
 {
+    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
+            QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME, errno);
+    }
+
     async_expand_pool_param_t *async_param = (async_expand_pool_param_t *)arg;
     if (async_param == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async param invalid\n");

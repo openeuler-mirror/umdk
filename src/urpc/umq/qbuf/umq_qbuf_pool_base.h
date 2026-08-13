@@ -73,6 +73,7 @@ extern "C" {
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
 #define QBUF_POOL_EXPAND_MAX_RATIO (2)
+#define QBUF_POOL_INITIAL_NODATA_BUF_CNT 32768
 #define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
