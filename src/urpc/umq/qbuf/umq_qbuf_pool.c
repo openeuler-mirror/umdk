@@ -3098,6 +3098,15 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         sci->header_region_start = (uint64_t)(uintptr_t)g_qbuf_pool.header_region_start[sc];
         sci->buf_cnt_with_data = g_qbuf_pool.block_pool[sc].buf_cnt_with_data;
         sci->buf_cnt_without_data = g_qbuf_pool.block_pool[sc].buf_cnt_without_data;
+        /* When disable_scale_cap is true, the expansion pool's slot_list is
+         * not initialized and traversing it causes SEGV (slot==NULL). Skip
+         * all expansion info; the output fields remain zero from caller's
+         * memset. global_total/capacity reflect the initial pool only. */
+        sci->global_total = g_qbuf_pool.per_sc_block_counts[sc];
+        sci->capacity = g_qbuf_pool.per_sc_block_counts[sc];
+        if (g_qbuf_pool.disable_scale_cap) {
+            continue;
+        }
         qbuf_expansion_pool_t *e = &g_qbuf_pool.exp_pool_with_data[sc];
         /* Take expansion_pool_lock to protect the slot_list traversal below
          * from a concurrent async_shrink_global_pool_callback that frees
@@ -3109,9 +3118,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         sci->exp_total_block_num = e->exp_total_block_num;
         sci->exp_total_expansion_count = e->total_expansion_count;
         sci->exp_total_shrink_count = e->total_shrink_count;
-        /* new DFX fields: global_total, capacity, exp_slots, exp_free_blk */
         sci->global_total = g_qbuf_pool.per_sc_block_counts[sc] + e->exp_total_block_num;
-        sci->capacity = g_qbuf_pool.per_sc_block_counts[sc];
         /* count expansion slots and free blocks for this sc */
         uint32_t slot_cnt = 0;
         uint64_t exp_free = 0;
@@ -3164,54 +3171,56 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     }
     qbuf_pool_stats->num++;
 
-    uint64_t exp_count = 0;
-    uint64_t exp_free_blocks = 0;
-    uint64_t exp_total_blocks = 0;
-    uint64_t exp_total_expansion = 0;
-    uint64_t exp_total_shrink = 0;
-    uint32_t exp_partial_slots = 0;
-    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
-        qbuf_expansion_pool_t *e = &g_qbuf_pool.exp_pool_with_data[sc];
-        exp_count += e->expansion_count;
-        exp_free_blocks += e->exp_total_block_num;
-        exp_total_blocks += (uint64_t)e->expansion_count * e->expansion_block_count;
-        exp_total_expansion += e->total_expansion_count;
-        exp_total_shrink += e->total_shrink_count;
-        exp_partial_slots += __atomic_load_n(&e->partial_slot_count, __ATOMIC_RELAXED);
-    }
-    qbuf_pool_stats->exp_pool_with_data.expansion_count = exp_count;
-    qbuf_pool_stats->exp_pool_with_data.partial_slot_count = exp_partial_slots;
-    qbuf_pool_stats->exp_pool_with_data.exp_total_free_block_num = exp_free_blocks;
-    qbuf_pool_stats->exp_pool_with_data.total_expansion_count = exp_total_expansion;
-    /* Accumulate sync/async expansion counts */
-    {
-        uint64_t sync_total = 0, async_total = 0;
+    if (!g_qbuf_pool.disable_scale_cap) {
+        uint64_t exp_count = 0;
+        uint64_t exp_free_blocks = 0;
+        uint64_t exp_total_blocks = 0;
+        uint64_t exp_total_expansion = 0;
+        uint64_t exp_total_shrink = 0;
+        uint32_t exp_partial_slots = 0;
         for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
-            sync_total += g_qbuf_pool.exp_pool_with_data[sc].sync_expansion_count;
-            async_total += g_qbuf_pool.exp_pool_with_data[sc].async_expansion_count;
+            qbuf_expansion_pool_t *e = &g_qbuf_pool.exp_pool_with_data[sc];
+            exp_count += e->expansion_count;
+            exp_free_blocks += e->exp_total_block_num;
+            exp_total_blocks += (uint64_t)e->expansion_count * e->expansion_block_count;
+            exp_total_expansion += e->total_expansion_count;
+            exp_total_shrink += e->total_shrink_count;
+            exp_partial_slots += __atomic_load_n(&e->partial_slot_count, __ATOMIC_RELAXED);
         }
-        qbuf_pool_stats->exp_pool_with_data.sync_expansion_count = sync_total;
-        qbuf_pool_stats->exp_pool_with_data.async_expansion_count = async_total;
-    }
-    qbuf_pool_stats->exp_pool_with_data.total_shrink_count = exp_total_shrink;
-    qbuf_pool_stats->exp_pool_with_data.exp_total_block_num = exp_total_blocks;
-    if (mode == UMQ_BUF_SPLIT) {
-        qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size = exp_total_blocks * (block_size + umq_buf_t_size);
-    } else {
-        qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size = exp_total_blocks * block_size;
-    }
+        qbuf_pool_stats->exp_pool_with_data.expansion_count = exp_count;
+        qbuf_pool_stats->exp_pool_with_data.partial_slot_count = exp_partial_slots;
+        qbuf_pool_stats->exp_pool_with_data.exp_total_free_block_num = exp_free_blocks;
+        qbuf_pool_stats->exp_pool_with_data.total_expansion_count = exp_total_expansion;
+        /* Accumulate sync/async expansion counts */
+        {
+            uint64_t sync_total = 0, async_total = 0;
+            for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+                sync_total += g_qbuf_pool.exp_pool_with_data[sc].sync_expansion_count;
+                async_total += g_qbuf_pool.exp_pool_with_data[sc].async_expansion_count;
+            }
+            qbuf_pool_stats->exp_pool_with_data.sync_expansion_count = sync_total;
+            qbuf_pool_stats->exp_pool_with_data.async_expansion_count = async_total;
+        }
+        qbuf_pool_stats->exp_pool_with_data.total_shrink_count = exp_total_shrink;
+        qbuf_pool_stats->exp_pool_with_data.exp_total_block_num = exp_total_blocks;
+        if (mode == UMQ_BUF_SPLIT) {
+            qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size = exp_total_blocks * (block_size + umq_buf_t_size);
+        } else {
+            qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size = exp_total_blocks * block_size;
+        }
 
-    qbuf_expansion_pool_t *exp_without_data = &g_qbuf_pool.exp_pool_without_date;
-    qbuf_pool_stats->exp_pool_without_data.expansion_count = exp_without_data->expansion_count;
-    qbuf_pool_stats->exp_pool_without_data.partial_slot_count =
-        __atomic_load_n(&exp_without_data->partial_slot_count, __ATOMIC_RELAXED);
-    qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num = exp_without_data->exp_total_block_num;
-    qbuf_pool_stats->exp_pool_without_data.total_expansion_count = exp_without_data->total_expansion_count;
-    qbuf_pool_stats->exp_pool_without_data.total_shrink_count = exp_without_data->total_shrink_count;
-    qbuf_pool_stats->exp_pool_without_data.exp_total_block_num =
-        exp_without_data->expansion_count * exp_without_data->expansion_block_count;
-    qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size =
-        qbuf_pool_stats->exp_pool_without_data.exp_total_block_num * umq_buf_t_size;
+        qbuf_expansion_pool_t *exp_without_data = &g_qbuf_pool.exp_pool_without_date;
+        qbuf_pool_stats->exp_pool_without_data.expansion_count = exp_without_data->expansion_count;
+        qbuf_pool_stats->exp_pool_without_data.partial_slot_count =
+            __atomic_load_n(&exp_without_data->partial_slot_count, __ATOMIC_RELAXED);
+        qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num = exp_without_data->exp_total_block_num;
+        qbuf_pool_stats->exp_pool_without_data.total_expansion_count = exp_without_data->total_expansion_count;
+        qbuf_pool_stats->exp_pool_without_data.total_shrink_count = exp_without_data->total_shrink_count;
+        qbuf_pool_stats->exp_pool_without_data.exp_total_block_num =
+            exp_without_data->expansion_count * exp_without_data->expansion_block_count;
+        qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size =
+            qbuf_pool_stats->exp_pool_without_data.exp_total_block_num * umq_buf_t_size;
+    }
 
     qbuf_pool_stats->local_qbuf_pool_num = 0;
     /* When g_tls_dtors_running is true, some threads have exited and their
@@ -3270,13 +3279,15 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_stats->escape_buf_cnt = __atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED);
 
     /* count non-NULL slots in g_exp_slot_table (new DFX field) */
-    uint32_t slot_used = 0;
-    for (uint32_t i = 0; i < QBUF_POOL_EXP_SLOT_TABLE_SIZE; i++) {
-        if (g_exp_slot_table[i] != NULL) {
-            ++slot_used;
+    if (!g_qbuf_pool.disable_scale_cap) {
+        uint32_t slot_used = 0;
+        for (uint32_t i = 0; i < QBUF_POOL_EXP_SLOT_TABLE_SIZE; i++) {
+            if (g_exp_slot_table[i] != NULL) {
+                ++slot_used;
+            }
         }
+        qbuf_pool_info->exp_slot_used_count = slot_used;
     }
-    qbuf_pool_info->exp_slot_used_count = slot_used;
     return UMQ_SUCCESS;
 }
 
