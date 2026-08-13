@@ -156,6 +156,10 @@ static void flush_event_handlers(bondp_worker_t *worker)
     bondp_worker_event_handler_t *entry = NULL;
     bondp_worker_event_handler_t *next = NULL;
 
+    if (ub_hmap_count(&worker->handler_map) == 0) {
+        return;
+    }
+
     HMAP_FOR_EACH_SAFE (entry, next, hmap_node, &worker->handler_map) {
         ub_hmap_remove(&worker->handler_map, &entry->hmap_node);
         entry->deleting = true;
