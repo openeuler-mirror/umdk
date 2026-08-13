@@ -115,13 +115,12 @@ typedef struct qbuf_pool {
     void *ext_header_buffer;
     uint64_t total_size;
 
-    // multi-level size_class: block_sizes[0..size_class_count-1] from explicit config
     uint32_t size_class_count;
     uint32_t block_sizes[UMQ_QBUF_SIZE_CLASS_MAX];
     char *data_region_start[UMQ_QBUF_SIZE_CLASS_MAX];
     char *data_region_end[UMQ_QBUF_SIZE_CLASS_MAX];
     char *header_region_start[UMQ_QBUF_SIZE_CLASS_MAX];
-    uint64_t per_sc_block_counts[UMQ_QBUF_SIZE_CLASS_MAX]; // per-SC initial block count (weighted)
+    uint64_t per_sc_block_counts[UMQ_QBUF_SIZE_CLASS_MAX];
     uint32_t headroom_size;
     uint32_t data_size;
 
@@ -138,12 +137,12 @@ typedef struct qbuf_pool {
     qbuf_expansion_pool_t exp_pool_with_data[UMQ_QBUF_SIZE_CLASS_MAX];
     qbuf_expansion_pool_t exp_pool_without_date;
 
-    uint64_t tls_qbuf_pool_depth;        // global TLS count cap (default 1.5K, per-SC for normal pool)
-    uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS count cap (default 1/2 of global)
+    uint64_t tls_qbuf_pool_depth;
+    uint64_t tls_expand_qbuf_pool_depth;
+    uint64_t per_sc_tls_qbuf_pool_depth[UMQ_QBUF_SIZE_CLASS_MAX];
 
     bool disable_scale_cap;
     bool disable_malloc_escape;
-    uint32_t per_sc_weights[UMQ_QBUF_SIZE_CLASS_MAX]; // 0=lazy(no reserve), >0=weight
 } qbuf_pool_t;
 
 static qbuf_pool_t g_qbuf_pool = {0};
@@ -1576,7 +1575,6 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
         return -UMQ_ERR_EINVAL;
     }
 
-    // Read block sizes from explicit_block_sizes[]
     if (cfg->explicit_block_sizes[0] == 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "explicit_block_sizes[] is not filled (size_class_count=%u)\n", count);
         return -UMQ_ERR_EINVAL;
@@ -1630,102 +1628,17 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
         QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD : cfg->expansion_threshold;
     g_qbuf_pool.disable_malloc_escape = cfg->disable_malloc_escape;
 
-    // SCs with per_sc_weights[sc]==0 are lazy: no initial reserve, alloc from expansion pool.
-    // This replaces the old lazy_sc_mask / lazy_init_block_size_threshold mechanism.
-
-    // Per-SC block count with weighted allocation.
-    // per_sc_weights[i] controls relative share of initial memory for SC i.
-    // Default: all weights = 1 (equal division). For 4K-heavy workloads use e.g. {2,1,1}.
-    // Allocation: per_sc[i] = (total_size * weight[i]) / (sum(weight[j] * blk_size[j]))
-    // then auto-shrink via layout simulation until it fits.
-    uint32_t weights[UMQ_QBUF_SIZE_CLASS_MAX];
-    uint64_t weight_sum = 0;
-    bool has_explicit_weights = false;
-    for (uint32_t i = 0; i < count && i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
-        if (cfg->per_sc_weights[i] != 0) { has_explicit_weights = true; break; }
-    }
     for (uint32_t i = 0; i < count; i++) {
-        // per_sc_weights[i]==0 means lazy (no reserve, alloc from expansion pool)
-        // per_sc_weights[i]>0 means reserve with this weight
-        // If ALL per_sc_weights are 0 (not explicitly set), default to 1
-        weights[i] = (i < UMQ_QBUF_SIZE_CLASS_MAX && has_explicit_weights) ?
-                     cfg->per_sc_weights[i] : 1;
-        weight_sum += (uint64_t)weights[i] * g_qbuf_pool.block_sizes[i];
+        g_qbuf_pool.per_sc_block_counts[i] = cfg->per_sc_block_counts[i];
+        g_qbuf_pool.per_sc_tls_qbuf_pool_depth[i] = (cfg->per_sc_tls_qbuf_pool_depth[i] == 0) ?
+            g_qbuf_pool.tls_qbuf_pool_depth : cfg->per_sc_tls_qbuf_pool_depth[i];
     }
 
-    if (weight_sum == 0) {
-        for (uint32_t i = 0; i < count; i++) {
-            g_qbuf_pool.per_sc_block_counts[i] = 0;
-        }
-    } else {
-        // Initial estimate per SC, then simulate layout to auto-fit
-        for (uint32_t i = 0; i < count; i++) {
-            if (weights[i] == 0) {
-                g_qbuf_pool.per_sc_block_counts[i] = 0;
-                continue;
-            }
-            uint64_t sc_budget = cfg->total_size * (uint64_t)weights[i] * g_qbuf_pool.block_sizes[i] / weight_sum;
-            g_qbuf_pool.per_sc_block_counts[i] = sc_budget / g_qbuf_pool.block_sizes[i];
-        }
-        // Auto-shrink: simulate the real layout and decrement counts until it fits.
-        // Layout is descending block_size order (same as init_split_mode_layout).
-        // Since larger SCs are exact multiples of smaller, no alignment padding needed.
-        for (int iter = 0; iter < 10000; iter++) {
-            uint64_t data_end = 0;
-            uint64_t hdr_size = 0;
-            // Process in descending order (largest SC first)
-            for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
-                uint32_t sc = (uint32_t)si;
-                uint64_t n = g_qbuf_pool.per_sc_block_counts[sc];
-                if (n == 0) continue;
-                uint32_t bs = g_qbuf_pool.block_sizes[sc];
-                data_end = (data_end + bs - 1) & ~((uint64_t)bs - 1);
-                data_end += n * bs;
-                if (cfg->mode == UMQ_BUF_SPLIT) {
-                    hdr_size += n * sizeof(umq_buf_t);
-                }
-            }
-            uint64_t layout_end = data_end;
-            if (cfg->mode == UMQ_BUF_SPLIT) {
-                layout_end += hdr_size;
-                layout_end += (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * sizeof(umq_buf_t);
-            }
-            if (layout_end <= cfg->total_size) {
-                break; // fits!
-            }
-            // Shrink: reduce the SC with the highest (blocks/weight) ratio,
-            // preserving the per_sc_weights proportion during auto-shrink.
-            // E.g. weights={2,1} means sc0 should have 2x blocks of sc1;
-            // if sc0 has more than 2x, shrink sc0; otherwise shrink sc1.
-            {
-                uint32_t shrink_sc = count;
-                uint64_t best_num = 0;
-                uint32_t best_den = 1;
-                for (uint32_t sc = 0; sc < count; sc++) {
-                    if (g_qbuf_pool.per_sc_block_counts[sc] == 0 || weights[sc] == 0) {
-                        continue;
-                    }
-                    // Compare n[sc]/weights[sc] vs best_num/best_den via cross-multiply
-                    if ((uint64_t)g_qbuf_pool.per_sc_block_counts[sc] * best_den > best_num * (uint64_t)weights[sc]) {
-                        best_num = g_qbuf_pool.per_sc_block_counts[sc];
-                        best_den = weights[sc];
-                        shrink_sc = sc;
-                    }
-                }
-                if (shrink_sc >= count) {
-                    break;
-                }
-                g_qbuf_pool.per_sc_block_counts[shrink_sc]--;
-            }
-        }
-    }
-
-    // Save resolved weights to g_qbuf_pool for layout functions to check lazy SCs
     for (uint32_t _sc = 0; _sc < count; _sc++) {
-        g_qbuf_pool.per_sc_weights[_sc] = weights[_sc];
-        UMQ_VLOG_INFO(VLOG_UMQ, "  sc=%u: blk_size=%u weight=%u initial_blocks=%llu\n", _sc,
-                      g_qbuf_pool.block_sizes[_sc], weights[_sc],
-                      (unsigned long long)g_qbuf_pool.per_sc_block_counts[_sc]);
+        UMQ_VLOG_INFO(VLOG_UMQ, "  sc=%u: blk_size=%u initial_blocks=%llu tls_depth=%llu\n", _sc,
+                      g_qbuf_pool.block_sizes[_sc],
+                      (unsigned long long)g_qbuf_pool.per_sc_block_counts[_sc],
+                      (unsigned long long)g_qbuf_pool.per_sc_tls_qbuf_pool_depth[_sc]);
     }
 
     return 0;
@@ -1748,17 +1661,15 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     uint32_t order_cnt = 0;
     for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
         uint32_t sc = (uint32_t)si;
-        if (g_qbuf_pool.per_sc_weights[sc] == 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] == 0) {
             continue;
         }
         order[order_cnt++] = sc;
     }
 
-    // Initialize bookkeeping for ALL SCs first (lazy SCs get zero regions), then write
-    // non-lazy data regions in descending order.
     for (uint32_t sc = 0; sc < count; sc++) {
         blk_nums[sc] = 0;
-        if (g_qbuf_pool.per_sc_weights[sc] == 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] == 0) {
             g_qbuf_pool.data_region_start[sc] = NULL;
             g_qbuf_pool.data_region_end[sc] = NULL;
         }
@@ -1814,7 +1725,7 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     }
     // Lazy SCs: zero block pool counts + expansion trigger (no data region allocated).
     for (uint32_t sc = 0; sc < count; sc++) {
-        if (g_qbuf_pool.per_sc_weights[sc] != 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] != 0) {
             continue;
         }
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
@@ -1859,7 +1770,7 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     uint32_t order_cnt = 0;
     for (int32_t si = (int32_t)count - 1; si >= 0; si--) {
         uint32_t sc = (uint32_t)si;
-        if (g_qbuf_pool.per_sc_weights[sc] == 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] == 0) {
             continue;
         }
         order[order_cnt++] = sc;
@@ -1867,7 +1778,7 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
 
     for (uint32_t sc = 0; sc < count; sc++) {
         blk_nums[sc] = 0;
-        if (g_qbuf_pool.per_sc_weights[sc] == 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] == 0) {
             g_qbuf_pool.data_region_start[sc] = NULL;
             g_qbuf_pool.data_region_end[sc] = NULL;
         }
@@ -1892,7 +1803,7 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
     for (uint32_t sc = 0; sc < count; sc++) {
         uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
         uint64_t blk_num = blk_nums[sc];
-        if (g_qbuf_pool.per_sc_weights[sc] == 0) {
+        if (g_qbuf_pool.per_sc_block_counts[sc] == 0) {
             g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
             g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
             uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
@@ -1988,13 +1899,13 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     UMQ_VLOG_INFO(VLOG_UMQ, "mode=%s size_class_count=%u\n",
                   g_qbuf_pool.mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE", g_qbuf_pool.size_class_count);
     for (uint32_t _sc = 0; _sc < g_qbuf_pool.size_class_count; _sc++) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "  sc=%u: blk_size=%u global_with_data=%llu trigger_expand=%llu\n", _sc,
+        UMQ_VLOG_INFO(VLOG_UMQ, "  sc=%u: blk_size=%u global_with_data=%llu tls_depth=%llu trigger_expand=%llu\n", _sc,
                       g_qbuf_pool.block_sizes[_sc], (unsigned long long)g_qbuf_pool.block_pool[_sc].buf_cnt_with_data,
+                      (unsigned long long)g_qbuf_pool.per_sc_tls_qbuf_pool_depth[_sc],
                       (unsigned long long)g_qbuf_pool.exp_pool_with_data[_sc].trigger_expand_block_num);
     }
     UMQ_VLOG_INFO(VLOG_UMQ, "  global_without_data=%llu\n",
                   (unsigned long long)g_qbuf_pool.block_pool[0].buf_cnt_without_data);
-    UMQ_VLOG_INFO(VLOG_UMQ, "  zero-reserve SCs (weight=0): alloc from expansion pool only\n");
     UMQ_VLOG_INFO(VLOG_UMQ, "  total_size=%llu expansion_mem_max=%llu\n",
                   (unsigned long long)g_qbuf_pool.total_size,
                   (unsigned long long)g_qbuf_pool.expansion_mem_size_max);
@@ -2171,8 +2082,8 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
             }
             // Clamp by global budget
             uint64_t g_total = __atomic_load_n(&g_total_local_cap_with_data_cnt[sc], __ATOMIC_RELAXED);
-            if (g_total + delta > g_qbuf_pool.tls_qbuf_pool_depth) {
-                delta = (g_total >= g_qbuf_pool.tls_qbuf_pool_depth) ? 0 : (g_qbuf_pool.tls_qbuf_pool_depth - g_total);
+            if (g_total + delta > g_qbuf_pool.per_sc_tls_qbuf_pool_depth[sc]) {
+                delta = (g_total >= g_qbuf_pool.per_sc_tls_qbuf_pool_depth[sc]) ? 0 : (g_qbuf_pool.per_sc_tls_qbuf_pool_depth[sc] - g_total);
             }
             if (delta > 0) {
                 local_pool->capacity_with_data[sc] += delta;
