@@ -21,15 +21,6 @@
 
 #include "admin_cmd.h"
 
-typedef struct admin_show_system_ctx {
-    uint8_t dev_ns_mode;
-    uint8_t eid_ns_mode;
-    bool has_dev_ns_mode;
-    bool has_eid_ns_mode;
-    bool found;
-    int ret;
-} admin_show_system_ctx_t;
-
 static int admin_show_system_reply_cb(struct nl_msg *msg, void *arg)
 {
     struct nlmsghdr *hdr = nlmsg_hdr(msg);
@@ -201,14 +192,13 @@ static int cmd_system_usage(admin_config_t *cfg)
     return 0;
 }
 
-static int cmd_system_show(admin_config_t *cfg)
+int admin_nl_get_system_info(admin_show_system_ctx_t *ctx)
 {
     struct nl_sock *sock = NULL;
     struct nl_msg *msg;
     int genl_id = 0;
     int ret;
 
-    (void)cfg;
     ret = admin_show_system_open_sock(&sock, &genl_id);
     if (ret != 0) {
         return ret;
@@ -220,21 +210,28 @@ static int cmd_system_show(admin_config_t *cfg)
         nl_socket_free(sock);
         return -ENOMEM;
     }
-
-    admin_show_system_ctx_t ctx = {0};
     nl_socket_disable_auto_ack(sock);
     ret = nl_send_auto(sock, msg);
     nl_socket_enable_auto_ack(sock);
     if (ret < 0) {
         printf("Failed to send netlink msg, ret:%d\n", ret);
     } else {
-        ret = admin_show_system_recv_reply(sock, &ctx);
+        ret = admin_show_system_recv_reply(sock, ctx);
     }
 
     nlmsg_free(msg);
     nl_close(sock);
     nl_socket_free(sock);
 
+    return ret;
+}
+
+static int cmd_system_show(admin_config_t *cfg)
+{
+    (void)cfg;
+    admin_show_system_ctx_t ctx = {0};
+
+    int ret = admin_nl_get_system_info(&ctx);
     if (ret != 0) {
         return ret;
     }
