@@ -764,7 +764,8 @@ urma_jfs_t *bondp_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
     bdp_jfs->comp_type = BONDP_COMP_JFS;
     atomic_init(&bdp_jfs->use_cnt.atomic_cnt, 0);
     atomic_init(&bdp_jfs->deleting, false);
-    atomic_init(&bdp_jfs->rnr_retry_cnt, 0);
+    atomic_init(&bdp_jfs->rnr_retry_sleep_cnt, 0);
+    atomic_init(&bdp_jfs->rnr_retry_wr_cnt, 0);
     (void)pthread_spin_init(&bdp_jfs->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jfs->modify_to_error = false;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
@@ -1463,7 +1464,8 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     bdp_jetty->comp_type = BONDP_COMP_JETTY;
     atomic_init(&bdp_jetty->use_cnt.atomic_cnt, 0);
     atomic_init(&bdp_jetty->deleting, false);
-    atomic_init(&bdp_jetty->rnr_retry_cnt, 0);
+    atomic_init(&bdp_jetty->rnr_retry_sleep_cnt, 0);
+    atomic_init(&bdp_jetty->rnr_retry_wr_cnt, 0);
     (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jetty->modify_to_error = false;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
