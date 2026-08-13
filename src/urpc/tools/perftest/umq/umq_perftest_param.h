@@ -35,6 +35,7 @@ typedef struct umq_perftest_config {
     bool use_atomic_window;
     bool enable_perf;
     uint32_t blk_mode;
+    uint8_t priority;
 } umq_perftest_config_t;
 
 int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *cfg);
