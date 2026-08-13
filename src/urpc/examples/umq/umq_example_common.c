@@ -56,6 +56,7 @@ static struct option g_long_options[] = {
     {"client",             no_argument,       NULL, 'l'},
     {"tp-mode",            required_argument, NULL, 'M'},
     {"tp-type",            required_argument, NULL, 'P'},
+    {"priority",           required_argument, NULL, 'O'},
     {"queue_cnt",          required_argument, NULL, 'q'},
     {"threadpool_size",    required_argument, NULL, 's'},
     {"m_dev_name",         required_argument, NULL, 'n'},
@@ -95,7 +96,7 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
         .trans_mode = cfg->trans_mode,
         .create_flag = UMQ_CREATE_FLAG_RX_BUF_SIZE | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_RX_DEPTH |
                        UMQ_CREATE_FLAG_TX_DEPTH | UMQ_CREATE_FLAG_QUEUE_MODE | UMQ_CREATE_FLAG_TP_MODE |
-                       UMQ_CREATE_FLAG_TP_TYPE,
+                       UMQ_CREATE_FLAG_TP_TYPE | UMQ_CREATE_FLAG_PRIORITY,
         .rx_buf_size = EXAMPLE_BUFFER_SIZE,
         .tx_buf_size = EXAMPLE_BUFFER_SIZE,
         .rx_depth = EXAMPLE_DEPTH,
@@ -103,6 +104,7 @@ uint64_t example_create_umq(struct urpc_example_config *cfg, uint8_t *local_bind
         .mode = cfg->poll_mode,
         .tp_mode = cfg->tp_mode,
         .tp_type = cfg->tp_type,
+        .priority = cfg->priority,
     };
     if (cfg->instance_mode == SERVER) {
         if (sprintf(option.name, "%s", "server") <= 0) {
@@ -639,12 +641,13 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
     }
 
     cfg->tcp_port = DEFAULT_PORT;
+    cfg->priority = DEFAULT_PRIORITY;
 
     while (1) {
         int c;
         unsigned long param;
 
-        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:M:P:", g_long_options, NULL);
+        c = getopt_long(argc, argv, "d:e:p:i:c:I:f:T:E:", g_long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -718,6 +721,9 @@ int parse_arguments(int argc, char **argv, struct urpc_example_config *cfg)
                     return -1;
                 }
                 cfg->tp_type = (umq_tp_type_t)param;
+                break;
+            case 'O':
+                cfg->priority = (uint8_t)strtoul(optarg, NULL, 0);
                 break;
             case 'q':
                 cfg->queue_num = (uint32_t)strtoul(optarg, NULL, 0);
