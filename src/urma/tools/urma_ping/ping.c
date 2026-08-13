@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
         .verbose_level = VLOG_LEVEL_NORMAL,
         .deadline = 0,
         .timeout = 1,
+        .priority = PING_INVALID_PRIORITY,
     };
 
     int ret = 0;

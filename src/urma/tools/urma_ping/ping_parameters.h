@@ -16,6 +16,8 @@
 
 #include "urma_types.h"
 
+#define PING_INVALID_PRIORITY (255)
+
 typedef struct ping_cfg {
     int argc;
     char **argv;
@@ -29,6 +31,7 @@ typedef struct ping_cfg {
     uint32_t deadline; /* seconds, 0 means disabled */
     uint32_t timeout;  /* seconds, per-reply timeout */
     uint32_t verbose_level;
+    uint8_t priority;  /* PING_INVALID_PRIORITY means auto-select */
 } ping_cfg_t;
 
 int str_to_u32(const char *buf, uint32_t *u32);
