@@ -1630,8 +1630,7 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
 
     for (uint32_t i = 0; i < count; i++) {
         g_qbuf_pool.per_sc_block_counts[i] = cfg->per_sc_block_counts[i];
-        g_qbuf_pool.per_sc_tls_qbuf_pool_depth[i] = (cfg->per_sc_tls_qbuf_pool_depth[i] == 0) ?
-            g_qbuf_pool.tls_qbuf_pool_depth : cfg->per_sc_tls_qbuf_pool_depth[i];
+        g_qbuf_pool.per_sc_tls_qbuf_pool_depth[i] = cfg->per_sc_tls_qbuf_pool_depth[i];
     }
 
     for (uint32_t _sc = 0; _sc < count; _sc++) {
