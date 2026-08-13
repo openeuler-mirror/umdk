@@ -17,6 +17,7 @@ set_target_properties(urma_ping
 
 target_include_directories(urma_ping
     PRIVATE
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
         /usr/include/libnl3
 )
 
