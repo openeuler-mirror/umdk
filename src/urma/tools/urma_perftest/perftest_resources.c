@@ -261,13 +261,23 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 del_ctx:
     (void)urma_delete_context(ctx->urma_ctx);
 uninit:
+    /* UB mgmt: close mgmt channel before urma_uninit, since urma_uninit
+     * dlclose()'s provider.so 
+     */
+    if (cfg->mgmt_type == PERFTEST_MGMT_UB) {
+        close_connection(cfg);
+    }
     (void)urma_uninit();
     return -1;
 }
 
-static void uninit_device(perftest_context_t *ctx)
+static void uninit_device(perftest_context_t *ctx, perftest_config_t *cfg)
 {
     urma_status_t status;
+
+    if (cfg->mgmt_type == PERFTEST_MGMT_UB) {
+        close_connection(cfg);
+    }
 
     status = urma_delete_context(ctx->urma_ctx);
     if (status != URMA_SUCCESS) {
@@ -2660,7 +2670,7 @@ unregister_mem:
 delete_jettys:
     destroy_simplex_jettys(ctx, cfg);
 uninit_dev:
-    uninit_device(ctx);
+    uninit_device(ctx, cfg);
     return -1;
 }
 
@@ -2911,7 +2921,7 @@ unregister_mem:
 delete_jettys:
     destroy_duplex_jettys(ctx, cfg);
 uninit_dev:
-    uninit_device(ctx);
+    uninit_device(ctx, cfg);
     return -1;
 }
 
@@ -2950,10 +2960,7 @@ static void destroy_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     destroy_simplex_jettys(ctx, cfg);
     unregister_mem(ctx, cfg);
     ctx->jetty_num = 0;
-    /* Close mgmt channel BEFORE uninit_device: urma_uninit is not refcounted
-     * and dlclose()'s provider .so, after which mgmt ctx->ops dangles. */
-    close_connection(cfg);
-    uninit_device(ctx);
+    uninit_device(ctx, cfg);
     return;
 }
 
@@ -2990,9 +2997,7 @@ static void destroy_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     destroy_duplex_jettys(ctx, cfg);
     unregister_mem(ctx, cfg);
     ctx->jetty_num = 0;
-    /* See destroy_simplex_ctx for ordering rationale. */
-    close_connection(cfg);
-    uninit_device(ctx);
+    uninit_device(ctx, cfg);
     return;
 }
 
