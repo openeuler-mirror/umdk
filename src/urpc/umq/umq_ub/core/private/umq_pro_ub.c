@@ -510,14 +510,12 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     }
 
     umq_ub_io_packet_stats(queue, UB_PACKET_STATS_TYPE_SEND, wr_cnt_limit, queue->dev_ctx->io_lock_free);
-    /* Logic UMQ: keep the borrow reference acquired by get_jetty_node until
-     * the corresponding TX CQE is reaped by umq_ub_poll_release_jetty_node.
-     * Releasing here AND in poll was a double-decrement: ref_cnt hit 0
-     * before the next post, so poll freed the node and the next post took
-     * the slow alloc path (spin lock + node alloc) on every WR under high
-     * QPS. Keeping the ref lets poll release it when tx_outstanding hits 0;
-     * if a new post arrives first, fast-path CAS keeps the node alive.
-     * The RECOVER_JETTY_NODE error path below still releases on failure. */
+    /* Logic UMQ: release the borrow reference acquired by get_jetty_node.
+     * tx_outstanding is not decremented here (failed_cnt=0); the node stays
+     * alive until all TX CQEs are reaped by umq_ub_poll_release_jetty_node. */
+    if (is_umq_ub_logic_queue(queue->create_flag)) {
+        umq_ub_post_release_jetty_node(queue, 0);
+    }
 
     if (max_tx < wr_index) {
         *bad_qbuf = (umq_buf_t *)(uintptr_t)g_umq_ub_urma_wr[max_tx].user_ctx;
