@@ -46,7 +46,7 @@ extern "C" {
 #endif
 
 #define UMQ_MAX_MSG_ID_NUM (1 << 5)
-#define UMQ_ID_ALLOC_SIZE (256 * 1024)
+#define UMQ_ID_ALLOC_SIZE (128 * 1024)
 
 #define UMQ_CONTINUE_FLAG 1
 #define UMQ_MAX_TSEG_NUM (1024)
@@ -389,9 +389,9 @@ typedef struct umq_ub_bind_info {
 typedef struct ub_bind_ctx {
     urma_target_jetty_t *tjetty[UB_QUEUE_JETTY_NUM];
     uint32_t remote_pid;
-    char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
     import_tseg_table_t *tseg_table;
     urpc_bitmap_t tseg_imported;
+    char remote_namespace[0];
 } ub_bind_ctx_t;
 
 struct ub_credit_pool;
