@@ -192,20 +192,27 @@ static int umq_tp_ub_mempool_state_refresh(uint64_t umqh_tp, uint32_t mempool_id
 }
 
 static int umq_tp_ub_mempool_info_get(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
-    uint32_t mempool_info_size)
+    uint32_t mempool_info_size, uint32_t *mempool_info_len)
 {
-    return umq_ub_mempool_info_get_impl(umqh_tp, mempool_id, mempool_info, mempool_info_size);
+    return umq_ub_mempool_info_get_impl(umqh_tp, mempool_id, mempool_info, mempool_info_size, mempool_info_len);
 }
 
-static int umq_tp_ub_mempool_info_set(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
-    uint32_t mempool_info_size, uint32_t version)
+static int umq_tp_ub_mempool_info_set(uint64_t umqh_tp, const uint8_t *mempool_info, uint32_t mempool_info_len)
 {
-    return umq_ub_mempool_info_set_impl(umqh_tp, mempool_id, mempool_info, mempool_info_size, version);
+    return umq_ub_mempool_info_set_impl(umqh_tp, mempool_info, mempool_info_len);
 }
 
-static int umq_tp_ub_remote_mempool_state_get(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version)
+static int umq_tp_ub_remote_mempool_state_check(uint64_t umqh_tp, const uint8_t *mempool_info,
+    uint32_t mempool_info_len)
 {
-    return umq_ub_remote_mempool_state_get_impl(umqh_tp, mempool_id, version);
+    return umq_ub_remote_mempool_state_check_impl(umqh_tp, mempool_info, mempool_info_len);
+}
+
+static int umq_tp_ub_mempool_info_get_remote_fields(const uint8_t *mempool_info, uint32_t mempool_info_len,
+    uint32_t *out_mempool_id, uint32_t *out_token_id, uint32_t *out_token_value)
+{
+    return umq_ub_mempool_info_get_remote_fields_impl(mempool_info, mempool_info_len,
+                                                      out_mempool_id, out_token_id, out_token_value);
 }
 
 static int umq_tp_ub_dev_info_get(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
@@ -280,7 +287,8 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_mempool_state_refresh = umq_tp_ub_mempool_state_refresh,
     .umq_tp_mempool_info_get = umq_tp_ub_mempool_info_get,
     .umq_tp_mempool_info_set = umq_tp_ub_mempool_info_set,
-    .umq_tp_remote_mempool_state_get = umq_tp_ub_remote_mempool_state_get,
+    .umq_tp_remote_mempool_state_check = umq_tp_ub_remote_mempool_state_check,
+    .umq_tp_mempool_info_get_remote_fields = umq_tp_ub_mempool_info_get_remote_fields,
     .umq_tp_dev_info_get = umq_tp_ub_dev_info_get,
     .umq_tp_dev_info_list_get = umq_tp_ub_dev_info_list_get,
     .umq_tp_dev_info_list_free = umq_tp_ub_dev_info_list_free,

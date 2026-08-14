@@ -109,11 +109,11 @@ typedef struct ub_ref_sge {
  * blob verbatim to urma_import_seg. mempool_id / token_value / version are
  * umq-specific and have no place inside urma_seg_t, so they ride in the header.
  *
- * Not __attribute__((packed)): the 16B header is all uint32, and urma_seg_t
- * needs 8B alignment (its uint64 len) which offset 16 satisfies, so the
- * natural layout is already 64B with seg naturally aligned — packing would
- * only force unaligned access on the embedded urma_seg_t. The static_asserts
- * below pin the layout so any drift is caught at compile time.
+ * Not __attribute__((packed)): the 20B header is all uint32, and urma_seg_t
+ * needs 8B alignment (its uint64 len) which offset 24 satisfies (4-byte padding
+ * after the 20B header), so the natural layout is already 72B with seg naturally
+ * aligned — packing would only force unaligned access on the embedded urma_seg_t.
+ * The static_asserts below pin the layout so any drift is caught at compile time.
  */
 typedef struct ub_import_mempool_info {
     uint32_t seg_size;            /* urma_get_seg_ctx size output, in bytes (>= sizeof(urma_seg_t)) */
@@ -121,12 +121,16 @@ typedef struct ub_import_mempool_info {
     uint32_t mempool_token_value; /* = tseg->user_ctx; urma_token_t carries it into urma_import_seg */
     uint32_t version;             /* bumped each time the source mempool is (re)registered;
                                      the peer compares it to decide reuse / re-import */
+    uint32_t token_id;            /* = urma_seg_t.token_id, promoted to header so the ubsocket
+                                     READ work-request build and umq import consume it standalone,
+                                     without inspecting the opaque seg blob below */
     urma_seg_t seg;               /* seg_size bytes, including any has_user_info extension tail */
     char seg_ext[0];              /* extension data when seg_size > sizeof(urma_seg_t) */
 } ub_import_mempool_info_t;
 
-_Static_assert(sizeof(ub_import_mempool_info_t) == 64, "ub_import_mempool_info_t must be 64B");
-_Static_assert(offsetof(ub_import_mempool_info_t, seg) == 16, "seg must follow the 16B header");
+_Static_assert(sizeof(ub_import_mempool_info_t) == 72, "ub_import_mempool_info_t must be 72B");
+_Static_assert(offsetof(ub_import_mempool_info_t, seg) == 24,
+               "seg must follow the 24B aligned offset (20B header + 4B padding)");
 
 /* Fixed header before the variable-length seg blob. Entry total size =
  * UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + entry->seg_size. */
@@ -626,11 +630,12 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
  * entry, using urma_get_seg_ctx to obtain the (possibly variable-length,
  * has_user_info-bearing) urma_seg_t blob. The peer forwards &entry->seg
  * verbatim to urma_import_seg. Fills the fixed header (seg_size, mempool_id,
- * token_value, version) and copies seg_size bytes of the seg blob after it.
- * The full variable-length blob (including the bonding has_user_info
- * extension tail) is always carried; callers must size their wire buffer to
- * hold the worst-case seg_size (e.g. UbsInternalMempoolInfo::ext[] in
- * ubsocket reserves UBS_MEMPOOL_INFO_SEG_EXT_MAX bytes for this).
+ * mempool_token_value, version, token_id) and copies seg_size bytes of the seg
+ * blob after it. The full variable-length blob (including the bonding
+ * has_user_info extension tail) is always carried; callers must size their
+ * wire buffer to hold the worst-case seg_size (ubsocket sizes its stack buffer
+ * to UMQ_MEMPOOL_INFO_MAX_SIZE, which reserves UBS_MEMPOOL_INFO_SEG_EXT_MAX
+ * bytes for this).
  *
  * @param tseg         local target segment to export (must outlive the call)
  * @param mempool_id   umq mempool id carried in the header

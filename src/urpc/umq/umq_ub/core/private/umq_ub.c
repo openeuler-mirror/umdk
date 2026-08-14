@@ -271,10 +271,16 @@ uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint3
      * including has_user_info + extension tail on bonding devices) verbatim.
      * The peer's urma_import_seg reads it directly — no field reassembly. */
     (void)memcpy(&out->seg, seg, seg_size);
+    /* Zero the compiler-inserted 4-byte padding between the 20B header and the
+     * 8B-aligned seg (offset 20..24) so no stack garbage is carried over the
+     * wire — the wire ub_mempool_info_t reserves the same 4 bytes explicitly. */
+    (void)memset((uint8_t *)out + 5 * sizeof(uint32_t), 0,
+                 UB_IMPORT_MEMPOOL_INFO_HDR_SIZE - 5 * sizeof(uint32_t));
     out->seg_size = seg_size;
     out->mempool_id = mempool_id;
     out->mempool_token_value = token_value;
     out->version = version;
+    out->token_id = seg->token_id; /* promoted to header: peer's READ WR build + import both read it */
 
     start_timestamp = umq_perf_get_start_timestamp();
     umq_symbol_urma()->urma_put_seg_ctx(seg);

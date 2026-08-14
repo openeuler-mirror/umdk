@@ -314,43 +314,97 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
  */
 int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 
-/**
- * Get mempool info: serialize the local mempool import descriptor so it can be
- * sent to the peer and imported there (used by the UBSocket bigdata READ path).
- * @param[in] umqh: umq handle
- * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
- * @param[in] mempool_info_size: size of mempool_info buffer
- * @param[out] mempool_info: mempool import information
- * Return: 0 on success, other value on error
+/*
+ * Mempool info opaque blob API (design §3.5).
+ *
+ * The blob is umq-private layout; callers (UBSocket bigdata READ path) treat it
+ * strictly as (ptr, len) — they never parse or reassemble fields. umq serializes
+ * the local mempool descriptor on get, and parses/imports the peer's blob on
+ * set/check. This fully decouples ubsocket from umq's internal struct layout:
+ * ubsocket only memcpy's the blob into its wire control packet and forwards it.
+ *
+ * Wire layout (ub_mempool_info_t, packed, 1:1 with umq's internal
+ * ub_import_mempool_info_t so umq can cast the wire blob directly):
+ *   seg_size | mempool_id | mempool_token_value | version | token_id | seg[]
+ * token_id is promoted out of urma_seg_t into the header because both ubsocket
+ * (READ work-request build) and umq (import) consume it standalone. seg[] is the
+ * opaque urma_seg_t blob (variable-length, carries the bonding has_user_info
+ * extension tail).
+ *
+ * UMQ_MEMPOOL_INFO_MAX_SIZE: worst-case blob size (header + sizeof(urma_seg_t) +
+ * bonding ext tail). Callers size stack buffers to this.
  */
-int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size);
+/* Fixed header byte length of a mempool info blob (the part before the
+ * variable-length seg[] tail). Equals offsetof(seg) of umq's internal
+ * ub_import_mempool_info_t. Exposed so external callers can size buffers /
+ * compute wire budgets without seeing the struct; the value is pinned by
+ * static_asserts in umq_ub_private.h. */
+#define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
+
+/* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
+ * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~973B
+ * uncompressed; 1024B covers it with slack, so one umq build runs against
+ * either umdk variant). Callers size stack buffers to this. */
+#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 1024u)
 
 /**
- * Set mempool info: import a peer mempool from the descriptor received in a
- * control message (used by the UBSocket bigdata READ path). The carried
- * version is recorded on the imported entry so the next state_get can decide
- * reuse vs unimport+reimport (design §3.5).
- * @param[in] umqh: umq handle
- * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
- * @param[in] mempool_info_size: size of mempool_info buffer
- * @param[in] mempool_info: mempool import information
- * @param[in] version: current mempool version
+ * Get mempool info: serialize the local mempool import descriptor into an opaque
+ * blob so it can be sent to the peer and imported there (used by the UBSocket
+ * bigdata READ path).
+ * @param[in]  umqh: umq handle
+ * @param[in]  mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[out] mempool_info: caller-allocated buffer (>= UMQ_MEMPOOL_INFO_MAX_SIZE)
+ * @param[in]  mempool_info_size: buffer capacity
+ * @param[out] mempool_info_len: actual byte length written (set on success)
  * Return: 0 on success, other value on error
  */
-int umq_mempool_info_set(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size,
-                         uint32_t version);
+int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size,
+                         uint32_t *mempool_info_len);
 
 /**
- * Get remote mempool import state vs the given version.
+ * Set mempool info: import a peer mempool from the opaque blob received in a
+ * control message (used by the UBSocket bigdata READ path). umq parses
+ * mempool_id/version/seg internally; the caller does not inspect fields. The
+ * carried version is recorded on the imported entry so the next state_check can
+ * decide reuse vs unimport+reimport (design §3.5).
  * @param[in] umqh: umq handle
- * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
- * @param[in] version: current mempool version
+ * @param[in] mempool_info: opaque blob received over the wire (umq parses it internally)
+ * @param[in] mempool_info_len: byte length of the blob
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_set(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
+
+/**
+ * Check remote mempool import state vs the version carried in the opaque blob.
+ * umq parses mempool_id/version from the blob internally; the caller does not
+ * inspect fields.
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_info: opaque blob received over the wire (umq parses it internally)
+ * @param[in] mempool_info_len: byte length of the blob
  * Return: 0 no import needed (cached version matches); 1 need import (not imported);
  *         2 need unimport & re-import (imported but version grew);
  *         3 protocol error: version rolled back or field conflict, caller sends READ_ABORT;
  *         -1 error
  */
-int umq_remote_mempool_state_get(uint64_t umqh, uint32_t mempool_id, uint32_t version);
+int umq_remote_mempool_state_check(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
+
+/**
+ * Extract the remote mempool addressing fields from the opaque blob, so the
+ * caller can build a READ/WRITE work-request's remote_sge. umq parses the blob
+ * internally; the caller never inspects the struct layout. addr/length of the
+ * remote sge are the caller's own concern (they come from the offer's UbsSeg,
+ * not from this blob), so only the three blob-borne fields are returned here.
+ * @param[in]  umqh: umq handle (selects the transport; the parse itself is stateless)
+ * @param[in]  mempool_info: opaque blob received over the wire
+ * @param[in]  mempool_info_len: byte length of the blob
+ * @param[out] out_mempool_id: set to the blob's mempool_id (NULL allowed to skip)
+ * @param[out] out_token_id: set to the blob's token_id (NULL allowed to skip)
+ * @param[out] out_token_value: set to the blob's token_value (NULL allowed to skip)
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_get_remote_fields(uint64_t umqh, const uint8_t *mempool_info,
+                                       uint32_t mempool_info_len, uint32_t *out_mempool_id,
+                                       uint32_t *out_token_id, uint32_t *out_token_value);
 
 /**
  * Get device information.
