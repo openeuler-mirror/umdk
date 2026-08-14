@@ -322,6 +322,7 @@ typedef struct admin_device_info {
 } admin_device_info_t;
 
 bool is_ubc(const char *dev_name);
+bool has_bonding_dev_prefix(const char *dev_name);
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds);
 int admin_nl_set_dev_sharing(bool enabled);
 int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd);
