@@ -311,6 +311,18 @@ bool is_ubc(const char *dev_name)
     return device_id == device_id_ubc;
 }
 
+bool has_bonding_dev_prefix(const char *dev_name)
+{
+    const char *prefix = "bonding_dev";
+
+    for (int i = 0; prefix[i] != '\0'; i++) {
+        if (dev_name[i] != prefix[i] || dev_name[i] == '\0') {
+            return false;
+        }
+    }
+    return true;
+}
+
 int exec_cmd(admin_config_t *cfg, const admin_cmd_t *cmds)
 {
     const char *cmd_name = pop_arg(cfg);

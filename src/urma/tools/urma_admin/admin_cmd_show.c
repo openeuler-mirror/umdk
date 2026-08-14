@@ -184,18 +184,6 @@ static void admin_parse_priority_attr(const char *sysfs_path, admin_show_ubep_t 
     free(priority_path);
 }
 
-static bool has_bonding_dev_prefix(const char *dev_name)
-{
-    const char *prefix = "bonding_dev";
-
-    for (int i = 0; prefix[i] != '\0'; i++) {
-        if (dev_name[i] != prefix[i] || dev_name[i] == '\0') {
-            return false;
-        }
-    }
-    return true;
-}
-
 static int admin_parse_device_attr(const char *sysfs_path, admin_show_ubep_t *ubep)
 {
     char tmp_value[VALUE_LEN_MAX];
