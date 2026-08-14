@@ -51,6 +51,36 @@ struct bondp_fb_ctx {
 #endif
 };
 
+bool bondp_fb_need_switch_path(bondp_comp_t *bdp_comp)
+{
+    if (!g_bondp_env.enable_failback) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (atomic_load(&bdp_comp->hc_valid[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+uint32_t bondp_fb_switch_path(bondp_comp_t *bdp_comp)
+{
+    uint32_t recovered_cnt = 0;
+
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (!atomic_exchange(&bdp_comp->hc_valid[i], false)) {
+            continue;
+        }
+        recovered_cnt++;
+        atomic_store(&bdp_comp->valid[i], true);
+        URMA_LOG_INFO("Path restored: local jetty recovered, vjetty_id=%u, local_idx=%u\n",
+                      bdp_comp->v_jetty.jetty_id.id, i);
+    }
+    return recovered_cnt;
+}
+
 #define BONDP_FB_TASK_HASH_BASIS    0x9d4f21U
 #define BONDP_FB_TASK_TABLE_SIZE    1024U
 /* Delay (ms) before rebuilding a failed-back pjetty on the bond worker. */
