@@ -838,8 +838,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     g_qbuf_pool.base.support_without_data = true;
     g_qbuf_pool.base.fetch_fn = normal_qbuf_base_fetch;
     g_qbuf_pool.base.self_shrink_fn = normal_qbuf_base_self_shrink;
-    uint64_t head_without_data_count = UMQ_EMPTY_HEADER_COEFFICIENT * (cfg->expansion_block_count == 0 ?
-        QBUF_POOL_DEFAULT_EXPANSION_COUNT : cfg->expansion_block_count);
+    uint64_t head_without_data_count = QBUF_POOL_INITIAL_NODATA_BUF_CNT;
     int ret = qbuf_pool_base_init(&g_qbuf_pool.base, cfg, head_without_data_count);
     if (ret != UMQ_SUCCESS) {
         return ret;
