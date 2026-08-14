@@ -427,7 +427,7 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         return NULL;
     }
 
-    bdp_ctx->msn_enable = true;
+    bdp_ctx->msn_enable = false;
     bdp_ctx->seg_cache_enable = false;
 
     int ret = 0;
