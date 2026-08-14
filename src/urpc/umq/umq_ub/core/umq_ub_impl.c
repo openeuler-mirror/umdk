@@ -2956,7 +2956,7 @@ FREE_BUF:
 }
 
 int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
-                                 uint32_t mempool_info_size)
+                                 uint32_t mempool_info_size, uint32_t *mempool_info_len)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
@@ -2990,8 +2990,8 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
      * blob (urma_seg_t + has_user_info ext tail on bonding), so the peer imports
      * via the has_user_info=true branch and reads peer_p_seg[] directly from
      * the extension — no reliance on the kernel driver reconstructing it. The
-     * caller's buffer (UbsInternalMempoolInfo in ubsocket) reserves slack for
-     * the worst-case extension tail. */
+     * caller's buffer (sized to UMQ_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
+     * slack for the worst-case extension tail. */
     uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
                                            import_mempool_info, cap);
     (void)pthread_spin_unlock(&queue->dev_ctx->tseg_list_lock);
@@ -2999,21 +2999,33 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u fill_seg_ctx failed\n", mempool_id);
         return -UMQ_ERR_EFAULT;
     }
+    if (mempool_info_len != NULL) {
+        *mempool_info_len = written;
+    }
     return UMQ_SUCCESS;
 }
 
-int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
-                                 uint32_t mempool_info_size, uint32_t version)
+int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, uint32_t mempool_info_len)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
-        mempool_info_size < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_info == NULL ||
+        mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    /* The blob is the wire layout (== ub_import_mempool_info_t layout, pinned by
+     * static_asserts); umq parses mempool_id/version internally so the caller
+     * never inspects fields. */
+    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+    uint32_t mempool_id = info->mempool_id;
+    uint32_t version = info->version;
+    if (mempool_id >= UMQ_MAX_TSEG_NUM) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
     // If a prior import exists for this mempool, the caller's version-based
-    // decision (umq_ub_remote_mempool_state_get_impl == UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT) guarantees a
+    // decision (umq_ub_remote_mempool_state_check_impl == UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT) guarantees a
     // version mismatch: drop and unimport it before re-importing, so the
     // stale tseg is fully replaced (design §3.5).
     if (umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id) != NULL) {
@@ -3022,16 +3034,16 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
 
     // Reuse the receive-side import path: build a temporary rx-style buffer that
     // carries one ub_import_mempool_info_t, then import it into bind_ctx->tseg_table.
-    // mempool_info_size is the actual byte length of the variable-length entry
+    // mempool_info_len is the actual byte length of the variable-length entry
     // (header + seg_size bytes, where seg_size may exceed sizeof(urma_seg_t) on
     // bonding devices), so the buffer and copy must follow it, not sizeof().
-    uint8_t buf[sizeof(umq_imm_head_t) + mempool_info_size];
+    uint8_t buf[sizeof(umq_imm_head_t) + mempool_info_len];
     umq_imm_head_t *umq_imm_head = (umq_imm_head_t *)(uintptr_t)buf;
     umq_imm_head->version = UMQ_IMM_VERSION;
     umq_imm_head->type = IMM_PROTOCAL_TYPE_IMPORT_MEM;
     umq_imm_head->mempool_num = 1;
     umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
-    (void)memcpy(buf + sizeof(umq_imm_head_t), mempool_info, mempool_info_size);
+    (void)memcpy(buf + sizeof(umq_imm_head_t), mempool_info, mempool_info_len);
 
     umq_buf_t import_buf;
     (void)memset(&import_buf, 0, sizeof(import_buf));
@@ -3044,7 +3056,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
     }
 
     // Stamp the freshly imported node with the carried version so the next
-    // umq_ub_remote_mempool_state_get_impl can decide reuse vs re-import. Do the
+    // umq_ub_remote_mempool_state_check_impl can decide reuse vs re-import. Do the
     // lookup + write under one wrlock (using the lock-free lookup helper) so a
     // concurrent umq_ub_tseg_remove cannot free the node between lookup and the
     // version write (write-after-free).
@@ -3057,11 +3069,23 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
     return UMQ_SUCCESS;
 }
 
-int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint32_t version)
+int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *mempool_info,
+                                           uint32_t mempool_info_len)
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
-    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get remote mempool state parameter invalid\n");
+    if (queue->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_info == NULL ||
+        mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub check remote mempool state parameter invalid\n");
+        return UMQ_REMOTE_MEMPOOL_STATE_ERR;
+    }
+    /* Parse mempool_id/version from the opaque blob internally; the caller does
+     * not inspect wire fields. Layout == ub_import_mempool_info_t (static_asserts
+     * pin it), so a cast is a safe, zero-copy read. */
+    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+    uint32_t mempool_id = info->mempool_id;
+    uint32_t version = info->version;
+    if (mempool_id >= UMQ_MAX_TSEG_NUM) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub check remote mempool state parameter invalid\n");
         return UMQ_REMOTE_MEMPOOL_STATE_ERR;
     }
 
@@ -3083,6 +3107,29 @@ int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, 
  
     (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
     return ret;
+}
+
+int umq_ub_mempool_info_get_remote_fields_impl(const uint8_t *mempool_info, uint32_t mempool_info_len,
+                                               uint32_t *out_mempool_id, uint32_t *out_token_id,
+                                               uint32_t *out_token_value)
+{
+    if (mempool_info == NULL ||
+        mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get remote fields parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    /* Parse the opaque blob with umq's private layout; the caller never sees the struct. */
+    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+    if (out_mempool_id != NULL) {
+        *out_mempool_id = info->mempool_id;
+    }
+    if (out_token_id != NULL) {
+        *out_token_id = info->token_id;
+    }
+    if (out_token_value != NULL) {
+        *out_token_value = info->mempool_token_value;
+    }
+    return UMQ_SUCCESS;
 }
 
 int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info)
