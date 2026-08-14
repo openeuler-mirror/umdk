@@ -116,9 +116,26 @@ public class RouteInstantiationTest {
     }
 
     @Test
-    void calculateNpuRouteTest() {
-        String templateType = "128_npu_rack";
+    void makeRoutesTest() {
         C3SncService service = new C3SncService();
+        service.routeCalculate();
+        Map<String, Map<String, RoutingEntry>> result = service.makeRoutes(superNode);
+        NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
+        // 拼接该npu对应的路由的key
+        String key = npuDevice.getDeviceName().concat("#").concat("2");
+        Map<String, RoutingEntry> routeMap = result.get(key);
+        printRoutingEntry(routeMap);
+        // 目的为31个npu：每个npu 8个 port cna和1个 pg cna
+        // 目的为4个l1 sw：每个l1 sw 1个 node cna
+        // 目的为4个l2 sw：每个l2 sw 2个 node cna
+        // 框间发布地址：1个
+        Assertions.assertEquals(31 * (8 + 1) + 4 + 4 * 2 + 3 * 32, routeMap.size());
+    }
+
+    @Test
+    void calculateNpuRouteTest() {
+        C3SncService service = new C3SncService();
+        service.routeCalculate();
         service.makeRoutes(superNode);
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         Map<String, RoutingEntry> routeMap = service.getNodeRoute(npuDevice.getDeviceName(), 2);
@@ -132,8 +149,8 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL1SwRouteTest() {
-        String templateType = "128_npu_rack";
         C3SncService service = new C3SncService();
+        service.routeCalculate();
         service.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
         Map<String, RoutingEntry> routeMap = service.getNodeRoute(swDevice.getDeviceName(), 1);
@@ -146,8 +163,8 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        String templateType = "128_npu_rack";
         C3SncService service = new C3SncService();
+        service.routeCalculate();
         service.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
         Map<String, RoutingEntry> routeMap = service.getNodeRoute(swDevice.getDeviceName(), 2);

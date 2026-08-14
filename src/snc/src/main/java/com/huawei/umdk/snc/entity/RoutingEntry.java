@@ -9,7 +9,10 @@
 package com.huawei.umdk.snc.entity;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+
+import com.huawei.umdk.snc.route.model.RouteEntry;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,5 +32,32 @@ public class RoutingEntry {
 
     public Map<String, OutPortInfo> getOutPortInfos() {
         return outPortInfos == null ? null : Collections.unmodifiableMap(outPortInfos);
+    }
+
+    public static RoutingEntry copy(RoutingEntry srcRoutingEntry) {
+        if (srcRoutingEntry == null) {
+            return null;
+        }
+
+        RoutePrefix srcPrefix = srcRoutingEntry.getPrefix();
+        RoutePrefix dstPrefix = (srcPrefix == null) ? null
+            : new RoutePrefix(srcPrefix.getDstAddress(), srcPrefix.getMaskLength());
+
+        Map<String, OutPortInfo> dstOutPortMap = new HashMap<>();
+        Map<String, OutPortInfo> srcOutPortMap = srcRoutingEntry.getOutPortInfos();
+        if (srcOutPortMap != null) {
+            for (Map.Entry<String, OutPortInfo> portEntry : srcOutPortMap.entrySet()) {
+                OutPortInfo srcPort = portEntry.getValue();
+                OutPortInfo dstPort = (srcPort == null) ? null : new OutPortInfo(
+                    srcPort.getPortName(), srcPort.getNextHop(), srcPort.getPreference(),
+                    srcPort.getTag(), srcPort.getProtocol(), srcPort.isActive());
+                dstOutPortMap.put(portEntry.getKey(), dstPort);
+            }
+        }
+
+        RoutingEntry destEntry = new RoutingEntry();
+        destEntry.setPrefix(dstPrefix);
+        destEntry.setOutPortInfos(dstOutPortMap);
+        return destEntry;
     }
 }

@@ -203,8 +203,8 @@ public class RouteInstantiationService {
         int chassis = extractRackNumber(npuDevice.getRack());
         Map<Integer, NpuForwardingChip> chips = npuDevice.getNpuForwardingChips();
         if (chips == null || chips.isEmpty()) {
-            log.info("npu device %s has no forwarding chips", npuDevice.getDeviceName());
-            return;
+            throw new IllegalArgumentException(String.format("npu device %s has no forwarding chips",
+                npuDevice.getDeviceName()));
         }
 
         for (NpuForwardingChip chip : chips.values()) {
@@ -212,7 +212,7 @@ public class RouteInstantiationService {
                 chassis, npuDevice.getBoardId(), npuDevice.getBoardIndex(), chip.getChipIndex());
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
-                log.info("route not found for label %s", label);
+                log.error("route not found for label %s", label);
                 continue;
             }
             String key = npuDevice.getDeviceName() + "#" + chip.getChipIndex();
@@ -231,33 +231,30 @@ public class RouteInstantiationService {
 
     private void makeL1SwRoutes(SwDevice swDevice, Map<String, RouteTable> routes,
                                 Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
+        Map<Integer, SwForwardingChip> chips = swDevice.getSwForwardingChips();
+        if (chips == null || chips.isEmpty()) {
+            throw new IllegalArgumentException(String.format("sw device %s has no forwarding chips",
+                swDevice.getDeviceName()));
+        }
+
         int chassis = extractRackNumber(swDevice.getRack());
         String label = String.format("type:l1_sw|chassis:%d|index:%d", chassis, swDevice.getIndex());
         RouteTable routeTable = routes.get(label);
         if (routeTable == null) {
-            log.info("route not found for label %s", label);
+            log.error("route not found for label %s", label);
             return;
         }
 
-        Map<Integer, SwForwardingChip> chips = swDevice.getSwForwardingChips();
-        if (chips == null || chips.isEmpty()) {
-            String key = swDevice.getDeviceName() + "#0";
-            instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
-            return;
-        }
-
-        for (SwForwardingChip chip : chips.values()) {
-            String key = swDevice.getDeviceName() + "#" + chip.getChipIndex();
-            instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
-        }
+        String key = swDevice.getDeviceName() + "#" + chips.values().iterator().next().getChipIndex();
+        instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
     }
 
     private void makeL2SwRoutes(SwDevice swDevice, Map<String, RouteTable> routes,
                                 Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
         Map<Integer, SwForwardingChip> chips = swDevice.getSwForwardingChips();
         if (chips == null || chips.isEmpty()) {
-            log.info("l2 sw device %s has no forwarding chips", swDevice.getDeviceName());
-            return;
+            throw new IllegalArgumentException(String.format("l2 sw device %s has no forwarding chips",
+                swDevice.getDeviceName()));
         }
 
         for (SwForwardingChip chip : chips.values()) {
@@ -265,7 +262,7 @@ public class RouteInstantiationService {
                 swDevice.getIndex(), chip.getChipIndex());
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
-                log.info("route not found for label %s", label);
+                log.error("route not found for label %s", label);
                 continue;
             }
             String key = swDevice.getDeviceName() + "#" + chip.getChipIndex();
@@ -311,5 +308,26 @@ public class RouteInstantiationService {
             ((addr >> DOT_DECIMAL_TWO_PART) & DOT_DECIMAL_MASK) + "." +
             ((addr >> DOT_DECIMAL_ONE_PART) & DOT_DECIMAL_MASK) + "." +
             (addr & DOT_DECIMAL_MASK);
+    }
+
+    public static Map<String, Map<String, RoutingEntry>> deepCopyRoutingEntry(
+        Map<String, Map<String, RoutingEntry>> source) {
+        Map<String, Map<String, RoutingEntry>> dest = new HashMap<>();
+        for (Map.Entry<String, Map<String, RoutingEntry>> deviceEntry : source.entrySet()) {
+            String deviceKey = deviceEntry.getKey();
+            Map<String, RoutingEntry> srcRouteMap = deviceEntry.getValue();
+            if (srcRouteMap == null) {
+                dest.put(deviceKey, null);
+                continue;
+            }
+
+            Map<String, RoutingEntry> dstRouteMap = new HashMap<>();
+            for (Map.Entry<String, RoutingEntry> routeEntry : srcRouteMap.entrySet()) {
+                RoutingEntry dstEntry = RoutingEntry.copy(routeEntry.getValue());
+                dstRouteMap.put(routeEntry.getKey(), dstEntry);
+            }
+            dest.put(deviceKey, dstRouteMap);
+        }
+        return dest;
     }
 }

@@ -41,8 +41,8 @@ public class C3SncService {
     // 超节点的路由模板
     private final Map<String, RouteTable> routes = new HashMap<>();
 
-    // 真实上线的超节点的路由
-    private final Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
+    // 上线的超节点的路由
+    private volatile Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
 
     private volatile boolean routeCalculated = false;
 
@@ -83,7 +83,7 @@ public class C3SncService {
     }
 
     // 路由计算加实例化
-    private synchronized void routeCalculate() {
+    public synchronized void routeCalculate() {
         if (routeCalculated) {
             log.info("route has calculated");
             return;
@@ -100,28 +100,37 @@ public class C3SncService {
         routeCalculated = true;
     }
 
-    public void makeRoutes(SuperNode superNode) {
+    public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode) {
+        if (!routeCalculated) {
+            throw new IllegalStateException("calculate routeCalculate first");
+        }
+
         if (superNode == null) {
             throw new IllegalArgumentException("superNode is null");
         }
 
         RouteInstantiationService service = new RouteInstantiationService();
-
-        routeCalculate();
-
+        Map<String, Map<String, RoutingEntry>> tempRouteMap = new HashMap<>();
         if (superNode.getNpuDevices() != null) {
+            log.info("find %d npu devices", superNode.getNpuDevices().size());
             for (NpuDevice npuDevice : superNode.getNpuDevices().values()) {
-                service.makeNpuRoutes(npuDevice, routes, instantiationRouteMap);
+                service.makeNpuRoutes(npuDevice, routes, tempRouteMap);
             }
         }
 
         if (superNode.getSwDevices() != null) {
+            log.info("find %d sw devices", superNode.getSwDevices().size());
             for (SwDevice swDevice : superNode.getSwDevices().values()) {
-                service.makeSwRoutes(swDevice, routes, instantiationRouteMap);
+                service.makeSwRoutes(swDevice, routes, tempRouteMap);
             }
         }
 
-        log.info("make routes success for %s", superNode.getName());
+        Map<String, Map<String, RoutingEntry>> copyRoutingEntry =
+            RouteInstantiationService.deepCopyRoutingEntry(tempRouteMap);
+        this.instantiationRouteMap.putAll(copyRoutingEntry);
+
+        log.info("make routes success for %s, total %d entries", superNode.getName(), tempRouteMap.size());
+        return tempRouteMap;
     }
 
     public Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex) {
