@@ -17,8 +17,8 @@
 #include "urma_api.h"
 #include "urma_log.h"
 
-#include "bondp_cp_tjetty.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_tjetty.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
 #include "bondp_worker.h"
@@ -171,15 +171,23 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
 static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t local_idx, uint32_t target_idx)
 {
     bondp_target_jetty_t *bdp_tjetty = NULL;
+    uint32_t recovered_cnt = 0;
 
     pthread_rwlock_rdlock(&node->lock);
     UB_LIST_FOR_EACH (bdp_tjetty, hc_entry, &node->tjetty_list) {
         bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
         if (p_tjetty != NULL) {
             atomic_store(&p_tjetty->valid, true);
+            recovered_cnt++;
         }
     }
     pthread_rwlock_unlock(&node->lock);
+
+    if (recovered_cnt != 0) {
+        URMA_LOG_INFO("Path restored: target jettys recovered, node_idx=%u, "
+                      "path=[%u, %u], cnt=%u\n",
+                      node->node_idx, local_idx, target_idx, recovered_cnt);
+    }
 }
 
 static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t local_idx)
@@ -207,7 +215,8 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
 
     if (ready_cnt != 0) {
-        URMA_LOG_INFO("Health probe confirmed rebuilt local_idx=%u jettys, ready_cnt=%u.\n",
+        URMA_LOG_INFO("Path ready: local jettys ready for failback, "
+                      "local_idx=%u, cnt=%u\n",
                       local_idx, ready_cnt);
     }
 }
