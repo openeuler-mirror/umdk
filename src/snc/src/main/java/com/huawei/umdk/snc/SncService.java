@@ -8,9 +8,12 @@
  */
 package com.huawei.umdk.snc;
 
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.dto.PathPlanRequest;
@@ -28,6 +31,11 @@ import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.TpAclEntity;
 import com.huawei.umdk.snc.exception.SNCStateException;
+import com.huawei.umdk.snc.route.model.RouteTable;
+import com.huawei.umdk.snc.route.service.RouteInstantiationService;
+import com.huawei.umdk.snc.route.service.RouteMspService;
+import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
 import com.huawei.umdk.snc.service.AclService;
 import com.huawei.umdk.snc.service.LinkEventService;
 import com.huawei.umdk.snc.service.PathService;
@@ -35,9 +43,24 @@ import com.huawei.umdk.snc.service.SuperNodeService;
 import com.huawei.umdk.snc.store.AclStore;
 import com.huawei.umdk.snc.store.SuperNodeStore;
 
-public class SNCServiceImpl implements SNCService {
+public class SncService {
 
-    private static final Logger LOG = new Logger(SNCServiceImpl.class);
+    private static final Logger LOG = new Logger(SncService.class);
+
+    private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList("128_npu_rack.json",
+        "128_npu_inter_rack.json");
+
+    private final Map<String, SncTopology> topologyMap = new HashMap<>();
+
+    private final Map<String, Map<String, RouteTable>> routeTemplateMap = new HashMap<>();
+
+    // 超节点的路由模板
+    private final Map<String, RouteTable> routes = new HashMap<>();
+
+    // 上线的超节点的路由
+    private volatile Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
+
+    private volatile boolean routeCalculated = false;
 
     private enum State {
         INIT, READY, DATAREADY, UNINIT
@@ -61,7 +84,11 @@ public class SNCServiceImpl implements SNCService {
 
     private volatile boolean aclLoaded;
 
-    @Override
+    public static void registerLogCallback(LogCallback logCallback) {
+        Logger.registerLogCallback(logCallback);
+        LOG.info("register snc log callback success");
+    }
+
     public void init(SNCConfig config) {
         if (config != null && config.getLogCallback() != null) {
             Logger.registerLogCallback(config.getLogCallback());
@@ -94,7 +121,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("init: state=" + state);
     }
 
-    @Override
     public void uninit() {
         LOG.info("uninit: starting cleanup");
         if (superNodeStore != null) {
@@ -117,7 +143,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("uninit: state=" + state);
     }
 
-    @Override
     public void setSuperNode(SuperNode superNode) {
         checkNotUninit();
         if (superNode == null) {
@@ -130,7 +155,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("setSuperNode: superNode=" + superNode.getName() + ", state=" + state);
     }
 
-    @Override
     public void addNpuDevices(String superNodeName, List<NpuDevice> devices) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -145,7 +169,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("addNpuDevices: superNode=" + superNodeName + ", count=" + devices.size());
     }
 
-    @Override
     public void addSwDevices(String superNodeName, List<SwDevice> devices) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -160,7 +183,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("addSwDevices: superNode=" + superNodeName + ", count=" + devices.size());
     }
 
-    @Override
     public void removeDevices(String superNodeName, List<String> deviceNames) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -175,7 +197,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("removeDevices: superNode=" + superNodeName + ", count=" + deviceNames.size());
     }
 
-    @Override
     public void addRoutingEntries(String superNodeName, String deviceName, Integer chipIndex,
                                   List<RoutingEntry> entries) {
         checkNotUninit();
@@ -200,7 +221,6 @@ public class SNCServiceImpl implements SNCService {
             + ", chip=" + chipIndex + ", count=" + entries.size());
     }
 
-    @Override
     public void removeRoutingEntries(String superNodeName, String deviceName, Integer chipIndex,
                                      List<RoutePrefix> prefixes) {
         checkNotUninit();
@@ -225,7 +245,6 @@ public class SNCServiceImpl implements SNCService {
             + ", chip=" + chipIndex + ", count=" + prefixes.size());
     }
 
-    @Override
     public void setAclData(AclData aclData) {
         checkNotUninit();
         if (aclData == null) {
@@ -238,7 +257,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("setAclData: superNode=" + aclData.getSuperNodeName() + ", state=" + state);
     }
 
-    @Override
     public void addAclRules(String superNodeName, Map<AclKey, TpAclEntity> rules) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -253,7 +271,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("addAclRules: superNode=" + superNodeName + ", count=" + rules.size());
     }
 
-    @Override
     public void removeAclRules(String superNodeName, List<AclKey> keys) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -268,7 +285,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("removeAclRules: superNode=" + superNodeName + ", count=" + keys.size());
     }
 
-    @Override
     public SuperNode getSuperNode(String name) {
         checkNotUninit();
         if (name == null || name.isEmpty()) {
@@ -280,7 +296,6 @@ public class SNCServiceImpl implements SNCService {
         return result;
     }
 
-    @Override
     public void removeSuperNode(String name) {
         checkNotUninit();
         if (name == null || name.isEmpty()) {
@@ -293,7 +308,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("removeSuperNode: name=" + name + ", state=" + state);
     }
 
-    @Override
     public AclData getAclData(String superNodeName) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -305,7 +319,6 @@ public class SNCServiceImpl implements SNCService {
         return result;
     }
 
-    @Override
     public void removeAclData(String superNodeName) {
         checkNotUninit();
         if (superNodeName == null || superNodeName.isEmpty()) {
@@ -318,7 +331,6 @@ public class SNCServiceImpl implements SNCService {
         LOG.info("removeAclData: superNode=" + superNodeName + ", state=" + state);
     }
 
-    @Override
     public PathPlanResult planPath(PathPlanRequest request) {
         if (state != State.DATAREADY) {
             LOG.error("planPath: error=SNC is not in DATAREADY state, state=" + state);
@@ -354,7 +366,6 @@ public class SNCServiceImpl implements SNCService {
         return result;
     }
 
-    @Override
     public void notifyLinkEvent(SuperNode supernode, LinkEvent event) {
         checkNotUninit();
         if (supernode == null) {
@@ -385,5 +396,98 @@ public class SNCServiceImpl implements SNCService {
             this.state = State.READY;
             LOG.info("state=" + state);
         }
+    }
+
+    private static void calculateDefaultTemplateRoute(Map<String, SncTopology> topologyMap,
+                                                      Map<String, Map<String, RouteTable>> topologyRouteMap) {
+        for (String filePath : TOPO_TEMPLATE_FILES) {
+            SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
+            String xpodType = topology.getLabel().getNames().get("type");
+            if (xpodType == null) {
+                throw new IllegalArgumentException("find invalid xpod type");
+            }
+            Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
+            LOG.info("calculate default route template success");
+
+            if (topologyMap != null) {
+                topologyMap.put(xpodType, topology);
+            }
+
+            if (topologyRouteMap != null) {
+                topologyRouteMap.put(xpodType, routeMap);
+            }
+        }
+    }
+
+    public static Map<String, Map<String, RouteTable>> routeMSP() {
+        // Map<topology_type, <node label, route>>
+        Map<String, Map<String, RouteTable>> topologyRouteMap = new HashMap<>();
+        calculateDefaultTemplateRoute(null, topologyRouteMap);
+        return topologyRouteMap;
+    }
+
+    // 路由计算加实例化
+    public synchronized void routeCalculate() {
+        if (routeCalculated) {
+            LOG.info("route has calculated");
+            return;
+        }
+
+        topologyMap.clear();
+        routeTemplateMap.clear();
+        routes.clear();
+
+        calculateDefaultTemplateRoute(topologyMap, routeTemplateMap);
+
+        RouteInstantiationService.instantiateXpodRoute(topologyMap, routeTemplateMap, routes);
+
+        routeCalculated = true;
+    }
+
+    public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode) {
+        if (!routeCalculated) {
+            throw new IllegalStateException("calculate routeCalculate first");
+        }
+
+        if (superNode == null) {
+            throw new IllegalArgumentException("superNode is null");
+        }
+
+        RouteInstantiationService service = new RouteInstantiationService();
+        Map<String, Map<String, RoutingEntry>> tempRouteMap = new HashMap<>();
+        if (superNode.getNpuDevices() != null) {
+            LOG.info("find %d npu devices", superNode.getNpuDevices().size());
+            for (NpuDevice npuDevice : superNode.getNpuDevices().values()) {
+                service.makeNpuRoutes(npuDevice, routes, tempRouteMap);
+            }
+        }
+
+        if (superNode.getSwDevices() != null) {
+            LOG.info("find %d sw devices", superNode.getSwDevices().size());
+            for (SwDevice swDevice : superNode.getSwDevices().values()) {
+                service.makeSwRoutes(swDevice, routes, tempRouteMap);
+            }
+        }
+
+        Map<String, Map<String, RoutingEntry>> copyRoutingEntry =
+            RouteInstantiationService.deepCopyRoutingEntry(tempRouteMap);
+        this.instantiationRouteMap.putAll(copyRoutingEntry);
+
+        LOG.info("make routes success for %s, total %d entries", superNode.getName(), tempRouteMap.size());
+        return tempRouteMap;
+    }
+
+    public Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex) {
+        if (deviceName == null) {
+            throw new IllegalArgumentException("device info is null");
+        }
+
+        String key = deviceName + "#" + chipIndex;
+        Map<String, RoutingEntry> routingEntries = instantiationRouteMap.get(key);
+        if (routingEntries == null) {
+            throw new IllegalArgumentException("not found route for " + key);
+        }
+
+        return routingEntries;
     }
 }
