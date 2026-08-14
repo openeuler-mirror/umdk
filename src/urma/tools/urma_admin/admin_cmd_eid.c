@@ -145,6 +145,10 @@ static int cmd_eid_add(admin_config_t *cfg)
     if ((ret = pop_arg_dev(cfg)) != 0) {
         return ret;
     }
+    if (has_bonding_dev_prefix(cfg->dev_name) || is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc/bonding dev.\n");
+        return -1;
+    }
     if ((ret = pop_arg_eid_idx(cfg)) != 0) {
         return ret;
     }
@@ -170,6 +174,10 @@ static int cmd_eid_del(admin_config_t *cfg)
     if ((ret = pop_arg_dev(cfg)) != 0) {
         return ret;
     }
+    if (has_bonding_dev_prefix(cfg->dev_name) || is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc/bonding dev.\n");
+        return -1;
+    }
     if ((ret = pop_arg_eid_idx(cfg)) != 0) {
         return ret;
     }
@@ -189,6 +197,10 @@ static int cmd_eid_del(admin_config_t *cfg)
 static int cmd_eid_set_mode(admin_config_t *cfg)
 {
     int ret;
+    if (has_bonding_dev_prefix(cfg->dev_name) || is_ubc(cfg->dev_name)) {
+        (void)printf("This operation is not supported on ubc/bonding dev.\n");
+        return -1;
+    }
     if ((ret = pop_arg_eid_mode(cfg)) != 0) {
         return ret;
     }
