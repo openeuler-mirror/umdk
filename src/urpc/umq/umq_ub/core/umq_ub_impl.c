@@ -3077,16 +3077,9 @@ int umq_ub_remote_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, 
     /* Version decision (design §3.5):
      *   equal            -> 0 reuse (no import)
      *   larger (grew)    -> 2 unimport & re-import (mempool re-registered)
-     *   smaller (rolled) -> 3 protocol error: a peer must never rewind version,
-     *                       caller sends READ_ABORT. */
-    int ret;
-    if (node->version == version) {
-        ret = UMQ_REMOTE_MEMPOOL_STATE_REUSE;
-    } else if (version > node->version) {
-        ret = UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT;
-    } else {
-        ret = UMQ_REMOTE_MEMPOOL_STATE_VERSION_ROLLBACK; /* version rollback */
-    }
+     *   smaller (rolled) -> 3 also unimport & re-import. */
+    int ret = node->version == version ? UMQ_REMOTE_MEMPOOL_STATE_REUSE : UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT;
+ 
     (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
     return ret;
 }
