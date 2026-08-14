@@ -250,10 +250,10 @@ typedef struct remote_eid_hmap_node {
     struct urpc_hmap_node node;
     urma_eid_t eid;
     uint32_t pid;
-    char remote_namespace[UMQ_UB_NAMESPACE_SIZE];
     uint32_t ref_cnt;
     import_tseg_table_t tseg; // save the current ub ctx imported tseg
     urpc_bitmap_t tseg_imported; // record whether the peer has imported the local memory
+    char remote_namespace[0]; // namespace string, allocated with namespace_len (see umq_ub_eid_node_create)
 } remote_eid_hmap_node_t;
 
 typedef struct remote_imported_tseg_info {
@@ -355,7 +355,7 @@ typedef struct ub_bind_ctx {
     uint32_t remote_pid;
     import_tseg_table_t *tseg_table;
     urpc_bitmap_t tseg_imported;
-    char remote_namespace[0];
+    char remote_namespace[0]; // namespace string, allocated with namespace_len (see umq_ub_bind_inner_impl)
 } ub_bind_ctx_t;
 
 struct ub_credit_pool;
