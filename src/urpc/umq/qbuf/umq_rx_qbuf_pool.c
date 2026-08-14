@@ -71,7 +71,7 @@ uint64_t umq_rx_io_buf_size(void)
 int umq_rx_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 {
     if (g_rx_pool_inited) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "rx qbuf pool has already been inited\n");
+        UMQ_VLOG_WARN(VLOG_UMQ, "rx qbuf pool has already been inited\n");
         return -UMQ_ERR_EEXIST;
     }
     if (cfg == NULL || cfg->buf_addr == NULL || cfg->total_size == 0) {
@@ -201,8 +201,8 @@ void umq_rx_qbuf_free(umq_buf_list_t *list)
 
 int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
 {
-    if (!g_rx_pool_inited) {
-        return UMQ_SUCCESS;
+    if (!g_rx_pool_inited || ops == NULL || ops->register_seg_callback == NULL) {
+        return -UMQ_ERR_EINVAL;
     }
 
     int ret = ops->register_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID,
@@ -215,7 +215,7 @@ int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
 
 void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
 {
-    if (!g_rx_pool_inited) {
+    if (!g_rx_pool_inited || ops == NULL || ops->unregister_seg_callback == NULL) {
         return;
     }
     ops->unregister_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID);

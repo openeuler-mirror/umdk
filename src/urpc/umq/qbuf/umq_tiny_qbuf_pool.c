@@ -124,7 +124,7 @@ static void release_tiny_thread_cache(uint64_t id)
 int umq_tiny_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
 {
     if (g_tiny_qbuf_pool.inited) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "tiny qbuf pool has already been inited\n");
+        UMQ_VLOG_WARN(VLOG_UMQ, "tiny qbuf pool has already been inited\n");
         return -UMQ_ERR_EEXIST;
     }
     if (cfg == NULL || cfg->buf_addr == NULL || cfg->total_size == 0) {

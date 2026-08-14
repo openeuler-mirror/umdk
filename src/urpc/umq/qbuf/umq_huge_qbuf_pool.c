@@ -211,7 +211,7 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (cfg->type < 0 || cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
+    if (cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool type: %d is invalid\n", cfg->type);
         return -UMQ_ERR_EINVAL;
     }
@@ -419,6 +419,9 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
 {
     if (!g_huge_pool_ctx.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
+        return;
+    }
+    if (list == NULL || QBUF_LIST_FIRST(list) == NULL) {
         return;
     }
 

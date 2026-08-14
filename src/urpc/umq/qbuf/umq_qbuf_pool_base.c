@@ -41,7 +41,14 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
     uint64_t blk_num;
     if (cfg->mode == UMQ_BUF_SPLIT) {
         uint64_t header_size = (uint32_t)sizeof(umq_buf_t);
-        blk_num = (cfg->total_size - split_extra_header_count * header_size) / (base->block_size + header_size);
+        uint64_t extra_header_size = split_extra_header_count * header_size;
+        if (cfg->total_size < extra_header_size) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "total_size %llu < split extra header size %llu, blk_num would underflow\n",
+                         (unsigned long long)cfg->total_size, (unsigned long long)extra_header_size);
+            umq_qbuf_block_pool_uninit(&base->block_pool[0]);
+            return -UMQ_ERR_EINVAL;
+        }
+        blk_num = (cfg->total_size - extra_header_size) / (base->block_size + header_size);
         base->header_buffer = (char *)cfg->buf_addr + blk_num * base->block_size;
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         blk_num = cfg->total_size / base->block_size;

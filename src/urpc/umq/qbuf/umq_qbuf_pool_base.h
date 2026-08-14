@@ -919,11 +919,13 @@ static ALWAYS_INLINE uint32_t umq_qbuf_base_actual_buf_count(const qbuf_pool_bas
                                                              uint32_t num, uint32_t headroom_size)
 {
     if (base->mode == UMQ_BUF_SPLIT) {
-        return num * ((request_size + headroom_size + base->block_size - 1) / base->block_size);
+        uint64_t count = (uint64_t)num * ((request_size + headroom_size + base->block_size - 1) / base->block_size);
+        return count > UINT32_MAX ? UINT32_MAX : (uint32_t)count;
     }
 
     uint32_t align_size = base->block_size - sizeof(umq_buf_t);
-    return num * ((request_size + headroom_size + align_size - 1) / align_size);
+    uint64_t count = (uint64_t)num * ((request_size + headroom_size + align_size - 1) / align_size);
+    return count > UINT32_MAX ? UINT32_MAX : (uint32_t)count;
 }
 
 static ALWAYS_INLINE int headroom_reset_with_split(umq_buf_t *qbuf, uint16_t headroom_size, uint32_t block_size)
