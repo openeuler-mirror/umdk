@@ -140,19 +140,24 @@ static int bondp_toggle_seg_cache(urma_context_t *ctx, bool enable)
 
 static int bondp_toggle_msn(urma_context_t *ctx, bool enable)
 {
-    if (ctx == NULL) {
-        URMA_LOG_ERR("Urma context is NULL\n");
+    if (ctx == NULL || ctx->dev == NULL) {
+        URMA_LOG_ERR("Invalid context or device\n");
         return -EINVAL;
     }
 
-    uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    if (enable) {
+        URMA_LOG_WARN("MSN feature is disabled and cannot be enabled.\n");
+        return -EOPNOTSUPP;
+    }
 
+    uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (cnt > 1) {
         URMA_LOG_WARN("Context already in use, atomic_cnt=%lu, dev_name=%s.\n", cnt, ctx->dev->name);
         return URMA_EAGAIN;
     }
-    bdp_ctx->msn_enable = enable;
+
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    bdp_ctx->msn_enable = false;  // enable is false here
     return 0;
 }
 
