@@ -114,8 +114,8 @@ static ALWAYS_INLINE int umq_ub_credit_check_and_request_send(ub_flow_control_t 
     if (fc == NULL) {
         return UMQ_SUCCESS;
     }
-    if (queue->checker != NULL) {
-        __atomic_store_n(&queue->checker->last_send, get_timestamp_us(), __ATOMIC_RELEASE);
+    if (fc->checker != NULL) {
+        __atomic_store_n(&fc->checker->last_send, get_timestamp_us(), __ATOMIC_RELEASE);
     }
     if (umq_ub_credit_req_timeout(fc)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), credit response report timeout(%u us)\n", queue->umq_id,
