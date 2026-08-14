@@ -1241,6 +1241,39 @@ DEL_CTX:
     return umq_status_convert(status);
 }
 
+/* failure does not affect normal functionality */
+void umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_t *queue)
+{
+    if (queue->used_port == NULL || queue->used_port_num == 0 ||
+        !is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
+        return;
+    }
+
+    bool expected = false;
+    if (!__atomic_compare_exchange_n(&dev_ctx->is_bonding_port_configured, &expected, true,
+        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+
+    bondp_set_bonding_port_in_t bond_in = {
+        .port_ids = queue->used_port,
+        .port_count = queue->used_port_num,
+    };
+    urma_user_ctl_in_t in = {
+        .addr = (uint64_t)(uintptr_t)&bond_in,
+        .len = sizeof(bond_in),
+        .opcode = BONDP_USER_CTL_SET_BONDING_PORT,
+    };
+    urma_user_ctl_out_t out = {0};
+    urma_status_t status = umq_symbol_urma()->urma_user_ctl(dev_ctx->urma_ctx, &in, &out);
+    if (status != URMA_SUCCESS) {
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ_URMA_API, "urma_user_ctl set bonding port for device %s failed, status: %d\n",
+            dev_ctx->urma_ctx->dev->name, (int)status);
+    }
+
+    return;
+}
+
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
 {
     if (ub_ctx == NULL || ub_ctx->urma_ctx == NULL) {
