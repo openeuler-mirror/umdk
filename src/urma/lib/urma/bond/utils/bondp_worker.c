@@ -30,12 +30,12 @@
 #define BONDP_WORKER_THREAD_NAME       "urma_bond_wrk"
 
 typedef struct bondp_worker_event_handler {
+    struct ub_hmap_node hmap_node;
     int fd;
     bondp_worker_event_fn_t handler;
     void *arg;
     bool deleting;
     uint32_t refcnt;
-    struct ub_hmap_node hmap_node;
 } bondp_worker_event_handler_t;
 
 typedef struct bondp_worker_cancel_cmd {
@@ -155,10 +155,6 @@ static void flush_event_handlers(bondp_worker_t *worker)
 {
     bondp_worker_event_handler_t *entry = NULL;
     bondp_worker_event_handler_t *next = NULL;
-
-    if (ub_hmap_count(&worker->handler_map) == 0) {
-        return;
-    }
 
     HMAP_FOR_EACH_SAFE (entry, next, hmap_node, &worker->handler_map) {
         ub_hmap_remove(&worker->handler_map, &entry->hmap_node);
