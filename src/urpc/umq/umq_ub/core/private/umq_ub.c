@@ -1066,6 +1066,10 @@ void umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_t *queue)
         return;
     }
 
+    if (__atomic_load_n(&dev_ctx->is_bonding_port_configured, __ATOMIC_ACQUIRE)) {
+        return;
+    }
+
     bool expected = false;
     if (!__atomic_compare_exchange_n(&dev_ctx->is_bonding_port_configured, &expected, true,
         false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
