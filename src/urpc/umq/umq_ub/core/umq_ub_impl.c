@@ -1459,8 +1459,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     (void)pthread_spin_init(&queue->get_jetty_node_lock, PTHREAD_PROCESS_PRIVATE);
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     if (is_umq_ub_logic_queue(queue->create_flag)) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "create Logic UMQ(ID:%u) success, tp_mode %d, flowcontrol use %s window\n",
-            queue->umq_id, queue->tp_mode, dev_ctx->flow_control.use_atomic_window ? "atomic" : "non-atomic");
+        UMQ_VLOG_INFO(VLOG_UMQ, "create Logic UMQ(ID:%u) success, tp_mode %d\n", queue->umq_id, queue->tp_mode);
     } else if (queue->flow_control != NULL) {
         UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id[0]: %u, jetty_id[1]: %u,%s create UMQ(ID:%u)"
             "success, jfr_id[0]: %u, jfr_id[1]: %u, urma transmode %d, tp_type %d, priority %d, rnr_retry %d, "
