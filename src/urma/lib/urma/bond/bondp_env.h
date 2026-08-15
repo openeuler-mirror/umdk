@@ -21,6 +21,7 @@ typedef struct bondp_env {
     uint64_t health_check_interval_ms;
     uint64_t rnr_retry_sleep_ms;
     uint64_t rnr_retry_max;
+    uint32_t rnr_retry_jitter_ratio;
     uint32_t rnr_retry_batch_wr_num;
     uint32_t health_check_batch_node_num;
     uint32_t failover_route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM];
