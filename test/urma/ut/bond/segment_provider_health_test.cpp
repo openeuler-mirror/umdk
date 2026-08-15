@@ -542,6 +542,7 @@ TEST(UrmaBondTest, PublicProviderInitUsesDefaultEnvValuesAndCleansUp)
     EnvGuard failback("BOND_ENABLE_FAILBACK", nullptr);
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", nullptr);
     EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "bad-int");
+    EnvGuard firstSleep("BOND_RNR_RETRY_FIRST_SLEEP_MS", nullptr);
     EnvGuard jitterRatio("BOND_RNR_RETRY_JITTER_RATIO", nullptr);
 
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
@@ -550,6 +551,7 @@ TEST(UrmaBondTest, PublicProviderInitUsesDefaultEnvValuesAndCleansUp)
     EXPECT_TRUE(g_bondp_env.enable_health_check);
     EXPECT_EQ(BONDP_HC_DEFAULT_PROBE_INTERVAL_MS,
               g_bondp_env.health_check_interval_ms);
+    EXPECT_EQ(g_bondp_env.rnr_retry_sleep_ms, g_bondp_env.rnr_retry_first_sleep_ms);
     EXPECT_EQ(0U, g_bondp_env.rnr_retry_jitter_ratio);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
 }
@@ -560,6 +562,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     EnvGuard failback("BOND_ENABLE_FAILBACK", "false");
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "true");
     EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "60000");
+    EnvGuard firstSleep("BOND_RNR_RETRY_FIRST_SLEEP_MS", "5");
     EnvGuard jitterRatio("BOND_RNR_RETRY_JITTER_RATIO", "25");
 
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
@@ -567,6 +570,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     EXPECT_FALSE(g_bondp_env.enable_failback);
     EXPECT_TRUE(g_bondp_env.enable_health_check);
     EXPECT_EQ(60000U, g_bondp_env.health_check_interval_ms);
+    EXPECT_EQ(5U, g_bondp_env.rnr_retry_first_sleep_ms);
     EXPECT_EQ(25U, g_bondp_env.rnr_retry_jitter_ratio);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
 }
