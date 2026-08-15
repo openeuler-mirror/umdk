@@ -68,12 +68,17 @@ static uint64_t add_rnr_retry_jitter(uint64_t sleep_ms)
 
 void bondp_rnr_retry_sleep_before_resend(uint32_t retry_cnt)
 {
-    uint64_t sleep_ms = g_bondp_env.rnr_retry_sleep_ms;
+    uint64_t sleep_ms = g_bondp_env.rnr_retry_first_sleep_ms;
+
+    if (retry_cnt > 0) {
+        uint32_t backoff_cnt = retry_cnt - 1;
+        sleep_ms = g_bondp_env.rnr_retry_sleep_ms;
+        for (uint32_t i = 0; i < backoff_cnt; i++) {
+            sleep_ms <<= 1;
+        }
+    }
     if (sleep_ms == 0) {
         return;
-    }
-    for (uint32_t i = 0; i < retry_cnt; i++) {
-        sleep_ms <<= 1;
     }
     sleep_ms = add_rnr_retry_jitter(sleep_ms);
 
