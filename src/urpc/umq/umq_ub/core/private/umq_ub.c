@@ -2377,6 +2377,28 @@ static ALWAYS_INLINE int umq_ub_import_mem_done(ub_queue_t *queue, uint16_t memp
     return ret;
 }
 
+/*
+ * wait_ack_import.lock 惰性创建：与 wait_ack_pool_id 数组同策略，仅在队列首次
+ * 需要缓存导入确认时创建（多数队列终生不会走到这里，省去每队列一把读写锁）。
+ * 并发首次创建以 CAS 发布，竞争失败方销毁自己创建的实例。
+ */
+static ALWAYS_INLINE bool umq_ub_wait_ack_lock_ensure(ub_queue_t *queue)
+{
+    if (__atomic_load_n(&queue->wait_ack_import.lock, __ATOMIC_ACQUIRE) != NULL) {
+        return true;
+    }
+    util_external_rwlock *lock = util_rwlock_create();
+    if (lock == NULL) {
+        return false;
+    }
+    util_external_rwlock *expected = NULL;
+    if (!__atomic_compare_exchange_n(&queue->wait_ack_import.lock, &expected, lock, false,
+        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        (void)util_rwlock_destroy(lock);
+    }
+    return true;
+}
+
 static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_t mempool_id, bool send_ack)
 {
     urma_eid_t dummy_eid = {{0}};
@@ -2392,6 +2414,11 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
             UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed",
                 EID_ARGS(*eid), id);
         }
+        return;
+    }
+    if (!umq_ub_wait_ack_lock_ensure(queue)) {
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, create wait ack lock failed",
+            EID_ARGS(*eid), id);
         return;
     }
     (void)util_rwlock_wrlock(queue->wait_ack_import.lock);
