@@ -3,10 +3,12 @@
 
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}       PROVIDER_AGG_DIR_SRCS)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/utils PROVIDER_AGG_UTILS_DIR_SRCS)
+list(REMOVE_ITEM PROVIDER_AGG_DIR_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bondp_dp_rnr_retry.c)
 
 add_library(urma_ubagg SHARED
     ${PROVIDER_AGG_DIR_SRCS}
     ${PROVIDER_AGG_UTILS_DIR_SRCS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/bondp_dp_rnr_retry.c
 )
 
 set(PROJECT_VERSION "0.0.3")
@@ -19,7 +21,7 @@ set_target_properties(urma_ubagg
         SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
-target_include_directories(urma_ubagg 
+target_include_directories(urma_ubagg
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE

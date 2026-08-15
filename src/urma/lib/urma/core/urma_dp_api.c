@@ -10,12 +10,12 @@
 
 #include <stddef.h>
 
+#include "ub_get_clock.h"
 #include "urma_api.h"
 #include "urma_log.h"
 #include "urma_opcode.h"
 #include "urma_private.h"
 #include "urma_provider.h"
-#include "ub_get_clock.h"
 
 static inline urma_ops_t *get_ops_by_urma_jfc(urma_jfc_t *jfc)
 {
@@ -261,7 +261,7 @@ int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
     UDMA_PERF_PROFILING_START(UB_POLL_JFC, urma_dev->name);
     ret = dp_ops->poll_jfc(jfc, cr_cnt, cr);
     UDMA_PERF_PROFILING_END(UB_POLL_JFC, urma_dev->name);
-    
+
     return ret;
 }
 
@@ -279,7 +279,7 @@ urma_status_t urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
     UDMA_PERF_PROFILING_START(UB_REARM_JFC, urma_dev->name);
     ret = dp_ops->rearm_jfc(jfc, solicited_only);
     UDMA_PERF_PROFILING_END(UB_REARM_JFC, urma_dev->name);
-    
+
     return ret;
 }
 
@@ -334,7 +334,7 @@ urma_status_t urma_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t
     UDMA_PERF_PROFILING_START(UB_JFS_POST_SEND, urma_dev->name);
     ret = dp_ops->post_jfs_wr(jfs, wr, bad_wr);
     UDMA_PERF_PROFILING_END(UB_JFS_POST_SEND, urma_dev->name);
-    
+
     return ret;
 }
 
@@ -367,12 +367,12 @@ urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, ur
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
-    
+
     urma_status_t ret;
     UDMA_PERF_PROFILING_START(UB_JETTY_POST_SEND, urma_dev->name);
     ret = dp_ops->post_jetty_send_wr(jetty, wr, bad_wr);
     UDMA_PERF_PROFILING_END(UB_JETTY_POST_SEND, urma_dev->name);
-    
+
     return ret;
 }
 
@@ -391,6 +391,6 @@ urma_status_t urma_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, ur
     UDMA_PERF_PROFILING_START(UB_JETTY_POST_RECV, urma_dev->name);
     ret = dp_ops->post_jetty_recv_wr(jetty, wr, bad_wr);
     UDMA_PERF_PROFILING_END(UB_JETTY_POST_RECV, urma_dev->name);
-    
+
     return ret;
 }
