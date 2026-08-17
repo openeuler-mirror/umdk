@@ -154,7 +154,7 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         return -UMQ_ERR_EINVAL;
     }
 
-    uint64_t without_data_expand_mem_size = QBUF_POOL_INITIAL_NODATA_BUF_CNT;
+    uint64_t without_data_expand_mem_size = (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * sizeof(umq_buf_t);
     if (normal_io_buf_size < without_data_expand_mem_size) {
         UMQ_VLOG_ERR(VLOG_UMQ, "normal buf pool init size %llu < support without data buf, required %llu\n",
             normal_io_buf_size, without_data_expand_mem_size);

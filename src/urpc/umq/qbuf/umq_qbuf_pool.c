@@ -162,7 +162,7 @@ static volatile uint64_t g_total_local_cap_without_data = 0;
 
 static volatile uint64_t g_total_escape_buf_cnt = 0;
 
-#define QBUF_POOL_TLS_QBUF_POOL_DEPTH (1536) // without_data global TLS pool capacity sum budget
+#define QBUF_POOL_TLS_QBUF_POOL_DEPTH (QBUF_POOL_INITIAL_NODATA_BUF_CNT)
 
 static inline uint32_t umq_qbuf_pool_tls_depth(void)
 {
