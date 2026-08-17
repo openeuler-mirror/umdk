@@ -58,9 +58,13 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
 // Lazy SCs now controlled by per_sc_weights[sc]==0 (no reserve, expansion pool only)
 
-// Expansion pool global shared id range [257, 1023), table size 766
+// Expansion pool global shared id range [257, 1021), table size 764.
+// The upper bound excludes reserved ids: UMQ_RX_QBUF_MEMPOOL_ID (1021),
+// UMQ_TINY_QBUF_MEMPOOL_ID (1022), QBUF_POOL_MEMPOOL_ID_MAX (1023, escape).
+// Previously [257, 1023) which let the id generator hand out 1021/1022 and
+// collide with rx/tiny tseg_list slots — bounded only by scale.
 #define QBUF_POOL_EXP_SLOT_ID_MIN (257)
-#define QBUF_POOL_EXP_SLOT_ID_MAX (1023)
+#define QBUF_POOL_EXP_SLOT_ID_MAX (1021)
 #define QBUF_POOL_EXP_SLOT_TABLE_SIZE (QBUF_POOL_EXP_SLOT_ID_MAX - QBUF_POOL_EXP_SLOT_ID_MIN)
 
 #define UMQ_TINY_QBUF_MEMPOOL_ID (1022U)
