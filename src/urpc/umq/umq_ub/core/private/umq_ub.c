@@ -22,6 +22,7 @@
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
 #define UMQ_MAX_QBUF_NUM 1
 #define UMQ_LEN_ALIGNMENT_4 4
+#define UMQ_LEN_ALIGNMENT_8 8
 /* Buckets for the per-peer imported-tseg hmap. Each peer typically imports
  * only 1-2 mempools, so 8 buckets keeps chains at length 1 while avoiding the
  * 4KB-per-connection cost a large bucket array would add at 48K+ peers. */
@@ -189,20 +190,20 @@ DEC_REF:
     return ret;
 }
 
-static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, xchg_mem_info_t *xchg_mem)
+static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, urma_seg_t *seg,
+                                     uint32_t seg_size, uint32_t token_value)
 {
-    if (xchg_mem == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "xchg_mem invalid\n");
+    if (urma_ctx == NULL || seg == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "import_mem invalid param, seg_size=%u\n", seg_size);
         return NULL;
     }
 
-    urma_seg_t remote_seg = {
-        .attr.value = xchg_mem->seg_flag.value,
-        .len = xchg_mem->seg_len,
-        .token_id = xchg_mem->seg_token_id
-    };
-    urma_token_t token = xchg_mem->token;
-    (void)memcpy(&remote_seg.ubva, &xchg_mem->ubva, sizeof(urma_ubva_t));
+    if (seg_size < sizeof(urma_seg_t)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "import_mem seg_size %u smaller than urma_seg_t %zu\n", seg_size, sizeof(urma_seg_t));
+        return NULL;
+    }
+
+    urma_token_t token = {.token = token_value};
     urma_import_seg_flag_t flag = {
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.mapping = URMA_SEG_NOMAP,
@@ -210,7 +211,7 @@ static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, xchg_mem_info_t *
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC
     };
 
-    urma_target_seg_t *import_tseg = umq_symbol_urma()->urma_import_seg(urma_ctx, &remote_seg, &token, 0, flag);
+    urma_target_seg_t *import_tseg = umq_symbol_urma()->urma_import_seg(urma_ctx, seg, &token, 0, flag);
     if (import_tseg == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_import_seg failed, errno: %d\n", errno);
         return NULL;
@@ -250,25 +251,21 @@ urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg_table, uint32_t 
 }
 
 static imported_tseg_node_t *umq_ub_tseg_node_create(
-    ub_queue_t *queue, urma_target_seg_t *remote_tseg, uint32_t mempool_id)
+    ub_queue_t *queue, urma_seg_t *seg, uint32_t seg_size, uint32_t token_value, uint32_t mempool_id)
 {
-    // importing the remote memory
-    urma_seg_t *seg = &remote_tseg->seg;
-    xchg_mem_info_t mem_info = {
-        .seg_len = seg->len,
-        .seg_token_id = seg->token_id,
-        .seg_flag = (urma_import_seg_flag_t)seg->attr.value,
-        .token.token = (uint32_t)remote_tseg->user_ctx
-    };
-    (void)memcpy(&mem_info.ubva, &seg->ubva, sizeof(urma_ubva_t));
-
+    /*
+     * Bind-info path: the peer shipped the seg blob produced by urma_get_seg_ctx
+     * (an urma_seg_t, optionally carrying a has_user_info extension tail on
+     * bonding devices). Forward it verbatim to import_mem, which hands it to
+     * urma_import_seg. token_value carries the peer's tseg->user_ctx.
+     */
     imported_tseg_node_t *tseg_node = (imported_tseg_node_t *)calloc(1, sizeof(imported_tseg_node_t));
     if (tseg_node == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), malloc tseg node failed\n", queue->umq_id);
         return NULL;
     }
 
-    tseg_node->tseg = import_mem(queue->dev_ctx->urma_ctx, &mem_info);
+    tseg_node->tseg = import_mem(queue->dev_ctx->urma_ctx, seg, seg_size, token_value);
     if (tseg_node->tseg == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), import mem failed\n", queue->umq_id);
         free(tseg_node);
@@ -319,7 +316,9 @@ static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_
 
     if (umq_ub_enable_import_remote_mem(queue->dev_ctx->feature)) {
         imported_tseg_node_t *tseg_node =
-            umq_ub_tseg_node_create(queue, &info->dev_info->tseg, UMQ_QBUF_DEFAULT_MEMPOOL_ID);
+            umq_ub_tseg_node_create(queue, umq_ub_bind_dev_info_seg(info->dev_info),
+                                    info->dev_info->seg_size, info->dev_info->mempool_token_value,
+                                    UMQ_QBUF_DEFAULT_MEMPOOL_ID);
         if (tseg_node == NULL) {
             UMQ_VLOG_ERR(VLOG_UMQ,
                 "UMQ(ID:%u), remote eid " EID_FMT ", remote jetty_id: "
@@ -661,7 +660,6 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     urpc_tlv_head_t *info_tlv_head = (urpc_tlv_head_t *)(uintptr_t)bind_info_buf;
     umq_ub_bind_dev_info_t *dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
     dev_info->umq_trans_mode = dev_ctx->trans_info.trans_mode;
-    (void)memcpy(&dev_info->tseg, dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID], sizeof(urma_target_seg_t));
     dev_info->buf_pool_mode = umq_qbuf_mode_get();
     dev_info->feature = dev_ctx->feature;
     dev_info->pid = (uint32_t)getpid();
@@ -672,10 +670,46 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
         return 0;
     }
 
-    // namespace len alignment 4 byte
-    dev_info->namespace_len = (((uint32_t)ret + UMQ_LEN_ALIGNMENT_4 - 1) & ~(UMQ_LEN_ALIGNMENT_4 - 1));
+    /* namespace_len 8-byte aligned so the seg blob that follows is 8-byte
+     * aligned (urma_seg_t contains uint64_t fields). */
+    dev_info->namespace_len = (((uint32_t)ret + UMQ_LEN_ALIGNMENT_8 - 1) & ~(UMQ_LEN_ALIGNMENT_8 - 1));
+
+    /* Serialize the default mempool segment via urma_get_seg_ctx (produces a
+     * valid urma_seg_t, including any has_user_info extension tail on bonding
+     * devices). The peer forwards this blob verbatim to urma_import_seg. */
+    urma_target_seg_t *tseg = dev_ctx->tseg_list[UMQ_QBUF_DEFAULT_MEMPOOL_ID];
+    if (tseg == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "default mempool tseg is NULL, cannot serialize seg ctx\n");
+        return 0;
+    }
+    urma_seg_t *seg = NULL;
+    uint32_t seg_size = 0;
+    urma_status_t status = umq_symbol_urma()->urma_get_seg_ctx(tseg, &seg, &seg_size);
+    if (status != URMA_SUCCESS || seg == NULL || seg_size < sizeof(urma_seg_t)) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_seg_ctx failed, status: %d, seg=%p, seg_size=%u\n",
+                     (int)status, seg, seg_size);
+        if (seg != NULL) {
+            umq_symbol_urma()->urma_put_seg_ctx(seg);
+        }
+        return 0;
+    }
+
+    uint32_t total = (uint32_t)sizeof(umq_ub_bind_dev_info_t) + dev_info->namespace_len + seg_size;
+    if (left_buf_size < (uint32_t)sizeof(urpc_tlv_head_t) + total) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "bind info size insufficient for seg blob, need %u, have %u\n",
+                     (uint32_t)sizeof(urpc_tlv_head_t) + total, left_buf_size);
+        umq_symbol_urma()->urma_put_seg_ctx(seg);
+        errno = UMQ_ERR_ENOMEM;
+        return 0;
+    }
+
+    dev_info->seg_size = seg_size;
+    dev_info->mempool_token_value = (uint32_t)tseg->user_ctx;
+    (void)memcpy(umq_ub_bind_dev_info_seg(dev_info), seg, seg_size);
+    umq_symbol_urma()->urma_put_seg_ctx(seg);
+
     info_tlv_head->type = UMQ_UB_BIND_INFO_TYPE_DEV;
-    info_tlv_head->len = (uint32_t)sizeof(umq_ub_bind_dev_info_t) + dev_info->namespace_len;
+    info_tlv_head->len = total;
     return urpc_tlv_get_total_len(info_tlv_head);
 }
 
@@ -865,8 +899,17 @@ int umq_ub_bind_info_deserialize(uint8_t *bind_info_buf, uint32_t bind_info_size
                     return -UMQ_ERR_EINVAL;
                 }
                 bind_info->dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info_tlv_head->value;
-                if (info_tlv_head->len != (sizeof(umq_ub_bind_dev_info_t) + bind_info->dev_info->namespace_len)) {
-                    UMQ_VLOG_ERR(VLOG_UMQ, "bind dev info namespace_len %u insufficient\n", info_tlv_head->len);
+                /* Validate variable-length payload: namespace + seg blob.
+                 * seg_size must be >= sizeof(urma_seg_t) and the TLV value
+                 * length must be >= header + namespace_len + seg_size
+                 * (allows future extensions to append extra trailing data). */
+                if (bind_info->dev_info->seg_size < sizeof(urma_seg_t) ||
+                    info_tlv_head->len < UB_BIND_DEV_INFO_TOTAL_LEN(bind_info->dev_info)) {
+                    UMQ_VLOG_ERR(VLOG_UMQ,
+                        "bind dev info size insufficient, tlv_len=%u, need>=%u (hdr %zu + ns %u + seg %u)\n",
+                        info_tlv_head->len, UB_BIND_DEV_INFO_TOTAL_LEN(bind_info->dev_info),
+                        sizeof(umq_ub_bind_dev_info_t), bind_info->dev_info->namespace_len,
+                        bind_info->dev_info->seg_size);
                     return -UMQ_ERR_EINVAL;
                 }
                 size_t len = strnlen(bind_info->dev_info->bind_namespace, bind_info->dev_info->namespace_len);
@@ -2282,15 +2325,15 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
             return UMQ_FAIL;
         }
 
-        xchg_mem_info_t mem_info = {
-            .seg_len = import_mempool_info[i].mempool_length,
-            .seg_token_id = import_mempool_info[i].mempool_token_id,
-            .seg_flag.value = import_mempool_info[i].mempool_seg_flag,
-            .token.token = import_mempool_info[i].mempool_token_value
+        urma_seg_t seg = {
+            .len = import_mempool_info[i].mempool_length,
+            .token_id = import_mempool_info[i].mempool_token_id,
+            .attr.value = import_mempool_info[i].mempool_seg_flag
         };
 
-        (void)memcpy(&mem_info.ubva, &import_mempool_info[i].mempool_ubva, sizeof(urma_ubva_t));
-        urma_target_seg_t *imported_tseg = import_mem(queue->dev_ctx->urma_ctx, &mem_info);
+        (void)memcpy(&seg.ubva, &import_mempool_info[i].mempool_ubva, sizeof(urma_ubva_t));
+        urma_target_seg_t *imported_tseg = import_mem(queue->dev_ctx->urma_ctx, &seg,
+                                                      sizeof(urma_seg_t), import_mempool_info[i].mempool_token_value);
         if (imported_tseg == NULL) {
             free(new_node);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, import memory failed\n", EID_ARGS(*eid), id);
