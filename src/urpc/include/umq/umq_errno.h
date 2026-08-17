@@ -59,6 +59,9 @@ typedef enum umq_buf_status {
     UMQ_BUF_LOC_DATA_POISON,            /* Local Data Poison */
     UMQ_BUF_REM_DATA_POISON,            /* Remote Data Poison */
 
+    /* RNR retries exhausted (fatal): URMA passthrough fatal code, remote jfr has no buffer */
+    UMQ_BUF_RNR_RETRY_CNT_EXC_ERR_FATAL = 99,
+
     UMQ_BUF_FLOW_CONTROL_UPDATE = 128,  /* Umq flow control window is updated, this is not error case */
     UMQ_MEMPOOL_UPDATE_SUCCESS,
     UMQ_MEMPOOL_UPDATE_FAILED,
