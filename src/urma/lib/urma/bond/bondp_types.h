@@ -43,6 +43,11 @@
 typedef urma_user_info_ext_hdr_t bondp_seg_ext_priv_t;
 typedef urma_user_info_ext_hdr_t bondp_rjetty_ext_priv_t;
 
+typedef struct bondp_rnr_retry_task {
+    uint64_t task_id;
+    bool task_pending;
+} bondp_rnr_retry_task_t;
+
 static inline bool bondp_seg_has_user_info(const urma_seg_t *seg)
 {
     return seg != NULL && seg->attr.bs.has_user_info != 0;
@@ -118,11 +123,9 @@ typedef struct bondp_context {
     uint64_t health_check_interval_ms;
     uint32_t health_check_batch_node_num;
     bool enable_rnr_retry;
-    uint64_t rnr_retry_first_sleep_ms;
     uint64_t rnr_retry_sleep_ms;
     uint64_t rnr_retry_max;
     uint32_t rnr_retry_jitter_ratio;
-    uint32_t rnr_retry_batch_wr_num;
 
     /* This variable represents the maximum number of times all available devices need to be traversed. */
     /* In general mode, dev_num is the same as the number of non-empty devices in the first few positions. */
@@ -241,20 +244,17 @@ typedef struct bondp_comp {
     uint32_t max_send_sge;
     uint32_t max_send_rsge;
     wr_buf_t send_wr_buf;
+    bondp_rnr_retry_task_t rnr_retry_tasks[URMA_UBAGG_DEV_MAX_NUM]; /* protected by send_lock */
 #ifndef __cplusplus
     atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     atomic_bool hc_valid[URMA_UBAGG_DEV_MAX_NUM];
     atomic_uint msn;
-    atomic_uint rnr_retry_sleep_cnt;
-    atomic_uint rnr_retry_wr_cnt;
 #else
     std::atomic_bool valid[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_bool rebuild_done[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_bool hc_valid[URMA_UBAGG_DEV_MAX_NUM];
     std::atomic_uint msn;
-    std::atomic_uint rnr_retry_sleep_cnt;
-    std::atomic_uint rnr_retry_wr_cnt;
 #endif
 #ifndef __cplusplus
     atomic_uint sqe_cnt[URMA_UBAGG_DEV_MAX_NUM][URMA_UBAGG_DEV_MAX_NUM];
