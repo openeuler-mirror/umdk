@@ -147,23 +147,6 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
         return -UMQ_ERR_EEXIST;
     }
 
-    urma_eid_t *eid;
-    uint32_t id;
-    if (is_umq_ub_logic_queue(queue->create_flag)) {
-        umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
-        eid = &main_queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-        id = main_queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    } else {
-        eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
-        id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    }
-    if (memcmp(eid, &queue_info->rjetty->jetty_id.eid, sizeof(urma_eid_t)) == 0 &&
-        id == queue_info->rjetty->jetty_id.id) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, UMQ(ID:%u), the queue cannot bind itself\n",
-                     EID_ARGS(*eid), id, queue->umq_id);
-        return -UMQ_ERR_EINVAL;
-    }
     return UMQ_SUCCESS;
 }
 
