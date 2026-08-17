@@ -571,7 +571,7 @@ static int umq_ub_credit_pool_init(ub_queue_t *queue, uint32_t feature, umq_flow
     ub_credit_pool_t *pool = &queue->jfr_ctx[UB_QUEUE_JETTY_IO]->credit;
     memset(pool, 0, sizeof(ub_credit_pool_t));
     pool->is_limited = cfg->is_limited;
-    pool->capacity = queue->rx_depth;
+    pool->capacity = umq_ub_queue_cfg_get(queue)->rx_depth;
     if (cfg->use_atomic_window) {
         pool->ops.available_credit_inc = available_credit_inc_atomic;
         pool->ops.available_credit_dec = available_credit_dec_atomic;
@@ -710,21 +710,22 @@ int umq_ub_flow_control_init(ub_queue_t *queue, uint32_t feature, umq_flow_contr
         }
     }
 
-    fc->local_rx_depth = queue->rx_depth;
-    fc->local_tx_depth = queue->tx_depth;
+    ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
+    fc->local_rx_depth = qcfg->rx_depth;
+    fc->local_tx_depth = qcfg->tx_depth;
     fc->initial_credit = cfg->initial_credit;
     fc->return_ratio = cfg->return_ratio;
     fc->min_reserved_credit = cfg->min_reserved_credit;
     fc->credit_multiple = cfg->credit_multiple;
     fc->max_credits_request = cfg->max_credits_request;
 
-    if (cfg->return_ratio == 0 || cfg->return_ratio > queue->rx_depth) {
+    if (cfg->return_ratio == 0 || cfg->return_ratio > qcfg->rx_depth) {
         fc->return_ratio = UMQ_UB_RETURN_CREDIT_RATIO;
     }
-    if (cfg->min_reserved_credit == 0 || cfg->min_reserved_credit > queue->rx_depth) {
+    if (cfg->min_reserved_credit == 0 || cfg->min_reserved_credit > qcfg->rx_depth) {
         fc->min_reserved_credit = UMQ_UB_MIN_RESERVED_CREDIT;
     }
-    if (cfg->initial_credit == 0 || cfg->initial_credit > queue->rx_depth) {
+    if (cfg->initial_credit == 0 || cfg->initial_credit > qcfg->rx_depth) {
         fc->initial_credit = fc->local_rx_depth >> UMQ_UB_INITIAL_CREDITS_PER_UMQ;
     }
     if (fc->initial_credit == 0) {
@@ -745,7 +746,7 @@ int umq_ub_flow_control_init(ub_queue_t *queue, uint32_t feature, umq_flow_contr
     }
     fc->credits_per_request = fc->initial_credit;
     fc->credit_request_threshold = fc->min_reserved_credit;
-    if (cfg->credit_multiple < 1 || cfg->credit_multiple > ((float)queue->rx_depth / fc->initial_credit)) {
+    if (cfg->credit_multiple < 1 || cfg->credit_multiple > ((float)qcfg->rx_depth / fc->initial_credit)) {
         fc->credit_multiple = UMQ_UB_DEFAULT_CREDIT_MULTIPLE;
     }
 
@@ -816,6 +817,15 @@ void umq_ub_flow_control_uninit(ub_queue_t *queue)
         return;
     }
     umq_ub_fc_msg_retry_list_uninit(queue);
+
+    // checker will be destroyed in umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit
+    if (fc->checker != NULL) {
+        (void)util_mutex_lock(fc->checker->lock);
+        fc->checker->umq = NULL;
+        close(fc->checker->event_fd);
+        fc->checker->event_fd = UMQ_INVALID_FD;
+        (void)util_mutex_unlock(fc->checker->lock);
+    }
 
     free(fc);
     queue->flow_control = NULL;
@@ -1080,11 +1090,11 @@ void umq_ub_shared_credit_resp_handle(ub_queue_t *queue, umq_ub_imm_t *imm)
 int umq_ub_shared_credit_return_req_send(ub_queue_t *queue)
 {
     ub_flow_control_t *fc = queue->flow_control;
-    if (fc == NULL || queue->bind_ctx == NULL || queue->checker == NULL) {
+    if (fc == NULL || queue->bind_ctx == NULL || fc->checker == NULL) {
         return UMQ_SUCCESS;
     }
     uint64_t timestamp = get_timestamp_us();
-    uint64_t last_send = __atomic_load_n(&queue->checker->last_send, __ATOMIC_ACQUIRE);
+    uint64_t last_send = __atomic_load_n(&fc->checker->last_send, __ATOMIC_ACQUIRE);
     if (timestamp < last_send) {
         return UMQ_SUCCESS;
     }
