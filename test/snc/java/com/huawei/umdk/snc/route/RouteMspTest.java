@@ -9,7 +9,8 @@
 
 package com.huawei.umdk.snc.route;
 
-import com.huawei.umdk.snc.C3SncService;
+import com.huawei.umdk.snc.SncService;
+import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.route.model.NextHopPort;
 import com.huawei.umdk.snc.route.model.RouteEntry;
@@ -42,9 +43,9 @@ public class RouteMspTest {
 
     @BeforeAll
     public static void init() {
-        C3SncService.registerLogCallback(((level, msg) -> {
+        SncService.registerLogCallback((level, msg) -> {
             System.out.printf("[%s] %s\n", level.getValue(), msg);
-        }));
+        });
 
         topologyMap.putAll(TestUtils.parseTopoTemplate());
     }
@@ -52,7 +53,7 @@ public class RouteMspTest {
     @Test
     void calculateNpuRouteTest() {
         String templateType = "128_npu_rack";
-        Map<String, Map<String, RouteTable>> routeMaps = C3SncService.routeMSP();
+        Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:npu|slot:1|ubpu:1|die:2");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
@@ -76,7 +77,7 @@ public class RouteMspTest {
     @Test
     void calculateL1SwRouteTest() {
         String templateType = "128_npu_rack";
-        Map<String, Map<String, RouteTable>> routeMaps = C3SncService.routeMSP();
+        Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l1_sw|index:1");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
@@ -97,7 +98,7 @@ public class RouteMspTest {
     @Test
     void calculateL2SwRouteTest() {
         String templateType = "128_npu_rack";
-        Map<String, Map<String, RouteTable>> routeMaps = C3SncService.routeMSP();
+        Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l2_sw|index:1|chip:1");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
@@ -112,7 +113,7 @@ public class RouteMspTest {
     @Test
     void calculateL2SwRouteInterRackTest() {
         String templateType = "128_npu_inter_rack";
-        Map<String, Map<String, RouteTable>> routeMaps = C3SncService.routeMSP();
+        Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l2_sw|index:1|chip:1");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);

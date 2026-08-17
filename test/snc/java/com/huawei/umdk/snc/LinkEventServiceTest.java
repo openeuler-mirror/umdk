@@ -45,7 +45,7 @@ import com.huawei.umdk.snc.exception.SNCStateException;
  */
 class LinkEventServiceTest {
 
-    private SNCServiceImpl snc;
+    private SncService snc;
 
     private static final String SUPER_NODE_NAME = "sn-01";
 
@@ -65,7 +65,7 @@ class LinkEventServiceTest {
 
     @BeforeEach
     void setUp() {
-        snc = new SNCServiceImpl();
+        snc = new SncService();
         snc.init(new SNCConfig());
         snc.setSuperNode(buildSuperNode());
     }

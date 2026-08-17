@@ -9,7 +9,7 @@
 
 package com.huawei.umdk.snc.route;
 
-import com.huawei.umdk.snc.C3SncService;
+import com.huawei.umdk.snc.SncService;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.OutPortInfo;
@@ -19,7 +19,6 @@ import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.SwForwardingChip;
 import com.huawei.umdk.snc.entity.SwitchLevel;
 import com.huawei.umdk.snc.log.Logger;
-import com.huawei.umdk.snc.route.model.RouteTable;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -95,7 +94,7 @@ public class RouteInstantiationTest {
 
     @BeforeAll
     public static void init() {
-        C3SncService.registerLogCallback(((level, msg) -> {
+        SncService.registerLogCallback(((level, msg) -> {
             System.out.printf("[%s] %s\n", level.getValue(), msg);
         }));
 
@@ -117,7 +116,7 @@ public class RouteInstantiationTest {
 
     @Test
     void makeRoutesTest() {
-        C3SncService service = new C3SncService();
+        SncService service = new SncService();
         service.routeCalculate();
         Map<String, Map<String, RoutingEntry>> result = service.makeRoutes(superNode);
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
@@ -134,7 +133,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateNpuRouteTest() {
-        C3SncService service = new C3SncService();
+        SncService service = new SncService();
         service.routeCalculate();
         service.makeRoutes(superNode);
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
@@ -149,7 +148,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL1SwRouteTest() {
-        C3SncService service = new C3SncService();
+        SncService service = new SncService();
         service.routeCalculate();
         service.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
@@ -163,7 +162,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        C3SncService service = new C3SncService();
+        SncService service = new SncService();
         service.routeCalculate();
         service.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
