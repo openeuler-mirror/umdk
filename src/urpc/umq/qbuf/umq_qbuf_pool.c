@@ -600,7 +600,11 @@ static inline uint32_t get_batch_count(uint32_t sc)
     return cnt;
 }
 
-// find smallest i where block_sizes[i] >= need; if need > max, return count-1
+// Find smallest i where block_sizes[i] >= need. If need exceeds the largest
+// single block (block_sizes[count-1]), no single class fits — return
+// UMQ_QBUF_SIZE_CLASS_MAX as a failure sentinel; the caller rejects the alloc
+// instead of falling back to multi-block chaining. This bounds umq allocations
+// to what a single pool block can hold.
 static inline uint32_t select_size_class(uint32_t need)
 {
     for (uint32_t i = 0; i < g_qbuf_pool.size_class_count; i++) {
@@ -608,7 +612,7 @@ static inline uint32_t select_size_class(uint32_t need)
             return i;
         }
     }
-    return g_qbuf_pool.size_class_count - 1;
+    return UMQ_QBUF_SIZE_CLASS_MAX;
 }
 
 // Find which size_class's data_region contains buf_data; UMQ_QBUF_SIZE_CLASS_MAX if not found.
@@ -2638,6 +2642,15 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
     // multi-level: select size_class based on need
     uint32_t need = request_size + param.headroom_size;
     uint32_t sc = select_size_class(need);
+    if (sc >= g_qbuf_pool.size_class_count) {
+        // need exceeds the largest single block — reject instead of multi-block chaining
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                           "umq alloc size too large, request_size: %u, headroom: %u, need: %u, "
+                           "max block size: %u\n",
+                           request_size, param.headroom_size, need,
+                           g_qbuf_pool.size_class_count > 0 ? g_qbuf_pool.block_sizes[g_qbuf_pool.size_class_count - 1] : 0);
+        return -UMQ_ERR_ENOMEM;
+    }
     uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
 
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
