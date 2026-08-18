@@ -314,39 +314,6 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
  */
 int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
 
-/*
- * Mempool info opaque blob API (design §3.5).
- *
- * The blob is umq-private layout; callers (UBSocket bigdata READ path) treat it
- * strictly as (ptr, len) — they never parse or reassemble fields. umq serializes
- * the local mempool descriptor on get, and parses/imports the peer's blob on
- * set/check. This fully decouples ubsocket from umq's internal struct layout:
- * ubsocket only memcpy's the blob into its wire control packet and forwards it.
- *
- * Wire layout (ub_mempool_info_t, packed, 1:1 with umq's internal
- * ub_import_mempool_info_t so umq can cast the wire blob directly):
- *   seg_size | mempool_id | mempool_token_value | version | token_id | seg[]
- * token_id is promoted out of urma_seg_t into the header because both ubsocket
- * (READ work-request build) and umq (import) consume it standalone. seg[] is the
- * opaque urma_seg_t blob (variable-length, carries the bonding has_user_info
- * extension tail).
- *
- * UMQ_MEMPOOL_INFO_MAX_SIZE: worst-case blob size (header + sizeof(urma_seg_t) +
- * bonding ext tail). Callers size stack buffers to this.
- */
-/* Fixed header byte length of a mempool info blob (the part before the
- * variable-length seg[] tail). Equals offsetof(seg) of umq's internal
- * ub_import_mempool_info_t. Exposed so external callers can size buffers /
- * compute wire budgets without seeing the struct; the value is pinned by
- * static_asserts in umq_ub_private.h. */
-#define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
-
-/* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
- * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~973B
- * uncompressed; 1024B covers it with slack, so one umq build runs against
- * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 1024u)
-
 /**
  * Get mempool info: serialize the local mempool import descriptor into an opaque
  * blob so it can be sent to the peer and imported there (used by the UBSocket
