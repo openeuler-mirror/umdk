@@ -107,6 +107,8 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_unregister_seg_t, urma_unregister_seg);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_import_seg_t, urma_import_seg);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_unimport_seg_t, urma_unimport_seg);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_get_seg_ctx_t, urma_get_seg_ctx);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_put_seg_ctx_t, urma_put_seg_ctx);
 
     // Async Event functions
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_get_async_event_t, urma_get_async_event);
@@ -188,6 +190,8 @@ static umq_symbol_urma_t g_umq_symbol_urma = {
     .urma_unregister_seg = urma_unregister_seg,
     .urma_import_seg = urma_import_seg,
     .urma_unimport_seg = urma_unimport_seg,
+    .urma_get_seg_ctx = urma_get_seg_ctx,
+    .urma_put_seg_ctx = urma_put_seg_ctx,
 
     // Async Event
     .urma_get_async_event = urma_get_async_event,
