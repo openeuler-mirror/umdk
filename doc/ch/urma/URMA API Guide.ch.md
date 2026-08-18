@@ -1223,6 +1223,9 @@ typedef struct urma_provider_ops {
     urma_context_t *(*create_context)(urma_device_t *dev, uint32_t eid_index, int dev_fd);
     urma_status_t (*delete_context)(urma_context_t *ctx);
     urma_status_t (*get_uasid)(uint32_t *uasid); /* obsolete */
+    /* Log Ops */
+    urma_status_t (*register_log_func)(urma_log_cb_t func);
+    urma_status_t (*unregister_log_func)(void);
 } urma_provider_ops_t;
 ```
 
@@ -2986,6 +2989,8 @@ typedef struct urma_jfs {
 } urma_jfs_t;
 ```
 
+> 说明：上述结构体定义未列出 `urma_jfs_opt` 成员；当前实现会访问 `jfs->urma_jfs_opt.is_actived` 和 `jfs->urma_jfs_opt.jfs_opt_mask`。
+
 10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
 
 typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
@@ -3645,7 +3650,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 @param[in] [Required] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
 
-@param[in] [Required] token_value: token_valueto put into output jetty/protection table;
+@param[in] [Required] token_value: token to put into output jetty/protection table;
 
 5.  返回值
 
