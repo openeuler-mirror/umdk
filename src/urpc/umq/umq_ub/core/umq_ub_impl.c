@@ -1680,9 +1680,45 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     if (is_umq_ub_logic_queue(queue->create_flag) && queue->jetty_node != 0) {
         jetty_pool_node_t *node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
         __atomic_store_n(&queue->jetty_node, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&node->umq_ref, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(&node->tx_outstanding, 0, __ATOMIC_RELEASE);
-        (void)umq_ub_jetty_node_free(node, false);
+        if (g_ubsocket_exiting) {
+            /* Process exit ONLY. The shared poll runners are stopped, so the
+             * pool round-robin will not drain/free this node; return it here to
+             * avoid leaving it IN_USE (which makes Clean()->node_remove CAS fail
+             * and log noisy URMA delete errors). Posts are guarded by
+             * g_ubsocket_exiting, so no other thread touches the node now. Do
+             * not read or write tx_outstanding (per review): node_free does not
+             * use it and nothing will reuse the node. Double free is guarded by
+             * the state CAS inside umq_ub_jetty_node_free. */
+            __atomic_store_n(&node->umq_ref, 0, __ATOMIC_RELEASE);
+            (void)umq_ub_jetty_node_free(node, false);
+        }
+        /* Normal per-link teardown: do NOT touch the node here.
+         *
+         * The original code unconditionally force-stored node->umq_ref = 0 and
+         * node->tx_outstanding = 0 and freed the node. That is wrong on two
+         * counts:
+         *   1. Correctness (the 25s first-RPC stall this MR fixes): logic queues
+         *      share pooled jetties, so umq_ub_jetty_node_free only recycles the
+         *      node struct — it does NOT delete or drain the node's IO jfc.
+         *      Force-zeroing and recycling a node that still has our WRs in
+         *      flight returns it to the pool with unreaped completions in its
+         *      CQ; the next borrower inherits them, over-counts, and frees/skips
+         *      the node with a live completion still queued -> 25s stall under
+         *      teardown storms.
+         *   2. Concurrency (raised in review): a node freed by the main-queue
+         *      round-robin does NOT clear the borrowing logic queue's
+         *      queue->jetty_node, so at destroy that pointer may be stale and
+         *      the node may already be owned by another queue that is
+         *      concurrently posting. Storing umq_ref/tx_outstanding or freeing
+         *      it here corrupts the true owner (its tx_outstanding increment is
+         *      wiped, or its node is pulled out from under it).
+         *
+         * Both are avoided by doing nothing: during normal operation the shared
+         * poll runners keep running, so the pool round-robin (main-queue poll
+         * via node_list) reaps this node's remaining completions and frees it
+         * through the main branch of umq_ub_poll_release_jetty_node once
+         * tx_outstanding truly reaches 0 — independent of this logic queue. The
+         * node stays IN_USE until then, so no queue can reuse it while draining. */
     }
 
     umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO);
