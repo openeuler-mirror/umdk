@@ -374,6 +374,19 @@ int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_in
  */
 int umq_mempool_info_set(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
 
+/*
+ * Return values of umq_remote_mempool_state_check. Exposed here (next to the
+ * function) so callers match against umq's own constants rather than
+ * re-defining a parallel set. A version change — whether the peer's mempool
+ * grew (re-registered) or rolled back (rewind) — is treated uniformly as
+ * NEED_REIMPORT: umq unimports the stale entry and re-imports. Rollback is
+ * NOT a protocol error and never returns a distinct value.
+ */
+#define UMQ_REMOTE_MEMPOOL_STATE_ERR          (-1)
+#define UMQ_REMOTE_MEMPOOL_STATE_REUSE        0
+#define UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT  1
+#define UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT 2
+
 /**
  * Check remote mempool import state vs the version carried in the opaque blob.
  * umq parses mempool_id/version from the blob internally; the caller does not
@@ -381,10 +394,11 @@ int umq_mempool_info_set(uint64_t umqh, const uint8_t *mempool_info, uint32_t me
  * @param[in] umqh: umq handle
  * @param[in] mempool_info: opaque blob received over the wire (umq parses it internally)
  * @param[in] mempool_info_len: byte length of the blob
- * Return: 0 no import needed (cached version matches); 1 need import (not imported);
- *         2 need unimport & re-import (imported but version grew);
- *         3 protocol error: version rolled back or field conflict, caller sends READ_ABORT;
- *         -1 error
+ * Return: UMQ_REMOTE_MEMPOOL_STATE_REUSE (0) cached version matches, no import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT (1) not imported, first import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT (2) imported but version changed
+ *         (grew or rolled back) — unimport & re-import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_ERR (-1) error
  */
 int umq_remote_mempool_state_check(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
 
