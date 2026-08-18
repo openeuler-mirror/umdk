@@ -44,6 +44,10 @@ uint64_t umq_rx_io_buf_size(void);
 int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 
+void umq_rx_qbuf_pool_depth_get(uint64_t *total_size, uint32_t *block_size, uint32_t *depth,
+                                uint64_t *free_depth);
+void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free_count);
+
 #ifdef __cplusplus
 }
 #endif

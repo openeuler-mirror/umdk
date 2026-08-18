@@ -275,6 +275,36 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
     info->block_size = block_size;
     info->total_block_num = base->total_block_num;
     info->umq_buf_t_size = umq_buf_t_size;
+
+    /* Fix P2-2: fill config and sc_info so Tiny/Huge Pool Config is not all-zero.
+     * Single-level pools report sc_count=1 with the one block_size. */
+    info->config.size_class_count = 1;
+    info->config.explicit_block_sizes[0] = block_size;
+    info->config.disable_scale_cap = 0;
+    info->config.disable_malloc_escape = 0;
+    info->config.expansion_size = 0;
+    info->config.expansion_threshold = 0;
+    info->config.expansion_mem_size_max = 0;
+    info->config.exp_total_mem_pool_size = 0;
+    info->config.tls_qbuf_pool_depth = base->tls_pools.tls_qbuf_pool_depth;
+    info->config.tls_expand_qbuf_pool_depth = base->tls_pools.tls_expand_qbuf_pool_depth;
+    info->config.batch_count = base->tls_pools.batch_count;
+    info->sc_count = 1;
+    {
+        umq_qbuf_sc_info_t *sci = &info->sc_info[0];
+        sci->blk_size = block_size;
+        sci->buf_cnt_with_data = base->block_pool[0].buf_cnt_with_data;
+        sci->global_total = base->total_block_num;
+        sci->capacity = base->total_block_num;
+        sci->init_block_count = base->total_block_num;
+        sci->exp_slots = 0;
+        sci->exp_total_block_num = 0;
+        sci->exp_free_blk = 0;
+        sci->exp_total_expansion_count = 0;
+        sci->exp_total_shrink_count = 0;
+        sci->trigger_expand = 0;
+    }
+
     if (base->mode == UMQ_BUF_SPLIT) {
         info->data_size = block_size;
         info->buf_size = block_size + umq_buf_t_size;
