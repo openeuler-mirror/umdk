@@ -86,17 +86,6 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id);
 int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
     uint32_t mempool_info_size, uint32_t *mempool_info_len);
 int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, uint32_t mempool_info_len);
-/* Return values of umq_ub_remote_mempool_state_check_impl:
- *   -1 = parameter error
- *    0 = cached version matches: reuse existing import, no action needed
- *    1 = not imported: need first-time import
- *    2 = version grew: need unimport \& re-import
- */
-#define UMQ_REMOTE_MEMPOOL_STATE_ERR          (-1)
-#define UMQ_REMOTE_MEMPOOL_STATE_REUSE        0
-#define UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT  1
-#define UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT 2
-
 int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *mempool_info,
     uint32_t mempool_info_len);
 /* Extract mempool_id/token_id/token_value from the opaque blob. Pure parse,
