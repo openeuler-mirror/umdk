@@ -178,6 +178,13 @@ typedef struct local_qbuf_pool_stats {
     uint64_t alloc_cnt_without_data;
     uint64_t free_cnt_with_data;
     uint64_t free_cnt_without_data;
+    /* per-SC fetch/return/alloc/free counters (valid [0..sc_count-1]) */
+    uint64_t sc_tls_fetch_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t sc_tls_fetch_buf_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t sc_tls_return_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t sc_tls_return_buf_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t sc_alloc_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
+    uint64_t sc_free_cnt[UMQ_QBUF_SIZE_CLASS_MAX];
 } local_qbuf_pool_stats_t;
 
 typedef struct thread_local_qbuf_pool {

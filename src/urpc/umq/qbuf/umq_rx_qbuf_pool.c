@@ -22,6 +22,9 @@ static global_block_pool_t g_rx_pool = {0};
 static void *g_rx_buffer_addr = NULL;
 static uint64_t g_rx_total_len = 0;
 static bool g_rx_pool_inited = false;
+// rx pool cumulative alloc/free counters (atomic, for DFX leak analysis)
+static volatile uint64_t g_rx_alloc_count = 0;
+static volatile uint64_t g_rx_free_count = 0;
 
 void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
 {
@@ -153,6 +156,7 @@ int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *o
         cur_node->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
     }
 
+    __atomic_add_fetch(&g_rx_alloc_count, cnt, __ATOMIC_RELAXED);
     return UMQ_SUCCESS;
 }
 
@@ -196,6 +200,7 @@ void umq_rx_qbuf_free(umq_buf_list_t *list)
     (void)pthread_spin_lock(&g_rx_pool.global_mutex);
     uint32_t cnt = release_batch(list, &g_rx_pool.head_with_data, false);
     g_rx_pool.buf_cnt_with_data += cnt;
+    __atomic_add_fetch(&g_rx_free_count, cnt, __ATOMIC_RELAXED);
     (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
 }
 
@@ -221,3 +226,39 @@ void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
     ops->unregister_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID);
 }
 
+void umq_rx_qbuf_pool_depth_get(uint64_t *total_size, uint32_t *block_size, uint32_t *depth,
+                                uint64_t *free_depth)
+{
+    /* Read global state directly (like Normal/Tiny DFX), without checking
+     * g_rx_pool_inited: after uninit, g_rx_total_len and block_size remain
+     * valid (not cleared), so total_size/depth reflect the configured pool;
+     * g_rx_pool.buf_cnt_with_data is cleared to 0 by uninit, so free_depth=0
+     * correctly indicates no free buffers. This is consistent with Normal/Tiny
+     * which also read their globals directly after uninit. */
+    uint32_t blk_size = UMQ_RX_QBUF_BLOCK_SIZE;
+    uint32_t header_size = (uint32_t)sizeof(umq_buf_t);
+    uint32_t blk_num = (uint32_t)(g_rx_total_len / (blk_size + header_size));
+    if (total_size != NULL) {
+        *total_size = g_rx_total_len;
+    }
+    if (block_size != NULL) {
+        *block_size = blk_size;
+    }
+    if (depth != NULL) {
+        *depth = blk_num;
+    }
+    if (free_depth != NULL) {
+        *free_depth = g_rx_pool.buf_cnt_with_data;
+    }
+}
+
+
+void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free_count)
+{
+    if (alloc_count != NULL) {
+        *alloc_count = __atomic_load_n(&g_rx_alloc_count, __ATOMIC_RELAXED);
+    }
+    if (free_count != NULL) {
+        *free_count = __atomic_load_n(&g_rx_free_count, __ATOMIC_RELAXED);
+    }
+}
