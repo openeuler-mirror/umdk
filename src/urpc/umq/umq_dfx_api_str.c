@@ -59,23 +59,6 @@ static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
     return qbuf_pool_type[type];
 }
 
-/* Format a byte count as "<raw> (<human>)" where human uses K/M/G suffix with
- * 2-decimal precision. Examples: "209715200 (200.00M)", "0 (0B)". Used in
- * the Derived Metrics section so testers can scan both raw and readable
- * values in one column. */
-static void umq_format_size_hr(uint64_t bytes, char *out, size_t out_size)
-{
-    if (bytes >= (1ULL << 30)) {
-        snprintf(out, out_size, "%lu (%.2fG)", (unsigned long)bytes, (double)bytes / (1ULL << 30));
-    } else if (bytes >= (1ULL << 20)) {
-        snprintf(out, out_size, "%lu (%.2fM)", (unsigned long)bytes, (double)bytes / (1ULL << 20));
-    } else if (bytes >= (1ULL << 10)) {
-        snprintf(out, out_size, "%lu (%.2fK)", (unsigned long)bytes, (double)bytes / (1ULL << 10));
-    } else {
-        snprintf(out, out_size, "%lu (%luB)", (unsigned long)bytes, (unsigned long)bytes);
-    }
-}
-
 int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, char *buf, int max_buf_len)
 {
     if (qbuf_pool_stats == NULL || buf == NULL || max_buf_len <= 0 ||
@@ -93,23 +76,111 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "                                             Qbuf Pool Statistics");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
 
-    // === Global Pool Config ===
+    // === Global Pool Config (merged with Per-SizeClass) ===
+    // Multi-level pools (Normal) are expanded per-SC (Small/Medium/...) instead of a
+    // single misleading row; single-level pools (Tiny) stay one row. RX pool and
+    // without-data are appended as their own rows under the Small pool that owns
+    // them. A trailing Total row sums every row's TotalSize for a quick memory
+    // footprint check.
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
                          "                                             Global Pool Config");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-9s %-11s %-8s %-8s %-8s %-8s %-8s %-11s %-11s %-11s %-13s %-13s\n",
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-6s %-21s %-8s %-8s %-8s %-8s %-8s %-11s %-11s %-11s\n",
                          "Type", "Mode", "TotalSize", "TotalBlk", "BlkSize", "Headroom", "DataSize", "BufSize",
-                         "UmqBufSize", "FreeBlk", "FreeSize", "NoBufFreeBlk", "NoBufFreeSize");
+                         "UmqBufSize", "FreeBlk", "FreeSize");
+    uint64_t grand_total_size = 0;
+    const umq_qbuf_pool_info_t *small_info = NULL; /* remembered for without-data row */
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-13s %-9s %-11lu %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu %-13lu %-13lu\n",
-                             umq_qbuf_pool_type_name(info->type), info->mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE",
-                             info->total_size, info->total_block_num, info->block_size, info->headroom_size,
-                             info->data_size, info->buf_size, info->umq_buf_t_size,
-                             info->available_mem.split.block_num_with_data, info->available_mem.split.size_with_data,
-                             info->available_mem.split.block_num_without_data, info->available_mem.split.size_without_data);
+        const char *mode_str = info->mode == UMQ_BUF_SPLIT ? "SPLIT" : "COMBINE";
+        if (info->sc_count > 1) {
+            small_info = info;
+            /* Multi-level: expand each SC as its own row (Small/Medium/...).
+             * Per-SC TotalSize = data_region size, TotalBlk = global_total, BlkSize
+             * = sc blk_size; Headroom/DataSize/BufSize/UmqBufSize are pool-level
+             * (shared across SCs). */
+            for (uint32_t sc = 0; sc < info->sc_count; sc++) {
+                const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
+                /* TotalBlk/TotalSize = initial reserved only (per_sc_block_counts,
+                 * set once at init, NOT including expansion); FreeBlk = current free.
+                 * TotalSize counts each block's umq_buf_t header (128B) on top of data. */
+                uint64_t sc_total_size = (uint64_t)sci->init_block_count * (sci->blk_size + info->umq_buf_t_size);
+                uint64_t sc_free_size = (uint64_t)sci->buf_cnt_with_data * sci->blk_size;
+                static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
+                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ?
+                                       sc_names[sc] : "sc?";
+                char ts_buf[32];
+                (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
+                               (double)sc_total_size / (1024.0 * 1024.0));
+                UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                     "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
+                                     sc_name, mode_str, ts_buf,
+                                     (unsigned long)sci->init_block_count,
+                                     sci->blk_size, info->headroom_size, info->data_size, info->buf_size,
+                                     info->umq_buf_t_size, (unsigned long)sci->buf_cnt_with_data, sc_free_size);
+                grand_total_size += sc_total_size;
+            }
+            /* RX pool row: owned by the multi-level Small pool, carried in its config.
+             * rx_pool_total_size already counts each block's umq_buf_t header, matching
+             * the other type rows that add TotalBlk * umq_buf_t_size to the data bytes. */
+            const umq_qbuf_pool_config_t *cfg = &info->config;
+            uint64_t rx_total_size = cfg->rx_pool_total_size;
+            char rx_ts_buf[32];
+            (void)snprintf(rx_ts_buf, sizeof(rx_ts_buf), "%lu(%.1fMB)", rx_total_size,
+                           (double)rx_total_size / (1024.0 * 1024.0));
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
+                                 "RX_pool", mode_str, rx_ts_buf,
+                                 (unsigned long)cfg->rx_pool_depth,
+                                 cfg->rx_pool_block_size, info->headroom_size, info->data_size,
+                                 info->buf_size, info->umq_buf_t_size,
+                                 (unsigned long)cfg->rx_pool_free_depth,
+                                 (uint64_t)cfg->rx_pool_free_depth * cfg->rx_pool_block_size);
+            grand_total_size += rx_total_size;
+        } else {
+            /* single-level pool (Tiny/etc): one row. TotalBlk/TotalSize = initial
+             * reserved (sc_info[0].capacity, NOT including expansion); FreeBlk =
+             * current free. */
+            const umq_qbuf_sc_info_t *sci0 = &info->sc_info[0];
+            uint64_t init_total_size = (uint64_t)sci0->init_block_count * (sci0->blk_size + info->umq_buf_t_size);
+            uint64_t free_size = (uint64_t)info->available_mem.split.block_num_with_data * sci0->blk_size;
+            char tiny_ts_buf[32];
+            (void)snprintf(tiny_ts_buf, sizeof(tiny_ts_buf), "%lu(%.1fMB)", init_total_size,
+                           (double)init_total_size / (1024.0 * 1024.0));
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
+                                 umq_qbuf_pool_type_name(info->type), mode_str, tiny_ts_buf,
+                                 (unsigned long)sci0->init_block_count, sci0->blk_size, info->headroom_size, info->data_size,
+                                 info->buf_size, info->umq_buf_t_size,
+                                 info->available_mem.split.block_num_with_data, free_size);
+            grand_total_size += init_total_size;
+        }
     }
+    /* without-data row (placed after Tiny): the Small pool's header-only blocks
+     * (sc0 carries the count). Only the umq_buf_t header (128B) is stored;
+     * TotalSize = header count * umq_buf_t_size. No Mode/BlkSize/etc (header-only,
+     * not a data block) — show "-" for those. without-data blocks are separate
+     * from the with-data blocks (not counted in any sc's init_block_count), so
+     * their header space IS added to grand_total. */
+    if (small_info != NULL && small_info->mode == UMQ_BUF_SPLIT) {
+        uint64_t nodata_total_size =
+            (uint64_t)small_info->available_mem.split.block_num_without_data * small_info->umq_buf_t_size;
+        char nodata_ts_buf[32];
+        (void)snprintf(nodata_ts_buf, sizeof(nodata_ts_buf), "%lu(%.1fMB)", nodata_total_size,
+                       (double)nodata_total_size / (1024.0 * 1024.0));
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                             "%-13s %-6s %-21s %-8lu %-8s %-8s %-8s %-8s %-11u %-11s %-11s\n",
+                             "without-data", "-", nodata_ts_buf,
+                             (unsigned long)small_info->available_mem.split.block_num_without_data,
+                             "-", "-", "-", "-", small_info->umq_buf_t_size, "-", "-");
+        grand_total_size += nodata_total_size;
+    }
+    /* Total row: sum of every row's TotalSize, with a human-readable MB suffix. */
+    char total_ts_buf[32];
+    (void)snprintf(total_ts_buf, sizeof(total_ts_buf), "%lu(%.1fMB)", grand_total_size,
+                   (double)grand_total_size / (1024.0 * 1024.0));
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                         "%-13s %-6s %-21s\n", "Total", "-", total_ts_buf);
 
     // === Pool Config (multi-level size_class + expansion settings) ===
     // Exposes per-pool multi-level config fields previously hidden in g_qbuf_pool.
@@ -132,52 +203,77 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->explicit_block_sizes[sc]);
         }
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12u\n", "per_sc_block_count",
-                             cfg->per_sc_block_count, "disable_scale_cap", (uint32_t)cfg->disable_scale_cap);
+        /* Fix P1-2: per_sc_block_count removed -- multi-level model has per-sc
+         * counts in sc_info[].cap, a single uint64 cannot represent them. */
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "disable_scale_cap",
+                             (uint32_t)cfg->disable_scale_cap);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u %-30s %-12lu\n", "disable_malloc_escape",
                              (uint32_t)cfg->disable_malloc_escape, "expansion_size", cfg->expansion_size);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u %-30s %-12u\n", "expansion_threshold",
                              cfg->expansion_threshold, "batch_count", cfg->batch_count);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "expansion_mem_size_max",
                              cfg->expansion_mem_size_max, "exp_total_mem_pool_size", cfg->exp_total_mem_pool_size);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "tls_qbuf_pool_depth",
-                             cfg->tls_qbuf_pool_depth, "tls_expand_qbuf_pool_depth", cfg->tls_expand_qbuf_pool_depth);
+         /* tls_qbuf_pool_depth / tls_expand_qbuf_pool_depth are block counts
+         * (not bytes), so they can be compared directly with Per-Thread TLS CurCap. */
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n",
+                             "tls_qbuf_pool_depth", cfg->tls_qbuf_pool_depth,
+                             "tls_expand_qbuf_pool_depth", cfg->tls_expand_qbuf_pool_depth);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "exp_slot_used_count",
                              info->exp_slot_used_count);
+        for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
+            char name[32];
+            snprintf(name, sizeof(name), "batch_count[sc%u]", sc);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
+                                 cfg->per_sc_batch_count[sc]);
+        }
     }
 
-    // === Per-SizeClass State (per-sc raw values, NOT summed) ===
-    // Per-sc breakdown of block_pool and exp_pool_with_data arrays. Replaces the
-    // single-level view (where only block_sizes[0] was exposed and per-sc counts
-    // were summed in umq_qbuf_pool_info_get's legacy path).
-    // Columns: g_with -> g_w_data, g_without -> g_wo_data (clearer abbreviation).
-    // Address columns replaced by relative offsets from pool base
-    // (sc_info[0].data_region_start). The absolute pointers remain available in
-    // the stats struct for callers that need them; the to_str view shows offsets
-    // because they are smaller and more meaningful for layout verification.
+    /* Pool Config [RX_pool]: RX pool config fields are carried on the Small pool's
+     * config (rx_pool_*), but displayed as their own section for clarity. */
+    if (small_info != NULL && small_info->type == UMQ_QBUF_POOL_TYPE_SMALL) {
+        const umq_qbuf_pool_config_t *cfg = &small_info->config;
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "                                  Pool Config [RX_pool]\n");
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", "rx_pool_total_size",
+                             cfg->rx_pool_total_size);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u %-30s %-12u\n", "rx_pool_block_size",
+                             cfg->rx_pool_block_size, "rx_pool_depth", cfg->rx_pool_depth);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12ld\n", "rx_pool_free_depth",
+                             cfg->rx_pool_free_depth, "rx_pool_outstanding",
+                             (long)(qbuf_pool_stats->alloc_stats.rx_pool_alloc_count - qbuf_pool_stats->alloc_stats.rx_pool_free_count));
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu %-30s %-12lu\n", "rx_pool_alloc_cnt",
+                             qbuf_pool_stats->alloc_stats.rx_pool_alloc_count, "rx_pool_free_cnt", qbuf_pool_stats->alloc_stats.rx_pool_free_count);
+    }
+
+    // === Without-Data Pool State ===
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
-        if (info->sc_count == 0) {
+        if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
             continue;
         }
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "                       Per-SizeClass State [%s, sc_count=%u]\n",
-                             umq_qbuf_pool_type_name(info->type), info->sc_count);
+                             "                       Without-Data Pool State [%s]\n",
+                             umq_qbuf_pool_type_name(info->type));
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-4s %-10s %-10s %-10s %-10s %-14s %-14s %-14s %-10s %-8s %-10s %-10s\n",
-                             "sc", "blk_size", "glbl_free", "hdr_free", "exp_slots",
-                             "exp_total_blk", "exp_total_exp", "exp_total_shrink", "glbl_total", "cap", "exp_free", "trig_expand");
-        for (uint32_t sc = 0; sc < info->sc_count; sc++) {
-            const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
+                             "%-10s %-10s %-14s %-14s %-14s %-11s %-11s %-11s\n",
+                             "free_blk", "blk_size", "exp_total_blk", "exp_total_exp", "exp_total_shrink",
+                             "alloc_cnt", "free_cnt", "outstanding");
+        {
+            const umq_expansion_pool_stats_t *exp = &qbuf_pool_stats->exp_pool_without_data;
+            uint32_t nodata_blk_size = info->umq_buf_t_size;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                                 "%-4u %-10u %-10lu %-10lu %-10u %-14lu %-14lu %-14lu %-10lu %-8lu %-10lu %-10lu\n", sc,
-                                 sci->blk_size, (unsigned long)sci->buf_cnt_with_data,
-                                 (unsigned long)sci->buf_cnt_without_data, sci->exp_slots,
-                                 (unsigned long)sci->exp_total_block_num, (unsigned long)sci->exp_total_expansion_count,
-                                 (unsigned long)sci->exp_total_shrink_count, (unsigned long)sci->global_total,
-                                 (unsigned long)sci->capacity, (unsigned long)sci->exp_free_blk, (unsigned long)sci->trigger_expand);
+                                 "%-10lu %-10u %-14lu %-14lu %-14lu %-11lu %-11lu %-11ld\n",
+                                 info->available_mem.split.block_num_without_data,
+                                 nodata_blk_size,
+                                 (unsigned long)exp->exp_total_block_num,
+                                 (unsigned long)exp->total_expansion_count,
+                                 (unsigned long)exp->total_shrink_count,
+                                 qbuf_pool_stats->alloc_stats.nodata_alloc_count,
+                                 qbuf_pool_stats->alloc_stats.nodata_free_count,
+                                 (long)(qbuf_pool_stats->alloc_stats.nodata_alloc_count - qbuf_pool_stats->alloc_stats.nodata_free_count));
         }
     }
 
@@ -188,15 +284,37 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-15s %-17s %-15s %-17s %-17s %-17s %-17s %-17s\n", "Type", "ExpandCnt",
                          "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "SyncExpCnt", "AsyncExpCnt", "AccShrinkCnt");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu %-17lu %-17lu\n", "WithData",
-                         qbuf_pool_stats->exp_pool_with_data.expansion_count,
-                         qbuf_pool_stats->exp_pool_with_data.exp_total_block_num,
-                         qbuf_pool_stats->exp_pool_with_data.exp_total_free_block_num,
-                         qbuf_pool_stats->exp_pool_with_data.exp_total_mem_size,
-                         qbuf_pool_stats->exp_pool_with_data.total_expansion_count,
-                         qbuf_pool_stats->exp_pool_with_data.sync_expansion_count,
-                         qbuf_pool_stats->exp_pool_with_data.async_expansion_count,
-                         qbuf_pool_stats->exp_pool_with_data.total_shrink_count);
+    /* WithData: per-SC breakdown for multi-level pools (Small/Medium/...). */
+    if (small_info != NULL && small_info->sc_count > 1) {
+        static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
+        for (uint32_t sc = 0; sc < small_info->sc_count; sc++) {
+            const umq_qbuf_sc_info_t *sci = &small_info->sc_info[sc];
+            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            uint64_t exp_mem_size = sci->exp_total_block_num * sci->blk_size;
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu %-17lu %-17lu\n",
+                                 sc_name, sci->exp_expansion_count,
+                                 (unsigned long)sci->exp_total_block_num,
+                                 (unsigned long)sci->exp_free_blk, (unsigned long)exp_mem_size,
+                                 (unsigned long)sci->exp_total_expansion_count,
+                                 (unsigned long)sci->exp_sync_expansion_count,
+                                 (unsigned long)sci->exp_async_expansion_count,
+                                 (unsigned long)sci->exp_total_shrink_count);
+        }
+    } else if (small_info != NULL && small_info->sc_count == 1) {
+        /* single-level pool: one WithData row */
+        const umq_qbuf_sc_info_t *sci = &small_info->sc_info[0];
+        uint64_t exp_mem_size = sci->exp_total_block_num * sci->blk_size;
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                             "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu %-17lu %-17lu\n", "WithData",
+                             sci->exp_expansion_count,
+                             (unsigned long)sci->exp_total_block_num,
+                             (unsigned long)sci->exp_free_blk, (unsigned long)exp_mem_size,
+                             (unsigned long)sci->exp_total_expansion_count,
+                             (unsigned long)sci->exp_sync_expansion_count,
+                             (unsigned long)sci->exp_async_expansion_count,
+                             (unsigned long)sci->exp_total_shrink_count);
+    }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu %-17lu %-17lu\n", "WithoutData",
                          qbuf_pool_stats->exp_pool_without_data.expansion_count,
                          qbuf_pool_stats->exp_pool_without_data.exp_total_block_num,
@@ -295,13 +413,35 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          total_tls_fetch_buf_cnt_with_data, total_tls_return_cnt_with_data,
                          total_tls_return_buf_cnt_with_data, total_alloc_cnt_with_data, total_free_cnt_with_data);
 
+    static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-14lu %-14lu\n",
-                             umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_with_data, s->buf_cnt_with_data,
-                             s->tls_fetch_cnt_with_data, s->tls_fetch_buf_cnt_with_data, s->tls_return_cnt_with_data,
-                             s->tls_return_buf_cnt_with_data, s->alloc_cnt_with_data, s->free_cnt_with_data);
+        if (s->sc_count > 1) {
+            /* Multi-level pool: split per-SC into Small/Medium rows.
+             * All columns show per-SC values (fetch/return/alloc/free are per-sc). */
+            for (uint32_t sc = 0; sc < s->sc_count; sc++) {
+                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+                UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                     "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-14lu %-14lu\n",
+                                     sc_name, s->tid,
+                                     (unsigned long)s->sc_capacity_with_data[sc],
+                                     (unsigned long)s->sc_buf_cnt_with_data[sc],
+                                     (unsigned long)s->sc_tls_fetch_cnt[sc],
+                                     (unsigned long)s->sc_tls_fetch_buf_cnt[sc],
+                                     (unsigned long)s->sc_tls_return_cnt[sc],
+                                     (unsigned long)s->sc_tls_return_buf_cnt[sc],
+                                     (unsigned long)s->sc_alloc_cnt[sc],
+                                     (unsigned long)s->sc_free_cnt[sc]);
+            }
+        } else {
+            /* single-level pool (Tiny/etc): one row */
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-14lu %-14lu\n",
+                                 umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_with_data, s->buf_cnt_with_data,
+                                 s->tls_fetch_cnt_with_data, s->tls_fetch_buf_cnt_with_data,
+                                 s->tls_return_cnt_with_data, s->tls_return_buf_cnt_with_data,
+                                 s->alloc_cnt_with_data, s->free_cnt_with_data);
+        }
     }
 
     // === Per-Thread TLS Pool Stats (WithoutData) ===
@@ -337,104 +477,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_without_data, s->buf_cnt_without_data,
             s->tls_fetch_cnt_without_data, s->tls_fetch_buf_cnt_without_data, s->tls_return_cnt_without_data,
             s->tls_return_buf_cnt_without_data, s->alloc_cnt_without_data, s->free_cnt_without_data);
-    }
-
-    // === Per-Thread Per-SC TLS (with_data breakdown) ===
-    // Per-thread per-size_class TLS bytes/buf_cnt. The Per-Thread TLS Pool Stats
-    // (WithData) section above reports per-thread SUM across sc levels; this
-    // section exposes the per-sc breakdown (matches the multi-level model).
-    for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
-        const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
-        if (s->sc_count == 0) {
-            continue; /* skip pools that did not fill per-sc arrays */
-        }
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "            Per-Thread Per-SC TLS (WithData) [%s, tid=%lu, sc_count=%u]\n",
-                             umq_qbuf_pool_type_name(s->type), (unsigned long)s->tid, s->sc_count);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4s %-18s %-18s\n", "sc", "tls_buf_cnt", "tls_cap_cnt");
-        for (uint32_t sc = 0; sc < s->sc_count; sc++) {
-            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-4u %-18lu %-18lu\n", sc,
-                                 (unsigned long)s->sc_buf_cnt_with_data[sc],
-                                 (unsigned long)s->sc_capacity_with_data[sc]);
-        }
-    }
-
-    // === Derived Metrics ===
-    // Pulls raw counts into tester-facing indicators plus human-readable sizes:
-    //   utilization   = (total - free) / total * 100  -- pool pressure
-    //   tls_locality  = tls_buf / (tls_buf + global_buf) * 100  -- TLS cache hit
-    //   alloc_minus_free = AccAlloc - AccFree  -- leak sanity (should equal
-    //   tls cur_buf; printed value 0 at init is the expected clean state)
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
-                         "                                             Derived Metrics");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                         "%-10s %-20s %-12s %-20s %-12s %-13s %-13s %-18s\n", "Pool", "TotalSize", "TotalCnt",
-                         "FreeSize", "FreeCnt", "Utilization", "TlsLocality", "AllocMinusFree");
-    for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
-        const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
-        char total_hr[32];
-        char free_hr[32];
-        char util_str[16];
-        char tls_loc_str[16];
-        umq_format_size_hr(info->total_size, total_hr, sizeof(total_hr));
-        umq_format_size_hr(info->available_mem.split.size_with_data, free_hr, sizeof(free_hr));
-        double util = (info->total_block_num == 0) ?
-                          0.0 :
-                          (double)(info->total_block_num - info->available_mem.split.block_num_with_data) /
-                              (double)info->total_block_num * 100.0;
-        uint64_t tls_buf_sum = total_tls_buf_cnt_with_data;
-        uint64_t global_buf = info->available_mem.split.block_num_with_data;
-        uint64_t denom = tls_buf_sum + global_buf;
-        double tls_loc = (denom == 0) ? 0.0 : (double)tls_buf_sum / (double)denom * 100.0;
-        int64_t alloc_minus_free = (int64_t)total_alloc_cnt_with_data - (int64_t)total_free_cnt_with_data;
-        snprintf(util_str, sizeof(util_str), "%.2f%%", util);
-        snprintf(tls_loc_str, sizeof(tls_loc_str), "%.2f%%", tls_loc);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-10s %-20s %-12lu %-20s %-12lu %-13s %-13s %-18ld\n",
-                             umq_qbuf_pool_type_name(info->type), total_hr,
-                             (unsigned long)info->total_block_num, free_hr,
-                             (unsigned long)info->available_mem.split.block_num_with_data,
-                             util_str, tls_loc_str, (long)alloc_minus_free);
-        /* Per-SC breakdown: each SC shows its own TotalCnt, FreeCnt, utilization and TLS locality.
-         *   TotalCnt   = global_total (init + expansion blocks for this SC)
-         *   FreeCnt    = buf_cnt_with_data (global free blocks for this SC)
-         *   utilization = (total - free) / total * 100  -- fraction of blocks in use
-         *   tls_locality = tls_buf_sc / (tls_buf_sc + global_free_sc) * 100  -- TLS cache hit rate */
-        if (info->sc_count > 0) {
-            for (uint32_t sc = 0; sc < info->sc_count; sc++) {
-                const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
-                char sc_total_hr[32];
-                char sc_free_hr[32];
-                char sc_util_str[16];
-                char sc_tls_loc_str[16];
-                uint64_t sc_total_bytes = sci->global_total * sci->blk_size;
-                uint64_t sc_free_bytes = sci->buf_cnt_with_data * sci->blk_size;
-                umq_format_size_hr(sc_total_bytes, sc_total_hr, sizeof(sc_total_hr));
-                umq_format_size_hr(sc_free_bytes, sc_free_hr, sizeof(sc_free_hr));
-                double sc_util = (sci->global_total == 0) ? 0.0 :
-                    (double)(sci->global_total - sci->buf_cnt_with_data) /
-                    (double)sci->global_total * 100.0;
-                uint64_t tls_buf_sc = total_tls_buf_cnt_with_data_per_sc[sc];
-                uint64_t global_buf_sc = sci->buf_cnt_with_data;
-                uint64_t sc_denom = tls_buf_sc + global_buf_sc;
-                double sc_tls_loc = (sc_denom == 0) ? 0.0 :
-                    (double)tls_buf_sc / (double)sc_denom * 100.0;
-                snprintf(sc_util_str, sizeof(sc_util_str), "%.2f%%", sc_util);
-                snprintf(sc_tls_loc_str, sizeof(sc_tls_loc_str), "%.2f%%", sc_tls_loc);
-                char sc_label[32];
-                snprintf(sc_label, sizeof(sc_label), "%s-sc%u",
-                         umq_qbuf_pool_type_name(info->type), sc);
-                UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                                     "%-10s %-20s %-12lu %-20s %-12lu %-13s %-13s\n",
-                                     sc_label, sc_total_hr, (unsigned long)sci->global_total,
-                                     sc_free_hr, (unsigned long)sci->buf_cnt_with_data,
-                                     sc_util_str, sc_tls_loc_str);
-            }
-        }
     }
 
     // === Escape (properly framed section, consistent with other tables) ===

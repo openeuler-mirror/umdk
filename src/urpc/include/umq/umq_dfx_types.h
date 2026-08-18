@@ -25,7 +25,7 @@ extern "C" {
 #define UMQ_PERF_QUANTILE_P99 (2u)
 #define UMQ_PERF_QUANTILE_P9999 (3u)
 #define UMQ_PERF_REC_MAX_NUM (64u)
-#define UMQ_DFX_TO_STRING_DEFAULT_LEN (20480)
+#define UMQ_DFX_TO_STRING_DEFAULT_LEN (40960)
 #define UMQ_LOCAL_QBUF_POOL_MAX_NUM (64)
 /* Maximum number of size_class levels exposed via DFX. Mirrors UMQ_QBUF_SIZE_CLASS_MAX
  * in the internal umq_qbuf_pool_base.h; duplicated here because the internal header
@@ -107,13 +107,15 @@ typedef struct umq_qbuf_sc_info {
     uint64_t data_region_end;      // g_qbuf_pool.data_region_end[sc] cast to uint64_t
     uint64_t header_region_start;  // g_qbuf_pool.header_region_start[sc] cast to uint64_t
     uint64_t buf_cnt_with_data;    // block_pool[sc].buf_cnt_with_data (global with_data count)
-    uint64_t buf_cnt_without_data; // block_pool[sc].buf_cnt_without_data (sc0 carries the without_data count; others 0)
     uint32_t exp_expansion_count;  // exp_pool_with_data[sc].expansion_count
     uint64_t exp_total_block_num;  // exp_pool_with_data[sc].exp_total_block_num
     uint64_t exp_total_expansion_count; // exp_pool_with_data[sc].total_expansion_count
     uint64_t exp_total_shrink_count;    // exp_pool_with_data[sc].total_shrink_count
+    uint64_t exp_sync_expansion_count;  // exp_pool_with_data[sc].sync_expansion_count
+    uint64_t exp_async_expansion_count; // exp_pool_with_data[sc].async_expansion_count
     uint64_t global_total;         // total blocks in global pool for this sc (init + expansion)
     uint64_t capacity;             // block_pool[sc] init capacity (per_sc_block_count)
+    uint64_t init_block_count;     // per_sc_block_counts[sc]: initial reserved block count, set once at init, NEVER changes at runtime
     uint32_t exp_slots;            // number of expansion pool slots for this sc
     uint64_t exp_free_blk;         // free blocks in expansion pool for this sc
     uint64_t trigger_expand;        // async expansion threshold (exp_pool_with_data[sc].trigger_expand_block_num)
@@ -134,6 +136,11 @@ typedef struct umq_qbuf_pool_config {
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 1/2 of tls_qbuf_pool_depth)
     uint64_t tls_qbuf_pool_depth;         // global TLS depth cap (per-SC for normal pool; default ~1.5K)
     uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
+    uint32_t per_sc_batch_count[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc batch count (get_batch_count(sc), varies by blk_size)
+    uint64_t rx_pool_total_size;        // RX recv pool total memory (bytes)
+    uint32_t rx_pool_block_size;        // RX recv pool block size (bytes)
+    uint32_t rx_pool_depth;             // RX recv pool total block count (capacity)
+    uint64_t rx_pool_free_depth;        // RX recv pool free block count (current depth)
 } umq_qbuf_pool_config_t;
 
 typedef enum umq_qbuf_pool_type {
@@ -170,8 +177,31 @@ typedef struct umq_local_qbuf_pool_stats {
      * above are the SUM across these sc entries). Valid indices: [0..sc_count-1]. */
     uint64_t sc_capacity_with_data[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc count cap held in TLS
     uint64_t sc_buf_cnt_with_data[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc buffer count held in TLS
+    uint64_t sc_tls_fetch_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX];    // per-sc TLS fetch count
+    uint64_t sc_tls_fetch_buf_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc TLS fetch buf count
+    uint64_t sc_tls_return_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX];   // per-sc TLS return count
+    uint64_t sc_tls_return_buf_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc TLS return buf count
+    uint64_t sc_alloc_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX];       // per-sc alloc count
+    uint64_t sc_free_cnt[UMQ_DFX_QBUF_SIZE_CLASS_MAX];         // per-sc free count
     uint32_t sc_count; // number of valid per-sc entries (g_qbuf_pool.size_class_count)
 } umq_local_qbuf_pool_stats_t;
+
+/* Global pool-granularity alloc/free counters for leak analysis.
+ * Unlike TLS-level counters (local_qbuf_pool_stats_t), these are accumulated
+ * across ALL threads via atomic operations, so alloc on thread A and free on
+ * thread B are both correctly counted.  alloc_count - free_count shows outstanding buffers;
+ * a persistently growing outstanding value indicates memory not being returned. */
+typedef struct umq_qbuf_pool_alloc_stats {
+    /* per-SC with_data: matches sc_info[sc] by index */
+    uint64_t sc_alloc_count[UMQ_SIZE_CLASS_MAX];  // per-SC cumulative with_data alloc count
+    uint64_t sc_free_count[UMQ_SIZE_CLASS_MAX];   // per-SC cumulative with_data free count
+    /* without_data: single pool, no per-SC split */
+    uint64_t nodata_alloc_count;                   // cumulative without_data alloc count
+    uint64_t nodata_free_count;                    // cumulative without_data free count
+    /* rx pool: independent 4K-only recv pool */
+    uint64_t rx_pool_alloc_count;                  // RX recv pool cumulative alloc count
+    uint64_t rx_pool_free_count;                   // RX recv pool cumulative free count
+} umq_qbuf_pool_alloc_stats_t;
 
 typedef struct umq_qbuf_pool_info {
     umq_qbuf_pool_type_t type; // qbuf pool type
@@ -217,6 +247,9 @@ typedef struct umq_qbuf_pool_stats {
 
     // escape
     uint64_t escape_buf_cnt;
+
+    // global pool-granularity leak stats
+    umq_qbuf_pool_alloc_stats_t alloc_stats;
 } umq_qbuf_pool_stats_t;
 
 typedef struct umq_info {
