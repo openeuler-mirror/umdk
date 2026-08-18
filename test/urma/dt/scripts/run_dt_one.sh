@@ -20,10 +20,14 @@ Examples:
   bash test/urma/dt/scripts/run_dt_one.sh test_read
   bash test/urma/dt/scripts/run_dt_one.sh test_rnr test/urma/dt/cases/test_rnr.cpp URMA_SIM_INJECT_STATUS=4
 
+Before running, build the DT environment once:
+  bash test/urma/dt/scripts/build_dt_env.sh
+Then run cases with no extra environment variables.
+
 Environment:
-  URMA_DT_SIM_MODE       hw or provider. Default: hw
+  URMA_DT_SIM_MODE       Run mode. Only hw supported (real provider + sim). Default: hw
   URMA_DT_BUILD_ROOT     Build output root. Default: <repo>/build/dt
-  URMA_DT_SRC_BUILD      Non-ASan UMDK build dir. Default: <build_root>/src_noasan
+  URMA_DT_SRC_BUILD      liburma build dir (build_dt_env.sh 产物). Default: build/dt/src_noasan
   URMA_DT_SAVE_LOGS      Save logs to files when set to 1. Default: 0
   URMA_DT_LOG_DIR        Log directory. Usually exported by run_dt.sh
   URMA_DT_PRINT_LOGS     Print case stdout when set to 1. Default: 1
@@ -37,7 +41,7 @@ Environment:
   GTEST_LIB              Optional gtest library directory
   UA_CORE                liburma.so directory. Default: <src_build>/urma/lib/urma/core
   UA_COMMON              liburma_common.so directory. Default: <src_build>/urma/common
-  SIM_BUILD              Simulator build directory. Default: <build_root>/simulator
+  SIM_BUILD              Simulator build directory (build_dt_env.sh 产物). Default: build/dt/simulator
   SIM_SO                 Simulator shared library. Default: <sim_build>/liburma_sim.so
   SIM_CFG                Simulator config json. Default: <simulator_dir>/urma_sim_config.json
 EOF
@@ -90,18 +94,13 @@ LOG_TAIL_LINES=${URMA_DT_LOG_TAIL_LINES:-0}
 PRINT_LOGS=${URMA_DT_PRINT_LOGS:-1}
 SAVE_LOGS=${URMA_DT_SAVE_LOGS:-0}
 
-case "$SIM_MODE" in
-    provider)
-        SIM_HW=0
-        ;;
-    hw)
-        SIM_HW=1
-        ;;
-    *)
-        echo "unknown URMA_DT_SIM_MODE=$SIM_MODE, expected provider or hw" >&2
-        exit 2
-        ;;
-esac
+# 仅支持 hw 模式：真 udma provider 跑真代码，sim 拦截其与内核的交互（方式 1）。
+# provider 模式（sim 当 provider，方式 3）已废弃——post_recv/SEND/wait 语义不完整。
+if [ "$SIM_MODE" != "hw" ]; then
+    echo "unknown URMA_DT_SIM_MODE=$SIM_MODE, only hw is supported" >&2
+    exit 2
+fi
+SIM_HW=1
 
 mkdir -p "$BIN_DIR" "$LOG_DIR" "$WORK_PARENT"
 
@@ -109,27 +108,19 @@ if [[ "$CASE_CPP" != /* ]]; then
     CASE_CPP="$UMDK_ROOT/$CASE_CPP"
 fi
 
-if [ ! -f "$CASE_CPP" ]; then
-    echo "[DT] missing case source: $CASE_CPP"
-    exit 1
-fi
+check_file()
+{
+    if [ ! -f "$1" ]; then
+        echo "[DT] missing $2: $1"
+        exit 1
+    fi
+}
 
-if [ ! -f "$FIXTURE_DIR/dt_fixture.cpp" ]; then
-    echo "[DT] missing fixture source: $FIXTURE_DIR/dt_fixture.cpp"
-    exit 1
-fi
+check_file "$CASE_CPP" "case source"
+check_file "$FIXTURE_DIR/dt_fixture.cpp" "fixture source"
+check_file "$SIM_SO" "simulator library (run build_dt_env.sh first)"
+check_file "$SIM_CFG" "simulator config"
 
-if [ ! -f "$SIM_SO" ]; then
-    echo "[DT] missing simulator library: $SIM_SO"
-    echo "[DT] run run_dt.sh first or provide SIM_SO explicitly"
-    exit 1
-fi
-
-if [ ! -f "$SIM_CFG" ]; then
-    echo "[DT] missing simulator config: $SIM_CFG"
-    echo "[DT] provide SIM_CFG explicitly or add simulator config under URMA_DT_SIMULATOR_DIR"
-    exit 1
-fi
 
 EXE=$BIN_DIR/${CASE_NAME}_run
 COMPILE_LOG=$LOG_DIR/${CASE_NAME}.compile.log
@@ -260,6 +251,7 @@ env \
     URMA_SIM_HW="$SIM_HW" \
     URMA_SIM_WORKDIR="$RUN_ROOT" \
     URMA_SIM_IPC_DIR="$RUN_ROOT/ipc" \
+    URMA_DT_INSTALL_DIR="${URMA_DT_INSTALL_DIR:-/usr/lib64/urma}" \
     "${EXTRA_ENV_ARRAY[@]}" \
     timeout "$TIMEOUT_SEC" "$EXE" --gtest_output=xml:"$XML_LOG" \
     >"$STDOUT_LOG" 2>"$STDERR_LOG" || RC=$?
