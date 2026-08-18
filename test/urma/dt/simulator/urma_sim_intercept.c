@@ -496,7 +496,20 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 int munmap(void *addr, size_t length)
 {
     init_real_funcs();
-    if (urma_sim_mmap_find(addr) != NULL) {
+    urma_sim_mmap_region_t *reg = urma_sim_mmap_find(addr);
+    if (reg != NULL) {
+        /* 命中 sim 假内存：仅支持整区释放。部分/子区间 munmap 无法用单槽
+         * 跟踪（剩余部分脱离跟踪 or 已解除区间仍被识别为模拟映射，模拟线程
+         * 可能访问已解除内存）——显式拒绝而非产生不一致。 */
+        if ((uintptr_t)addr != (uintptr_t)reg->addr || length != reg->size) {
+            errno = EINVAL;
+            return -1;
+        }
+        /* 先真释放匿名映射，成功后才清槽位（失败保留槽位并透传 errno） */
+        if (real_munmap(addr, length) != 0) {
+            return -1;
+        }
+        urma_sim_mmap_free(addr);
         return 0;
     }
     return real_munmap(addr, length);
@@ -692,9 +705,12 @@ int ioctl(int fd, unsigned long request, ...)
         urma_cmd_hdr_t *hdr = (urma_cmd_hdr_t *)argp;
         int ret = urma_sim_handle_ioctl(fd, hdr->command, hdr->args_len, hdr->args_addr);
         /* 透传返回值：urma_sim_handle_ioctl 返回 -1 表示 sim 不直接回填（如 GET_EID_LIST），
-         * 让真 urma 走 sysfs fallback（urma_read_eid_list 失败 → 读 eids/eidN）。 */
+         * 让真 urma 走 sysfs fallback（urma_read_eid_list 失败 → 读 eids/eidN）。
+         * 错误码：命令层用 -errno 编码具体错误（ret < -1），在此透传为 errno
+         * （EINVAL/EBADF…不能被统一覆盖成 EIO，否则调用方把命令构造错误误报
+         * 为设备 I/O 故障）；仅 ret == -1（无具体错误码）才回退 EIO。 */
         if (ret != 0) {
-            errno = EIO;
+            errno = (ret < -1) ? -ret : EIO;
             return -1;
         }
         return 0;
