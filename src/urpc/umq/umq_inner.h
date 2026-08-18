@@ -26,7 +26,8 @@ extern "C" {
 
 #define UMQ_EID_MAP_PREFIX              (0x0000ffff)
 #define UMQ_DEFAULT_BUF_SIZE            4096
-#define UMQ_DEFAULT_DEPTH               1024
+#define UMQ_DEFAULT_TX_DEPTH            256
+#define UMQ_DEFAULT_RX_DEPTH            1024
 #define UMQ_MAX_QUEUE_NUMBER            8192
 #define UMQ_SIZE_4M                     (0x400000)
 #define SHM_MODE (0660)
