@@ -136,21 +136,15 @@ static void filter_least_load_path(bondp_path_t least_load_path[], uint32_t *lea
     *least_load_cnt = out_cnt;
 }
 
-static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
-                                       uint32_t min_idx[], uint32_t max_idx[], bondp_path_t least_load_path[],
-                                       uint32_t *least_load_cnt)
+static void select_least_load_path(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                                   uint32_t min_idx[], uint32_t max_idx[], bondp_path_t least_load_path[],
+                                   uint32_t *least_load_cnt)
 {
-    uint32_t least_load = UINT32_MAX;
-    uint32_t valid_route = 0;
     urma_transport_mode_t trans_mode = get_comp_urma_trans_mode(bdp_comp);
-
-    if (*least_load_cnt != 0) {
-        least_load = least_load_path[0].least_load;
-    }
-
+    bool target_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t local_idx = bdp_comp->active_indices[i];
-        if (!atomic_load(&bdp_comp->valid[local_idx]) || local_idx < min_idx[0] || local_idx >= max_idx[0]) {
+        if (local_idx < min_idx[0] || local_idx >= max_idx[0]) {
             continue;
         }
         for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
@@ -158,35 +152,26 @@ static uint32_t select_least_load_path(const bondp_comp_t *bdp_comp, const bondp
                 continue;
             }
             uint32_t target_idx = bdp_tjetty->p_tjettys[j].remote_indice;
-            if (target_idx < min_idx[1] || target_idx >= max_idx[1] ||
-                !bondp_p_tjetty_available(&bdp_tjetty->p_tjettys[j])) {
+            if (target_idx < min_idx[1] || target_idx >= max_idx[1]) {
                 continue;
             }
-            if (bdp_comp->p_jetty[local_idx] == NULL) {
+            if (bdp_comp->p_jetty[local_idx] == NULL || target_used[target_idx]) {
                 continue;
             }
             if (trans_mode == URMA_TM_RC && bdp_comp->comp_type == BONDP_COMP_JETTY &&
                 bdp_comp->p_jetty[local_idx]->remote_jetty != bdp_tjetty->p_tjettys[j].p_tjetty) {
                 continue;
             }
-            uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
-            if (sqe_cnt < least_load) {
-                least_load = sqe_cnt;
-                least_load_path[0].least_load = least_load;
-                least_load_path[0].local_idx = local_idx;
-                least_load_path[0].target_idx = target_idx;
-                *least_load_cnt = 1;
-                valid_route++;
-            } else if (sqe_cnt == least_load) {
-                least_load_path[(*least_load_cnt)].least_load = least_load;
-                least_load_path[(*least_load_cnt)].local_idx = local_idx;
-                least_load_path[(*least_load_cnt)].target_idx = target_idx;
+            target_used[target_idx] = true;
+            if (atomic_load(&bdp_comp->valid[local_idx]) && bondp_p_tjetty_available(&bdp_tjetty->p_tjettys[j])) {
+                uint32_t sqe_cnt = atomic_load(&bdp_comp->sqe_cnt[local_idx][target_idx]);
+                least_load_path[*least_load_cnt] = (bondp_path_t){local_idx, target_idx, sqe_cnt};
                 (*least_load_cnt)++;
-                valid_route++;
             }
+            break;
         }
     }
-    return valid_route;
+    filter_least_load_path(least_load_path, least_load_cnt);
 }
 
 static __thread struct random_data schedule_rand_data;

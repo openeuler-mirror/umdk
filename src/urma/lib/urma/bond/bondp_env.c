@@ -115,14 +115,14 @@ static void read_env_balance_route_all(bondp_env_t *env)
     char env_name[BONDP_ENV_LEN_MAX] = {0};
     int ret = 0;
     const uint32_t route[IODIE_NUM][IODIE_NUM][URMA_ACTIVE_PORT_PER_DIE][URMA_FAILOVER_LINK_NUM] = {
-        {{{1, 6, 7, 4},
-          {2, 5, 8, 3}},
-         {{5, 2, 4, 7},
-          {6, 1, 3, 8}}},
-        {{{7, 4, 1, 6},
-          {8, 3, 2, 5}},
-         {{3, 8, 5, 2},
-          {4, 7, 6, 1}}}};
+        {{{1, 3, 5, 7},
+          {2, 4, 6, 8}},
+         {{5, 7, 1, 3},
+          {6, 8, 2, 4}}},
+        {{{7, 5, 3, 1},
+          {8, 6, 4, 2}},
+         {{3, 1, 7, 5},
+          {4, 2, 8, 6}}}};
 
     for (int src_die = 0; src_die < IODIE_NUM; src_die++) {
         for (int dst_die = 0; dst_die < IODIE_NUM; dst_die++) {
