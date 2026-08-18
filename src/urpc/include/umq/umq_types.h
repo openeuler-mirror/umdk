@@ -706,6 +706,19 @@ typedef struct umq_tp_resource_create_option {
     umq_used_ports_t used_ports;
 } umq_tp_resource_create_option_t;
 
+/* Fixed header byte length of a mempool info blob (the part before the
+ * variable-length seg[] tail). Equals offsetof(seg) of umq's internal
+ * ub_import_mempool_info_t. Exposed so external callers can size buffers /
+ * compute wire budgets without seeing the struct; the value is pinned by
+ * static_asserts in umq_ub_private.h. */
+#define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
+
+/* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
+ * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~973B
+ * uncompressed; 1024B covers it with slack, so one umq build runs against
+ * either umdk variant). Callers size stack buffers to this. */
+#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 1024u)
+
 #ifdef __cplusplus
 }
 #endif
