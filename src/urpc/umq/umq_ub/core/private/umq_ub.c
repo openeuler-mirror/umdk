@@ -22,7 +22,10 @@
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
 #define UMQ_MAX_QBUF_NUM 1
 #define UMQ_LEN_ALIGNMENT_4 4
-#define TSEG_MAP_NUM 256
+/* Buckets for the per-peer imported-tseg hmap. Each peer typically imports
+ * only 1-2 mempools, so 8 buckets keeps chains at length 1 while avoiding the
+ * 4KB-per-connection cost a large bucket array would add at 48K+ peers. */
+#define TSEG_MAP_NUM 8
 #define UMQ_CTP_MAX_BUF_SIZE 4096
 #define UMQ_INITIAL_CREDIT 0
 
@@ -284,7 +287,8 @@ static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node)
 static remote_eid_hmap_node_t *umq_ub_eid_node_create(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     urma_eid_t *remote_eid = &info->queue_info->rjetty->jetty_id.eid;
-    remote_eid_hmap_node_t *eid_node = (remote_eid_hmap_node_t *)malloc(sizeof(remote_eid_hmap_node_t));
+    remote_eid_hmap_node_t *eid_node =
+        (remote_eid_hmap_node_t *)malloc(sizeof(remote_eid_hmap_node_t) + info->dev_info->namespace_len);
     if (eid_node == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), malloc eid node failed\n", queue->umq_id);
         return NULL;
