@@ -437,7 +437,6 @@ struct umq_buf {
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE (1) // enable arg headroom_size
 #define UMQ_ALLOC_FLAG_POOL_TYPE (2)      // enable arg pool_type
-#define UMQ_ALLOC_FLAG_RX_POOL (4)        // route to RX pool (4KB-only, independent)
 
 typedef struct umq_alloc_option {
     uint32_t flag; // indicates which below property takes effect

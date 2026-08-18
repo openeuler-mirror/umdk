@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 
 #include "umq_errno.h"
+#include "umq_qbuf_pool.h"
 #include "umq_rx_qbuf_pool.h"
 #include "umq_vlog.h"
 
@@ -124,25 +125,49 @@ void umq_rx_qbuf_pool_uninit(void)
 
 int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
-    (void)request_size;
-    (void)option;
     if (!g_rx_pool_inited || num == 0) {
         return -UMQ_ERR_ENOMEM;
+    }
+
+    uint32_t headroom_size =
+        (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ? option->headroom_size : 0;
+    /* RX pool only has 4KB blocks. request_size must fit within one block
+     * after headroom, otherwise the direct path silently returns a buf
+     * smaller than requested. */
+    if (request_size > UMQ_RX_QBUF_BLOCK_SIZE - headroom_size) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rx qbuf alloc request_size %u exceeds max %u (block %u - headroom %u)\n",
+                           request_size, UMQ_RX_QBUF_BLOCK_SIZE - headroom_size, UMQ_RX_QBUF_BLOCK_SIZE, headroom_size);
+        return -UMQ_ERR_EINVAL;
     }
 
     (void)pthread_spin_lock(&g_rx_pool.global_mutex);
     if (g_rx_pool.buf_cnt_with_data < num) {
         (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rx qbuf pool not enough, request %u, available %lu\n", num,
-                           g_rx_pool.buf_cnt_with_data);
-        return -UMQ_ERR_ENOMEM;
+        /* RX pool exhausted: fallback to normal pool SC[0] (4KB).
+         * Safe because: (1) normal pool also registered as UB tseg via
+         * umq_ub_register_memory_impl() (umq_ub_api.c:36); (2) mempool_id
+         * on the allocated buf is UMQ_QBUF_DEFAULT_MEMPOOL_ID, so free()
+         * auto-routes to umq_qbuf_free (no free path change needed).
+         * pool_type=NORMAL explicit to avoid escape fallback (escape buf
+         * has no tseg registration, peer cannot zero-copy access).
+         * Force request_size = block_size - headroom so that normal pool
+         * returns the same data_size as the direct path:
+         *   need = (4096 - headroom) + headroom = 4096 → always SC[0]
+         *   data_size = min(4096 - headroom, 4096 - headroom) = 4096 - headroom
+         * No SC drift, no multi-block split, consistent with direct path. */
+        umq_alloc_option_t fallback_opt = {0};
+        fallback_opt.flag = UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE | UMQ_ALLOC_FLAG_POOL_TYPE;
+        fallback_opt.headroom_size = headroom_size;
+        fallback_opt.pool_type = UMQ_ALLOC_POOL_NORMAL;
+        uint32_t forced_req = UMQ_RX_QBUF_BLOCK_SIZE - headroom_size;
+        UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "RX pool fallback to normal: req=%u forced_req=%u num=%u avail=%lu\n",
+                             request_size, forced_req, num, (unsigned long)g_rx_pool.buf_cnt_with_data);
+        return umq_normal_qbuf_alloc(forced_req, num, &fallback_opt, list);
     }
     uint32_t cnt = allocate_batch(&g_rx_pool.head_with_data, num, list);
     g_rx_pool.buf_cnt_with_data -= cnt;
     (void)pthread_spin_unlock(&g_rx_pool.global_mutex);
 
-    uint32_t headroom_size =
-        (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ? option->headroom_size : 0;
     uint32_t max_data_capacity = UMQ_RX_QBUF_BLOCK_SIZE - headroom_size;
     umq_buf_t *cur_node;
     QBUF_LIST_FOR_EACH(cur_node, list)

@@ -46,6 +46,13 @@ static uint8_t *umq_tp_ub_plus_init(umq_init_cfg_t *cfg)
             goto UNINIT_MEM;
         }
     }
+    if (cfg->buf_pool_cfg.rx_block_count > 0) {
+        ret = umq_ub_register_rx_memory_impl();
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "register rx memory failed, status: %d\n", ret);
+            goto UNINIT_MEM;
+        }
+    }
 
     return ub_ctx;
 

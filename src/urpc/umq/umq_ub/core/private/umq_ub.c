@@ -171,7 +171,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
     int ret = UMQ_SUCCESS;
 
     umq_inc_ref(queue->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
-    umq_alloc_option_t rx_option = {UMQ_ALLOC_FLAG_RX_POOL, 0};
+    umq_alloc_option_t rx_option = {UMQ_ALLOC_FLAG_POOL_TYPE, 0, UMQ_ALLOC_POOL_RX};
     do {
         cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
         umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size - factor, cur_batch_count, 0, &rx_option);
@@ -3263,7 +3263,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
     if (require_rx_count > 0) {
         uint32_t cur_batch_count = 0;
         int ret = UMQ_SUCCESS;
-        umq_alloc_option_t rx_option = {UMQ_ALLOC_FLAG_RX_POOL, 0};
+        umq_alloc_option_t rx_option = {UMQ_ALLOC_FLAG_POOL_TYPE, 0, UMQ_ALLOC_POOL_RX};
         do {
             cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
             umq_buf_t *qbuf = umq_buf_alloc(queue->rx_buf_size - headroom_size - factor, cur_batch_count,

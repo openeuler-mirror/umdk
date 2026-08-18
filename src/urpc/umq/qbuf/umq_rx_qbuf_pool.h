@@ -26,7 +26,7 @@ extern "C" {
  * Independent RX qbuf pool: 4KB-only, single size class.
  * Decoupled from normal 4KB pool to avoid contention with general 4KB consumers (e.g. urpc).
  * No TLS cache, no HWM cap, no expand/shrink.
- * Routing: alloc via UMQ_ALLOC_FLAG_RX_POOL / UMQ_ALLOC_POOL_RX;
+ * Routing: alloc via UMQ_ALLOC_FLAG_POOL_TYPE + pool_type=UMQ_ALLOC_POOL_RX;
  *          free via qbuf->mempool_id == UMQ_RX_QBUF_MEMPOOL_ID.
  */
 int umq_rx_qbuf_pool_init(qbuf_pool_cfg_t *cfg);

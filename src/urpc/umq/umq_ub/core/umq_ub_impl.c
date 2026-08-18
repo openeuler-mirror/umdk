@@ -238,6 +238,11 @@ int32_t umq_ub_register_memory_impl(void *buf, uint64_t size)
     return umq_ub_register_memory_with_id(UMQ_QBUF_DEFAULT_MEMPOOL_ID, buf, size);
 }
 
+int32_t umq_ub_register_rx_memory_impl(void)
+{
+    return umq_ub_register_memory_with_id(UMQ_RX_QBUF_MEMPOOL_ID, umq_rx_io_buf_addr(), umq_rx_io_buf_size());
+}
+
 int32_t umq_ub_register_tiny_memory_impl(void)
 {
     return umq_ub_register_memory_with_id(UMQ_TINY_QBUF_MEMPOOL_ID, umq_tiny_io_buf_addr(), umq_tiny_io_buf_size());
