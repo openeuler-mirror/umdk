@@ -94,7 +94,7 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 			  struct udma_create_jetty_resp *resp)
 {
-	if (!sq->dtu_en && (!sq->sq_reserved || sq->cstm))
+	if (sq->cstm || (!sq->dtu_en && !sq->sq_reserved))
 		return 0;
 
 	if (resp->buf_addr == 0) {
