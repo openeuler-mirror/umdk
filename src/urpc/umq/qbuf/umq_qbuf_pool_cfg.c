@@ -161,6 +161,10 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         return -UMQ_ERR_EINVAL;
     }
 
+    if (cfg->buf_mode == UMQ_BUF_SPLIT) {
+        normal_io_buf_size += without_data_expand_mem_size;
+    }
+
     plan->normal_io_buf_size = normal_io_buf_size;
 
     if (!cfg->buf_pool_cfg.disable_scale_cap && cfg->buf_pool_cfg.umq_buf_pool_max_size > QBUF_POOL_MEM_SIZE_MAX) {

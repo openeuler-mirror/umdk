@@ -1520,7 +1520,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         }
         queue->rx_depth = option->rx_depth;
     } else {
-        queue->rx_depth = min_dev_rx < UMQ_DEFAULT_DEPTH ? min_dev_rx : UMQ_DEFAULT_DEPTH;
+        queue->rx_depth = min_dev_rx < UMQ_DEFAULT_RX_DEPTH ? min_dev_rx : UMQ_DEFAULT_RX_DEPTH;
     }
 
     if (UMQ_UB_ENABLE_SHARE_FC_JFR && is_umq_ub_main_queue(option->create_flag)) {
@@ -1539,7 +1539,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
         }
         queue->tx_depth = option->tx_depth;
     } else {
-        queue->tx_depth = min_dev_tx < UMQ_DEFAULT_DEPTH ? min_dev_tx : UMQ_DEFAULT_DEPTH;
+        queue->tx_depth = min_dev_tx < UMQ_DEFAULT_TX_DEPTH ? min_dev_tx : UMQ_DEFAULT_TX_DEPTH;
     }
 
     // Jetty pool is process-wide and shared by all main+share_transport umqs; each main umq feeds jetty pool
