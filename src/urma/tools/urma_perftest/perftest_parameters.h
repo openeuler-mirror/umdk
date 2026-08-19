@@ -353,7 +353,7 @@ typedef struct perftest_config {
     uint8_t dscp;
     bool uboe_dscp;
     uint8_t sl;
-    bool uboe_sl;
+    bool enable_sl;
     bool enable_va;
     uint64_t v_address;
     bool share_jfs;
