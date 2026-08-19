@@ -5954,7 +5954,7 @@ typedef struct urma_tp_attr_value {
     uint8_t vlan_en  : 1;
     uint8_t dscp     : 6;
     uint8_t at_times : 5;
-    uint8_t sl       : 4;
+    uint8_t sl       : 4; // service level. Only configurable for RTP/UTP (CTP derives sl from priority_info)
     uint8_t ttl;
     uint16_t ack_udp_srcport;
     uint16_t data_udp_srcport;
@@ -5985,6 +5985,12 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 3. Description
 
 Set TP attribute values.
+
+![](figures/urma_info.png)
+
+Constraints:
+- For CTP-type TPs, the `sl` attribute cannot be set via this interface. The sl of CTP is derived from the device's `priority_info` table based on the priority (see the `urma_admin dev set <dev> sl --sl <sl> --priority <priority>` command for SL-to-priority mapping configuration).
+- For RTP/UTP-type TPs (including UBoe mode), the `sl` attribute can be explicitly set via this interface.
 
 4. Parameters
 
