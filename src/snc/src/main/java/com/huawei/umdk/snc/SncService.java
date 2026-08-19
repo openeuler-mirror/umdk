@@ -32,6 +32,7 @@ import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.TpAclEntity;
 import com.huawei.umdk.snc.exception.SNCStateException;
 import com.huawei.umdk.snc.route.model.RouteTable;
+import com.huawei.umdk.snc.route.service.RouteConvergeService;
 import com.huawei.umdk.snc.route.service.RouteInstantiationService;
 import com.huawei.umdk.snc.route.service.RouteMspService;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
@@ -80,6 +81,8 @@ public class SncService {
 
     private LinkEventService linkEventService;
 
+    private RouteConvergeService routeConvergeService;
+
     private volatile boolean superNodeLoaded;
 
     private volatile boolean aclLoaded;
@@ -112,7 +115,9 @@ public class SncService {
         this.pathService = new PathService(superNodeStore, aclStore,
             pathEngine, routeLookupEngine, aclCheckEngine);
         this.linkEventService = new LinkEventService(superNodeStore);
-        LOG.debug("init: Service instances created (SuperNodeService, AclService, PathService, LinkEventService)");
+        this.routeConvergeService = new RouteConvergeService();
+        LOG.debug("init: Service instances created (SuperNodeService, AclService, PathService, "
+            + "LinkEventService, RouteConvergeService)");
 
         this.superNodeLoaded = false;
         this.aclLoaded = false;
@@ -140,6 +145,7 @@ public class SncService {
         this.aclService = null;
         this.pathService = null;
         this.linkEventService = null;
+        this.routeConvergeService = null;
         LOG.info("uninit: state=" + state);
     }
 
@@ -379,6 +385,8 @@ public class SncService {
         linkEventService.notifyLinkEvent(supernode, event);
         LOG.info("notifyLinkEvent: superNode=" + supernode.getName() + ", device=" + event.getDeviceName()
             + ", port=" + event.getPortName() + ", status=" + event.getEventType());
+        // 路由收敛：基于 link 事件按 BFS 在互联转发节点间传播收敛状态
+        routeConvergeService.converge(instantiationRouteMap, supernode, event);
     }
 
     private void checkNotUninit() {
@@ -482,7 +490,7 @@ public class SncService {
             throw new IllegalArgumentException("device info is null");
         }
 
-        String key = deviceName + "#" + chipIndex;
+        String key = RouteInstantiationService.buildRouteTableKey(deviceName, chipIndex);
         Map<String, RoutingEntry> routingEntries = instantiationRouteMap.get(key);
         if (routingEntries == null) {
             throw new IllegalArgumentException("not found route for " + key);

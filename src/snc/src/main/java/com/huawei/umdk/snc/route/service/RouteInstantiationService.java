@@ -65,6 +65,18 @@ public class RouteInstantiationService {
 
     private static final int DOT_DECIMAL_MASK = 0xFF;
 
+    /**
+     * instantiationRouteMap 中 key 的分隔符：形如 "deviceName#chipIndex"。
+     */
+    public static final String KEY_SEPARATOR = "#";
+
+    /**
+     * 构建 instantiationRouteMap 的 key："deviceName#chipIndex"。
+     */
+    public static String buildRouteTableKey(String deviceName, int chipIndex) {
+        return deviceName + KEY_SEPARATOR + chipIndex;
+    }
+
     private static Prefix fillHighBitAddress(Prefix prefix, Integer chassisIndex) {
         Prefix newPrefix = new Prefix(prefix.getAddr(), prefix.getMaskLen(), prefix.getMask());
         if (prefix.getMask() == ALL_MASK) {
@@ -215,7 +227,7 @@ public class RouteInstantiationService {
                 log.error("route not found for label %s", label);
                 continue;
             }
-            String key = npuDevice.getDeviceName() + "#" + chip.getChipIndex();
+            String key = buildRouteTableKey(npuDevice.getDeviceName(), chip.getChipIndex());
             instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
         }
     }
@@ -245,7 +257,8 @@ public class RouteInstantiationService {
             return;
         }
 
-        String key = swDevice.getDeviceName() + "#" + chips.values().iterator().next().getChipIndex();
+        String key = buildRouteTableKey(swDevice.getDeviceName(),
+            chips.values().iterator().next().getChipIndex());
         instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
     }
 
@@ -265,7 +278,7 @@ public class RouteInstantiationService {
                 log.error("route not found for label %s", label);
                 continue;
             }
-            String key = swDevice.getDeviceName() + "#" + chip.getChipIndex();
+            String key = buildRouteTableKey(swDevice.getDeviceName(), chip.getChipIndex());
             instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
         }
     }
@@ -283,11 +296,13 @@ public class RouteInstantiationService {
             for (NextHopPort nhp : routeEntry.getNhpSet()) {
                 OutPortInfo outPortInfo = new OutPortInfo();
                 outPortInfo.setPortName(nhp.getOutPortName());
-                outPortInfo.setActive(true);
+                // 默认 convergedFlag=0 表示未收敛，可达
                 outPortInfoMap.put(nhp.getOutPortName(), outPortInfo);
             }
 
-            result.put(dstAddress, new RoutingEntry(routePrefix, outPortInfoMap));
+            RoutingEntry routingEntry = new RoutingEntry(routePrefix, outPortInfoMap, true);
+            routingEntry.refreshReachable();
+            result.put(dstAddress, routingEntry);
         }
         return result;
     }
