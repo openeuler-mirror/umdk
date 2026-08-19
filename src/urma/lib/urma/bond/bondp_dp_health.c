@@ -376,7 +376,7 @@ static void hc_probe_link(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node,
     }
 }
 
-static void hc_probe_node(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node)
+static bool hc_probe_node(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node)
 {
     bool any_connected = false;
     bool all_checked = true;
@@ -404,6 +404,8 @@ static void hc_probe_node(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node)
         }
     }
     pthread_rwlock_unlock(&node->lock);
+
+    return any_connected;
 }
 
 static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
@@ -429,9 +431,12 @@ static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
 
     uint32_t batch_cnt = MIN(hc_ctx->cfg.batch_node_num, hc_ctx->node_num);
     uint32_t node_idx = hc_ctx->probe_cur_idx % hc_ctx->node_num;
-    for (uint32_t i = 0; i < batch_cnt; ++i) {
+    uint32_t probe_cnt = 0;
+    for (uint32_t scan_cnt = 0; scan_cnt < hc_ctx->node_num && probe_cnt < batch_cnt; ++scan_cnt) {
         bondp_hc_node_t *node = &hc_ctx->nodes[node_idx];
-        hc_probe_node(hc_ctx, node);
+        if (hc_probe_node(hc_ctx, node)) {
+            probe_cnt++;
+        }
         node_idx = (node_idx + 1) % hc_ctx->node_num;
     }
     hc_ctx->probe_cur_idx = node_idx;
