@@ -49,10 +49,10 @@ TEST(UrmaBondTest, DatapathPublicPostRecvPropagatesSingleDeviceNoStoreFailure)
     fixture.comp.comp_type = BONDP_COMP_JFR;
     fixture.comp.active_count = 1;
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
-    fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
+    fixture.phyOps.post_jfr_wr = MockPostFirstJfrWrFails;
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.comp.v_jfr, &wr, &badWr));
-    EXPECT_EQ(nullptr, badWr);
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr(&fixture.comp.v_jfr, &wr, &badWr));
+    EXPECT_EQ(&wr, badWr);
     EXPECT_EQ(0U, fixture.comp.rqe_cnt[0]);
 }
 
@@ -83,6 +83,38 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupSplitsAcrossActivePaths)
     EXPECT_EQ(nullptr, badWr);
     EXPECT_EQ(1U, fixture.comp.rqe_cnt[0] + fixture.comp.rqe_cnt[1]);
     wr_buf_uninit(&fixture.comp.recv_wr_buf);
+}
+
+TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupTranslatesBadWr)
+{
+    BondPathFixture fixture;
+    urma_sge_t recvSge[2] = {};
+    urma_jfr_wr_t firstWr = {};
+    urma_jfr_wr_t secondWr = {};
+    urma_jfr_wr_t *badWr = nullptr;
+
+    recvSge[0].tseg = &fixture.localSeg.v_tseg;
+    recvSge[1].tseg = &fixture.localSeg.v_tseg;
+    firstWr.src.sge = &recvSge[0];
+    firstWr.src.num_sge = 1;
+    firstWr.next = &secondWr;
+    secondWr.src.sge = &recvSge[1];
+    secondWr.src.num_sge = 1;
+    fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
+    fixture.ctx.msn_enable = false;
+    fixture.comp.comp_type = BONDP_COMP_JFR;
+    fixture.comp.active_count = 1;
+    fixture.comp.active_indices[0] = 0;
+    fixture.comp.p_jfr[0] = &fixture.phyJfr[0];
+    fixture.phyOps.post_jfr_wr = [](urma_jfr_t *, urma_jfr_wr_t *wr,
+                                    urma_jfr_wr_t **badWr) -> urma_status_t {
+        *badWr = wr->next;
+        return URMA_EAGAIN;
+    };
+
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(&secondWr, badWr);
+    EXPECT_EQ(1U, fixture.comp.rqe_cnt[0]);
 }
 
 TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupRejectsOversizedList)
