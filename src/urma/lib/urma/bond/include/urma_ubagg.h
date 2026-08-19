@@ -11,6 +11,7 @@
 #define URMA_UBAGG_H
 
 #include "urma_types.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -19,6 +20,7 @@ extern "C" {
 
 /* For version compatibility */
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
+#define BONDP_USER_CTL_SET_CTX_CFG BONDP_USER_CTL_SET_CTX_CFG
 
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
 #define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
@@ -43,7 +45,35 @@ typedef enum bondp_user_ctl_opcode {
     /* port_ids config for this opcode should be the same as the port_ids
        config when creating jetty */
     BONDP_USER_CTL_SET_BONDING_PORT,
+    BONDP_USER_CTL_SET_CTX_CFG,
 } bondp_user_ctl_opcode_t;
+
+typedef enum bondp_ctx_cfg_mask {
+    BONDP_CTX_CFG_ENABLE_FAILOVER        = 1ULL << 0,
+    BONDP_CTX_CFG_ENABLE_FAILBACK        = 1ULL << 1,
+    BONDP_CTX_CFG_ENABLE_HEALTH_CHECK    = 1ULL << 2,
+    BONDP_CTX_CFG_HEALTH_CHECK_INTERVAL  = 1ULL << 3,
+    BONDP_CTX_CFG_HEALTH_CHECK_BATCH_NUM = 1ULL << 4,
+    BONDP_CTX_CFG_ENABLE_RNR_RETRY       = 1ULL << 5,
+    BONDP_CTX_CFG_RNR_SLEEP              = 1ULL << 6,
+    BONDP_CTX_CFG_RNR_MAX                = 1ULL << 7,
+    BONDP_CTX_CFG_RNR_JITTER_RATIO       = 1ULL << 8,
+} bondp_ctx_cfg_mask_t;
+
+#define BONDP_CTX_CFG_MASK_ALL ((1ULL << 9) - 1)
+
+typedef struct bondp_set_ctx_cfg_in {
+    uint64_t mask;
+    bool enable_failover;
+    bool enable_failback;
+    bool enable_health_check;
+    uint64_t health_check_interval_ms;
+    uint32_t health_check_batch_node_num;
+    bool enable_rnr_retry;
+    uint64_t rnr_retry_sleep_ms;
+    uint64_t rnr_retry_max;
+    uint32_t rnr_retry_jitter_ratio;
+} bondp_set_ctx_cfg_in_t;
 
 // URMA_USER_CTL_BOND_SET_BONDING_MODE,
 typedef enum bondp_bonding_mode {
