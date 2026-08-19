@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "bondp_dp_health.h"
+#include "bondp_env.h"
 #include "bondp_types.h"
 #include "bondp_cp_tjetty.h"
 #include "urma_log.h"
@@ -340,7 +341,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
         }
         least_load_cnt = select_affinity_path(bdp_comp, bdp_tjetty, info,
                                               least_load_path, &old_path);
-        if (least_load_cnt == 0 && !g_bondp_env.enable_failover) {
+        if (least_load_cnt == 0 && !bdp_comp->bondp_ctx->enable_failover) {
             return URMA_FAIL;
         }
         filter_least_load_path(least_load_path, &least_load_cnt);

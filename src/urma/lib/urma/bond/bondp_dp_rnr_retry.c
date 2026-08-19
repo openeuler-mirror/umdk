@@ -12,7 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "bondp_env.h"
+#include "bondp_types.h"
 
 #include "bondp_dp_rnr_retry.h"
 
@@ -46,15 +46,14 @@ static uint64_t get_rnr_retry_jitter_rand(void)
     return (uint64_t)(uint32_t)rand_val;
 }
 
-static uint64_t add_rnr_retry_jitter(uint64_t sleep_ms)
+static uint64_t add_rnr_retry_jitter(uint64_t sleep_ms, uint32_t jitter_ratio)
 {
-    uint32_t ratio = g_bondp_env.rnr_retry_jitter_ratio;
-    if (ratio == 0) {
+    if (jitter_ratio == 0) {
         return sleep_ms;
     }
 
-    uint64_t jitter_ms = (sleep_ms / BONDP_RATIO_PERCENT) * ratio +
-                         ((sleep_ms % BONDP_RATIO_PERCENT) * ratio) / BONDP_RATIO_PERCENT;
+    uint64_t jitter_ms = (sleep_ms / BONDP_RATIO_PERCENT) * jitter_ratio +
+                         ((sleep_ms % BONDP_RATIO_PERCENT) * jitter_ratio) / BONDP_RATIO_PERCENT;
     if (jitter_ms == 0) {
         return sleep_ms;
     }
@@ -66,13 +65,13 @@ static uint64_t add_rnr_retry_jitter(uint64_t sleep_ms)
     return sleep_ms + jitter;
 }
 
-void bondp_rnr_retry_sleep_before_resend(uint32_t retry_cnt)
+void bondp_rnr_retry_sleep_before_resend(const bondp_context_t *bdp_ctx, uint32_t retry_cnt)
 {
-    uint64_t sleep_ms = g_bondp_env.rnr_retry_first_sleep_ms;
+    uint64_t sleep_ms = bdp_ctx->rnr_retry_first_sleep_ms;
 
     if (retry_cnt > 0) {
         uint32_t backoff_cnt = retry_cnt - 1;
-        sleep_ms = g_bondp_env.rnr_retry_sleep_ms;
+        sleep_ms = bdp_ctx->rnr_retry_sleep_ms;
         for (uint32_t i = 0; i < backoff_cnt; i++) {
             sleep_ms <<= 1;
         }
@@ -80,7 +79,7 @@ void bondp_rnr_retry_sleep_before_resend(uint32_t retry_cnt)
     if (sleep_ms == 0) {
         return;
     }
-    sleep_ms = add_rnr_retry_jitter(sleep_ms);
+    sleep_ms = add_rnr_retry_jitter(sleep_ms, bdp_ctx->rnr_retry_jitter_ratio);
 
     struct timespec sleep_time = {
         .tv_sec = (time_t)(sleep_ms / BONDP_MS_PER_SEC),

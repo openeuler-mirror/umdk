@@ -53,7 +53,7 @@ struct bondp_fb_ctx {
 
 bool bondp_fb_need_switch_path(bondp_comp_t *bdp_comp)
 {
-    if (!g_bondp_env.enable_failback) {
+    if (!bdp_comp->bondp_ctx->enable_failback) {
         return false;
     }
 
