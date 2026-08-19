@@ -18,7 +18,6 @@
 #endif
 #include <stdbool.h>
 
-#include "bondp_env.h"
 #include "bondp_hash_table.h"
 #include "bondp_wr_buf.h"
 #include "bondp_topo_info.h"
@@ -112,6 +111,19 @@ typedef struct bondp_port_cfg {
 typedef struct bondp_context {
     urma_context_t v_ctx;
     urma_context_t *p_ctxs[URMA_UBAGG_DEV_MAX_NUM]; /* every unit is symmetrical. */
+
+    bool enable_failover;
+    bool enable_failback;
+    bool enable_health_check;
+    uint64_t health_check_interval_ms;
+    uint32_t health_check_batch_node_num;
+    bool enable_rnr_retry;
+    uint64_t rnr_retry_first_sleep_ms;
+    uint64_t rnr_retry_sleep_ms;
+    uint64_t rnr_retry_max;
+    uint32_t rnr_retry_jitter_ratio;
+    uint32_t rnr_retry_batch_wr_num;
+
     /* This variable represents the maximum number of times all available devices need to be traversed. */
     /* In general mode, dev_num is the same as the number of non-empty devices in the first few positions. */
     /* In matrix server mode, dev_num is always PRIMARY_EID_NUM + PROT_EID_MAX_NUM, */
