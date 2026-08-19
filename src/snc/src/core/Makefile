@@ -2,7 +2,7 @@
 #loading path
 #--------------------------------------------------------------------------------------------------------------------------------------------------
 CXX := g++
-TARGET := liburma_ping.so
+TARGET := libsnc_ping.so
 
 CXXFLAGS := -std=c++11\
         -Werror\
@@ -28,6 +28,7 @@ ACL_LIB_DIR = ${ASCEND_DIR}/lib64
 SRC_DIR := src
 INC_DIR := include
 DEPENDS_DIR := depends
+LOG_DIR := log
 LIB_DIR := lib
 BIN_DIR := bin
 #
@@ -38,6 +39,7 @@ LIBS = -L$(HCCL_LIB_DIR) -lhccl_plf\
 INCLUDEDIRS = -I$(INC_DIR)\
                 -I$(SRC_DIR)\
                 -I$(DEPENDS_DIR)\
+                -I$(LOG_DIR)\
                 -I$(ACL_INC_DIR)\
                 -I$(ACL_INC_DIR)/acl\
                 -I$(HCCL_INC_DIR)
@@ -47,8 +49,8 @@ INCLUDEDIRS = -I$(INC_DIR)\
 .PHONY: all clean
 all:
 	@mkdir -p $(LIB_DIR) $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(SRC_DIR)/urma_ping.cc $(INCLUDEDIRS) $(LDFLAGS) -o ./$(LIB_DIR)/$(TARGET) $(LIBS)
-	@printf "\nURMA Ping shared library compile completed\n"
+	$(CXX) $(CXXFLAGS) $(SRC_DIR)/snc_ping.cc $(LOG_DIR)/snc_ping_log.cc $(INCLUDEDIRS) $(LDFLAGS) -o ./$(LIB_DIR)/$(TARGET) $(LIBS)
+	@printf "\nSNC Ping shared library compile completed\n"
 
 clean:
 	rm -rf ./$(LIB_DIR)/* ./$(BIN_DIR)/*
