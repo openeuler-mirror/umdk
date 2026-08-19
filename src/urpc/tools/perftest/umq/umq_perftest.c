@@ -7,6 +7,7 @@
 
 #include <arpa/inet.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -34,7 +35,6 @@
 typedef struct umq_perftest_worker_arg {
     perftest_thread_arg_t thd_arg;
     umq_perftest_config_t *cfg;
-    uint64_t umqh;
     union {
         umq_perftest_latency_arg_t lat_arg;
         umq_perftest_qps_arg_t qps_arg;
@@ -46,7 +46,8 @@ static struct umq_perftest_ctx {
     umq_perftest_worker_arg_t *args;
     umq_perftest_config_t cfg;
 
-    uint64_t umqh;
+    uint64_t umqh;          // non-shared: local umqh; shared: sub umqh (worker bind/bind_info/post_rx)
+    uint64_t main_umqh;    // shared-mode main umqh (holds shared jfr/jetty pool; no IO/bind)
     int fd;
     int accept_fd;
     volatile bool force_quit;
@@ -256,14 +257,50 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
         option.used_ports.num = 1;
     }
 
-    uint64_t umqh = umq_create(&option);
-    if (umqh == UMQ_INVALID_HANDLE) {
-        LOG_PRINT("umq_create failed\n");
+    if (!cfg->share_jfr) {
+        // Non-shared: original single-umq path
+        uint64_t umqh = umq_create(&option);
+        if (umqh == UMQ_INVALID_HANDLE) {
+            LOG_PRINT("umq_create failed\n");
+            return -1;
+        }
+        g_umq_perftest_ctx.umqh = umqh;
+        return 0;
+    }
+
+    // Share-jfr mode: 1 main + 1 sub. main holds shared FC jfr/jetty pool; sub reuses it and runs IO.
+    umq_create_option_t main_opt = option;
+    main_opt.create_flag |= UMQ_CREATE_FLAG_MAIN_UMQ;
+    uint64_t main_umqh = umq_create(&main_opt);
+    if (main_umqh == UMQ_INVALID_HANDLE) {
+        LOG_PRINT("umq_create main failed\n");
         return -1;
     }
-    g_umq_perftest_ctx.umqh = umqh;
+    g_umq_perftest_ctx.main_umqh = main_umqh;
 
+    // sub: copy main, drop MAIN_UMQ; drop TX_BUF_SIZE/TX_DEPTH (sub inherits main, see share_rq_param_check)
+    umq_create_option_t sub_opt = option;
+    sub_opt.create_flag &= ~(UMQ_CREATE_FLAG_MAIN_UMQ | UMQ_CREATE_FLAG_TX_BUF_SIZE | UMQ_CREATE_FLAG_TX_DEPTH);
+    sub_opt.create_flag |= UMQ_CREATE_FLAG_SHARE_RQ;
+    sub_opt.share_rq_umqh = main_umqh;
+    // SHARE_RQ and SUB_UMQ must be set together (umq_ub.c:1356-1362)
+    sub_opt.create_flag |= UMQ_CREATE_FLAG_SUB_UMQ;
+    uint64_t sub_umqh = umq_create(&sub_opt);
+    if (sub_umqh == UMQ_INVALID_HANDLE) {
+        LOG_PRINT("umq_create sub failed\n");
+        (void)umq_destroy(main_umqh);
+        g_umq_perftest_ctx.main_umqh = 0;
+        return -1;
+    }
+    // ctx->umqh points to sub: worker bind/bind_info_get/bind/post_tx all on sub (main never does IO)
+    g_umq_perftest_ctx.umqh = sub_umqh;
+    LOG_PRINT("create shared umq done\n");
     return 0;
+}
+
+static inline uint64_t umq_perftest_main_umqh_get()
+{
+    return g_umq_perftest_ctx.cfg.share_jfr ? g_umq_perftest_ctx.main_umqh : g_umq_perftest_ctx.umqh;
 }
 
 static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
@@ -275,12 +312,23 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
         .io_direction = UMQ_IO_TX,
     };
 
+    // Shared mode: RX post/poll on main umq (main has its own IO jetty -> urma_post_jfr_wr).
+    // sub umq has no IO jetty; post rx on it would NULL deref (umq_pro_ub.c:566).
+    // Must be declared before goto WAIT_UMQ_READY, else base mode skips init -> uninit use.
+    uint64_t rx_umqh = umq_perftest_main_umqh_get();
+
+    umq_cfg_get_t umq_cfg = {0};
+    if (umq_cfg_get(rx_umqh, &umq_cfg) != UMQ_SUCCESS) {
+        LOG_PRINT("umq_cfg_get failed\n");
+        return -1;
+    }
+
     if ((cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
         goto WAIT_UMQ_READY;
     }
 
     // pro mode，need alloc rx buf
-    uint32_t require_rx_count = cfg->config.rx_depth;
+    uint32_t require_rx_count = cfg->config.rx_depth * umq_cfg.rqe_post_factor;
     uint32_t cur_batch_count = 0;
 
     umq_io_option_t io_rx_option = {
@@ -297,7 +345,8 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
             return -1;
         }
 
-        if (umq_post(g_umq_perftest_ctx.umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
+        // post sub umq rx or normal umq
+        if (umq_post(rx_umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
             LOG_PRINT("post rx failed\n");
             umq_buf_free(bad_buf);
             return -1;
@@ -308,7 +357,7 @@ static int umq_perftest_post_rx(umq_perftest_config_t *cfg)
 
 WAIT_UMQ_READY:
     do {
-        int ret = umq_poll(g_umq_perftest_ctx.umqh, &io_tx_option, &buf, 1);
+        int ret = umq_poll(rx_umqh, &io_tx_option, &buf, 1);
         if (ret != 0) {
             LOG_PRINT("poll tx get unexpected result %d\n", ret);
             break;
@@ -333,7 +382,8 @@ static inline void umq_perftest_server_qps_work_load(perftest_thread_arg_t *args
 {
     umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->qps_arg.cfg = arg->cfg;
-    umq_perftest_run_qps(arg->umqh, &arg->qps_arg);
+    // non-shared: main_umq = umqh (pro path also runs without share_jfr, so main_umqh is 0 then)
+    umq_perftest_run_qps(g_umq_perftest_ctx.umqh, umq_perftest_main_umqh_get(), &arg->qps_arg);
     umq_perftest_show_perf(arg->cfg);
 }
 
@@ -341,7 +391,8 @@ static inline void umq_perftest_latency_work_load(perftest_thread_arg_t *args)
 {
     umq_perftest_worker_arg_t *arg = (umq_perftest_worker_arg_t *)(uintptr_t)args;
     arg->lat_arg.cfg = arg->cfg;
-    umq_perftest_run_latency(arg->umqh, &arg->lat_arg);
+    // non-shared: main_umq = umqh (pro path also runs without share_jfr, so main_umqh is 0 then)
+    umq_perftest_run_latency(g_umq_perftest_ctx.umqh, umq_perftest_main_umqh_get(), &arg->lat_arg);
     umq_perftest_show_perf(arg->cfg);
 }
 
@@ -362,7 +413,6 @@ static int umq_perftest_start_test_threads(umq_perftest_config_t *cfg)
     g_umq_perftest_ctx.args->thd_arg.state = PERFTEST_THREAD_INIT;
     g_umq_perftest_ctx.args->thd_arg.cpu_affinity = cfg->config.cpu_affinity;
     g_umq_perftest_ctx.args->cfg = cfg;
-    g_umq_perftest_ctx.args->umqh = g_umq_perftest_ctx.umqh;
     if (perftest_worker_thread_create(&g_umq_perftest_ctx.args->thd_arg) != 0) {
         LOG_PRINT("create worker thread failed\n");
         free(g_umq_perftest_ctx.args);
@@ -545,7 +595,7 @@ static int umq_perftest_run_client(umq_perftest_config_t *cfg)
     // exchange bind info and bind
     ret = umq_perftest_client_exchange_data();
     if (ret != 0) {
-        goto DESTROY;
+        goto DESTROY_UMQ;
     }
 
     // post rx
@@ -573,13 +623,16 @@ static int umq_perftest_run_client(umq_perftest_config_t *cfg)
     umq_perftest_stop_test_threads(&cfg->config);
 
 UNBIND:
-    // unbind and flush tx and rx
+    // unbind and flush tx and rx (sub)
     (void)umq_unbind(g_umq_perftest_ctx.umqh);
 
-DESTROY:
-    // destroy umqh
+DESTROY_UMQ:
     (void)umq_destroy(g_umq_perftest_ctx.umqh);
-
+    g_umq_perftest_ctx.umqh = 0;
+    if (cfg->share_jfr) {
+        (void)umq_destroy(g_umq_perftest_ctx.main_umqh);
+        g_umq_perftest_ctx.main_umqh = 0;
+    }
     umq_perftest_finish_perf(cfg);
 
 CLOSE_SOC:
@@ -703,7 +756,7 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
     // exchange bind info and bind
     ret = umq_perftest_server_exchange_and_bind(cfg);
     if (ret != 0) {
-        goto DESTROY;
+        goto DESTROY_UMQ;
     }
 
     // fill rx
@@ -731,13 +784,16 @@ static int umq_perftest_run_server(umq_perftest_config_t *cfg)
     umq_perftest_stop_test_threads(&cfg->config);
 
 UNBIND:
-    // unbind and flush rx and tx
+    // unbind and flush rx and tx (sub)
     (void)umq_unbind(g_umq_perftest_ctx.umqh);
 
-DESTROY:
-    // destroy umqh
+DESTROY_UMQ:
     (void)umq_destroy(g_umq_perftest_ctx.umqh);
-
+    g_umq_perftest_ctx.umqh = 0;
+    if (cfg->share_jfr) {
+        (void)umq_destroy(g_umq_perftest_ctx.main_umqh);
+        g_umq_perftest_ctx.main_umqh = 0;
+    }
     umq_perftest_finish_perf(cfg);
 
 CLOSE_ACCEPT_FD:
