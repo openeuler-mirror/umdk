@@ -9,6 +9,8 @@
 
 #include <stdint.h>
 
-void bondp_rnr_retry_sleep_before_resend(uint32_t retry_cnt);
+struct bondp_context;
+
+void bondp_rnr_retry_sleep_before_resend(const struct bondp_context *bdp_ctx, uint32_t retry_cnt);
 
 #endif /* BONDP_DP_RNR_RETRY_H */
