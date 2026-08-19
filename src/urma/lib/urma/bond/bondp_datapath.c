@@ -1364,7 +1364,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         return CONVERT_SKIP;
     }
 
-    if (g_bondp_env.enable_rnr_retry && is_rnr_retry_cr(cr) && !bdp_comp->modify_to_error) {
+    const bondp_context_t *comp_ctx = bdp_comp->bondp_ctx;
+    if (comp_ctx->enable_rnr_retry && is_rnr_retry_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         if (wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
             wr_entry->bdp_comp != bdp_comp ||
@@ -1377,16 +1378,16 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
 
         uint32_t wr_cnt = atomic_load(&bdp_comp->rnr_retry_wr_cnt);
         uint32_t sleep_cnt = atomic_load(&bdp_comp->rnr_retry_sleep_cnt);
-        if (sleep_cnt >= g_bondp_env.rnr_retry_max) {
+        if (sleep_cnt >= comp_ctx->rnr_retry_max) {
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
             URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu sleep_cnt=%u retry_max=%lu\n",
-                         wr_id, sleep_cnt, g_bondp_env.rnr_retry_max);
+                         wr_id, sleep_cnt, comp_ctx->rnr_retry_max);
             goto CONVERT_CR;
         }
 
         bool need_sleep = (wr_cnt == 0);
         uint32_t next_wr_cnt = wr_cnt + 1;
-        if (next_wr_cnt >= g_bondp_env.rnr_retry_batch_wr_num) {
+        if (next_wr_cnt >= comp_ctx->rnr_retry_batch_wr_num) {
             next_wr_cnt = 0;
         }
         atomic_store(&bdp_comp->rnr_retry_wr_cnt, next_wr_cnt);
@@ -1398,7 +1399,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
                           send_idx, target_idx, cr->status, sleep_cnt,
                           bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
-            bondp_rnr_retry_sleep_before_resend(sleep_cnt);
+            bondp_rnr_retry_sleep_before_resend(comp_ctx, sleep_cnt);
 
             (void)pthread_spin_lock(&bdp_comp->send_lock);
 
@@ -1432,7 +1433,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         if (skip_p_tjetty != NULL) {
             atomic_store(&skip_p_tjetty->valid, false);
         }
-        if (is_need_rebuild_jetty(cr) && g_bondp_env.enable_failback) {
+        if (is_need_rebuild_jetty(cr) && comp_ctx->enable_failback) {
             int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx);
             if (ret != 0 && ret != -EEXIST) {
                 URMA_LOG_WARN("Failed to add failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d\n",
@@ -1444,7 +1445,7 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         /* choose the failover route(0 or 1) through send_idx and target_idx */
         int new_send_idx = send_idx;
         int new_target_idx = target_idx;
-        if (!g_bondp_env.enable_failover ||
+        if (!comp_ctx->enable_failover ||
             schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx,
                           wr_entry->wr.flag.bs.has_drv_ext ? &wr_entry->info : NULL) != 0) {
