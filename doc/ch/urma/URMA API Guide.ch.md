@@ -5957,7 +5957,7 @@ typedef struct urma_tp_attr_value {
     uint8_t vlan_en : 1;
     uint8_t dscp : 6; // differentiated services code point
     uint8_t at_times : 5; // ack timeout max times
-    uint8_t sl : 4; // service level
+    uint8_t sl : 4; // service level. Only configurable for RTP/UTP
     uint8_t ttl; // time to live
     uint16_t ack_udp_srcport;
     uint16_t data_udp_srcport;
@@ -5988,6 +5988,12 @@ typedef struct urma_tp_attr_value {
 3.  描述
 
 设置tp属性值。
+
+![](figures/urma_info.png)
+
+约束说明：
+- 对于 CTP 类型 TP，不允许通过本接口设置 `sl` 属性。CTP 的 sl 由设备的 `priority_info` 表根据 priority 反查得出（参见 [urma_admin dev set](#) 命令配置 SL 与 priority 的映射关系）。
+- 对于 RTP/UTP 类型 TP（含 UBoe 模式），可通过本接口显式设置 `sl` 属性。
 
 4.  参数
 

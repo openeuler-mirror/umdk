@@ -1403,7 +1403,7 @@ static void create_tp_info_get_attr_uboe(perftest_config_t *cfg, urma_tp_attr_va
     if (cfg->uboe_dscp) {
         tp_attr->dscp = cfg->dscp;
     }
-    if (cfg->uboe_sl) {
+    if (cfg->enable_sl) {
         tp_attr->sl = cfg->sl;
         (*set_tp_attr_cnt)++;
         (*set_tp_attr_flag) |= PERFTEST_SET_ATTR_BITMAP_SL_FLAG;
@@ -1489,6 +1489,23 @@ static int create_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
                                    set_tp_attr_flag, &tp_attr);
             if (ret != URMA_SUCCESS) {
                 LOG_ERROR("Failed to set_tp_attr, ret:%d\n", ret);
+                goto free_buf;
+            }
+        } else if (cfg->enable_sl) {
+            if (cfg->use_ctp) {
+                LOG_ERROR("ctp does not support setting sl.\n");
+                goto free_buf;
+            }
+            urma_tp_attr_value_t tp_attr = {0};
+            uint8_t set_tp_attr_cnt = 0;
+            uint32_t set_tp_attr_flag = 0;
+            tp_attr.sl = cfg->sl;
+            set_tp_attr_cnt++;
+            set_tp_attr_flag |= PERFTEST_SET_ATTR_BITMAP_SL_FLAG;
+            ret = urma_set_tp_attr(ctx->urma_ctx, ctx->tp_info[i].tp_handle, set_tp_attr_cnt,
+                                   set_tp_attr_flag, &tp_attr);
+            if (ret != URMA_SUCCESS) {
+                LOG_ERROR("Failed to set_tp_attr(sl), ret:%d\n", ret);
                 goto free_buf;
             }
         }
