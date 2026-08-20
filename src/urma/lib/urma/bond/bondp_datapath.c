@@ -27,11 +27,9 @@
 
 #include "bondp_datapath.h"
 
-#define BONDP_POST_SEND_MAX_RETRY   3
+#define BONDP_POST_SEND_MAX_RETRY          3
 /* Max consecutive fast returns before forcing a full scan */
-#define BONDP_FAST_RETURN_THRESHOLD 64
-
-static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx);
+#define BONDP_FAST_RETURN_THRESHOLD        64
 
 static urma_jetty_id_t *get_comp_urma_jetty_id(bondp_comp_t *bdp_comp)
 {
@@ -365,11 +363,12 @@ static void failback_resend_wr(bondp_comp_t *bdp_comp, uint64_t resend_wr_id)
     }
 
     atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
-    if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+    if (bondp_resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
         URMA_LOG_ERR("Failed failback resend on post, wr_id=%lu, vjetty_id=%u, tjetty_id=%u, "
                      "from=[%u, %u], to=[%d, %d]\n",
                      resend_wr_id, bdp_comp->v_jetty.jetty_id.id,
                      target_vjetty_id, old_send_idx, old_target_idx, new_send_idx, new_target_idx);
+        return;
     }
 }
 
@@ -552,6 +551,8 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             wr_entry->user_ctx = cur->user_ctx;
             wr_entry->target_vjetty = bdp_tjetty;
             wr_entry->bdp_comp = bdp_comp;
+            wr_entry->rnr_retry_pending = false;
+            wr_entry->rnr_retry_cnt = 0;
             if (cur->flag.bs.has_drv_ext) {
                 bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(cur, bondp_jfs_wr_t, base);
                 wr_entry->info.src_chip_id = bwr->src_chip_id;
@@ -1099,7 +1100,7 @@ typedef enum cr_convert_ret {
     CONVERT_SKIP = 1,
 } cr_convert_ret_t;
 
-static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
+int bondp_resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int send_idx, int target_idx)
 {
     int ret;
 
@@ -1121,6 +1122,7 @@ static int resend_jfs_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *wr_entry, int s
     if (ret != URMA_SUCCESS) {
         goto release_wr_entry;
     }
+    wr_entry->rnr_retry_pending = false;
 
     return ret;
 
@@ -1146,7 +1148,7 @@ static void resend_matched_jfs_wrs(bondp_comp_t *bdp_comp, uint64_t base_wr_id,
         }
 
         atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
-        if (resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
+        if (bondp_resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
             URMA_LOG_ERR("Failed to resend %s jfs wr, wr_id=%lu\n", reason, resend_wr_id);
         }
     }
@@ -1376,52 +1378,50 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             return CONVERT_SKIP;
         }
 
-        uint32_t wr_cnt = atomic_load(&bdp_comp->rnr_retry_wr_cnt);
-        uint32_t sleep_cnt = atomic_load(&bdp_comp->rnr_retry_sleep_cnt);
-        if (sleep_cnt >= comp_ctx->rnr_retry_max) {
-            (void)pthread_spin_unlock(&bdp_comp->send_lock);
-            URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu sleep_cnt=%u retry_max=%lu\n",
-                         wr_id, sleep_cnt, comp_ctx->rnr_retry_max);
-            goto CONVERT_CR;
-        }
-
-        bool need_sleep = (wr_cnt == 0);
-        uint32_t next_wr_cnt = wr_cnt + 1;
-        if (next_wr_cnt >= comp_ctx->rnr_retry_batch_wr_num) {
-            next_wr_cnt = 0;
-        }
-        atomic_store(&bdp_comp->rnr_retry_wr_cnt, next_wr_cnt);
-
-        if (need_sleep) {
-            atomic_store(&bdp_comp->rnr_retry_sleep_cnt, sleep_cnt + 1);
-            URMA_LOG_INFO("Sleep before RNR retry resend, path=[%u, %u], cr status=%d, "
-                          "sleep_cnt=%u, jetty_id=%u, tjetty_id=%u\n",
-                          send_idx, target_idx, cr->status, sleep_cnt,
-                          bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id);
-            (void)pthread_spin_unlock(&bdp_comp->send_lock);
-            bondp_rnr_retry_sleep_before_resend(comp_ctx, sleep_cnt);
-
-            (void)pthread_spin_lock(&bdp_comp->send_lock);
-
-            wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);
-            if (wr_entry == NULL ||
-                wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
-                wr_entry->bdp_comp != bdp_comp ||
-                wr_entry->send_idx != send_idx ||
-                wr_entry->target_idx != target_idx) {
-                (void)pthread_spin_unlock(&bdp_comp->send_lock);
-                put_comp(bdp_comp);
-                return CONVERT_SKIP;
+        uint64_t user_ctx = wr_entry->user_ctx;
+        uint32_t retry_cnt = wr_entry->rnr_retry_cnt;
+        atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
+        wr_entry->rnr_retry_pending = true;
+        if (retry_cnt == 0) {
+            wr_entry->rnr_retry_cnt++;
+            if (bondp_resend_jfs_wr(bdp_comp, wr_entry, send_idx, target_idx) != 0) {
+                URMA_LOG_ERR("Failed to resend first rnr retry jfs wr, wr_id=%lu\n", wr_id);
+            }
+        } else if (retry_cnt >= comp_ctx->rnr_retry_max) {
+            URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
+                         wr_id, retry_cnt, comp_ctx->rnr_retry_max);
+            cr->status = BOND_CR_RNR_RETRY_CNT_EXC_ERR;
+            wr_entry->rnr_retry_pending = false;
+            jfs_wr_put_refs(&wr_entry->wr);
+            jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
+        } else {
+            bool new_task = false;
+            int schedule_ret = bondp_rnr_retry_schedule(bdp_comp, send_idx, retry_cnt, &new_task);
+            if (schedule_ret != 0) {
+                URMA_LOG_ERR("Failed to schedule rnr retry jfs wr, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
+                             wr_id, retry_cnt, comp_ctx->rnr_retry_max);
+                cr->status = BOND_CR_RNR_RETRY_CNT_EXC_ERR;
+                wr_entry->rnr_retry_pending = false;
+                jfs_wr_put_refs(&wr_entry->wr);
+                jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
+            } else {
+                wr_entry->rnr_retry_cnt++;
+                if (new_task) {
+                    URMA_LOG_INFO("Schedule RNR retry resend, path=[%u, %u], "
+                                  "retry_cnt=%u, local_id=%u, tjetty_id=%u\n",
+                                  send_idx, target_idx, retry_cnt,
+                                  get_comp_urma_jetty_id(bdp_comp)->id,
+                                  wr_entry->target_vjetty->v_tjetty.id.id);
+                }
             }
         }
-
-        atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][target_idx], 1);
-        if (resend_jfs_wr(bdp_comp, wr_entry, send_idx, target_idx) != 0) {
-            URMA_LOG_ERR("Failed to resend rnr retry jfs wr, wr_id=%lu\n", wr_id);
-        }
+        uint32_t msn = 0;
+        convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
+        cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
+        cr->user_ctx = user_ctx;
         (void)pthread_spin_unlock(&bdp_comp->send_lock);
         put_comp(bdp_comp);
-        return CONVERT_SKIP;
+        return CONVERT_SUCCESS;
     }
 
     if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
@@ -1485,11 +1485,6 @@ CONVERT_CR:
     convert_pcr_to_vcr(cr, bdp_comp->bondp_ctx, &msn);
     cr->local_id = get_comp_urma_jetty_id(bdp_comp)->id;
     cr->user_ctx = wr_entry->user_ctx;
-    if (cr->status == URMA_CR_SUCCESS) {
-        atomic_store(&bdp_comp->rnr_retry_sleep_cnt, 0);
-        atomic_store(&bdp_comp->rnr_retry_wr_cnt, 0);
-    }
-
     pthread_spin_lock(&bdp_comp->send_lock);
     jfs_wr_put_refs(&wr_entry->wr);
     jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);

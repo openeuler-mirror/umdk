@@ -457,11 +457,9 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     bdp_ctx->health_check_interval_ms = g_bondp_env.health_check_interval_ms;
     bdp_ctx->health_check_batch_node_num = g_bondp_env.health_check_batch_node_num;
     bdp_ctx->enable_rnr_retry = g_bondp_env.enable_rnr_retry;
-    bdp_ctx->rnr_retry_first_sleep_ms = g_bondp_env.rnr_retry_first_sleep_ms;
     bdp_ctx->rnr_retry_sleep_ms = g_bondp_env.rnr_retry_sleep_ms;
     bdp_ctx->rnr_retry_max = g_bondp_env.rnr_retry_max;
     bdp_ctx->rnr_retry_jitter_ratio = g_bondp_env.rnr_retry_jitter_ratio;
-    bdp_ctx->rnr_retry_batch_wr_num = g_bondp_env.rnr_retry_batch_wr_num;
 
     int ret = 0;
     ret = bondp_create_vcontext(bdp_ctx, dev, eid_index, dev_fd);

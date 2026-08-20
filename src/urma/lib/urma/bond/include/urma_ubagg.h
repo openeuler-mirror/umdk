@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+#define BOND_CR_RNR_RETRY_CNT_EXC_ERR 99
+
 /* For version compatibility */
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
 #define BONDP_USER_CTL_SET_CTX_CFG BONDP_USER_CTL_SET_CTX_CFG
