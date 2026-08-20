@@ -330,6 +330,10 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     umq_buf_t *last_node = NULL;
+
+    if (QBUF_LIST_EMPTY(input))
+        return 0;
+
     QBUF_LIST_FOR_EACH(cur_node, input)
     {
         ++cnt;
