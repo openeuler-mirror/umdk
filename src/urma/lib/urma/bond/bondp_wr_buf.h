@@ -11,6 +11,7 @@
 #ifndef BONDP_WR_BUF_H
 #define BONDP_WR_BUF_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <pthread.h>
 
@@ -59,6 +60,8 @@ typedef struct jfs_wr_entry {
     struct bondp_target_jetty *target_vjetty;
     uint32_t send_idx;
     uint32_t target_idx;
+    bool rnr_retry_pending;
+    uint32_t rnr_retry_cnt;
     bondp_chip_id_info_t info;
     urma_sge_t sge_data[];
 } jfs_wr_entry_t;
