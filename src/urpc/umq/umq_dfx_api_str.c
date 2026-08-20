@@ -246,35 +246,81 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              qbuf_pool_stats->alloc_stats.rx_pool_alloc_count, "rx_pool_free_cnt", qbuf_pool_stats->alloc_stats.rx_pool_free_count);
     }
 
-    // === Without-Data Pool State ===
+    // === Global Pool State (unified: all pool types with alloc/free/outstanding) ===
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
+                         "                                             Global Pool State");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                         "%-13s %-10s %-10s %-14s %-14s %-14s %-11s %-11s %-11s\n",
+                         "Type", "free_blk", "blk_size", "exp_total_blk", "exp_total_exp", "exp_total_shrink",
+                         "alloc_cnt", "free_cnt", "outstanding");
+    /* Normal pool: per-SC with_data rows + RX + without-data */
+    static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
         if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
             continue;
         }
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "                       Without-Data Pool State [%s]\n",
-                             umq_qbuf_pool_type_name(info->type));
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                             "%-10s %-10s %-14s %-14s %-14s %-11s %-11s %-11s\n",
-                             "free_blk", "blk_size", "exp_total_blk", "exp_total_exp", "exp_total_shrink",
-                             "alloc_cnt", "free_cnt", "outstanding");
+        for (uint32_t sc = 0; sc < info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
+            const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
+            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-10lu %-10u %-14lu %-14lu %-14lu %-11lu %-11lu %-11ld\n",
+                                 sc_name,
+                                 (unsigned long)sci->buf_cnt_with_data,
+                                 sci->blk_size,
+                                 (unsigned long)sci->exp_total_block_num,
+                                 (unsigned long)sci->exp_total_expansion_count,
+                                 (unsigned long)sci->exp_total_shrink_count,
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.sc_alloc_count[sc],
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.sc_free_count[sc],
+                                 (long)(qbuf_pool_stats->alloc_stats.sc_alloc_count[sc] -
+                                        qbuf_pool_stats->alloc_stats.sc_free_count[sc]));
+        }
+        /* RX pool row */
+        {
+            const umq_qbuf_pool_config_t *cfg = &info->config;
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-10lu %-10u %-14s %-14s %-14s %-11lu %-11lu %-11ld\n",
+                                 "RX_pool",
+                                 (unsigned long)cfg->rx_pool_free_depth,
+                                 cfg->rx_pool_block_size,
+                                 "-", "-", "-",
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.rx_pool_alloc_count,
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.rx_pool_free_count,
+                                 (long)(qbuf_pool_stats->alloc_stats.rx_pool_alloc_count -
+                                        qbuf_pool_stats->alloc_stats.rx_pool_free_count));
+        }
+        /* without-data row */
         {
             const umq_expansion_pool_stats_t *exp = &qbuf_pool_stats->exp_pool_without_data;
-            uint32_t nodata_blk_size = info->umq_buf_t_size;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
-                                 "%-10lu %-10u %-14lu %-14lu %-14lu %-11lu %-11lu %-11ld\n",
-                                 info->available_mem.split.block_num_without_data,
-                                 nodata_blk_size,
+                                 "%-13s %-10lu %-10u %-14lu %-14lu %-14lu %-11lu %-11lu %-11ld\n",
+                                 "without-data",
+                                 (unsigned long)info->available_mem.split.block_num_without_data,
+                                 info->umq_buf_t_size,
                                  (unsigned long)exp->exp_total_block_num,
                                  (unsigned long)exp->total_expansion_count,
                                  (unsigned long)exp->total_shrink_count,
-                                 qbuf_pool_stats->alloc_stats.nodata_alloc_count,
-                                 qbuf_pool_stats->alloc_stats.nodata_free_count,
-                                 (long)(qbuf_pool_stats->alloc_stats.nodata_alloc_count - qbuf_pool_stats->alloc_stats.nodata_free_count));
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.nodata_alloc_count,
+                                 (unsigned long)qbuf_pool_stats->alloc_stats.nodata_free_count,
+                                 (long)(qbuf_pool_stats->alloc_stats.nodata_alloc_count -
+                                        qbuf_pool_stats->alloc_stats.nodata_free_count));
         }
+    }
+    /* Tiny pool row (separate pool, no expansion, no global alloc/free counters) */
+    for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
+        const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
+        if (info->type != UMQ_QBUF_POOL_TYPE_TINY) {
+            continue;
+        }
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                             "%-13s %-10lu %-10u %-14s %-14s %-14s %-11s %-11s %-11s\n",
+                             "Tiny",
+                             (unsigned long)info->available_mem.split.block_num_with_data,
+                             info->block_size,
+                             "-", "-", "-", "-", "-", "-");
     }
 
     // === Expansion Pool ===
@@ -413,7 +459,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          total_tls_fetch_buf_cnt_with_data, total_tls_return_cnt_with_data,
                          total_tls_return_buf_cnt_with_data, total_alloc_cnt_with_data, total_free_cnt_with_data);
 
-    static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
         if (s->sc_count > 1) {
