@@ -53,6 +53,15 @@ extern "C" {
 // Multi-level size_class defaults
 #define QBUF_POOL_DEFAULT_SIZE_CLASS_COUNT (2)
 // QBUF_POOL_DEFAULT_STEP_MULTIPLIER removed (replaced by explicit_block_sizes[])
+
+// Size class indices: identify the role of each slot in per_sc_block_counts[] /
+// per_sc_tls_qbuf_pool_depth[] / explicit_block_sizes[].
+//   [SMALL]  -> block size = small_block_size (validated in init_size_class_config)
+//   [MIDDLE] -> block size defaults to QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT when caller passes 0
+//   [LARGE+] -> block size must be set explicitly (no default, cfg_check rejects 0)
+#define QBUF_POOL_SMALL_SIZE_CLASS_ID      (0)
+#define QBUF_POOL_MIDDLE_SIZE_CLASS_ID     (1)
+#define QBUF_POOL_LARGE_SIZE_CLASS_ID_MIN  (2)
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
@@ -84,6 +93,20 @@ extern "C" {
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 #define QBUF_POOL_MAX_BLOCK_SIZE (1024U * 1024U)
 #define QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA (4 * 1024 * 1024)
+
+// per_sc_tls_qbuf_pool_depth[] default / range bounds (cfg_check fills default when caller passes 0)
+#define QBUF_POOL_TLS_DEPTH_DEFAULT          (1024)
+#define QBUF_POOL_TLS_DEPTH_MIN              (1)
+#define QBUF_POOL_TLS_DEPTH_MAX              (15360)
+// per_sc_block_counts[] default / range bounds
+#define QBUF_POOL_BLOCK_COUNT_DEFAULT        (1536)
+#define QBUF_POOL_BLOCK_COUNT_MIN            (1)
+#define QBUF_POOL_BLOCK_COUNT_MAX            (30720)
+// explicit_block_sizes[i>=1] default / range bounds (i==0 must equal small_block_size, validated in init_size_class_config)
+#define QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT  (64 * 1024)
+#define QBUF_POOL_MIDDLE_BLOCK_SIZE_MIN      (8 * 1024)
+#define QBUF_POOL_MIDDLE_BLOCK_SIZE_MAX      (1024 * 1024)
+#define QBUF_POOL_BLOCK_SIZE_ALIGN           (4096)
 
 typedef struct mempool_segment_ops {
     int (*register_seg_callback)(uint8_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);

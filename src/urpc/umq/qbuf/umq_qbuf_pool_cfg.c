@@ -9,6 +9,11 @@
 #include "umq_qbuf_pool_helper.h"
 #include "umq_tiny_qbuf_pool.h"
 
+static inline bool umq_is_power_of_2(uint32_t x)
+{
+    return x > 0 && (x & (x - 1)) == 0;
+}
+
 static int umq_tiny_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *plan)
 {
     if (!cfg->buf_pool_cfg.enable_tiny_pool) {
@@ -79,18 +84,66 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
     uint64_t normal_io_buf_size = 0;
     for (uint32_t i = 0; i < count; i++) {
         uint64_t blk_cnt = cfg->buf_pool_cfg.per_sc_block_counts[i];
+        uint64_t tls = cfg->buf_pool_cfg.per_sc_tls_qbuf_pool_depth[i];
         uint32_t blk_sz = cfg->buf_pool_cfg.explicit_block_sizes[i];
-        plan->per_sc_block_counts[i] = blk_cnt;
-        plan->per_sc_tls_qbuf_pool_depth[i] = cfg->buf_pool_cfg.per_sc_tls_qbuf_pool_depth[i];
+
+        // 0 = use default (fail-fast in plan stage, before allocation)
         if (blk_cnt == 0) {
-            continue;
+            blk_cnt = QBUF_POOL_BLOCK_COUNT_DEFAULT;
         }
-        if (blk_sz == 0) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "per_sc_block_counts[%u]=%llu but explicit_block_sizes[%u]=0\n",
-                         i, (unsigned long long)blk_cnt, i);
+        if (tls == 0) {
+            tls = QBUF_POOL_TLS_DEPTH_DEFAULT;
+        }
+        // Size class roles: see QBUF_POOL_SMALL/MIDDLE/LARGE_SIZE_CLASS_ID in umq_qbuf_pool_base.h.
+        // SMALL  -> block size = small_block_size (validated in init_size_class_config, defensive)
+        // MIDDLE -> block size defaults to QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT when caller passes 0
+        // LARGE+  -> block size must be set explicitly (no default, cfg_check rejects 0)
+        if (i == QBUF_POOL_MIDDLE_SIZE_CLASS_ID && blk_sz == 0) {
+            blk_sz = QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT;
+        }
+
+        // composite constraint: blk_cnt >= tls (prevents uint64 underflow downstream)
+        if (tls < QBUF_POOL_TLS_DEPTH_MIN || tls > QBUF_POOL_TLS_DEPTH_MAX) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "per_sc_tls_qbuf_pool_depth[%u]=%llu out of range [%u, %u]\n",
+                         i, (unsigned long long)tls, QBUF_POOL_TLS_DEPTH_MIN, QBUF_POOL_TLS_DEPTH_MAX);
             return -UMQ_ERR_EINVAL;
         }
-        normal_io_buf_size += blk_cnt * blk_sz;
+        if (blk_cnt < QBUF_POOL_BLOCK_COUNT_MIN || blk_cnt > QBUF_POOL_BLOCK_COUNT_MAX) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "per_sc_block_counts[%u]=%llu out of range [%u, %u]\n",
+                         i, (unsigned long long)blk_cnt, QBUF_POOL_BLOCK_COUNT_MIN, QBUF_POOL_BLOCK_COUNT_MAX);
+            return -UMQ_ERR_EINVAL;
+        }
+        if (blk_cnt < tls) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "per_sc_block_counts[%u]=%llu < per_sc_tls_qbuf_pool_depth[%u]=%llu\n",
+                         i, (unsigned long long)blk_cnt, i, (unsigned long long)tls);
+            return -UMQ_ERR_EINVAL;
+        }
+        if (i >= QBUF_POOL_LARGE_SIZE_CLASS_ID_MIN && blk_sz == 0) {
+            UMQ_VLOG_ERR(VLOG_UMQ,
+                         "explicit_block_sizes[%u]=0 is invalid for SC index > 1, must be set explicitly\n", i);
+            return -UMQ_ERR_EINVAL;
+        }
+        if (i == QBUF_POOL_MIDDLE_SIZE_CLASS_ID) {
+            if (blk_sz < QBUF_POOL_MIDDLE_BLOCK_SIZE_MIN || blk_sz > QBUF_POOL_MIDDLE_BLOCK_SIZE_MAX) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "explicit_block_sizes[%u]=%u out of range [%u, %u]\n",
+                             i, blk_sz, QBUF_POOL_MIDDLE_BLOCK_SIZE_MIN, QBUF_POOL_MIDDLE_BLOCK_SIZE_MAX);
+                return -UMQ_ERR_EINVAL;
+            }
+            if (blk_sz % QBUF_POOL_BLOCK_SIZE_ALIGN != 0) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "explicit_block_sizes[%u]=%u not aligned to %u\n",
+                             i, blk_sz, QBUF_POOL_BLOCK_SIZE_ALIGN);
+                return -UMQ_ERR_EINVAL;
+            }
+            if (!umq_is_power_of_2(blk_sz)) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "explicit_block_sizes[%u]=%u not power of 2\n", i, blk_sz);
+                return -UMQ_ERR_EINVAL;
+            }
+        }
+
+        plan->per_sc_block_counts[i] = blk_cnt;
+        plan->per_sc_tls_qbuf_pool_depth[i] = tls;
+        plan->explicit_block_sizes[i] = blk_sz;
+        normal_io_buf_size += (uint64_t)blk_cnt * blk_sz;
         if (cfg->buf_mode == UMQ_BUF_SPLIT) {
             normal_io_buf_size += blk_cnt * sizeof(umq_buf_t);
         }
