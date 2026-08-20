@@ -730,7 +730,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .expansion_threshold = cfg->buf_pool_cfg.expansion_threshold,
     };
     memcpy(qbuf_cfg.explicit_block_sizes,
-           cfg->buf_pool_cfg.explicit_block_sizes,
+           buf_pool_plan.explicit_block_sizes,
            sizeof(uint32_t) * cfg->buf_pool_cfg.size_class_count);
     memcpy(qbuf_cfg.per_sc_block_counts,
            buf_pool_plan.per_sc_block_counts,
