@@ -3361,7 +3361,7 @@ int umq_ub_send_imm(ub_queue_t *queue, uint64_t imm_value, urma_sge_t *sge, uint
         &urma_wr, &bad_wr);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_POST_SEND, start_timestamp);
     uint64_t delta_ns = umq_trace_write_delta(tp_start);
-    umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_FC_POST_TX, tp_start, delta_ns);
+    umq_trace_sub_record(UMQ_TRACE_TYPE_POST, UMQ_URMA_FUNC_POST_TX, tp_start, delta_ns);
     if (status != URMA_SUCCESS) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
             "remote jetty_id: %u, urma_post_jetty_send_wr failed, status: %d\n", EID_ARGS(*eid), id,
