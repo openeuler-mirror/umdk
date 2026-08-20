@@ -32,6 +32,7 @@ static const char UMQ_DFX_UNDERLINE_120[] =
     "--------------------------------------------------------------------------------"
     "----------------------------------------"; /* 80 + 40 = 120 */
 #define UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN 20
+#define UMQ_DFX_LABEL_BUF_SIZE 32
 
 #define UMQ_DFX_SNPRINTF_BUF(__buf, __max_buf_len, __offset, __format, ...)                                \
     do {                                                                                                   \
@@ -109,7 +110,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                 static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
                 const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ?
                                        sc_names[sc] : "sc?";
-                char ts_buf[32];
+                char ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
                 (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
                                (double)sc_total_size / (1024.0 * 1024.0));
                 UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -125,7 +126,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
              * the other type rows that add TotalBlk * umq_buf_t_size to the data bytes. */
             const umq_qbuf_pool_config_t *cfg = &info->config;
             uint64_t rx_total_size = cfg->rx_pool_total_size;
-            char rx_ts_buf[32];
+            char rx_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(rx_ts_buf, sizeof(rx_ts_buf), "%lu(%.1fMB)", rx_total_size,
                            (double)rx_total_size / (1024.0 * 1024.0));
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -144,7 +145,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             const umq_qbuf_sc_info_t *sci0 = &info->sc_info[0];
             uint64_t init_total_size = (uint64_t)sci0->init_block_count * (sci0->blk_size + info->umq_buf_t_size);
             uint64_t free_size = (uint64_t)info->available_mem.split.block_num_with_data * sci0->blk_size;
-            char tiny_ts_buf[32];
+            char tiny_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(tiny_ts_buf, sizeof(tiny_ts_buf), "%lu(%.1fMB)", init_total_size,
                            (double)init_total_size / (1024.0 * 1024.0));
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -165,7 +166,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     if (small_info != NULL && small_info->mode == UMQ_BUF_SPLIT) {
         uint64_t nodata_total_size =
             (uint64_t)small_info->available_mem.split.block_num_without_data * small_info->umq_buf_t_size;
-        char nodata_ts_buf[32];
+        char nodata_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
         (void)snprintf(nodata_ts_buf, sizeof(nodata_ts_buf), "%lu(%.1fMB)", nodata_total_size,
                        (double)nodata_total_size / (1024.0 * 1024.0));
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -176,7 +177,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         grand_total_size += nodata_total_size;
     }
     /* Total row: sum of every row's TotalSize, with a human-readable MB suffix. */
-    char total_ts_buf[32];
+    char total_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
     (void)snprintf(total_ts_buf, sizeof(total_ts_buf), "%lu(%.1fMB)", grand_total_size,
                    (double)grand_total_size / (1024.0 * 1024.0));
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -198,7 +199,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "size_class_count",
                              cfg->size_class_count);
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
-            char name[32];
+            char name[UMQ_DFX_LABEL_BUF_SIZE];
             snprintf(name, sizeof(name), "blk_size[%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->explicit_block_sizes[sc]);
@@ -221,7 +222,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "exp_slot_used_count",
                              info->exp_slot_used_count);
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
-            char name[32];
+            char name[UMQ_DFX_LABEL_BUF_SIZE];
             snprintf(name, sizeof(name), "batch_count[sc%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->per_sc_batch_count[sc]);
@@ -426,9 +427,16 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     uint64_t total_free_cnt_with_data = 0;
     uint64_t total_free_cnt_without_data = 0;
 
-    /* Per-SC TLS buf accumulation for Derived Metrics breakdown.
+    /* Per-SC TLS accumulation for Derived Metrics breakdown.
      * Indexed by [sc], valid range [0..sc_count-1]. */
     uint64_t total_tls_buf_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_tls_capacity_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_tls_fetch_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_tls_fetch_buf_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_tls_return_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_tls_return_buf_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_alloc_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
+    uint64_t total_free_cnt_with_data_per_sc[UMQ_SIZE_CLASS_MAX] = {0};
 
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
@@ -448,9 +456,16 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         total_tls_return_buf_cnt_with_data += s->tls_return_buf_cnt_with_data;
         total_alloc_cnt_with_data += s->alloc_cnt_with_data;
         total_free_cnt_with_data += s->free_cnt_with_data;
-        /* accumulate per-SC TLS buf for Derived Metrics */
+        /* accumulate per-SC TLS for Derived Metrics */
         for (uint32_t sc = 0; sc < s->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
             total_tls_buf_cnt_with_data_per_sc[sc] += s->sc_buf_cnt_with_data[sc];
+            total_tls_capacity_with_data_per_sc[sc] += s->sc_capacity_with_data[sc];
+            total_tls_fetch_cnt_with_data_per_sc[sc] += s->sc_tls_fetch_cnt[sc];
+            total_tls_fetch_buf_cnt_with_data_per_sc[sc] += s->sc_tls_fetch_buf_cnt[sc];
+            total_tls_return_cnt_with_data_per_sc[sc] += s->sc_tls_return_cnt[sc];
+            total_tls_return_buf_cnt_with_data_per_sc[sc] += s->sc_tls_return_buf_cnt[sc];
+            total_alloc_cnt_with_data_per_sc[sc] += s->sc_alloc_cnt[sc];
+            total_free_cnt_with_data_per_sc[sc] += s->sc_free_cnt[sc];
         }
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -458,6 +473,25 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          total_tls_capacity_with_data, total_tls_buf_cnt_with_data, total_tls_fetch_cnt_with_data,
                          total_tls_fetch_buf_cnt_with_data, total_tls_return_cnt_with_data,
                          total_tls_return_buf_cnt_with_data, total_alloc_cnt_with_data, total_free_cnt_with_data);
+    /* per-SC total rows (total-Small/total-Medium/...) for multi-level pools */
+    if (small_info != NULL && small_info->sc_count > 1) {
+        for (uint32_t sc = 0; sc < small_info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
+            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            char total_sc_label[UMQ_DFX_LABEL_BUF_SIZE];
+            (void)snprintf(total_sc_label, sizeof(total_sc_label), "total-%s", sc_name);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                                 "%-13s %-16s %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-14lu %-14lu\n",
+                                 total_sc_label, "-",
+                                 total_tls_capacity_with_data_per_sc[sc],
+                                 total_tls_buf_cnt_with_data_per_sc[sc],
+                                 total_tls_fetch_cnt_with_data_per_sc[sc],
+                                 total_tls_fetch_buf_cnt_with_data_per_sc[sc],
+                                 total_tls_return_cnt_with_data_per_sc[sc],
+                                 total_tls_return_buf_cnt_with_data_per_sc[sc],
+                                 total_alloc_cnt_with_data_per_sc[sc],
+                                 total_free_cnt_with_data_per_sc[sc]);
+        }
+    }
 
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
@@ -536,7 +570,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          (unsigned long)escape_total);
     if (small_info != NULL) {
         for (uint32_t sc = 0; sc < small_info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
-            char sc_label[32];
+            char sc_label[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(sc_label, sizeof(sc_label), "escape_buf_cnt_sc[%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "  %-28s %lu  (blk_size=%u)\n",
                                  sc_label,
