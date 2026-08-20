@@ -483,8 +483,22 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", "                                             Escape");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %lu\n", "escape_buf_cnt",
-                         (unsigned long)qbuf_pool_stats->escape_buf_cnt);
+    uint64_t escape_total = 0;
+    for (uint32_t sc = 0; sc < UMQ_SIZE_CLASS_MAX; sc++) {
+        escape_total += qbuf_pool_stats->escape_buf_cnt_by_sc[sc];
+    }
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %lu\n", "escape_buf_cnt(total)",
+                         (unsigned long)escape_total);
+    if (small_info != NULL) {
+        for (uint32_t sc = 0; sc < small_info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
+            char sc_label[32];
+            (void)snprintf(sc_label, sizeof(sc_label), "escape_buf_cnt_sc[%u]", sc);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "  %-28s %lu  (blk_size=%u)\n",
+                                 sc_label,
+                                 (unsigned long)qbuf_pool_stats->escape_buf_cnt_by_sc[sc],
+                                 small_info->sc_info[sc].blk_size);
+        }
+    }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
 
     return str_size;

@@ -246,7 +246,7 @@ typedef struct umq_qbuf_pool_stats {
     uint32_t local_qbuf_pool_num;                                                   // local buf pool statistics count
 
     // escape
-    uint64_t escape_buf_cnt;
+    uint64_t escape_buf_cnt_by_sc[UMQ_SIZE_CLASS_MAX]; // per-size_class escape buf count
 
     // global pool-granularity leak stats
     umq_qbuf_pool_alloc_stats_t alloc_stats;
