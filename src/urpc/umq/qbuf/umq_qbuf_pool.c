@@ -168,7 +168,18 @@ static pthread_spinlock_t g_tls_stats_lock;
 static volatile uint64_t g_total_local_cap_with_data_cnt[UMQ_QBUF_SIZE_CLASS_MAX] = {0};
 static volatile uint64_t g_total_local_cap_without_data = 0;
 
-static volatile uint64_t g_total_escape_buf_cnt = 0;
+static volatile uint64_t g_escape_buf_cnt[UMQ_QBUF_SIZE_CLASS_MAX] = {0};
+
+static inline bool any_escape_buf_exists(void)
+{
+    uint32_t sc_count = g_qbuf_pool.size_class_count;
+    for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX && i < sc_count; i++) {
+        if (__atomic_load_n(&g_escape_buf_cnt[i], __ATOMIC_RELAXED) != 0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 #define QBUF_POOL_TLS_QBUF_POOL_DEPTH (QBUF_POOL_INITIAL_NODATA_BUF_CNT)
 
@@ -504,9 +515,15 @@ void qbuf_log_non_pool_pointer(const char *caller, void *data)
             (void *)g_qbuf_pool.header_region_start[sc]);
     }
     UMQ_VLOG_ERR(VLOG_UMQ,
-        "  expansion_without_data_block_num=%llu escape_buf_cnt=%llu\n",
-        (unsigned long long)g_qbuf_pool.exp_pool_without_date.exp_total_block_num,
-        (unsigned long long)__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED));
+        "  expansion_without_data_block_num=%llu escape_buf_cnt:\n",
+        (unsigned long long)g_qbuf_pool.exp_pool_without_date.exp_total_block_num);
+    for (uint32_t esc_sc = 0; esc_sc < g_qbuf_pool.size_class_count; esc_sc++) {
+        uint64_t sc_cnt = __atomic_load_n(&g_escape_buf_cnt[esc_sc], __ATOMIC_RELAXED);
+        if (sc_cnt > 0) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "  escape_buf_cnt_sc%u=%llu (blk_size=%u)\n", esc_sc,
+                         (unsigned long long)sc_cnt, g_qbuf_pool.block_sizes[esc_sc]);
+        }
+    }
 
     /* Dump RX pool and tiny pool ranges (extern from their respective modules) */
     extern void *umq_rx_io_buf_addr(void);
@@ -787,7 +804,7 @@ static int slot_with_data_init(uint32_t sc, qbuf_expansion_pool_slot_t *slot)
     uint64_t sub_slot_data_buf_size = exp_pool->sub_slot_data_buf_size;
     uint64_t total_size = QBUF_MEMALIGN_SIZE * sub_slot_count;
     if (!try_inc_atomic_exp_mem_size(total_size)) {
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+        if (!any_escape_buf_exists()) {
             UMQ_LIMIT_VLOG_ERR(
                 VLOG_UMQ,
                 "expand mem size max: %llu, now expand mem size: %llu, expand buf pool need: %llu, expand failed\n",
@@ -1906,7 +1923,9 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     (void)pthread_spin_init(&g_tls_stats_lock, PTHREAD_PROCESS_PRIVATE);
     urpc_list_init(&g_tls_register_head);
     g_qbuf_pool.inited = true;
-    g_total_escape_buf_cnt = 0;
+    for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
+        g_escape_buf_cnt[i] = 0;
+    }
 #ifdef UMQ_QBUF_DEBUG
     if (getenv("UMQ_QBUF_DEBUG") != NULL)
         umq_qbuf_set_debug(1);
@@ -2055,7 +2074,7 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
                 g_dbg_stats.alloc_with_data_fetch_global += ret;
         }
         if (ret <= 0) {
-            if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+            if (!any_escape_buf_exists()) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "fetch from global failed, fetch count: %u\n", need_batch);
                 if (with_data) {
                     if (qbuf_debug_on())
@@ -2220,7 +2239,7 @@ int expand_global_pool(bool with_data, uint32_t sc)
 
     ret = with_data ? slot_with_data_init(sc, slot) : slot_without_data_init(exp_pool, slot);
     if (ret != UMQ_SUCCESS) {
-        if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+        if (!any_escape_buf_exists()) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "init %s slot failed\n", with_data ? "with data" : "without_data\n");
         }
         goto FREE_SLOT;
@@ -2479,11 +2498,11 @@ static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc
     qbuf->mempool_without_data = 0;
 
     QBUF_LIST_FIRST(list) = qbuf;
-    (void)__atomic_add_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_RELAXED);
+    (void)__atomic_add_fetch(&g_escape_buf_cnt[sc], 1, __ATOMIC_RELAXED);
     if (qbuf_debug_on())
         g_dbg_stats.alloc_with_data_escape++;
-    UMQ_VLOG_DEBUG(VLOG_UMQ, "ALLOC_ESCAPE: sc=%u blk_size=%u total_escape=%llu mpool=1023\n", sc, blk_size,
-                   (unsigned long long)__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED));
+    UMQ_VLOG_DEBUG(VLOG_UMQ, "ALLOC_ESCAPE: sc=%u blk_size=%u sc_escape=%llu mpool=1023\n", sc, blk_size,
+                   (unsigned long long)__atomic_load_n(&g_escape_buf_cnt[sc], __ATOMIC_RELAXED));
     return UMQ_SUCCESS;
 }
 
@@ -2674,10 +2693,15 @@ void umq_qbuf_free(umq_buf_list_t *list)
     }
 
     if (QBUF_LIST_FIRST(list)->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX && !g_qbuf_pool.disable_malloc_escape) {
-        free(QBUF_LIST_FIRST(list)->buf_data);
-        (void)__atomic_sub_fetch(&g_total_escape_buf_cnt, 1, __ATOMIC_RELAXED);
-        UMQ_VLOG_DEBUG(VLOG_UMQ, "FREE_ESCAPE: buf=%p remaining_escape=%llu mpool=1023\n", QBUF_LIST_FIRST(list),
-                       (unsigned long long)__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED));
+        umq_buf_t *esc_buf = QBUF_LIST_FIRST(list);
+        uint32_t esc_sc = blk_size_to_sc(esc_buf->data_size);
+        free(esc_buf->buf_data);
+        if (esc_sc < UMQ_QBUF_SIZE_CLASS_MAX) {
+            (void)__atomic_sub_fetch(&g_escape_buf_cnt[esc_sc], 1, __ATOMIC_RELAXED);
+        }
+        UMQ_VLOG_DEBUG(VLOG_UMQ, "FREE_ESCAPE: buf=%p sc=%u sc_escape=%llu mpool=1023\n", esc_buf, esc_sc,
+                       (esc_sc < UMQ_QBUF_SIZE_CLASS_MAX) ?
+                           (unsigned long long)__atomic_load_n(&g_escape_buf_cnt[esc_sc], __ATOMIC_RELAXED) : 0ULL);
         return;
     }
 
@@ -2846,11 +2870,11 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 
 static inline umq_buf_t *escape_data_to_head(void *data)
 {
-    /* Escape-pool blocks are only allocated when g_total_escape_buf_cnt > 0. Without this guard
+    /* Escape-pool blocks are only allocated when any escape buf exists. Without this guard
      * the speculative dereference of (data + block_size) below would read out-of-bounds for
      * pointers that belong to other pools (e.g. rx / tiny), which allocate their data buffers
      * independently and do not place a umq_buf_t header right after each data block. */
-    if (__atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED) == 0) {
+    if (!any_escape_buf_exists()) {
         return NULL;
     }
     /* Escape bufs are allocated via memalign(blk_size, blk_size + sizeof(umq_buf_t)),
@@ -2957,7 +2981,7 @@ umq_buf_t *umq_qbuf_data_to_head(void *data)
         }
 
         /* Always try expansion pool / escape lookup. Expansion-pool blocks
-         * don't increment g_total_escape_buf_cnt, so we can't gate on it. */
+         * don't increment g_escape_buf_cnt[], so we can't gate on it. */
         umq_buf_t *esc = umq_qbuf_data_to_head_escape(data);
         if (esc != NULL && esc->buf_data != NULL && esc->buf_data <= (char *)data &&
             esc->buf_data + esc->buf_size > (char *)data) {
@@ -3273,7 +3297,9 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         }
         (void)pthread_spin_unlock(&g_tls_stats_lock);
     } /* end if (!g_tls_dtors_running) */
-    qbuf_pool_stats->escape_buf_cnt = __atomic_load_n(&g_total_escape_buf_cnt, __ATOMIC_RELAXED);
+    for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
+        qbuf_pool_stats->escape_buf_cnt_by_sc[i] = __atomic_load_n(&g_escape_buf_cnt[i], __ATOMIC_RELAXED);
+    }
 
     /* count non-NULL slots in g_exp_slot_table (new DFX field) */
     if (!g_qbuf_pool.disable_scale_cap) {
