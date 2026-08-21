@@ -1238,9 +1238,6 @@ urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
     @param[out]attr->rx_threshold:urma_query_jfr returns the smaller value if two are returned; returns the value
     directly if only one is returned; returns zero if neither is returned.
 
-    @param[out]attr->mask:Use bits to indicate whether the aforementioned two values are valid. The state remains
-    valid at all times, whereas rx_threshold requires processing based on the return value of urma_query_jfr.
-
     @param[out]cfg:Directly assign jfr_cfg to v_jfr
 */
 urma_status_t bondp_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_attr_t *attr)
@@ -1249,14 +1246,16 @@ urma_status_t bondp_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_att
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jfr, bondp_comp_t, v_jfr);
     int cmp_threshold = UINT32_MAX;
     bool isready = false;
+    bool has_member = false;
     /*
-    The sequential traversal from 0 to 2 is because JFR currently only supports multi-path configuration,
-    hence it is only necessary to traverse the JFR corresponding to the primary EID.
+    p_jfr[] is sparsely indexed by enabled_indices, which can reach URMA_UBAGG_DEV_MAX_NUM
+    in port-level bonding. Scan the full range with a NULL check, as bondp_delete_pjfr does.
     */
-    for (int i = 0; i < IODIE_NUM; i++) {
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_jfr->p_jfr[i] == NULL) {
             continue;
         }
+        has_member = true;
         ret = urma_query_jfr(bdp_jfr->p_jfr[i], cfg, attr);
         if (ret == URMA_SUCCESS) {
             /*
@@ -1265,10 +1264,10 @@ urma_status_t bondp_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_att
             2. Both return values are different and one is ready.
             3. Both return values are different and neither is ready.
             */
-            if ((attr->mask & JFR_STATE) && attr->state == URMA_JFR_STATE_READY) {
+            if (attr->state == URMA_JFR_STATE_READY) {
                 isready = true;
             }
-            if ((attr->mask & JFR_RX_THRESHOLD) && attr->rx_threshold != 0) {
+            if (attr->rx_threshold != 0) {
                 cmp_threshold = cmp_threshold > attr->rx_threshold ? attr->rx_threshold : cmp_threshold;
             }
         } else {
@@ -1279,15 +1278,17 @@ urma_status_t bondp_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_att
             return ret;
         }
     }
+    if (!has_member) {
+        URMA_LOG_ERR("no physical jfr on v_jfr, jfr_id=%u\n", bdp_jfr->v_jfr.jfr_id.id);
+        return URMA_EINVAL;
+    }
     if (isready) {
         attr->state = URMA_JFR_STATE_READY;
     }
     if (cmp_threshold != UINT32_MAX) {
         attr->rx_threshold = cmp_threshold;
-        attr->mask = JFR_STATE | JFR_RX_THRESHOLD;
     } else {
         attr->rx_threshold = 0;
-        attr->mask = JFR_STATE;
     }
     *cfg = bdp_jfr->v_jfr.jfr_cfg;
     return URMA_SUCCESS;
