@@ -22,10 +22,6 @@ public class LinkEventService {
 
     private static final Logger LOG = new Logger(LinkEventService.class);
 
-    private static final String LINK_STATUS_UP = "up";
-
-    private static final String LINK_STATUS_DOWN = "down";
-
     private final SuperNodeStore store;
 
     public LinkEventService(SuperNodeStore store) {
@@ -46,7 +42,7 @@ public class LinkEventService {
             throw new IllegalArgumentException("portName must not be null or empty");
         }
         String eventType = event.getEventType();
-        if (!LINK_STATUS_UP.equals(eventType) && !LINK_STATUS_DOWN.equals(eventType)) {
+        if (!LinkEvent.LINK_STATUS_UP.equals(eventType) && !LinkEvent.LINK_STATUS_DOWN.equals(eventType)) {
             LOG.error("notifyLinkEvent: error=invalid eventType=%s, expected=up|down", eventType);
             throw new IllegalArgumentException("invalid eventType: " + eventType + ", expected: up|down");
         }
@@ -69,8 +65,6 @@ public class LinkEventService {
         port.setUpdateAt(event.getEventTime());
         LOG.info("notifyLinkEvent: device=%s, port=%s, status=%s, updateAt=%s",
             event.getDeviceName(), event.getPortName(), eventType, event.getEventTime());
-
-        // 路由收敛传播预留（本期不实现）
     }
 
     private PortEntity findPortByName(DeviceEntity device, String portName) {
