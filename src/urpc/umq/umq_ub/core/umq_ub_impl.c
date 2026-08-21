@@ -1304,7 +1304,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         UMQ_VLOG_ERR(VLOG_UMQ, "device ctx %s find failed\n", dev_str);
         return UMQ_INVALID_HANDLE;
     }
-
+    bool is_port_configured = false;
     umq_inc_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
     ub_queue_t *queue = (ub_queue_t *)calloc(1, sizeof(ub_queue_t));
     if (queue == NULL) {
@@ -1318,7 +1318,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
         goto FREE_QUEUE;
     }
 
-    umq_ub_config_bonding_port(dev_ctx, queue);
+    is_port_configured = umq_ub_config_bonding_port(dev_ctx, queue);
 
     ub_queue_t *share_rq = NULL;
     if ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
@@ -1463,6 +1463,10 @@ FREE_QUEUE:
     }
     free(queue);
 DEC_REF:
+    if (is_port_configured) {
+        __atomic_store_n(&dev_ctx->is_bonding_port_configured, false, __ATOMIC_RELEASE);
+    }
+
     umq_dec_ref(dev_ctx->io_lock_free, &dev_ctx->ref_cnt, 1);
 
     return UMQ_INVALID_HANDLE;

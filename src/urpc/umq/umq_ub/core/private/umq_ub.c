@@ -1089,21 +1089,21 @@ DEL_CTX:
 }
 
 /* failure does not affect normal functionality */
-void umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_t *queue)
+bool umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_t *queue)
 {
     if (queue->used_port == NULL || queue->used_port_num == 0 ||
         !is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
-        return;
+        return false;
     }
 
     if (__atomic_load_n(&dev_ctx->is_bonding_port_configured, __ATOMIC_ACQUIRE)) {
-        return;
+        return false;
     }
 
     bool expected = false;
     if (!__atomic_compare_exchange_n(&dev_ctx->is_bonding_port_configured, &expected, true,
         false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-        return;
+        return false;
     }
 
     bondp_set_bonding_port_in_t bond_in = {
@@ -1122,7 +1122,7 @@ void umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_t *queue)
             dev_ctx->urma_ctx->dev->name, (int)status);
     }
 
-    return;
+    return true;
 }
 
 int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
