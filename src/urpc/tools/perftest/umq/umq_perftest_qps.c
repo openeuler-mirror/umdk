@@ -181,15 +181,16 @@ static void umq_perftest_client_run_qps_base(uint64_t umqh, umq_perftest_qps_arg
                 return;
             }
         } while (ret != UMQ_SUCCESS && !is_perftest_force_quit());
-        umq_notify(umqh);
 
         (void)atomic_fetch_add(&g_umq_perftest_qps_ctx.reqs[thread_inx], UMQ_BATCH_SIZE);
     }
     perftest_force_quit();
 }
 
-static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_server_run_qps_pro_interrupt(
+    uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
+    //   UMQ_IO_ALL poll split into umq_poll(main_umqh,RX) + umq_poll(umqh,TX)
     umq_buf_t *bad_buf = NULL;
     uint32_t require_rx_cnt = 0;
     int32_t poll_num = 0;
@@ -206,7 +207,7 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
         .direction = UMQ_IO_TX,
     };
 
-    if (umq_rearm_interrupt(umqh, false, &interrupt_option) != 0) {
+    if (umq_rearm_interrupt(main_umqh, false, &interrupt_option) != 0) {
         LOG_PRINT("server umq_rearm_interrupt failed\n");
     }
 
@@ -218,16 +219,13 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
     uint32_t fake_buf_cnt;
     int ret;
 
-    umq_io_option_t io_all_option = {
-        .io_direction = UMQ_IO_ALL,
-    };
-
     umq_io_option_t io_rx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_RX,
     };
 
     while (!is_perftest_force_quit() && (get_cycles() - start_cycle) / cycles_to_units < ITER_MAX_WAIT_TIME_US) {
-        ret = umq_wait_interrupt(umqh, INTERRUPT_MAX_WAIT_TIME_MS, &interrupt_option);
+        ret = umq_wait_interrupt(main_umqh, INTERRUPT_MAX_WAIT_TIME_MS, &interrupt_option);
         if (ret < 0) {
             LOG_PRINT("umq_wait_interrupt failed\n");
             return;
@@ -235,15 +233,15 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
         if (ret == 0) {
             continue;
         }
-        umq_ack_interrupt(umqh, 1, &interrupt_option);
-        if (umq_rearm_interrupt(umqh, false, &interrupt_option) != 0) {
+        umq_ack_interrupt(main_umqh, 1, &interrupt_option);
+        if (umq_rearm_interrupt(main_umqh, false, &interrupt_option) != 0) {
             LOG_PRINT("server umq_rearm_interrupt failed\n");
             return;
         }
 
-        // recv req, release req buf after counting
+        // recv req (RX), release req buf after counting
         do {
-            poll_num = umq_poll(umqh, &io_all_option, polled_buf, UMQ_BATCH_SIZE);
+            poll_num = umq_poll(main_umqh, &io_rx_option, polled_buf, UMQ_BATCH_SIZE);
             if (poll_num < 0) {
                 LOG_PRINT("poll rx failed\n");
                 return;
@@ -270,7 +268,7 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
                 return;
             }
 
-            if (umq_post(umqh, rx_buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
+            if (umq_post(main_umqh, rx_buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
                 handle_bad_buf(&rx_buf, bad_buf);
                 umq_buf_free(rx_buf);
                 umq_buf_free(bad_buf);
@@ -282,8 +280,9 @@ static void umq_perftest_server_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
     }
 }
 
-static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
+    //   UMQ_IO_ALL poll split into umq_poll(main_umqh,RX) + umq_poll(umqh,TX)
     umq_buf_t *bad_buf = NULL;
     uint32_t require_rx_cnt = 0;
     int32_t poll_num = 0;
@@ -293,16 +292,13 @@ static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, umq_perftest_
     uint64_t start_cycle = get_cycles();
     double cycles_to_units = get_cpu_mhz(false);
     uint32_t fake_buf_cnt;
-    umq_io_option_t io_all_option = {
-        .io_direction = UMQ_IO_ALL,
-    };
-
     umq_io_option_t io_rx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_RX,
     };
     while (!is_perftest_force_quit() && (get_cycles() - start_cycle) / cycles_to_units < ITER_MAX_WAIT_TIME_US) {
-        // recv req，release req buf after counting
-        poll_num = umq_poll(umqh, &io_all_option, polled_buf, UMQ_BATCH_SIZE);
+        // recv req, release req buf after counting
+        poll_num = umq_poll(main_umqh, &io_rx_option, polled_buf, UMQ_BATCH_SIZE);
         if (poll_num < 0) {
             LOG_PRINT("poll rx failed\n");
             return;
@@ -328,7 +324,7 @@ static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, umq_perftest_
                 return;
             }
 
-            if (umq_post(umqh, rx_buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
+            if (umq_post(main_umqh, rx_buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
                 handle_bad_buf(&rx_buf, bad_buf);
                 umq_buf_free(rx_buf);
                 umq_buf_free(bad_buf);
@@ -340,12 +336,12 @@ static void umq_perftest_server_run_qps_pro_polling(uint64_t umqh, umq_perftest_
     }
 }
 
-static void umq_perftest_server_run_qps_pro(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_server_run_qps_pro(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     if (qps_arg->cfg->config.interrupt) {
-        umq_perftest_server_run_qps_pro_interrupt(umqh, qps_arg);
+        umq_perftest_server_run_qps_pro_interrupt(umqh, main_umqh, qps_arg);
     } else {
-        umq_perftest_server_run_qps_pro_polling(umqh, qps_arg);
+        umq_perftest_server_run_qps_pro_polling(umqh, main_umqh, qps_arg);
     }
 }
 
@@ -366,12 +362,14 @@ static inline uint32_t get_actual_send_num(umq_buf_t *req_buf, umq_buf_t *bad)
     return num;
 }
 
-static int handle_qps_client_rx_buf(uint64_t umqh, umq_buf_t **rx_buf, uint32_t poll_buf_cnt, uint32_t *fake_buf_cnt)
+static int handle_qps_client_rx_buf(
+    uint64_t main_umqh, umq_buf_t **rx_buf, uint32_t poll_buf_cnt, uint32_t *fake_buf_cnt)
 {
     umq_buf_t *buf = NULL;
     uint32_t failed_idx = 0;
     *fake_buf_cnt = 0;
     umq_io_option_t io_rx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_RX,
     };
     for (uint32_t i = 0; i < poll_buf_cnt; i++) {
@@ -389,7 +387,7 @@ static int handle_qps_client_rx_buf(uint64_t umqh, umq_buf_t **rx_buf, uint32_t 
         }
 
         umq_buf_t *bad_buf = NULL;
-        if (umq_post(umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
+        if (umq_post(main_umqh, buf, &io_rx_option, &bad_buf) != UMQ_SUCCESS) {
             failed_idx = i;
             LOG_PRINT("post rx failed\n");
             goto FREE_RX_BUF;
@@ -404,7 +402,7 @@ FREE_RX_BUF:
     return UMQ_FAIL;
 }
 
-static int umq_perftest_client_wait_fc_tx_interrupt(uint64_t umqh, umq_interrupt_option_t *option)
+static int umq_perftest_client_wait_fc_rx_interrupt(uint64_t umqh, umq_interrupt_option_t *option)
 {
     int ret = umq_wait_interrupt(umqh, INTERRUPT_MAX_WAIT_TIME_MS, option);
     if (ret < 0) {
@@ -422,7 +420,8 @@ static int umq_perftest_client_wait_fc_tx_interrupt(uint64_t umqh, umq_interrupt
     return 0;
 }
 
-static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_client_run_qps_pro_interrupt(
+    uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     // preparing req data, req data reuse
     umq_buf_t *req_buf = umq_buf_alloc(qps_arg->cfg->config.size, UMQ_BATCH_SIZE, umqh, NULL);
@@ -457,16 +456,19 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
         goto ERROR;
     }
 
-    if (umq_rearm_interrupt(umqh, false, &rx_interrupt_option) != 0) {
+    if (umq_rearm_interrupt(main_umqh, false, &rx_interrupt_option) != 0) {
         LOG_PRINT("umq_rearm_interrupt failed\n");
         goto ERROR;
     }
 
     umq_io_option_t io_rx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_RX,
     };
 
+    // post/poll TX both on sub (no flag)
     umq_io_option_t io_tx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_TX,
     };
 
@@ -479,10 +481,9 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
                 if (ret == -UMQ_ERR_EAGAIN) {
                     if (req_buf != bad_buf) {
                         can_send_num -= get_actual_send_num(req_buf, bad_buf);
-                        umq_notify(umqh);
                     }
 
-                    if (umq_perftest_client_wait_fc_tx_interrupt(umqh, &rx_interrupt_option) == 0) {
+                    if (umq_perftest_client_wait_fc_rx_interrupt(main_umqh, &rx_interrupt_option) == 0) {
                         goto POLL;
                     }
                     LOG_PRINT("wait fc tx interrupt failed\n");
@@ -493,7 +494,6 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
                 goto ERROR;
             }
             can_send_num -= UMQ_BATCH_SIZE;
-            umq_notify(umqh);
         }
         if (umq_wait_interrupt(umqh, INTERRUPT_MAX_WAIT_TIME_MS, &tx_interrupt_option) != 1) {
             LOG_PRINT("umq_wait_interrupt failed\n");
@@ -505,14 +505,14 @@ static void umq_perftest_client_run_qps_pro_interrupt(uint64_t umqh, umq_perftes
             goto ERROR;
         }
 POLL:
-        // poll flowctrl win, increase the count
-        ret = umq_poll(umqh, &io_rx_option, rx_buf, UMQ_BATCH_SIZE);
+        // poll flowctrl win, increase the count (RX)
+        ret = umq_poll(main_umqh, &io_rx_option, rx_buf, UMQ_BATCH_SIZE);
         if (ret < 0) {
             LOG_PRINT("poll rx failed\n");
             goto ERROR;
         }
 
-        if (handle_qps_client_rx_buf(umqh, rx_buf, ret, &fake_buf_cnt) != UMQ_SUCCESS) {
+        if (handle_qps_client_rx_buf(main_umqh, rx_buf, ret, &fake_buf_cnt) != UMQ_SUCCESS) {
             LOG_PRINT("handle qps client rx buf failed\n");
             goto ERROR;
         }
@@ -540,7 +540,7 @@ ERROR:
     perftest_force_quit();
 }
 
-static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     // preparing req data, req data reuse
     umq_buf_t *req_buf = umq_buf_alloc(qps_arg->cfg->config.size, UMQ_BATCH_SIZE, umqh, NULL);
@@ -563,10 +563,13 @@ static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_
     uint32_t fake_buf_cnt;
 
     umq_io_option_t io_rx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_RX,
     };
 
+    // post/poll TX both on sub (no flag)
     umq_io_option_t io_tx_option = {
+        .flag = UMQ_IO_OPTION_FLAG_DIRECTION,
         .io_direction = UMQ_IO_TX,
     };
 
@@ -584,17 +587,16 @@ static void umq_perftest_client_run_qps_pro_polling(uint64_t umqh, umq_perftest_
                 goto ERROR;
             }
             can_send_num -= UMQ_BATCH_SIZE;
-            umq_notify(umqh);
         }
 POLL:
-        // poll flowctrl win, increase the count
-        ret = umq_poll(umqh, &io_rx_option, rx_buf, UMQ_BATCH_SIZE);
+        // poll flowctrl win, increase the count (RX)
+        ret = umq_poll(main_umqh, &io_rx_option, rx_buf, UMQ_BATCH_SIZE);
         if (ret < 0) {
             LOG_PRINT("poll rx failed\n");
             goto ERROR;
         }
 
-        if (handle_qps_client_rx_buf(umqh, rx_buf, ret, &fake_buf_cnt) != UMQ_SUCCESS) {
+        if (handle_qps_client_rx_buf(main_umqh, rx_buf, ret, &fake_buf_cnt) != UMQ_SUCCESS) {
             LOG_PRINT("handle qps client rx buf failed\n");
             goto ERROR;
         }
@@ -622,26 +624,26 @@ ERROR:
     perftest_force_quit();
 }
 
-static void umq_perftest_client_run_qps_pro(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+static void umq_perftest_client_run_qps_pro(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     if (qps_arg->cfg->config.interrupt) {
-        umq_perftest_client_run_qps_pro_interrupt(umqh, qps_arg);
+        umq_perftest_client_run_qps_pro_interrupt(umqh, main_umqh, qps_arg);
     } else {
-        umq_perftest_client_run_qps_pro_polling(umqh, qps_arg);
+        umq_perftest_client_run_qps_pro_polling(umqh, main_umqh, qps_arg);
     }
 }
 
-void umq_perftest_run_qps(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg)
+void umq_perftest_run_qps(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg)
 {
     if (qps_arg->cfg->config.instance_mode == PERF_INSTANCE_SERVER) {
         if (qps_arg->cfg->feature & UMQ_FEATURE_API_PRO) {
-            umq_perftest_server_run_qps_pro(umqh, qps_arg);
+            umq_perftest_server_run_qps_pro(umqh, main_umqh, qps_arg);
         } else {
             umq_perftest_server_run_qps_base(umqh, qps_arg);
         }
     } else {
         if (qps_arg->cfg->feature & UMQ_FEATURE_API_PRO) {
-            umq_perftest_client_run_qps_pro(umqh, qps_arg);
+            umq_perftest_client_run_qps_pro(umqh, main_umqh, qps_arg);
         } else {
             umq_perftest_client_run_qps_base(umqh, qps_arg);
         }

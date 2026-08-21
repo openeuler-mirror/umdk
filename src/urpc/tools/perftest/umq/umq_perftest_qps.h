@@ -18,7 +18,7 @@ typedef struct umq_perftest_qps_arg {
     umq_perftest_config_t *cfg;
 } umq_perftest_qps_arg_t;
 
-void umq_perftest_run_qps(uint64_t umqh, umq_perftest_qps_arg_t *qps_arg);
+void umq_perftest_run_qps(uint64_t umqh, uint64_t main_umqh, umq_perftest_qps_arg_t *qps_arg);
 
 #ifdef __cplusplus
 }
