@@ -363,6 +363,7 @@ private:
             SyncFunc<AscendC::HardEvent::MTE2_MTE3>();
             DataCopyExtParams copyParams{1, static_cast<uint32_t>(numExperts * sizeof(int32_t)), 0, 0, 0};
             DataCopyPad(recvCntGt[rank * numExperts], recvTokenLt, copyParams);
+            SyncFunc<AscendC::HardEvent::MTE3_S>();
         }
     }
 
