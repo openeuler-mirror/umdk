@@ -6,6 +6,7 @@
  */
 
 #include "umq_huge_qbuf_pool.h"
+#include "umq_qbuf_pool.h"
 #include "umq_qbuf_pool_helper.h"
 #include "umq_tiny_qbuf_pool.h"
 
@@ -80,6 +81,7 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
         UMQ_VLOG_ERR(VLOG_UMQ, "size_class_count %u out of range [1, %u]\n", count, UMQ_SIZE_CLASS_MAX);
         return -UMQ_ERR_EINVAL;
     }
+    plan->size_class_count = count;
 
     uint64_t normal_io_buf_size = 0;
     for (uint32_t i = 0; i < count; i++) {
@@ -95,9 +97,12 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
             tls = QBUF_POOL_TLS_DEPTH_DEFAULT;
         }
         // Size class roles: see QBUF_POOL_SMALL/MIDDLE/LARGE_SIZE_CLASS_ID in umq_qbuf_pool_base.h.
-        // SMALL  -> block size = small_block_size (validated in init_size_class_config, defensive)
+        // SMALL  -> block size defaults to small_block_size when caller passes 0
         // MIDDLE -> block size defaults to QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT when caller passes 0
         // LARGE+  -> block size must be set explicitly (no default, cfg_check rejects 0)
+        if (i == QBUF_POOL_SMALL_SIZE_CLASS_ID && blk_sz == 0) {
+            blk_sz = umq_buf_size_small();
+        }
         if (i == QBUF_POOL_MIDDLE_SIZE_CLASS_ID && blk_sz == 0) {
             blk_sz = QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT;
         }

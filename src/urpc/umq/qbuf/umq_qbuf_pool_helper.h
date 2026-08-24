@@ -29,6 +29,7 @@ typedef struct umq_qbuf_pool_plan {
     uint64_t per_sc_block_counts[UMQ_SIZE_CLASS_MAX];
     uint64_t per_sc_tls_qbuf_pool_depth[UMQ_SIZE_CLASS_MAX];
     uint32_t explicit_block_sizes[UMQ_SIZE_CLASS_MAX];
+    uint32_t size_class_count;
 } umq_qbuf_pool_plan_t;
 
 typedef enum umq_pool_type {
