@@ -730,19 +730,19 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
         .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
         .disable_malloc_escape = cfg->buf_pool_cfg.disable_malloc_escape,
-        .size_class_count = cfg->buf_pool_cfg.size_class_count,
+        .size_class_count = buf_pool_plan.size_class_count,
         .expansion_size = cfg->buf_pool_cfg.expansion_size,
         .expansion_threshold = cfg->buf_pool_cfg.expansion_threshold,
     };
     memcpy(qbuf_cfg.explicit_block_sizes,
            buf_pool_plan.explicit_block_sizes,
-           sizeof(uint32_t) * cfg->buf_pool_cfg.size_class_count);
+           sizeof(uint32_t) * buf_pool_plan.size_class_count);
     memcpy(qbuf_cfg.per_sc_block_counts,
            buf_pool_plan.per_sc_block_counts,
-           sizeof(uint64_t) * cfg->buf_pool_cfg.size_class_count);
+           sizeof(uint64_t) * buf_pool_plan.size_class_count);
     memcpy(qbuf_cfg.per_sc_tls_qbuf_pool_depth,
            buf_pool_plan.per_sc_tls_qbuf_pool_depth,
-           sizeof(uint64_t) * cfg->buf_pool_cfg.size_class_count);
+           sizeof(uint64_t) * buf_pool_plan.size_class_count);
     ret = umq_qbuf_pool_init(&qbuf_cfg);
     if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_EEXIST) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool init failed, status: %d\n", ret);
