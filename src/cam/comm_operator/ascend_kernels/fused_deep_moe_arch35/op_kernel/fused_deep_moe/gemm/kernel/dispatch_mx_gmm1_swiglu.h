@@ -1023,7 +1023,7 @@ public:
                 AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
                 if (tmpLocalTensor.GetValue(0) == tokenFlag) {
-                    SetValueAndFlush<int32_t>(tokGlobalInt32, 1, 0);
+                    SetValueAndFlush<int32_t>(tokGlobalInt32, 0, 0);
                     break;
                 }
                 SPIN_WAIT_CYCLES();
