@@ -40,15 +40,34 @@ class ScenarioResult:
         self.events.append(f"{time.time():.3f} {msg}")
 
 
+@dataclass
+class AgentCtx:
+    """Correlated agent identity params grouped to keep scenario methods
+    below the too-many-arguments threshold (G.FNM.03)."""
+    agent_id: str
+    session_id: str
+    task: str
+    workspace: str
+
+
 class AgentSupervisor(Protocol):
     """Minimal contract the driver needs from the agent process manager."""
 
-    def agent_pid(self, agent_id: str) -> int: ...
-    def await_turn(self, agent_id: str, k: int, timeout: float = 60.0) -> None: ...
-    def kill_agent(self, agent_id: str) -> None: ...
-    def send_signal(self, agent_id: str, sig: int) -> None: ...
+    def agent_pid(self, agent_id: str) -> int:
+        ...
+
+    def await_turn(self, agent_id: str, k: int, timeout: float = 60.0) -> None:
+        ...
+
+    def kill_agent(self, agent_id: str) -> None:
+        ...
+
+    def send_signal(self, agent_id: str, sig: int) -> None:
+        ...
+
     def restart_agent(self, agent_id: str, session_id: str, task: str,
-                      workspace: str, from_turn: int) -> None: ...
+                      workspace: str, from_turn: int) -> None:
+        ...
 
 
 class FaultDriver:
@@ -57,56 +76,50 @@ class FaultDriver:
         self.sup = supervisor
 
     # ---- scenario 1: kill + restart ----
-    def kill_restart(
-        self, agent_id: str, session_id: str, task: str,
-        workspace: str, turn_k: int = 3, delay_s: float = 10.0,
-    ) -> ScenarioResult:
-        r = ScenarioResult(agent_id, "kill_restart", turn_k, delay_s)
+    def kill_restart(self, ctx: AgentCtx, turn_k: int = 3,
+                     delay_s: float = 10.0) -> ScenarioResult:
+        r = ScenarioResult(ctx.agent_id, "kill_restart", turn_k, delay_s)
         r.add(f"awaiting turn {turn_k}")
-        self.sup.await_turn(agent_id, turn_k)
-        r.add(f"reached turn {turn_k}; killing pid={self.sup.agent_pid(agent_id)}")
-        self.sup.kill_agent(agent_id)
+        self.sup.await_turn(ctx.agent_id, turn_k)
+        r.add(f"reached turn {turn_k}; killing pid={self.sup.agent_pid(ctx.agent_id)}")
+        self.sup.kill_agent(ctx.agent_id)
         r.add("killed; waiting delay")
         time.sleep(delay_s)
         r.add("delay elapsed; restarting agent (recover)")
-        self.sup.restart_agent(agent_id, session_id, task, workspace, from_turn=turn_k)
+        self.sup.restart_agent(ctx.agent_id, ctx.session_id, ctx.task,
+                               ctx.workspace, from_turn=turn_k)
         r.add("restarted")
         return r
 
     # ---- scenario 2: graceful unregister + re-register ----
-    def graceful_unregister(
-        self, agent_id: str, session_id: str, task: str,
-        workspace: str, turn_k: int = 3, delay_s: float = 5.0,
-    ) -> ScenarioResult:
-        r = ScenarioResult(agent_id, "graceful_unregister", turn_k, delay_s)
-        self.sup.await_turn(agent_id, turn_k)
+    def graceful_unregister(self, ctx: AgentCtx, turn_k: int = 3,
+                            delay_s: float = 5.0) -> ScenarioResult:
+        r = ScenarioResult(ctx.agent_id, "graceful_unregister", turn_k, delay_s)
+        self.sup.await_turn(ctx.agent_id, turn_k)
         r.add(f"reached turn {turn_k}; unregister")
-        self.aigw.unregister(agent_id)
+        self.aigw.unregister(ctx.agent_id)
         r.add("unregistered; waiting delay")
         time.sleep(delay_s)
         r.add("re-registering")
-        self.aigw.register(agent_id, ["test-model"])
+        self.aigw.register(ctx.agent_id, ["test-model"])
         r.add("re-registered; restarting agent (register)")
-        self.sup.restart_agent(agent_id, session_id, task, workspace, from_turn=turn_k)
+        self.sup.restart_agent(ctx.agent_id, ctx.session_id, ctx.task,
+                               ctx.workspace, from_turn=turn_k)
         return r
 
     # ---- scenario 3: heartbeat timeout ----
-    def heartbeat_timeout(
-        self, agent_id: str, session_id: str, task: str,
-        workspace: str, turn_k: int = 3,
-        wait_gone_s: float = 0.0,
-    ) -> ScenarioResult:
+    def heartbeat_timeout(self, ctx: AgentCtx, turn_k: int = 3, wait_gone_s: float = 0.0) -> ScenarioResult:
         """SIGUSR1 freezes the agent (no explicit hb, no get-suggestion implicit
         hb). Returns immediately — run_scenario's assert_state_sequence polls
         the AIGW debug endpoint and captures Active->Suspected->Recovering->Gone
         as it happens (rather than sleeping blind then missing states already
         finalized + removed). wait_gone_s is kept for backward compat but
         defaults to 0 (no blind sleep)."""
-        r = ScenarioResult(agent_id, "heartbeat_timeout", turn_k, wait_gone_s)
-        self.sup.await_turn(agent_id, turn_k)
+        r = ScenarioResult(ctx.agent_id, "heartbeat_timeout", turn_k, wait_gone_s)
+        self.sup.await_turn(ctx.agent_id, turn_k)
         r.add(f"reached turn {turn_k}; sending SIGUSR1 to freeze agent")
         import signal as _sig
-        self.sup.send_signal(agent_id, _sig.SIGUSR1)
+        self.sup.send_signal(ctx.agent_id, _sig.SIGUSR1)
         r.add("agent frozen; AIGW aging will run Active->Gone")
         if wait_gone_s > 0:
             time.sleep(wait_gone_s)

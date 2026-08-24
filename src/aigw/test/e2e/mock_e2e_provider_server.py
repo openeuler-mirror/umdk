@@ -18,10 +18,13 @@ Usage:
 
 import argparse
 import json
+import logging
 import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderState:
@@ -49,7 +52,7 @@ FAULT_BODIES = {
 def make_handler(state: ProviderState):
     class ProviderHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
-            print(f"[Provider-{state.name}] {self.address_string()} - {fmt % args}")
+            logger.info(f"[Provider-{state.name}] {self.address_string()} - {fmt % args}")
 
         def _send_json(self, code: int, payload: dict):
             body = json.dumps(payload).encode()
@@ -183,7 +186,7 @@ def make_handler(state: ProviderState):
 def run(port: int, name: str, fault: str):
     state = ProviderState(name, fault)
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
-    print(f"[Provider-{name}] listening on 127.0.0.1:{port} (fault={fault})")
+    logger.info(f"[Provider-{name}] listening on 127.0.0.1:{port} (fault={fault})")
     server.serve_forever()
 
 

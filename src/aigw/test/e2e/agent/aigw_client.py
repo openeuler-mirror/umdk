@@ -104,13 +104,8 @@ class AigwClient:
         )
 
     # ---- get-suggestion (carries implicit heartbeat) ----
-    def get_suggestion(
-        self,
-        model: str,
-        body: dict[str, Any],
-        agent_id: str,
-        session_id: str,
-    ) -> Any:
+    def get_suggestion(self, model: str, body: dict[str, Any], agent_id: str,
+                       session_id: str) -> Any:
         """POST /aigw/v1/openai/get-suggestion. Sets X-Agent-Id + X-Session-Id
         so AIGW's implicit-heartbeat path (http_server.go:392-398) fires.
 

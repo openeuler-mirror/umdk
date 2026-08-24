@@ -9,13 +9,17 @@ AND mock-vLLM received ZERO offload hints.
 
 from __future__ import annotations
 
+import importlib.util
 import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import run_scenario  # type: ignore
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_spec = importlib.util.spec_from_file_location(
+    "run_scenario", os.path.join(_HERE, "run_scenario.py")
+)
+run_scenario = importlib.util.module_from_spec(_spec)  # type: ignore
+_spec.loader.exec_module(run_scenario)
 
 pytestmark = pytest.mark.requires_aigw_binary
 

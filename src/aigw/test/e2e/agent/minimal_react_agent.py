@@ -26,21 +26,30 @@ fault_driver contract:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import logging
 import os
 import re
 import shlex
 import signal
 import subprocess
-import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urljoin
 from typing import Any
 
-# sibling imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from aigw_client import AigwClient, AigwError  # type: ignore
+logger = logging.getLogger(__name__)
+
+# sibling imports (avoid sys.path.insert — load the module by file path)
+_spec = importlib.util.spec_from_file_location(
+    "aigw_client", os.path.join(os.path.dirname(os.path.abspath(__file__)), "aigw_client.py")
+)
+_aigw_client_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_aigw_client_mod)
+AigwClient = _aigw_client_mod.AigwClient
+AigwError = _aigw_client_mod.AigwError
 
 
 # ---- tools (exec in the agent's workspace) ----
@@ -157,9 +166,9 @@ class MinimalReactAgent:
     def register(self) -> None:
         try:
             self.aigw.register(self.args.agent_id, [self.args.model])
-            print(f"[agent {self.args.agent_id}] registered", flush=True)
+            logger.info(f"[agent {self.args.agent_id}] registered")
         except AigwError as e:
-            print(f"[agent {self.args.agent_id}] register failed: {e}", flush=True)
+            logger.error(f"[agent {self.args.agent_id}] register failed: {e}")
 
     def recover(self) -> None:
         """On restart-after-kill, reuse agent_id+session_id to resume.
@@ -169,18 +178,19 @@ class MinimalReactAgent:
         agent past Gone, fall back to a fresh Register (registry.go:194
         overwrites the Gone record with StateRegistered), then the first
         heartbeat moves it Active. Either path lands the agent back in Active,
-        which is what the kill_restart assertion expects."""
+        which is what the kill_restart assertion expects.
+        """
         try:
             self.aigw.recover(self.args.agent_id, [self.args.model])
-            print(f"[agent {self.args.agent_id}] recovered (resume from turn {self.turn})", flush=True)
+            logger.info(f"[agent {self.args.agent_id}] recovered (resume from turn {self.turn})")
         except AigwError as e:
-            print(f"[agent {self.args.agent_id}] recover failed ({e.status}); "
-                  f"agent likely Gone -> re-registering", flush=True)
+            logger.warning(f"[agent {self.args.agent_id}] recover failed ({e.status}); "
+                           f"agent likely Gone -> re-registering")
             try:
                 self.aigw.register(self.args.agent_id, [self.args.model])
-                print(f"[agent {self.args.agent_id}] re-registered after Gone", flush=True)
+                logger.info(f"[agent {self.args.agent_id}] re-registered after Gone")
             except AigwError as e2:
-                print(f"[agent {self.args.agent_id}] re-register failed: {e2}", flush=True)
+                logger.error(f"[agent {self.args.agent_id}] re-register failed: {e2}")
 
     def _heartbeat_loop(self) -> None:
         while not self._hb_stop.is_set():
@@ -190,7 +200,7 @@ class MinimalReactAgent:
                         self.args.agent_id, [self.args.model], [self.args.session_id]
                     )
                 except AigwError as e:
-                    print(f"[agent {self.args.agent_id}] hb failed: {e.status}", flush=True)
+                    logger.warning(f"[agent {self.args.agent_id}] hb failed: {e.status}")
             self._hb_stop.wait(self.args.heartbeat_interval)
 
     def start_heartbeat(self) -> None:
@@ -210,7 +220,7 @@ class MinimalReactAgent:
         messages.extend(self.transcript)
         body = json.dumps({"model": self.args.model, "messages": messages}).encode()
         req = urllib.request.Request(
-            self.args.vllm_url + "/v1/chat/completions",
+            urljoin(self.args.vllm_url, "/v1/chat/completions"),
             data=body, method="POST",
             headers={"Content-Type": "application/json"},
         )
@@ -246,17 +256,17 @@ class MinimalReactAgent:
                 self.args.agent_id, self.args.session_id,
             )
         except AigwError as e:
-            print(f"[agent {self.args.agent_id}] get-suggestion failed: {e.status}", flush=True)
+            logger.warning(f"[agent {self.args.agent_id}] get-suggestion failed: {e.status}")
         # call the stub LLM
         text = self._call_llm()
         self.transcript.append({"role": "assistant", "content": text})
         self._save_transcript()
         if _FINAL_RE.search(text):
-            print(f"[agent {self.args.agent_id}] final answer at turn {self.turn}", flush=True)
+            logger.info(f"[agent {self.args.agent_id}] final answer at turn {self.turn}")
             return False
         m = _ACTION_RE.search(text)
         if not m:
-            print(f"[agent {self.args.agent_id}] no action parsed; stopping", flush=True)
+            logger.warning(f"[agent {self.args.agent_id}] no action parsed; stopping")
             return False
         action, arg = m.group(1), m.group(2).strip()
         obs = self._do_tool(action, arg)
@@ -288,7 +298,7 @@ def _install_sigusr1(agent: MinimalReactAgent) -> None:
         agent.pause_heartbeat = True  # stop explicit heartbeat thread
         agent.paused = True  # freeze the ReAct loop (no get-suggestion = no
                               # implicit hb either) so AIGW ages to Gone
-        print(f"[agent {agent.args.agent_id}] SIGUSR1: paused (no hb, no get-suggestion)", flush=True)
+        logger.info(f"[agent {agent.args.agent_id}] SIGUSR1: paused (no hb, no get-suggestion)")
     signal.signal(signal.SIGUSR1, _h)
 
 

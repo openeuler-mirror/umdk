@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import sys
 import tempfile
 import threading
 import time
@@ -16,11 +15,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-# ensure the agent module is importable
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import minimal_react_agent as mra  # type: ignore
-from mock_vllm import MockVllm  # type: ignore
-from tasks.fix_failing_test import FixFailingTestTask  # type: ignore
+# ensure the agent module is importable (use importlib to avoid sys.path.insert)
+import importlib.util
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_module(name, rel_path):
+    spec = importlib.util.spec_from_file_location(
+        name, os.path.join(_HERE, rel_path)
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+mra = _load_module("minimal_react_agent", "minimal_react_agent.py")
+MockVllm = _load_module("mock_vllm", "mock_vllm.py").MockVllm
+FixFailingTestTask = _load_module(
+    "tasks.fix_failing_test", os.path.join("tasks", "fix_failing_test.py")
+).FixFailingTestTask
 
 
 class _MockAigwHandler(BaseHTTPRequestHandler):

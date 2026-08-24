@@ -55,10 +55,8 @@ def get_state(aigw: AigwClient, agent_id: str) -> str | None:
     return None
 
 
-def wait_for_state(
-    aigw: AigwClient, agent_id: str, target: str | set[str],
-    timeout: float = 30.0, interval: float = 0.5,
-) -> str | None:
+def wait_for_state(aigw: AigwClient, agent_id: str, target: str | set[str],
+                    timeout: float = 30.0, interval: float = 0.5) -> str | None:
     """Poll until the agent reaches a target state (or set of states). Returns
     the state reached, or None on timeout."""
     targets = {target} if isinstance(target, str) else set(target)
@@ -71,10 +69,9 @@ def wait_for_state(
     return None
 
 
-def assert_state_sequence(
-    aigw: AigwClient, agent_id: str, expected: list[str],
-    total_timeout: float = 60.0, interval: float = 0.5,
-) -> tuple[bool, str]:
+def assert_state_sequence(aigw: AigwClient, agent_id: str, expected: list[str],
+                            total_timeout: float = 60.0,
+                            interval: float = 0.5) -> tuple[bool, str]:
     """Assert the agent walked through `expected` state transitions in order.
     Polls, recording the distinct states seen in order, until the expected
     sequence appears as a subsequence OR timeout. Returns (ok, observed_str)."""

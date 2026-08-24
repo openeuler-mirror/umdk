@@ -15,29 +15,55 @@ and mock_vllm.py started separately (or started here via --start-mock-vllm).
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import logging
 import os
 import subprocess
 import sys
 import time
 
-# sibling imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from aigw_client import AigwClient  # type: ignore
-from assertions import (  # type: ignore
-    assert_hint_received,
-    assert_no_hint,
-    assert_state_sequence,
-    get_state,
-    wait_for_state,
-)
-from fault_driver import FaultDriver  # type: ignore
-from supervisor import SubprocessSupervisor  # type: ignore
+logger = logging.getLogger(__name__)
 
-# tasks
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tasks"))
-from tasks.fix_failing_test import FixFailingTestTask  # type: ignore
-from tasks.add_docstring import AddDocstringTask  # type: ignore
-from tasks.refactor_func import RefactorFuncTask  # type: ignore
+# sibling imports (loaded via importlib to avoid sys.path.insert(0, ...))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_sibling(name: str):
+    path = os.path.join(_HERE, f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_aigw_client = _load_sibling("aigw_client")
+AigwClient = _aigw_client.AigwClient  # type: ignore
+_assertions = _load_sibling("assertions")
+assert_hint_received = _assertions.assert_hint_received  # type: ignore
+assert_no_hint = _assertions.assert_no_hint  # type: ignore
+assert_state_sequence = _assertions.assert_state_sequence  # type: ignore
+get_state = _assertions.get_state  # type: ignore
+wait_for_state = _assertions.wait_for_state  # type: ignore
+_fault_driver = _load_sibling("fault_driver")  # type: ignore
+FaultDriver = _fault_driver.FaultDriver  # type: ignore
+AgentCtx = _fault_driver.AgentCtx  # type: ignore
+SubprocessSupervisor = _load_sibling("supervisor").SubprocessSupervisor  # type: ignore
+
+# tasks (loaded via importlib to avoid sys.path.insert(0, ...))
+_TASKS_DIR = os.path.join(_HERE, "tasks")
+
+
+def _load_task_module(name: str):
+    path = os.path.join(_TASKS_DIR, f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"tasks.{name}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+FixFailingTestTask = _load_task_module("fix_failing_test").FixFailingTestTask  # type: ignore
+AddDocstringTask = _load_task_module("add_docstring").AddDocstringTask  # type: ignore
+RefactorFuncTask = _load_task_module("refactor_func").RefactorFuncTask  # type: ignore
 
 TASKS = {
     "fix_failing_test": FixFailingTestTask,
@@ -138,19 +164,18 @@ def _run_scenario(args, aigw: AigwClient, mock_port: int, report: dict) -> dict:
         time.sleep(wait_s)
 
     # fire the scenario
+    ctx = AgentCtx(agent_id=a_id, session_id=args.session_id,
+                   task=args.task, workspace=a_ws)
     if args.scenario == "kill_restart":
-        r = fd.kill_restart(a_id, args.session_id, args.task, a_ws,
-                            turn_k=args.turn_k, delay_s=args.delay_s)
+        r = fd.kill_restart(ctx, turn_k=args.turn_k, delay_s=args.delay_s)
     elif args.scenario == "graceful_unregister":
-        r = fd.graceful_unregister(a_id, args.session_id, args.task, a_ws,
-                                  turn_k=args.turn_k, delay_s=args.delay_s)
+        r = fd.graceful_unregister(ctx, turn_k=args.turn_k, delay_s=args.delay_s)
     elif args.scenario == "heartbeat_timeout":
         # wait_gone_s=0: don't blind-sleep; assert_state_sequence below polls
         # the debug endpoint and captures Active->Suspected->Recovering->Gone
         # live (sleeping blind would miss states finalized + removed by the
         # time we look).
-        r = fd.heartbeat_timeout(a_id, args.session_id, args.task, a_ws,
-                                 turn_k=args.turn_k, wait_gone_s=0.0)
+        r = fd.heartbeat_timeout(ctx, turn_k=args.turn_k, wait_gone_s=0.0)
     else:
         report["details"].append(f"unknown scenario {args.scenario}")
         sup.stop_all()
@@ -170,7 +195,9 @@ def _run_scenario(args, aigw: AigwClient, mock_port: int, report: dict) -> dict:
             call_log_calls = json.load(f)
 
     class _CL:
-        def __init__(self, calls): self._c = calls
+        def __init__(self, calls):
+            self._c = calls
+
         def count(self, op):
             return sum(1 for c in self._c
                        if c.get("method") == "POST" and c.get("path") == f"/v1/kvc/{op}")
@@ -271,10 +298,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     report = run(args)
-    print("=" * 60)
-    print(f"SCENARIO {args.scenario}: {'PASS' if report['pass'] else 'FAIL'}")
+    logger.info("=" * 60)
+    logger.info(f"SCENARIO {args.scenario}: {'PASS' if report['pass'] else 'FAIL'}")
     for d in report["details"]:
-        print(f"  {d}")
+        logger.info(f"  {d}")
     return 0 if report["pass"] else 1
 
 

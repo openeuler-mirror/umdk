@@ -1,23 +1,24 @@
-"""FaultDriver unit tests (Phase 3 Group D1) — exercises the 3 scenario state
-machines + turn parser against a fake supervisor (no real agent process).
+"""FaultDriver unit tests (Phase 3 Group D1) for scenario state machines.
 
-The fake supervisor records calls and lets await_turn return immediately (or
-after a tiny sleep), so the scenarios run fast. delay_s / wait_gone_s are
-shrunk to ~0 in tests."""
+Exercises the 3 scenario state machines + turn parser against a fake
+supervisor (no real agent process). The fake supervisor records calls and
+lets await_turn return immediately (or after a tiny sleep), so the scenarios
+run fast. delay_s / wait_gone_s are shrunk to ~0 in tests."""
 
 from __future__ import annotations
 
 import signal
+from unittest.mock import MagicMock
 
 import pytest
 
 from aigw_client import AigwClient  # type: ignore
 from fault_driver import (  # type: ignore
+    AgentCtx,
     FaultDriver,
     reached_turn,
     parse_turns,
 )
-from unittest.mock import MagicMock
 
 
 class _FakeSupervisor:
@@ -54,7 +55,7 @@ def driver():
 
 def test_kill_restart_sequence(driver):
     fd, sup, aigw = driver
-    r = fd.kill_restart("a1", "s1", "fix_failing_test", "/ws",
+    r = fd.kill_restart(AgentCtx("a1", "s1", "fix_failing_test", "/ws"),
                         turn_k=3, delay_s=0.01)
     assert r.scenario == "kill_restart"
     # ordered calls: await -> pid -> kill -> (delay) -> restart
@@ -67,7 +68,7 @@ def test_kill_restart_sequence(driver):
 
 def test_graceful_unregister_sequence(driver):
     fd, sup, aigw = driver
-    r = fd.graceful_unregister("a1", "s1", "fix_failing_test", "/ws",
+    r = fd.graceful_unregister(AgentCtx("a1", "s1", "fix_failing_test", "/ws"),
                                turn_k=2, delay_s=0.01)
     assert r.scenario == "graceful_unregister"
     assert sup.calls[0] == "await:a1:2"
@@ -80,7 +81,7 @@ def test_graceful_unregister_sequence(driver):
 
 def test_heartbeat_timeout_sequence(driver):
     fd, sup, aigw = driver
-    r = fd.heartbeat_timeout("a1", "s1", "fix_failing_test", "/ws",
+    r = fd.heartbeat_timeout(AgentCtx("a1", "s1", "fix_failing_test", "/ws"),
                              turn_k=3, wait_gone_s=0.01)
     assert r.scenario == "heartbeat_timeout"
     assert sup.calls[0] == "await:a1:3"

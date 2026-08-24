@@ -83,7 +83,7 @@ typedef enum {
  * @brief Configuration for initializing the AIGW component.
  */
 typedef struct {
-    const char *log_level;     /**< Log level ("trace", "debug", "info", "warn", "warning", "error", "fatal", "panic"). */
+    const char *log_level;     /**< Log level (e.g., "trace", "debug", "info", "warn", "error", "fatal", "panic"). */
     const char *log_path;      /**< Log output file path. */
 
     int32_t max_instances_per_model;    /**< Maximum number of inference instances allowed per model (> 0). */
@@ -362,7 +362,6 @@ typedef struct {
      *         On error, no fields are deleted.
      */
     aigw_error_t (*hash_delete_fields)(const char *key, char **field_keys, uint32_t field_count);
-
 } aigw_cache_driver_ops_t;
 
 /**
@@ -426,8 +425,8 @@ typedef struct {
     aigw_lb_type_t d_lb_type;                           /**< Load balancing algorithm type for decode */
     const char *pretrain_ttft_path;                     /**< Pretrain ttft path used by AIGW_LB_PREFILL_TIME_AWARE */
 
-    uint32_t cache_refresh_interval_ms; /**< Cache refresh interval in milliseconds, use default interval if set to 0 */
-    double tokenization_ratio;          /**< Ratio of characters to tokens (e.g., 0.5 means 2 chars per token on average). */
+    uint32_t cache_refresh_interval_ms; /**< Cache refresh interval (ms); default interval used if set to 0 */
+    double tokenization_ratio;          /**< Ratio of chars to tokens (e.g., 0.5 means 2 chars per token on avg). */
 } aigw_model_config_t;
 
 /**

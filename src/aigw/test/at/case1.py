@@ -2,16 +2,19 @@ import sys
 import threading
 import time
 import json
+import logging
+
 import requests
 from flask import Flask, Response
 
+logger = logging.getLogger(__name__)
 
 # 注册URL
-register_url = "http://127.0.0.1:8888/aigw/v1/register-instance"
+REGISTER_URL = "http://127.0.0.1:8888/aigw/v1/register-instance"
 # 调度URL
-get_suggestion_url = "http://127.0.0.1:8888/aigw/v1/openai/get-suggestion"
+GET_SUGGESTION_URL = "http://127.0.0.1:8888/aigw/v1/openai/get-suggestion"
 # 注销URL
-unregister_url = "http://127.0.0.1:8888/aigw/v1/unregister-instance"
+UNREGISTER_URL = "http://127.0.0.1:8888/aigw/v1/unregister-instance"
 # 实例1注册信息
 ins1_info = {
     "name": "instance01",
@@ -137,7 +140,7 @@ if __name__ == '__main__':
     t2 = threading.Thread(target=run_app2, daemon=True)
     t2.start()
 
-    print("*** 实例已在端口5001和5002启动 ***")
+    logger.info("*** 实例已在端口5001和5002启动 ***")
     # 等待服务端启动
     time.sleep(1)
 
@@ -148,47 +151,47 @@ if __name__ == '__main__':
 
     # 注册实例1
     json_data = json.dumps(ins1_info)
-    response = requests.post(register_url, data=json_data, headers=headers)
+    response = requests.post(REGISTER_URL, data=json_data, headers=headers)
     if response.status_code != 200:
-        print("[fail]实例1注册失败，预期成功")
+        logger.error("[fail]实例1注册失败，预期成功")
         sys.exit(1)
     else:
-        print("[success]实例1注册成功，预期成功")
+        logger.info("[success]实例1注册成功，预期成功")
     # 注册实例2
     json_data = json.dumps(ins2_info)
-    response = requests.post(register_url, data=json_data, headers=headers)
+    response = requests.post(REGISTER_URL, data=json_data, headers=headers)
     if response.status_code != 200:
-        print("[fail]实例2注册失败，预期成功")
+        logger.error("[fail]实例2注册失败，预期成功")
         sys.exit(1)
     else:
-        print("[success]实例2注册成功，预期成功")
+        logger.info("[success]实例2注册成功，预期成功")
     # 重复注册
-    response = requests.post(register_url, data=json_data, headers=headers)
+    response = requests.post(REGISTER_URL, data=json_data, headers=headers)
     if response.status_code != 200:
-        print("[success]实例2重复注册失败，预期失败")
+        logger.info("[success]实例2重复注册失败，预期失败")
     else:
-        print("[fail]实例2重复注册成功，预期失败")
+        logger.error("[fail]实例2重复注册成功，预期失败")
         sys.exit(1)
     # 请求调度，默认capacity，两次都调度给5001
     for i in range(2):
         uuid = f"req_{i}"
         req["uuid"] = uuid
         json_data = json.dumps(req)
-        response = requests.post(get_suggestion_url, data=json_data, headers=headers)
+        response = requests.post(GET_SUGGESTION_URL, data=json_data, headers=headers)
         if response.json() == {'targetPrefill': '127.0.0.1:5001', 'targetDecode': ''}:
-            print(f"[success]{uuid}调度结果：", response.json())
+            logger.info(f"[success]{uuid}调度结果：{response.json()}")
         else:
-            print(f"[fail]{uuid}预期5001，实际调度结果：", response.json())
+            logger.error(f"[fail]{uuid}预期5001，实际调度结果：{response.json()}")
             sys.exit(1)
         time.sleep(1)
     # 注销实例2
     json_data = json.dumps(del_ins2_info)
-    response = requests.post(unregister_url, data=json_data, headers=headers)
+    response = requests.post(UNREGISTER_URL, data=json_data, headers=headers)
     if response.status_code != 200:
-        print("[fail]实例2注销失败，预期成功")
+        logger.error("[fail]实例2注销失败，预期成功")
         sys.exit(1)
     else:
-        print("[success]实例2注销成功，预期成功")
+        logger.info("[success]实例2注销成功，预期成功")
     time.sleep(1)
 
 

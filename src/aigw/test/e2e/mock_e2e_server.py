@@ -12,14 +12,17 @@ Usage:
 
 import argparse
 import json
+import logging
+import random
+import threading
 import time
 import uuid
-import threading
-import asyncio
+from dataclasses import dataclass
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, List, Optional
-from dataclasses import dataclass, asdict
-import random
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,9 +44,9 @@ class K8sMockHandler(BaseHTTPRequestHandler):
 
     workers: List[DPWorker] = []
 
-    def log_message(self, format, *args):
+    def log_message(self, fmt, *args):
         """Custom log format"""
-        print(f"[K8s-Mock] {self.address_string()} - {format % args}")
+        logger.info(f"[K8s-Mock] {self.address_string()} - {fmt % args}")
 
     def do_GET(self):
         """Handle GET requests for Kubernetes API"""
@@ -60,7 +63,7 @@ class K8sMockHandler(BaseHTTPRequestHandler):
         parts = self.path.split('/')
         namespace = parts[4] if len(parts) > 4 else "default"
 
-        print(f"[K8s-Mock] Watch endpoints requested for namespace {namespace}")
+        logger.info(f"[K8s-Mock] Watch endpoints requested for namespace {namespace}")
 
         # Send initial ADDED events for all existing workers
         # Use Connection: close to ensure connection is closed after response
@@ -121,10 +124,16 @@ class K8sMockHandler(BaseHTTPRequestHandler):
             event = json.dumps({"type": "ADDED", "object": endpoint})
             self.wfile.write((event + '\n').encode())
             self.wfile.flush()
-            print(f"[K8s-Mock] Sent ADDED event for {service_name}")
+            logger.info(f"[K8s-Mock] Sent ADDED event for {service_name}")
 
         # Send BOOKMARK event to signal completion (standard K8s watch behavior)
-        heartbeat = json.dumps({"type": "BOOKMARK", "object": {"kind": "Endpoints", "metadata": {"resourceVersion": str(int(time.time()))}}})
+        heartbeat = json.dumps({
+            "type": "BOOKMARK",
+            "object": {
+                "kind": "Endpoints",
+                "metadata": {"resourceVersion": str(int(time.time()))}
+            }
+        })
         self.wfile.write((heartbeat + '\n').encode())
         self.wfile.flush()
 
@@ -133,7 +142,7 @@ class K8sMockHandler(BaseHTTPRequestHandler):
         if hasattr(self, '_close_connection'):
             self._close_connection()
 
-        print(f"[K8s-Mock] Watch stream completed for namespace {namespace}")
+        logger.info(f"[K8s-Mock] Watch stream completed for namespace {namespace}")
 
     def handle_list_endpoints(self):
         """Handle listing endpoints (mock Kubernetes Endpoints API)"""
@@ -205,7 +214,7 @@ class K8sMockHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(response, indent=2).encode())
-        print(f"[K8s-Mock] Returning {len(endpoints)} endpoints for namespace {namespace}")
+        logger.info(f"[K8s-Mock] Returning {len(endpoints)} endpoints for namespace {namespace}")
 
 
 class WorkerMockHandler(BaseHTTPRequestHandler):
@@ -216,9 +225,9 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
     dp_size: int = 1
     request_count: int = 0
 
-    def log_message(self, format, *args):
+    def log_message(self, fmt, *args):
         """Custom log format"""
-        print(f"[Worker-{self.worker_name}] {self.address_string()} - {format % args}")
+        logger.info(f"[Worker-{self.worker_name}] {self.address_string()} - {fmt % args}")
 
     def do_POST(self):
         """Handle POST requests"""
@@ -241,12 +250,12 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         WorkerMockHandler.request_count += 1
         req_id = WorkerMockHandler.request_count
 
-        print(f"\n[Worker-{self.worker_name}] ===== Request #{req_id} =====")
-        print(f"  DP-Rank Header: {dp_rank_header}")
-        print(f"  Worker DP-Rank: {self.dp_rank}")
-        print(f"  Model: {request.get('model', 'unknown')}")
-        print(f"  Stream: {request.get('stream', False)}")
-        print(f"  Messages: {len(request.get('messages', []))} messages")
+        logger.info(f"\n[Worker-{self.worker_name}] ===== Request #{req_id} =====")
+        logger.info(f"  DP-Rank Header: {dp_rank_header}")
+        logger.info(f"  Worker DP-Rank: {self.dp_rank}")
+        logger.info(f"  Model: {request.get('model', 'unknown')}")
+        logger.info(f"  Stream: {request.get('stream', False)}")
+        logger.info(f"  Messages: {len(request.get('messages', []))} messages")
 
         is_stream = request.get("stream", False)
         model = request.get("model", "mock-model")
@@ -296,7 +305,7 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
             event_data = f"data: {json.dumps(chunk)}\n\n"
             self.wfile.write(event_data.encode())
             self.wfile.flush()
-            print(f"[Worker-{self.worker_name}] Sent chunk {i+1}/{len(words)}: {word}")
+            logger.info(f"[Worker-{self.worker_name}] Sent chunk {i+1}/{len(words)}: {word}")
             time.sleep(0.05)  # Simulate streaming delay
 
         # Send final chunk with finish_reason
@@ -316,7 +325,7 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         self.wfile.write("data: [DONE]\n\n".encode())
         self.wfile.flush()
 
-        print(f"[Worker-{self.worker_name}] Streaming completed for request #{req_id}\n")
+        logger.info(f"[Worker-{self.worker_name}] Streaming completed for request #{req_id}\n")
 
     def handle_non_streaming_response(self, request, model, req_id):
         """Handle non-streaming response"""
@@ -347,7 +356,7 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(response, indent=2).encode())
-        print(f"[Worker-{self.worker_name}] Non-streaming response sent for request #{req_id}\n")
+        logger.info(f"[Worker-{self.worker_name}] Non-streaming response sent for request #{req_id}\n")
 
     def handle_completions(self):
         """Handle completions request"""
@@ -358,8 +367,11 @@ def run_k8s_server(port: int, workers: List[DPWorker]):
     """Run the mock Kubernetes API server"""
     K8sMockHandler.workers = workers
     server = HTTPServer(('0.0.0.0', port), K8sMockHandler)
-    print(f"[K8s-Mock] Starting Kubernetes mock server on port {port}")
-    print(f"[K8s-Mock] Endpoints: http://localhost:{port}/api/v1/namespaces/{workers[0].group_id}/endpoints")
+    logger.info(f"[K8s-Mock] Starting Kubernetes mock server on port {port}")
+    logger.info(
+        f"[K8s-Mock] Endpoints: http://localhost:{port}"
+        f"/api/v1/namespaces/{workers[0].group_id}/endpoints"
+    )
     server.serve_forever()
 
 
@@ -369,7 +381,10 @@ def run_worker_server(port: int, name: str, dp_rank: int, dp_size: int):
     WorkerMockHandler.dp_rank = dp_rank
     WorkerMockHandler.dp_size = dp_size
     server = HTTPServer(('0.0.0.0', port), WorkerMockHandler)
-    print(f"[Worker-{name}] Starting worker server on port {port} (DP-Rank: {dp_rank}/{dp_size})")
+    logger.info(
+        f"[Worker-{name}] Starting worker server on port {port} "
+        f"(DP-Rank: {dp_rank}/{dp_size})"
+    )
     server.serve_forever()
 
 
@@ -413,21 +428,21 @@ def main():
             labels={"app": "vllm", "role": "decode", "model": args.model}
         ))
 
-    print("=" * 60)
-    print("AIGW E2E Mock Server")
-    print("=" * 60)
-    print(f"Configuration:")
-    print(f"  K8s API Port: {args.k8s_port}")
-    print(f"  Worker Base Port: {args.worker_base_port}")
-    print(f"  Num Workers: {args.num_workers}")
-    print(f"  DP Size: {args.dp_size}")
-    print(f"  Namespace: {args.namespace}")
-    print(f"  Model: {args.model}")
-    print("=" * 60)
-    print("\nWorkers:")
+    logger.info("=" * 60)
+    logger.info("AIGW E2E Mock Server")
+    logger.info("=" * 60)
+    logger.info(f"Configuration:")
+    logger.info(f"  K8s API Port: {args.k8s_port}")
+    logger.info(f"  Worker Base Port: {args.worker_base_port}")
+    logger.info(f"  Num Workers: {args.num_workers}")
+    logger.info(f"  DP Size: {args.dp_size}")
+    logger.info(f"  Namespace: {args.namespace}")
+    logger.info(f"  Model: {args.model}")
+    logger.info("=" * 60)
+    logger.info("\nWorkers:")
     for w in workers:
-        print(f"  {w.name:15} | {w.role:8} | Port: {w.port} | Group: {w.group_id}")
-    print("=" * 60)
+        logger.info(f"  {w.name:15} | {w.role:8} | Port: {w.port} | Group: {w.group_id}")
+    logger.info("=" * 60)
 
     # Start threads
     threads = []
@@ -453,13 +468,13 @@ def main():
     for thread in threads:
         thread.start()
 
-    print("\nAll servers started. Press Ctrl+C to stop.\n")
+    logger.info("\nAll servers started. Press Ctrl+C to stop.\n")
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        logger.info("\nShutting down...")
 
 
 if __name__ == "__main__":

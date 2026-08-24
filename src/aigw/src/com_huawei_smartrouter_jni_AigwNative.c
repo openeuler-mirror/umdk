@@ -22,12 +22,14 @@ static pthread_key_t g_tls_key;
 static pthread_once_t g_tls_init_once = PTHREAD_ONCE_INIT;
 
 // TLS cleanup function
-static void tls_cleanup(void *ptr) {
+static void tls_cleanup(void *ptr)
+{
     // No cleanup needed
 }
 
 // Initialize TLS key
-static void init_tls_key() {
+static void init_tls_key()
+{
     pthread_key_create(&g_tls_key, tls_cleanup);
 }
 
@@ -47,7 +49,8 @@ static jclass g_stringClass = NULL;
 #define KV_INTERLEAVE_STRIDE 2
 
 // Helper function to get JNI environment
-static JNIEnv* getJNIEnv() {
+static JNIEnv* getJNIEnv()
+{
     JNIEnv *env = NULL;
     if (g_jvm == NULL) {
         return NULL;
@@ -66,7 +69,8 @@ static JNIEnv* getJNIEnv() {
 }
 
 // Helper function to convert Java string to C string
-static char* jstringToCStr(JNIEnv *env, jstring jstr) {
+static char* jstringToCStr(JNIEnv *env, jstring jstr)
+{
     if (jstr == NULL) {
         return NULL;
     }
@@ -80,7 +84,8 @@ static char* jstringToCStr(JNIEnv *env, jstring jstr) {
 }
 
 // Helper function to create Java string from C string
-static jstring cStrToJString(JNIEnv *env, const char *cstr) {
+static jstring cStrToJString(JNIEnv *env, const char *cstr)
+{
     if (cstr == NULL) {
         return NULL;
     }
@@ -88,7 +93,8 @@ static jstring cStrToJString(JNIEnv *env, const char *cstr) {
 }
 
 // Helper function to convert Java config to C structure
-static aigw_config_t* convertAigwConfig(JNIEnv *env, jobject jconfig) {
+static aigw_config_t* convertAigwConfig(JNIEnv *env, jobject jconfig)
+{
     if (jconfig == NULL) {
         return NULL;
     }
@@ -127,7 +133,8 @@ static aigw_config_t* convertAigwConfig(JNIEnv *env, jobject jconfig) {
 }
 
 // Helper function to free aigw_config_t
-static void freeAigwConfig(aigw_config_t *config) {
+static void freeAigwConfig(aigw_config_t *config)
+{
     if (config == NULL) {
         return;
     }
@@ -136,8 +143,21 @@ static void freeAigwConfig(aigw_config_t *config) {
     free(config);
 }
 
+// Find a class by name and create a global ref. Returns NULL on failure.
+static jclass load_global_class(JNIEnv *env, const char *name)
+{
+    jclass localClass = (*env)->FindClass(env, name);
+    if (localClass == NULL) {
+        return NULL;
+    }
+    jclass globalRef = (*env)->NewGlobalRef(env, localClass);
+    (*env)->DeleteLocalRef(env, localClass);
+    return globalRef;
+}
+
 // JNI_OnLoad - called when library is loaded
-JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
+{
     JNIEnv *env = NULL;
     if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_8) != JNI_OK) {
         return JNI_ERR;
@@ -146,13 +166,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_jvm = vm;
 
     // Cache DcsCacheDriver class reference
-    jclass localClass = (*env)->FindClass(env, "com/huawei/smartrouter/dcs/DcsCacheDriver");
-    if (localClass == NULL) {
-        return JNI_ERR;
-    }
-    g_dcsCacheDriverClass = (*env)->NewGlobalRef(env, localClass);
-    (*env)->DeleteLocalRef(env, localClass);
-
+    g_dcsCacheDriverClass = load_global_class(env, "com/huawei/smartrouter/dcs/DcsCacheDriver");
     if (g_dcsCacheDriverClass == NULL) {
         return JNI_ERR;
     }
@@ -167,15 +181,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
 
     // Cache Object[] class reference for array creation
-    localClass = (*env)->FindClass(env, "[Ljava/lang/Object;");
-    if (localClass == NULL) {
-        (*env)->DeleteGlobalRef(env, g_dcsCacheDriverClass);
-        g_dcsCacheDriverClass = NULL;
-        return JNI_ERR;
-    }
-    g_objectArrayClass = (*env)->NewGlobalRef(env, localClass);
-    (*env)->DeleteLocalRef(env, localClass);
-
+    g_objectArrayClass = load_global_class(env, "[Ljava/lang/Object;");
     if (g_objectArrayClass == NULL) {
         (*env)->DeleteGlobalRef(env, g_dcsCacheDriverClass);
         g_dcsCacheDriverClass = NULL;
@@ -183,17 +189,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
 
     // Cache String class reference for array creation
-    localClass = (*env)->FindClass(env, "java/lang/String");
-    if (localClass == NULL) {
-        (*env)->DeleteGlobalRef(env, g_dcsCacheDriverClass);
-        g_dcsCacheDriverClass = NULL;
-        (*env)->DeleteGlobalRef(env, g_objectArrayClass);
-        g_objectArrayClass = NULL;
-        return JNI_ERR;
-    }
-    g_stringClass = (*env)->NewGlobalRef(env, localClass);
-    (*env)->DeleteLocalRef(env, localClass);
-
+    g_stringClass = load_global_class(env, "java/lang/String");
     if (g_stringClass == NULL) {
         (*env)->DeleteGlobalRef(env, g_dcsCacheDriverClass);
         g_dcsCacheDriverClass = NULL;
@@ -206,7 +202,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 }
 
 // JNI_OnUnload - called when library is unloaded
-JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
+JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved)
+{
     JNIEnv *env = NULL;
     if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_8) == JNI_OK) {
         if (g_dcsCacheDriverClass != NULL) {
@@ -227,38 +224,116 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
 }
 
 // Implement: aigwInit
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwInit(JNIEnv *env, jobject obj, jobject jconfig) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwInit(JNIEnv *env, jobject obj, jobject jconfig)
+{
     aigw_config_t *config = convertAigwConfig(env, jconfig);
     if (config == NULL) {
         return AIGW_ERR_INVALID_PARAM;
     }
-    
+
     aigw_error_t result = aigw_init(config);
     freeAigwConfig(config);
-    
+
     return result;
 }
 
 // Implement: aigwUninit
-JNIEXPORT void JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUninit(JNIEnv *env, jobject obj) {
+JNIEXPORT void JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUninit(JNIEnv *env, jobject obj)
+{
     aigw_uninit();
 }
 
+// Fill an aigw_openai_message_t array from a Java AigwNativeMessage[] array.
+static void fill_messages_from_java(JNIEnv *env, jobjectArray jmessages, jsize msgCount,
+    aigw_openai_message_t *messages)
+{
+    for (int i = 0; i < msgCount; i++) {
+        jobject jmsg = (*env)->GetObjectArrayElement(env, jmessages, i);
+        jclass msgCls = (*env)->GetObjectClass(env, jmsg);
+
+        jfieldID roleField = (*env)->GetFieldID(env, msgCls, "role", "Ljava/lang/String;");
+        jstring jrole = (jstring)(*env)->GetObjectField(env, jmsg, roleField);
+        messages[i].role = jstringToCStr(env, jrole);
+
+        jfieldID contentField = (*env)->GetFieldID(env, msgCls, "content", "Ljava/lang/String;");
+        jstring jcontent = (jstring)(*env)->GetObjectField(env, jmsg, contentField);
+        messages[i].content = jstringToCStr(env, jcontent);
+
+        (*env)->DeleteLocalRef(env, jmsg);
+        (*env)->DeleteLocalRef(env, msgCls);
+        (*env)->DeleteLocalRef(env, jrole);
+        (*env)->DeleteLocalRef(env, jcontent);
+    }
+}
+
+// Fill an aigw_node_info_t array from a Java AigwNativeNodeInfo[] array.
+static void fill_nodes_from_java(JNIEnv *env, jobjectArray jnodeList, int nodeNum,
+    aigw_node_info_t *nodeList)
+{
+    for (int i = 0; i < nodeNum; i++) {
+        jobject jnode = (*env)->GetObjectArrayElement(env, jnodeList, i);
+        jclass nodeCls = (*env)->GetObjectClass(env, jnode);
+
+        jfieldID roleField = (*env)->GetFieldID(env, nodeCls, "role", "I");
+        nodeList[i].role = (*env)->GetIntField(env, jnode, roleField);
+
+        jfieldID nodeAddrField = (*env)->GetFieldID(env, nodeCls, "nodeAddr", "Ljava/lang/String;");
+        jstring jnodeAddr = (jstring)(*env)->GetObjectField(env, jnode, nodeAddrField);
+        nodeList[i].node_addr = jstringToCStr(env, jnodeAddr);
+
+        jfieldID groupIdField = (*env)->GetFieldID(env, nodeCls, "groupId", "Ljava/lang/String;");
+        jstring jgroupId = (jstring)(*env)->GetObjectField(env, jnode, groupIdField);
+        nodeList[i].group_id = jstringToCStr(env, jgroupId);
+
+        (*env)->DeleteLocalRef(env, jnode);
+        (*env)->DeleteLocalRef(env, nodeCls);
+        (*env)->DeleteLocalRef(env, jnodeAddr);
+        (*env)->DeleteLocalRef(env, jgroupId);
+    }
+}
+
+// Write select result fields back onto the Java result object.
+static void write_select_result_to_java(JNIEnv *env, jobject joutResult,
+    const aigw_select_result_t *result, aigw_error_t ret)
+{
+    jclass resultCls = (*env)->GetObjectClass(env, joutResult);
+    if (ret == AIGW_SUCCESS) {
+        jfieldID prefillField = (*env)->GetFieldID(env, resultCls, "prefillNodeAddr", "Ljava/lang/String;");
+        jstring jprefill = cStrToJString(env, result->prefill_node_addr);
+        (*env)->SetObjectField(env, joutResult, prefillField, jprefill);
+
+        jfieldID decodeField = (*env)->GetFieldID(env, resultCls, "decodeNodeAddr", "Ljava/lang/String;");
+        jstring jdecode = cStrToJString(env, result->decode_node_addr);
+        (*env)->SetObjectField(env, joutResult, decodeField, jdecode);
+
+        (*env)->DeleteLocalRef(env, jprefill);
+        (*env)->DeleteLocalRef(env, jdecode);
+    } else {
+        jfieldID errorField = (*env)->GetFieldID(env, resultCls, "errorDesc", "Ljava/lang/String;");
+        jstring jerror = cStrToJString(env, result->error_desc);
+        (*env)->SetObjectField(env, joutResult, errorField, jerror);
+        (*env)->DeleteLocalRef(env, jerror);
+    }
+    (*env)->DeleteLocalRef(env, resultCls);
+}
+
 // Implement: aigwSelectNodes
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNodes(JNIEnv *env, jobject obj, 
-    jobject jrequest, jobject jcontext, jobject joutResult) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNodes(JNIEnv *env, jobject obj,
+    jobject jrequest, jobject jcontext, jobject joutResult)
+{
     aigw_request_t request;
     jclass reqCls = (*env)->GetObjectClass(env, jrequest);
-    
+
     jfieldID uuidField = (*env)->GetFieldID(env, reqCls, "uuid", "Ljava/lang/String;");
     jstring juuid = (jstring)(*env)->GetObjectField(env, jrequest, uuidField);
     request.uuid = jstringToCStr(env, juuid);
-    
+
     jfieldID modelField = (*env)->GetFieldID(env, reqCls, "model", "Ljava/lang/String;");
     jstring jmodel = (jstring)(*env)->GetObjectField(env, jrequest, modelField);
     request.model = jstringToCStr(env, jmodel);
-    
-    jfieldID messagesField = (*env)->GetFieldID(env, reqCls, "messages", "[Lcom/huawei/smartrouter/model/AigwNativeMessage;");
+
+    jfieldID messagesField = (*env)->GetFieldID(env, reqCls, "messages",
+        "[Lcom/huawei/smartrouter/model/AigwNativeMessage;");
     jobjectArray jmessages = (jobjectArray)(*env)->GetObjectField(env, jrequest, messagesField);
     if (jmessages == NULL) {
         (*env)->DeleteLocalRef(env, reqCls);
@@ -285,32 +360,17 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNode
         return AIGW_ERR_NO_MEMORY;
     }
     memset(messages, 0, sizeof(aigw_openai_message_t) * msgCount);
-    for (int i = 0; i < msgCount; i++) {
-        jobject jmsg = (*env)->GetObjectArrayElement(env, jmessages, i);
-        jclass msgCls = (*env)->GetObjectClass(env, jmsg);
-
-        jfieldID roleField = (*env)->GetFieldID(env, msgCls, "role", "Ljava/lang/String;");
-        jstring jrole = (jstring)(*env)->GetObjectField(env, jmsg, roleField);
-        messages[i].role = jstringToCStr(env, jrole);
-
-        jfieldID contentField = (*env)->GetFieldID(env, msgCls, "content", "Ljava/lang/String;");
-        jstring jcontent = (jstring)(*env)->GetObjectField(env, jmsg, contentField);
-        messages[i].content = jstringToCStr(env, jcontent);
-
-        (*env)->DeleteLocalRef(env, jmsg);
-        (*env)->DeleteLocalRef(env, msgCls);
-        (*env)->DeleteLocalRef(env, jrole);
-        (*env)->DeleteLocalRef(env, jcontent);
-    }
+    fill_messages_from_java(env, jmessages, msgCount, messages);
     request.messages = messages;
-    
+
     aigw_select_context_t context;
     jclass ctxCls = (*env)->GetObjectClass(env, jcontext);
-    
+
     jfieldID nodeNumField = (*env)->GetFieldID(env, ctxCls, "nodeNum", "I");
     context.node_num = (*env)->GetIntField(env, jcontext, nodeNumField);
-    
-    jfieldID nodeListField = (*env)->GetFieldID(env, ctxCls, "nodeList", "[Lcom/huawei/smartrouter/model/AigwNativeNodeInfo;");
+
+    jfieldID nodeListField = (*env)->GetFieldID(env, ctxCls, "nodeList",
+        "[Lcom/huawei/smartrouter/model/AigwNativeNodeInfo;");
     jobjectArray jnodeList = (jobjectArray)(*env)->GetObjectField(env, jcontext, nodeListField);
     if (jnodeList == NULL) {
         (*env)->DeleteLocalRef(env, ctxCls);
@@ -342,55 +402,17 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNode
         return AIGW_ERR_NO_MEMORY;
     }
     memset(nodeList, 0, sizeof(aigw_node_info_t) * context.node_num);
-    for (int i = 0; i < context.node_num; i++) {
-        jobject jnode = (*env)->GetObjectArrayElement(env, jnodeList, i);
-        jclass nodeCls = (*env)->GetObjectClass(env, jnode);
-
-        jfieldID roleField = (*env)->GetFieldID(env, nodeCls, "role", "I");
-        nodeList[i].role = (*env)->GetIntField(env, jnode, roleField);
-
-        jfieldID nodeAddrField = (*env)->GetFieldID(env, nodeCls, "nodeAddr", "Ljava/lang/String;");
-        jstring jnodeAddr = (jstring)(*env)->GetObjectField(env, jnode, nodeAddrField);
-        nodeList[i].node_addr = jstringToCStr(env, jnodeAddr);
-
-        jfieldID groupIdField = (*env)->GetFieldID(env, nodeCls, "groupId", "Ljava/lang/String;");
-        jstring jgroupId = (jstring)(*env)->GetObjectField(env, jnode, groupIdField);
-        nodeList[i].group_id = jstringToCStr(env, jgroupId);
-
-        (*env)->DeleteLocalRef(env, jnode);
-        (*env)->DeleteLocalRef(env, nodeCls);
-        (*env)->DeleteLocalRef(env, jnodeAddr);
-        (*env)->DeleteLocalRef(env, jgroupId);
-    }
+    fill_nodes_from_java(env, jnodeList, context.node_num, nodeList);
     context.node_list = nodeList;
-    
+
     aigw_select_result_t result;
     memset_s(&result, sizeof(result), 0, sizeof(result));
-    
+
     aigw_error_t ret = aigw_select_nodes(&request, &context, &result);
-    
     if (ret == AIGW_SUCCESS) {
-        jclass resultCls = (*env)->GetObjectClass(env, joutResult);
-
-        jfieldID prefillField = (*env)->GetFieldID(env, resultCls, "prefillNodeAddr", "Ljava/lang/String;");
-        jstring jprefill = cStrToJString(env, result.prefill_node_addr);
-        (*env)->SetObjectField(env, joutResult, prefillField, jprefill);
-
-        jfieldID decodeField = (*env)->GetFieldID(env, resultCls, "decodeNodeAddr", "Ljava/lang/String;");
-        jstring jdecode = cStrToJString(env, result.decode_node_addr);
-        (*env)->SetObjectField(env, joutResult, decodeField, jdecode);
-
-        (*env)->DeleteLocalRef(env, resultCls);
-        (*env)->DeleteLocalRef(env, jprefill);
-        (*env)->DeleteLocalRef(env, jdecode);
+        write_select_result_to_java(env, joutResult, &result, ret);
     } else {
-        jclass resultCls = (*env)->GetObjectClass(env, joutResult);
-        jfieldID errorField = (*env)->GetFieldID(env, resultCls, "errorDesc", "Ljava/lang/String;");
-        jstring jerror = cStrToJString(env, result.error_desc);
-        (*env)->SetObjectField(env, joutResult, errorField, jerror);
-
-        (*env)->DeleteLocalRef(env, resultCls);
-        (*env)->DeleteLocalRef(env, jerror);
+        write_select_result_to_java(env, joutResult, &result, ret);
     }
 
     (*env)->DeleteLocalRef(env, ctxCls);
@@ -416,7 +438,8 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNode
 
 // Implement: aigwNotifyEvent
 JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwNotifyEvent(JNIEnv *env, jobject obj,
-    jint eventType, jobject jevent) {
+    jint eventType, jobject jevent)
+{
     aigw_event_info_t event;
     jclass eventCls = (*env)->GetObjectClass(env, jevent);
 
@@ -446,8 +469,48 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwNotifyEven
     return result;
 }
 
+// Copy valid key/value pairs from a Java pair array into a pre-allocated C array.
+// Returns the number of valid pairs written (skips NULL entries/fields).
+static int copy_pairs_from_java(JNIEnv *env, jobjectArray pairs, jsize pairsLen,
+    key_value_pair_t *outPairs)
+{
+    int validCount = 0;
+    for (int i = 0; i < pairsLen; i++) {
+        jobjectArray pair = (jobjectArray)(*env)->GetObjectArrayElement(env, pairs, i);
+        if (pair == NULL) {
+            // Skip this pair if it's NULL
+            continue;
+        }
+
+        jstring jfkey = (jstring)(*env)->GetObjectArrayElement(env, pair, 0);
+        jstring jfvalue = (jstring)(*env)->GetObjectArrayElement(env, pair, 1);
+        if (jfkey == NULL || jfvalue == NULL) {
+            // Skip if either key or value is NULL
+            if (jfkey != NULL) (*env)->DeleteLocalRef(env, jfkey);
+            if (jfvalue != NULL) (*env)->DeleteLocalRef(env, jfvalue);
+            (*env)->DeleteLocalRef(env, pair);
+            continue;
+        }
+
+        const char *ckey = (*env)->GetStringUTFChars(env, jfkey, NULL);
+        const char *cvalue = (*env)->GetStringUTFChars(env, jfvalue, NULL);
+
+        strncpy_s(outPairs[validCount].key, AIGW_CACHE_KEY_MAX_LEN, ckey, AIGW_CACHE_KEY_MAX_LEN - 1);
+        strncpy_s(outPairs[validCount].value, AIGW_CACHE_VALUE_MAX_LEN, cvalue, AIGW_CACHE_VALUE_MAX_LEN - 1);
+        validCount++;
+
+        (*env)->ReleaseStringUTFChars(env, jfkey, ckey);
+        (*env)->ReleaseStringUTFChars(env, jfvalue, cvalue);
+        (*env)->DeleteLocalRef(env, jfkey);
+        (*env)->DeleteLocalRef(env, jfvalue);
+        (*env)->DeleteLocalRef(env, pair);
+    }
+    return validCount;
+}
+
 // Cache driver callback functions
-static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *out_array) {
+static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *out_array)
+{
     JNIEnv *env = getJNIEnv();
     if (env == NULL) {
         return AIGW_ERR_INTERNAL;
@@ -460,9 +523,8 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
 
     jstring jkey = cStrToJString(env, key);
 
-    jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass, g_staticCacheCallbackMethodID,
-        1, jkey, NULL, NULL, 0);
-
+    jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass,
+        g_staticCacheCallbackMethodID, 1, jkey, NULL, NULL, 0);
     if (result == NULL) {
         out_array->pairs = NULL;
         out_array->count = 0;
@@ -470,7 +532,6 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
     }
 
     jsize resultLen = (*env)->GetArrayLength(env, result);
-
     if (resultLen < CB_RESULT_MIN_LEN) {
         out_array->pairs = NULL;
         out_array->count = 0;
@@ -480,7 +541,6 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
 
     // Get status code from result[0]
     jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
-
     if (jstatus == NULL) {
         out_array->pairs = NULL;
         out_array->count = 0;
@@ -490,7 +550,6 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
 
     jclass statusClass = (*env)->GetObjectClass(env, jstatus);
     jmethodID intValueMethod = (*env)->GetMethodID(env, statusClass, "intValue", "()I");
-
     if (intValueMethod == NULL) {
         (*env)->DeleteLocalRef(env, jstatus);
         out_array->pairs = NULL;
@@ -519,7 +578,6 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
     }
 
     jsize pairsLen = (*env)->GetArrayLength(env, pairs);
-
     if (pairsLen <= 0) {
         out_array->pairs = NULL;
         out_array->count = 0;
@@ -537,38 +595,7 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
         return AIGW_ERR_NO_MEMORY;
     }
 
-    int validCount = 0;
-    for (int i = 0; i < pairsLen; i++) {
-        jobjectArray pair = (jobjectArray)(*env)->GetObjectArrayElement(env, pairs, i);
-        if (pair == NULL) {
-            // Skip this pair if it's NULL
-            continue;
-        }
-
-        jstring jfkey = (jstring)(*env)->GetObjectArrayElement(env, pair, 0);
-        jstring jfvalue = (jstring)(*env)->GetObjectArrayElement(env, pair, 1);
-
-        if (jfkey == NULL || jfvalue == NULL) {
-            // Skip if either key or value is NULL
-            if (jfkey != NULL) (*env)->DeleteLocalRef(env, jfkey);
-            if (jfvalue != NULL) (*env)->DeleteLocalRef(env, jfvalue);
-            (*env)->DeleteLocalRef(env, pair);
-            continue;
-        }
-
-        const char *ckey = (*env)->GetStringUTFChars(env, jfkey, NULL);
-        const char *cvalue = (*env)->GetStringUTFChars(env, jfvalue, NULL);
-
-        strncpy_s(out_array->pairs[validCount].key, AIGW_CACHE_KEY_MAX_LEN, ckey, AIGW_CACHE_KEY_MAX_LEN - 1);
-        strncpy_s(out_array->pairs[validCount].value, AIGW_CACHE_VALUE_MAX_LEN, cvalue, AIGW_CACHE_VALUE_MAX_LEN - 1);
-        validCount++;
-
-        (*env)->ReleaseStringUTFChars(env, jfkey, ckey);
-        (*env)->ReleaseStringUTFChars(env, jfvalue, cvalue);
-        (*env)->DeleteLocalRef(env, jfkey);
-        (*env)->DeleteLocalRef(env, jfvalue);
-        (*env)->DeleteLocalRef(env, pair);
-    }
+    int validCount = copy_pairs_from_java(env, pairs, pairsLen, out_array->pairs);
     out_array->count = validCount;
 
     (*env)->DeleteLocalRef(env, pairs);
@@ -576,7 +603,8 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
     return AIGW_SUCCESS;
 }
 
-static aigw_error_t hash_set_fields_callback(const char *key, const key_value_array_t *fields) {
+static aigw_error_t hash_set_fields_callback(const char *key, const key_value_array_t *fields)
+{
     JNIEnv *env = getJNIEnv();
     if (env == NULL) {
         return AIGW_ERR_INTERNAL;
@@ -608,7 +636,6 @@ static aigw_error_t hash_set_fields_callback(const char *key, const key_value_ar
     for (int i = 0; i < fields->count; i++) {
         jstring jfkey = cStrToJString(env, fields->pairs[i].key);
         jstring jfvalue = cStrToJString(env, fields->pairs[i].value);
-
         if (jfkey == NULL || jfvalue == NULL) {
             if (jfkey != NULL) (*env)->DeleteLocalRef(env, jfkey);
             if (jfvalue != NULL) (*env)->DeleteLocalRef(env, jfvalue);
@@ -640,7 +667,19 @@ static aigw_error_t hash_set_fields_callback(const char *key, const key_value_ar
     return AIGW_SUCCESS;
 }
 
-static aigw_error_t hash_delete_fields_callback(const char *key, char **field_keys, uint32_t field_count) {
+// Release local references for array elements in range [0, end)
+static void release_array_elements(JNIEnv *env, jobjectArray array, uint32_t end)
+{
+    for (uint32_t j = 0; j < end; j++) {
+        jobject elem = (*env)->GetObjectArrayElement(env, array, j);
+        if (elem != NULL) {
+            (*env)->DeleteLocalRef(env, elem);
+        }
+    }
+}
+
+static aigw_error_t hash_delete_fields_callback(const char *key, char **field_keys, uint32_t field_count)
+{
     JNIEnv *env = getJNIEnv();
     if (env == NULL) {
         return AIGW_ERR_INTERNAL;
@@ -665,12 +704,7 @@ static aigw_error_t hash_delete_fields_callback(const char *key, char **field_ke
         jstring jfieldKey = cStrToJString(env, field_keys[i]);
         if (jfieldKey == NULL) {
             // 清理已创建的元素
-            for (uint32_t j = 0; j < i; j++) {
-                jobject elem = (*env)->GetObjectArrayElement(env, jfieldKeys, j);
-                if (elem != NULL) {
-                    (*env)->DeleteLocalRef(env, elem);
-                }
-            }
+            release_array_elements(env, jfieldKeys, i);
             (*env)->DeleteLocalRef(env, jfieldKeys);
             (*env)->DeleteLocalRef(env, jkey);
             return AIGW_ERR_NO_MEMORY;
@@ -694,7 +728,8 @@ static aigw_error_t hash_delete_fields_callback(const char *key, char **field_ke
     return AIGW_SUCCESS;
 }
 
-static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_count, key_value_array_t *out_arrays) {
+static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_count, key_value_array_t *out_arrays)
+{
     JNIEnv *env = getJNIEnv();
     if (env == NULL) {
         return AIGW_ERR_INTERNAL;
@@ -727,15 +762,13 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
         (*env)->DeleteLocalRef(env, jkey);
     }
 
-    jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass, g_staticCacheCallbackMethodID,
-        4, NULL, NULL, jkeys, key_count);
-
+    jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass,
+        g_staticCacheCallbackMethodID, 4, NULL, NULL, jkeys, key_count);
     if (result == NULL) {
         return AIGW_ERR_INTERNAL;
     }
 
     jsize resultLen = (*env)->GetArrayLength(env, result);
-
     if (resultLen < CB_RESULT_MIN_LEN) {
         (*env)->DeleteLocalRef(env, result);
         return AIGW_ERR_INTERNAL;
@@ -780,7 +813,6 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
     }
 
     jsize batchResultsLen = (*env)->GetArrayLength(env, batchResults);
-
     if (batchResultsLen != key_count) {
         (*env)->DeleteLocalRef(env, batchResults);
         (*env)->DeleteLocalRef(env, result);
@@ -790,7 +822,6 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
     // Process each key's result
     for (uint32_t i = 0; i < key_count; i++) {
         jobjectArray pairs = (jobjectArray)(*env)->GetObjectArrayElement(env, batchResults, i);
-
         if (pairs == NULL) {
             out_arrays[i].pairs = NULL;
             out_arrays[i].count = 0;
@@ -798,7 +829,6 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
         }
 
         jsize pairsLen = (*env)->GetArrayLength(env, pairs);
-
         if (pairsLen <= 0) {
             out_arrays[i].pairs = NULL;
             out_arrays[i].count = 0;
@@ -814,36 +844,7 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
             continue;
         }
 
-        int validCount = 0;
-        for (int j = 0; j < pairsLen; j++) {
-            jobjectArray pair = (jobjectArray)(*env)->GetObjectArrayElement(env, pairs, j);
-            if (pair == NULL) {
-                continue;
-            }
-
-            jstring jfkey = (jstring)(*env)->GetObjectArrayElement(env, pair, 0);
-            jstring jfvalue = (jstring)(*env)->GetObjectArrayElement(env, pair, 1);
-
-            if (jfkey == NULL || jfvalue == NULL) {
-                if (jfkey != NULL) (*env)->DeleteLocalRef(env, jfkey);
-                if (jfvalue != NULL) (*env)->DeleteLocalRef(env, jfvalue);
-                (*env)->DeleteLocalRef(env, pair);
-                continue;
-            }
-
-            const char *ckey = (*env)->GetStringUTFChars(env, jfkey, NULL);
-            const char *cvalue = (*env)->GetStringUTFChars(env, jfvalue, NULL);
-
-            strncpy_s(out_arrays[i].pairs[validCount].key, AIGW_CACHE_KEY_MAX_LEN, ckey, AIGW_CACHE_KEY_MAX_LEN - 1);
-            strncpy_s(out_arrays[i].pairs[validCount].value, AIGW_CACHE_VALUE_MAX_LEN, cvalue, AIGW_CACHE_VALUE_MAX_LEN - 1);
-            validCount++;
-
-            (*env)->ReleaseStringUTFChars(env, jfkey, ckey);
-            (*env)->ReleaseStringUTFChars(env, jfvalue, cvalue);
-            (*env)->DeleteLocalRef(env, jfkey);
-            (*env)->DeleteLocalRef(env, jfvalue);
-            (*env)->DeleteLocalRef(env, pair);
-        }
+        int validCount = copy_pairs_from_java(env, pairs, pairsLen, out_arrays[i].pairs);
         out_arrays[i].count = validCount;
 
         (*env)->DeleteLocalRef(env, pairs);
@@ -855,7 +856,9 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
 }
 
 // Implement: aigwRegisterCacheDriver
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterCacheDriver(JNIEnv *env, jobject obj, jobject jdriver) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterCacheDriver(JNIEnv *env, jobject obj,
+    jobject jdriver)
+{
     static aigw_cache_driver_ops_t ops = {
         .hash_get_all = hash_get_all_callback,
         .hash_get_all_batch = hash_get_all_batch_callback,
@@ -881,12 +884,15 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterCa
 }
 
 // Implement: aigwUnregisterCacheDriver
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUnregisterCacheDriver(JNIEnv *env, jobject obj) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUnregisterCacheDriver(JNIEnv *env, jobject obj)
+{
     return aigw_unregister_cache_driver();
 }
 
 // Implement: aigwRegisterModel
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterModel(JNIEnv *env, jobject obj, jobject jconfig) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterModel(JNIEnv *env, jobject obj,
+    jobject jconfig)
+{
     aigw_model_config_t config;
     jclass configCls = (*env)->GetObjectClass(env, jconfig);
 
@@ -923,7 +929,9 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwRegisterMo
 }
 
 // Implement: aigwUnregisterModel
-JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUnregisterModel(JNIEnv *env, jobject obj, jstring jmodelName) {
+JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwUnregisterModel(JNIEnv *env, jobject obj,
+    jstring jmodelName)
+{
     char *modelName = jstringToCStr(env, jmodelName);
     aigw_error_t result = aigw_unregister_model(modelName);
     free(modelName);

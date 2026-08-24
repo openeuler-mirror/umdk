@@ -24,10 +24,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _now_ms() -> int:
@@ -141,7 +144,12 @@ _TASK_SCRIPTS: dict[str, list[str]] = {
         "Action: bash_exec\nAction Input: cat mod.py",
         "Action: read_file\nAction Input: mod.py",
         "Action: grep_find\nAction Input: def",
-        "Action: write_file\nAction Input: mod.py|\"\"\"mod doc.\"\"\"\ndef f():\n    \"\"\"f doc.\"\"\"\n    return 1\ndef g():\n    \"\"\"g doc.\"\"\"\n    return 2\ndef h():\n    \"\"\"h doc.\"\"\"\n    return 3\n",
+        (
+            "Action: write_file\nAction Input: mod.py|\"\"\"mod doc.\"\"\"\n"
+            "def f():\n    \"\"\"f doc.\"\"\"\n    return 1\ndef g():\n"
+            "    \"\"\"g doc.\"\"\"\n    return 2\ndef h():\n    \"\"\"h doc.\"\"\"\n"
+            "    return 3\n"
+        ),
         "Action: bash_exec\nAction Input: python3 -m py_compile mod.py",
         "Final Answer: done",
     ],
@@ -378,7 +386,7 @@ def _main() -> int:
     args = ap.parse_args()
     mv = MockVllm(port=args.port, prefetch_complete_ms=args.prefetch_complete_ms)
     mv.start()
-    print(f"mock_vllm listening on {mv.base_url}", flush=True)
+    logger.info(f"mock_vllm listening on {mv.base_url}")
     try:
         while True:
             time.sleep(60)

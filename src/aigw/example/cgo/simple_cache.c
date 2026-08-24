@@ -70,7 +70,8 @@ static unsigned int hash_string(const char* str)
  * Find or create an outer entry for the given model name.
  * Returns a pointer to the OuterEntry, or NULL if failed (e.g., table full).
  */
-OuterEntry* get_or_create_outer_entry(const char* model_name) {
+OuterEntry* get_or_create_outer_entry(const char* model_name)
+{
     if (!model_name) {
         return NULL;
     }
@@ -209,6 +210,44 @@ static aigw_error_t simple_cache_hash_get_all(const char *model_name, key_value_
 }
 
 /**
+ * Find a slot for the given req_id within the outer entry and write the value.
+ * Returns 1 on success (and stores the index in *out_index), 0 if no slot found.
+ */
+static int set_inner_entry(OuterEntry *outer, const char *req_id, const char *json_value, int *out_index)
+{
+    unsigned int start_index = hash_string(req_id);
+    unsigned int index = start_index;
+
+    do {
+        InnerEntry *entry = &outer->inner_map[index];
+        if (entry->state == STATE_EMPTY || entry->state == STATE_DELETED ||
+            strcmp(entry->req_id, req_id) == 0) {
+            strncpy(entry->req_id, req_id, MAX_REQ_ID_LEN - 1);
+            entry->req_id[MAX_REQ_ID_LEN - 1] = '\0';
+            strncpy(entry->json_value, json_value, MAX_JSON_STR_LEN - 1);
+            entry->json_value[MAX_JSON_STR_LEN - 1] = '\0';
+            entry->state = STATE_OCCUPIED;
+            *out_index = (int)index;
+            return 1;
+        }
+        index = (index + 1) % HASH_MAP_SIZE;
+    } while (index != start_index);
+
+    return 0;
+}
+
+/**
+ * Mark previously-touched inner entries as deleted and release the index buffer.
+ */
+static void rollback_touched_entries(OuterEntry *outer, int *touched_indices, int touched_count)
+{
+    for (int i = 0; i < touched_count; i++) {
+        outer->inner_map[touched_indices[i]].state = STATE_DELETED;
+    }
+    free(touched_indices);
+}
+
+/**
  * Mock function: Set multiple fields in the hash (set request load info for a model).
  */
 static aigw_error_t simple_cache_hash_set_fields(const char *model_name, const key_value_array_t *fields)
@@ -248,40 +287,17 @@ static aigw_error_t simple_cache_hash_set_fields(const char *model_name, const k
             break;
         }
 
-        unsigned int start_index = hash_string(req_id);
-        unsigned int index = start_index;
-        InnerEntry* entry = NULL;
-        int slot_found = 0;
-
-        do {
-            entry = &outer->inner_map[index];
-            if (entry->state == STATE_EMPTY || entry->state == STATE_DELETED || strcmp(entry->req_id, req_id) == 0) {
-                strncpy(entry->req_id, req_id, MAX_REQ_ID_LEN - 1);
-                entry->req_id[MAX_REQ_ID_LEN - 1] = '\0';
-                strncpy(entry->json_value, json_value, MAX_JSON_STR_LEN - 1);
-                entry->json_value[MAX_JSON_STR_LEN - 1] = '\0';
-                entry->state = STATE_OCCUPIED;
-
-                touched_indices[touched_count++] = index;
-                slot_found = 1;
-                break;
-            }
-
-            index = (index + 1) % HASH_MAP_SIZE;
-        } while (index != start_index);
-
-        if (!slot_found) {
+        int slot_index = 0;
+        if (!set_inner_entry(outer, req_id, json_value, &slot_index)) {
             rollback_required = 1;
             break;
         }
+        touched_indices[touched_count++] = slot_index;
     }
 
     if (rollback_required) {
-        for (int i = 0; i < touched_count; i++) {
-            outer->inner_map[touched_indices[i]].state = STATE_DELETED; // or EMPTY? depends on policy
-        }
+        rollback_touched_entries(outer, touched_indices, touched_count);
         pthread_rwlock_unlock(&outer->lock);
-        free(touched_indices);
         CACHE_DEBUG("Set failed, rolled back");
         return AIGW_ERR_NO_SPACE;
     }
@@ -290,6 +306,32 @@ static aigw_error_t simple_cache_hash_set_fields(const char *model_name, const k
     free(touched_indices);
     CACHE_DEBUG("Set success for %d fields", fields->count);
     return AIGW_SUCCESS;
+}
+
+/**
+ * Find the index of an occupied inner entry matching req_id.
+ * Returns 1 and stores the index in *out_index if found, 0 otherwise.
+ */
+static int find_occupied_entry(OuterEntry *outer, const char *req_id, int *out_index)
+{
+    unsigned int start_index = hash_string(req_id);
+    unsigned int index = start_index;
+
+    do {
+        InnerEntry *entry = &outer->inner_map[index];
+        if (entry->state == STATE_EMPTY) {
+            // Stop probing: no further entries can exist beyond an empty slot
+            // (insertion would have used this slot)
+            break;
+        }
+        if (entry->state == STATE_OCCUPIED && strcmp(entry->req_id, req_id) == 0) {
+            *out_index = (int)index;
+            return 1;
+        }
+        index = (index + 1) % HASH_MAP_SIZE;
+    } while (index != start_index);
+
+    return 0;
 }
 
 /**
@@ -330,31 +372,14 @@ static aigw_error_t simple_cache_hash_delete_fields(const char *model_name, char
             return AIGW_ERR_INVALID_PARAM;
         }
 
-        unsigned int start_index = hash_string(req_id);
-        unsigned int index = start_index;
-        int key_found = 0;
-
-        do {
-            InnerEntry* entry = &outer->inner_map[index];
-            if (entry->state == STATE_EMPTY) {
-                // Stop probing: no further entries can exist beyond an empty slot
-                // (insertion would have used this slot)
-                break;
-            }
-            if (entry->state == STATE_OCCUPIED && strcmp(entry->req_id, req_id) == 0) {
-                indices_to_delete[found_count++] = index;
-                key_found = 1;
-                break;
-            }
-            index = (index + 1) % HASH_MAP_SIZE;
-        } while (index != start_index);
-
-        if (!key_found) {
+        int found_index = 0;
+        if (!find_occupied_entry(outer, req_id, &found_index)) {
             pthread_rwlock_unlock(&outer->lock);
             free(indices_to_delete);
             CACHE_DEBUG("Delete failed: key not found: %s", req_id);
             return AIGW_ERR_NOT_FOUND;
         }
+        indices_to_delete[found_count++] = found_index;
     }
 
     for (int i = 0; i < found_count; i++) {
@@ -371,7 +396,7 @@ static aigw_error_t simple_cache_hash_delete_fields(const char *model_name, char
  * Mock function: Batch retrieves all fields and values from multiple hashes.
  */
 static aigw_error_t simple_cache_hash_get_all_batch(const char **keys, uint32_t key_count,
-                    key_value_array_t *out_arrays)
+    key_value_array_t *out_arrays)
 {
     // Parameter validation
     if (!keys || key_count == 0 || !out_arrays) {
@@ -388,20 +413,21 @@ static aigw_error_t simple_cache_hash_get_all_batch(const char **keys, uint32_t 
         }
     }
 
-
     // Traverse each key and call simple_cache_hash_get_all to get the results
     for (uint32_t i = 0; i < key_count; i++) {
+        // Use early-continue to flatten the loop body and reduce nesting
         aigw_error_t err = simple_cache_hash_get_all(keys[i], &out_arrays[i]);
-        if (err != AIGW_SUCCESS && err != AIGW_ERR_NOT_FOUND) {
-            // Failed to obtain, clean up the allocated memory
-            for (uint32_t j = 0; j < i; j++) {
-                if (out_arrays[j].pairs) {
-                    free(out_arrays[j].pairs);
-                }
-            }
-            CACHE_DEBUG("Failed to get hash for key %s: %d", keys[i], err);
-            return err;
+        if (err == AIGW_SUCCESS || err == AIGW_ERR_NOT_FOUND) {
+            continue;
         }
+        // Failed to obtain, clean up the allocated memory
+        for (uint32_t j = 0; j < i; j++) {
+            if (out_arrays[j].pairs) {
+                free(out_arrays[j].pairs);
+            }
+        }
+        CACHE_DEBUG("Failed to get hash for key %s: %d", keys[i], err);
+        return err;
     }
 
     CACHE_DEBUG("Retrieved %u hashes", key_count);
@@ -441,6 +467,8 @@ aigw_cache_driver_t *get_simple_cache_driver(void)
     return &simple_redis_cache;
 }
 
+static aigw_error_t test_simple_cache_query_and_delete(const char *model_name);
+
 // Test function
 aigw_error_t test_simple_cache(void)
 {
@@ -468,8 +496,17 @@ aigw_error_t test_simple_cache(void)
         return err;
     }
 
+    err = test_simple_cache_query_and_delete("gpt-3");
+    return err;
+}
+
+/**
+ * Query, delete, and re-query to verify the cache behavior for a model.
+ */
+static aigw_error_t test_simple_cache_query_and_delete(const char *model_name)
+{
     key_value_array_t result = {0};
-    err = simple_cache_hash_get_all("gpt-3", &result);
+    aigw_error_t err = simple_cache_hash_get_all(model_name, &result);
     if (err != AIGW_SUCCESS && err != AIGW_ERR_NOT_FOUND) {
         printf("Get all failed: %d\n", err);
         return err;
@@ -481,7 +518,7 @@ aigw_error_t test_simple_cache(void)
     }
 
     char *del_keys[] = { "req1" };
-    err = simple_cache_hash_delete_fields("gpt-3", del_keys, 1);
+    err = simple_cache_hash_delete_fields(model_name, del_keys, 1);
     if (err != AIGW_SUCCESS) {
         printf("Delete failed: %d\n", err);
         free(result.pairs);
@@ -489,7 +526,7 @@ aigw_error_t test_simple_cache(void)
     }
 
     key_value_array_t result2 = {0};
-    err = simple_cache_hash_get_all("gpt-3", &result2);
+    err = simple_cache_hash_get_all(model_name, &result2);
     printf("After delete, got %d entries:\n", result2.count);
     for (int i = 0; i < result2.count; i++) {
         printf("Key: %s, Value: %s\n", result2.pairs[i].key, result2.pairs[i].value);
@@ -501,9 +538,8 @@ aigw_error_t test_simple_cache(void)
     if (result2.count == 1) {
         printf("Test simple_cache successfully\n");
         return AIGW_SUCCESS;
-    } else {
-        return AIGW_ERR_INTERNAL;
     }
+    return AIGW_ERR_INTERNAL;
 }
 
 /* this function will be automatically called before main */

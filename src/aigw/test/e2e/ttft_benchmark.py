@@ -20,10 +20,14 @@ Output: CSV rows (append mode) for post-hoc analysis.
 import argparse
 import csv
 import json
+import logging
 import random
-import sys
 import time
 import urllib.request
+from dataclasses import dataclass
+from urllib.parse import urljoin
+
+logger = logging.getLogger(__name__)
 
 MODEL = "Qwen2.5-7B"
 W1 = "http://169.254.30.2:8081"
@@ -69,14 +73,14 @@ def get_hits(port, host="127.0.0.1"):
                 line = line.decode().strip()
                 if line.startswith(HITS_METRIC + "{") and line.split()[0].endswith("}"):
                     return float(line.split()[1])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("get_hits(%s) failed: %s", port, e)
     return -1.0
 
 
 def tokenize_count(url, prompt):
     body = json.dumps({"model": MODEL, "prompt": prompt, "add_special_tokens": False}).encode()
-    req = urllib.request.Request(url + "/tokenize", data=body,
+    req = urllib.request.Request(urljoin(url, "/tokenize"), data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())["count"]
@@ -88,7 +92,7 @@ def measure_template_overhead(url):
     body = json.dumps({"model": MODEL,
                        "messages": [{"role": "user", "content": probe}],
                        "max_tokens": 1}).encode()
-    req = urllib.request.Request(url + "/v1/chat/completions", data=body,
+    req = urllib.request.Request(urljoin(url, "/v1/chat/completions"), data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as resp:
         used = json.loads(resp.read())["usage"]["prompt_tokens"]
@@ -158,7 +162,7 @@ def sse_ttft(url, body, timeout=180):
                     if content:
                         return (time.perf_counter() - start) * 1000.0, True
     except Exception as e:
-        print(f"    [warn] request failed: {e}", file=sys.stderr)
+        logger.warning(f"    [warn] request failed: {e}")
         return -1.0, False
     return -1.0, False
 
@@ -170,24 +174,33 @@ def chat_body(prompt):
             "stream": True}
 
 
-def run_scenario(csvw, tier, scenario, prompts, url, n):
+@dataclass
+class ScenarioCtx:
+    """Correlated run-scenario inputs bundled to keep argument count <= 5."""
+    csvw: object
+    prompts: list
+    url: str
+    n: int
+
+
+def run_scenario(ctx, tier, scenario):
     """Run n requests against url. Returns (done, hits_w1_delta, hits_w2_delta)."""
     rng = random.Random(seed + hash((tier, scenario)) % 2 ** 32)
-    order = list(range(len(prompts)))
+    order = list(range(len(ctx.prompts)))
     rng.shuffle(order)
 
     h1_0 = get_hits(8081)
     h2_0 = get_hits(8082)
     done = 0
     for idx in order:
-        prompt, tail_tokens = prompts[idx]
-        ttft, ok = sse_ttft(url, chat_body(prompt))
+        prompt, tail_tokens = ctx.prompts[idx]
+        ttft, ok = sse_ttft(ctx.url, chat_body(prompt))
         if not ok:
             continue
-        csvw.writerow([time.strftime("%Y-%m-%dT%H:%M:%S"), tier, scenario, done,
-                       tail_tokens, round(ttft, 2), 1])
+        ctx.csvw.writerow([time.strftime("%Y-%m-%dT%H:%M:%S"), tier, scenario, done,
+                           tail_tokens, round(ttft, 2), 1])
         done += 1
-        if done >= n:
+        if done >= ctx.n:
             break
     h1_1 = get_hits(8081)
     h2_1 = get_hits(8082)
@@ -209,12 +222,12 @@ def main():
 
     tiers = [int(t) for t in args.tiers.split(",")]
     scenarios = args.scenarios.split(",")
-    urls = {"A": AIGW, "B": W2 + "/v1/chat/completions",
-            "C": W1 + "/v1/chat/completions", "D": AIGW}
+    urls = {"A": AIGW, "B": urljoin(W2, "/v1/chat/completions"),
+            "C": urljoin(W1, "/v1/chat/completions"), "D": AIGW}
     tok_url = W1
 
     overhead = measure_template_overhead(W1)
-    print(f"[setup] template overhead={overhead} tokens", flush=True)
+    logger.info(f"[setup] template overhead={overhead} tokens")
 
     with open(args.out, "a", newline="") as f:
         csvw = csv.writer(f)
@@ -225,7 +238,8 @@ def main():
             n_pref = calibrate_prefix(tok_url, tier, overhead)
             prefix = " ".join([SENTENCE] * n_pref)
             pref_tokens = tokenize_count(tok_url, prefix) + overhead
-            print(f"[tier {tier}] prefix: {n_pref} sentences (={pref_tokens} tokens)", flush=True)
+            logger.info(f"[tier {tier}] prefix: {n_pref} sentences "
+                        f"(={pref_tokens} tokens)")
 
             tails = []
             for _ in range(args.n):
@@ -235,24 +249,27 @@ def main():
 
             if args.warm:
                 warm_prompt = prefix + " " + tails[0][0]
-                ttft, ok = sse_ttft(W1 + "/v1/chat/completions", chat_body(warm_prompt))
-                print(f"  [warm] worker1 direct ttft={ttft:.1f}ms ok={ok}", flush=True)
+                ttft, ok = sse_ttft(urljoin(W1, "/v1/chat/completions"),
+                                     chat_body(warm_prompt))
+                logger.info(f"  [warm] worker1 direct ttft={ttft:.1f}ms ok={ok}")
                 time.sleep(3)
 
             for sc in scenarios:
                 if sc == "B":
                     prompts = [calibrate_independent(tok_url, tier, overhead)
                                for _ in range(args.n)]
-                    print(f"  [B] tier={tier} independent prompts "
-                          f"(deterministic miss), n={args.n} ...", flush=True)
+                    logger.info(f"  [B] tier={tier} independent prompts "
+                                f"(deterministic miss), n={args.n} ...")
                 else:
                     prompts = [(prefix + " " + t, tn) for t, tn in tails]
-                    print(f"  [{sc}] tier={tier} shared-prefix prompts, n={args.n} ...",
-                          flush=True)
-                done, dh1, dh2 = run_scenario(csvw, tier, sc, prompts, urls[sc], args.n)
-                print(f"  [{sc}] tier={tier} done={done} "
-                      f"hits_w1_delta={dh1:.0f} hits_w2_delta={dh2:.0f}", flush=True)
-    print("[done]")
+                    logger.info(f"  [{sc}] tier={tier} shared-prefix prompts, "
+                                f"n={args.n} ...")
+                ctx = ScenarioCtx(csvw=csvw, prompts=prompts, url=urls.get(sc, AIGW),
+                                  n=args.n)
+                done, dh1, dh2 = run_scenario(ctx, tier, sc)
+                logger.info(f"  [{sc}] tier={tier} done={done} "
+                            f"hits_w1_delta={dh1:.0f} hits_w2_delta={dh2:.0f}")
+    logger.info("[done]")
 
 
 if __name__ == "__main__":
