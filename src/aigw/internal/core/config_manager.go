@@ -9,11 +9,14 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"huawei.com/aigw/internal/apipool"
 	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/pkg/log"
 	"huawei.com/aigw/pkg/utils"
@@ -36,22 +39,29 @@ const (
 	// see minSessionTimeout and maxSessionTimeout of server
 	defaultZkSessionTimeout = 40
 
-	defaultSnapshotInternal = 3
-
 	maxTotalInstanceNum = 4096
+	maxModelNum         = 1024
+	maxInsPerModel      = 1024
 	maxConcurrency      = 512
 	// default datasync max interval, the unit is second
 	dataSyncMaxInterval = 600
 
-	maxPromptRunes = 128 * 1024
+	maxPromptRunes = 10 * 1024 * 1024
 	minPromptRunes = 1024
+
+	defaultCacheRefreshIntervalMs = 100
+	defaultTokenizationRatio      = float64(0.35)
 )
 
 var validCommonLBTypes = map[string]bool{
-	"roundRobin": true,
-	"leastConn":  true,
-	"capacity":   true,
-	"token":      true,
+	"roundRobin":       true,
+	"leastConn":        true,
+	"capacity":         true,
+	"token":            true,
+	"prefillTimeAware": true,
+	"consistentHash":   true,
+
+	"prefixCache": true,
 }
 
 var validDecodeLBTypes = map[string]bool{
@@ -60,6 +70,7 @@ var validDecodeLBTypes = map[string]bool{
 	"capacity":   true,
 	"token":      true,
 	"decode":     true,
+	"none":       true,
 }
 
 var validPredictorTypes = map[string]bool{
@@ -142,6 +153,57 @@ func resetDefault(cfg *base.AigwConfig) {
 			zkCfg.SessionTimeout = defaultZkSessionTimeout
 		}
 	}
+
+	// checking Discovery config
+	discoveryCfg := &cfg.Discovery
+	if discoveryCfg.Enable {
+		if discoveryCfg.ResyncPeriod == 0 {
+			discoveryCfg.ResyncPeriod = 30 // 30 seconds default
+		}
+		if discoveryCfg.Namespace == "" {
+			discoveryCfg.Namespace = "default"
+		}
+	}
+
+	// checking Proxy config
+	proxyCfg := &cfg.Proxy
+	if proxyCfg.Enable {
+		if proxyCfg.Timeout == 0 {
+			proxyCfg.Timeout = 30 // 30 seconds default
+		}
+		if proxyCfg.MaxRetry == 0 {
+			proxyCfg.MaxRetry = 3
+		}
+		if proxyCfg.RetryBaseInterval == 0 {
+			proxyCfg.RetryBaseInterval = 100 // 100ms default
+		}
+		if proxyCfg.RetryMaxInterval == 0 {
+			proxyCfg.RetryMaxInterval = 5000 // 5s default
+		}
+		// Circuit breaker defaults
+		if proxyCfg.CircuitBreaker.Enabled {
+			if proxyCfg.CircuitBreaker.FailureThreshold == 0 {
+				proxyCfg.CircuitBreaker.FailureThreshold = 5
+			}
+			if proxyCfg.CircuitBreaker.SuccessThreshold == 0 {
+				proxyCfg.CircuitBreaker.SuccessThreshold = 2
+			}
+			if proxyCfg.CircuitBreaker.Timeout == 0 {
+				proxyCfg.CircuitBreaker.Timeout = 30 // 30 seconds default
+			}
+		}
+	}
+
+	// checking LoadBalancer consistent hash config
+	for i := range cfg.GsConfigs {
+		lbCfg := &cfg.GsConfigs[i].LoadBalancer
+		if lbCfg.VirtualNodes == 0 {
+			lbCfg.VirtualNodes = 160 // default virtual nodes
+		}
+		if lbCfg.FallbackNum == 0 {
+			lbCfg.FallbackNum = 3 // default fallback nodes
+		}
+	}
 }
 
 // LoadConfig loads the config from file
@@ -184,6 +246,10 @@ func validateLoadBalancer(gsCfg *base.GlobalSchedulerConfig) error {
 	}
 	if gsCfg.LoadBalancer.MinMatchedLength <= 0 {
 		return fmt.Errorf("invalid MinMatchedLength value: %v, should > 0", gsCfg.LoadBalancer.MinMatchedLength)
+	}
+	if (gsCfg.LoadBalancer.Mixed == "prefillTimeAware" || gsCfg.LoadBalancer.Prefill == "prefillTimeAware" ||
+		gsCfg.LoadBalancer.Decode == "prefillTimeAware") && gsCfg.LoadBalancer.PretrainTTFTPath == "" {
+		return fmt.Errorf("invalid empty pretrainTTFTPath when prefillTimeAware load balancer is used")
 	}
 
 	return nil
@@ -289,6 +355,16 @@ func validatePredictorConfig(cfg *base.PredictorConfig) error {
 func validateGlobalSchedulersConfig(gsConfigs []base.GlobalSchedulerConfig) error {
 	for _, scheduler := range gsConfigs {
 		log.Info().Msgf("checking global scheduler config, model %v", scheduler.Model)
+		if err := validateModeField(&scheduler); err != nil {
+			return err
+		}
+		if scheduler.Mode == "provider" {
+			if err := validateProviderPool(&scheduler); err != nil {
+				return err
+			}
+			log.Info().Msgf("finished to check provider pool config, model %v", scheduler.Model)
+			continue // skip instance-mode loadBalancer/blockSize validation
+		}
 		if scheduler.BlockSize <= 0 {
 			return fmt.Errorf("invalid block size value: %v, should > 0", scheduler.BlockSize)
 		}
@@ -368,15 +444,16 @@ func validateTokenizerConfig(cfg *base.TokenizerConfig) error {
 	return nil
 }
 
-func validateLimits(config *base.Limits) error {
+// ValidateLimits checks the validation of config limits.
+func ValidateLimits(config *base.Limits) error {
 	if config.TotalInsNum > maxTotalInstanceNum || config.TotalInsNum < 1 {
 		return fmt.Errorf("totalInsNum must be between 1 and %v", maxTotalInstanceNum)
 	}
-	if config.InsNumPerModel > maxConcurrency || config.InsNumPerModel < 1 {
-		return fmt.Errorf("insNumPerModel must be between 1 and %v", maxConcurrency)
+	if config.InsNumPerModel > maxInsPerModel || config.InsNumPerModel < 1 {
+		return fmt.Errorf("insNumPerModel must be between 1 and %v", maxInsPerModel)
 	}
-	if config.ModelNum > maxConcurrency || config.ModelNum < 1 {
-		return fmt.Errorf("modelNum must be between 1 and %v", maxConcurrency)
+	if config.ModelNum > maxModelNum || config.ModelNum < 1 {
+		return fmt.Errorf("modelNum must be between 1 and %v", maxModelNum)
 	}
 	if config.Concurrency > maxConcurrency || config.Concurrency < 1 {
 		return fmt.Errorf("concurrency must be between 1 and %v", maxConcurrency)
@@ -401,10 +478,16 @@ func (m *AigwConfigManager) ValidateConfig(config *base.AigwConfig) error {
 	if err := validatePredictorConfig(&config.Predictor); err != nil {
 		return err
 	}
-	if err := validateLimits(&config.Limits); err != nil {
+	if err := ValidateLimits(&config.Limits); err != nil {
 		return err
 	}
 	if err := validateDataSyncConfig(&config.DataSyncConfig); err != nil {
+		return err
+	}
+	if err := validateDiscoveryConfig(&config.Discovery); err != nil {
+		return err
+	}
+	if err := validateProxyConfig(&config.Proxy); err != nil {
 		return err
 	}
 
@@ -455,11 +538,168 @@ func validateDataSyncConfig(cfg *base.DataSyncConfig) error {
 	return nil
 }
 
+func validateDiscoveryConfig(cfg *base.DiscoveryConfig) error {
+	if !cfg.Enable {
+		return nil
+	}
+
+	validDiscoveryTypes := map[string]bool{
+		"k8s": true,
+		"dns": true,
+		"zk":  true,
+	}
+
+	if !validDiscoveryTypes[cfg.Type] {
+		return fmt.Errorf("invalid discovery type: %s, must be one of: k8s, dns, zk", cfg.Type)
+	}
+
+	if cfg.Type == "k8s" {
+		// KubeconfigPath is optional for in-cluster config
+		if cfg.KubeconfigPath != "" {
+			if _, err := utils.ValidateFilePath(cfg.KubeconfigPath); err != nil {
+				return fmt.Errorf("invalid kubeconfig path: %v", err)
+			}
+		}
+	}
+
+	if cfg.ResyncPeriod < 0 {
+		return fmt.Errorf("invalid resync period: %d, must be >= 0", cfg.ResyncPeriod)
+	}
+
+	return nil
+}
+
+func validateProxyConfig(cfg *base.ProxyConfig) error {
+	if !cfg.Enable {
+		return nil
+	}
+
+	if cfg.Timeout < 0 {
+		return fmt.Errorf("invalid proxy timeout: %d, must be >= 0", cfg.Timeout)
+	}
+	if cfg.MaxRetry < 0 {
+		return fmt.Errorf("invalid proxy max retry: %d, must be >= 0", cfg.MaxRetry)
+	}
+	if cfg.RetryBaseInterval < 0 {
+		return fmt.Errorf("invalid proxy retry base interval: %d, must be >= 0", cfg.RetryBaseInterval)
+	}
+	if cfg.RetryMaxInterval < 0 {
+		return fmt.Errorf("invalid proxy retry max interval: %d, must be >= 0", cfg.RetryMaxInterval)
+	}
+
+	// Validate circuit breaker config
+	if cfg.CircuitBreaker.Enabled {
+		if cfg.CircuitBreaker.FailureThreshold < 0 {
+			return fmt.Errorf("invalid circuit breaker failure threshold: %d", cfg.CircuitBreaker.FailureThreshold)
+		}
+		if cfg.CircuitBreaker.SuccessThreshold < 0 {
+			return fmt.Errorf("invalid circuit breaker success threshold: %d", cfg.CircuitBreaker.SuccessThreshold)
+		}
+		if cfg.CircuitBreaker.Timeout < 0 {
+			return fmt.Errorf("invalid circuit breaker timeout: %d", cfg.CircuitBreaker.Timeout)
+		}
+	}
+
+	return nil
+}
+
 // PrintConfig shows the config
 func (m *AigwConfigManager) PrintConfig() {
-	configJSON, err := json.MarshalIndent(m.config, "", "  ")
+	raw, err := json.Marshal(m.config)
+	if err != nil {
+		return
+	}
+	var generic any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return
+	}
+	redactAPIKeys(generic)
+	configJSON, err := json.MarshalIndent(generic, "", "  ")
 	if err == nil {
-		// do not print private data
+		// do not print private data: provider apiKeys are reduced to a fingerprint
 		log.Debug().Msgf("current config: %v", string(configJSON))
 	}
+}
+
+// redactAPIKeys walks a decoded JSON value and replaces any "apiKey" string with
+// its sha256[:16] fingerprint so plaintext provider keys never reach the logs.
+func redactAPIKeys(v any) {
+	switch node := v.(type) {
+	case map[string]any:
+		for k, child := range node {
+			if k == "apiKey" {
+				if key, ok := child.(string); ok && key != "" {
+					sum := sha256.Sum256([]byte(key))
+					node[k] = hex.EncodeToString(sum[:])[:16]
+				}
+				continue
+			}
+			redactAPIKeys(child)
+		}
+	case []any:
+		for _, child := range node {
+			redactAPIKeys(child)
+		}
+	}
+}
+
+// NewDefaultGsConfig returns the default config when delivered as a dynamic library
+func NewDefaultGsConfig(model string) *base.GlobalSchedulerConfig {
+	return &base.GlobalSchedulerConfig{
+		Model:                model,
+		BlockSize:            128,
+		DeployPolicy:         "separated",
+		MaxTimeToFirstToken:  1000, // ms
+		MaxTimeBetweenTokens: 500,  // ms
+		TokenizeModelName:    "",
+		LoadBalancer: base.LoadBalancerConfig{
+			Mixed:               "token",
+			Prefill:             "prefillTimeAware",
+			Decode:              "decode",
+			BatchSize:           128,
+			ReservedBlockNumber: 1,
+			MinMatchedLength:    0,
+			PowerOfTwo:          false,
+		},
+		InsConnectType:         "",
+		CacheRefreshIntervalMs: defaultCacheRefreshIntervalMs,
+		TokenizationRatio:      defaultTokenizationRatio,
+	}
+}
+
+// validateModeField validates the optional mode literal.
+func validateModeField(gsc *base.GlobalSchedulerConfig) error {
+	switch gsc.Mode {
+	case "", "instance", "provider":
+		return nil
+	default:
+		return fmt.Errorf("model %q: invalid mode %q (want instance|provider)", gsc.Model, gsc.Mode)
+	}
+}
+
+// validateProviderPool validates a mode=provider scheduler config.
+func validateProviderPool(gsc *base.GlobalSchedulerConfig) error {
+	pp := gsc.ProviderPool
+	if pp == nil {
+		return fmt.Errorf("model %q: mode=provider requires providerPool", gsc.Model)
+	}
+	if len(pp.Deployments) == 0 {
+		return fmt.Errorf("model %q: providerPool.deployments must not be empty", gsc.Model)
+	}
+	if _, err := apipool.CreateStrategy(pp.Strategy, apipool.NewState(&base.CooldownConfig{}), pp.StrategyOptions); err != nil {
+		return fmt.Errorf("model %q: %w", gsc.Model, err)
+	}
+	registry := apipool.NewDefaultRegistry()
+	for _, d := range pp.Deployments {
+		if _, err := registry.Get(d.Provider); err != nil {
+			return fmt.Errorf("model %q: %w", gsc.Model, err)
+		}
+		if d.Provider == "custom" && d.AuthHeaderName == "" {
+			return fmt.Errorf("model %q deployment %q: custom provider requires authHeaderName", gsc.Model, d.ID)
+		}
+		if d.APIBase == "" || d.APIKey == "" {
+			return fmt.Errorf("model %q deployment %q: apiBase and apiKey required", gsc.Model, d.ID)
+		}
+	}
+	return nil
 }

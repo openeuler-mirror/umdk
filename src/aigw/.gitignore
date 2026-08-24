@@ -1,2 +1,9 @@
 .idea
 .vscode
+
+# Build toolchains and artifacts (not source)
+.cargo/
+.rustup/
+output/
+open_source/
+configs/tokenizer-qwen25-7b.json

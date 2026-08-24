@@ -267,6 +267,12 @@ func SetGlobalLevel(l logrus.Level) {
 	logger.SetLevel(l)
 }
 
+// DebugEnabled reports whether debug-level logging is active. Use it to guard
+// construction of expensive debug-only log arguments on hot paths.
+func DebugEnabled() bool {
+	return logger.GetLevel() >= DebugLevel
+}
+
 // DisableLog disable the logger
 func DisableLog() {
 	logger.SetOutput(io.Discard)

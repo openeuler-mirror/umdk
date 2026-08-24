@@ -1,8 +1,3 @@
-#
-# SPDX-License-Identifier: MIT
-# Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
-#
-
 cmake_minimum_required(VERSION 3.28.2)
 project(AIGW LANGUAGES C CXX)
 

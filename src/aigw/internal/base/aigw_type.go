@@ -8,7 +8,11 @@
 // Package base contains the core functions for AIGW.
 package base
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"huawei.com/aigw/internal/renderclient"
+)
 
 // OpenAiMessage specified the input format of OpenAI
 type OpenAiMessage struct {
@@ -66,22 +70,22 @@ type ZookeeperConfig struct {
 
 // DiscoveryConfig struct contains configuration for service discovery
 type DiscoveryConfig struct {
-	Type                  string `json:"type"`                  // Discovery type: "k8s", "dns", "zk"
-	KubeconfigPath        string `json:"kubeconfigPath"`        // K8s kubeconfig path (optional, use in-cluster config if empty)
-	Namespace             string `json:"namespace"`             // K8s namespace to watch
-	ResyncPeriod          int    `json:"resyncPeriod"`          // Resync period in seconds
-	Enable                bool   `json:"enable"`                // Enable service discovery
-	SkipInstanceConnection bool  `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing)
+	Type                   string `json:"type"`                   // Discovery type: "k8s", "dns", "zk"
+	KubeconfigPath         string `json:"kubeconfigPath"`         // K8s kubeconfig path (optional, use in-cluster config if empty)
+	Namespace              string `json:"namespace"`              // K8s namespace to watch
+	ResyncPeriod           int    `json:"resyncPeriod"`           // Resync period in seconds
+	Enable                 bool   `json:"enable"`                 // Enable service discovery
+	SkipInstanceConnection bool   `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing)
 }
 
 // ProxyConfig struct contains configuration for request proxy/forwarding
 type ProxyConfig struct {
-	Timeout           int  `json:"timeout"`           // Request timeout in seconds
-	MaxRetry          int  `json:"maxRetry"`          // Maximum retry attempts
-	RetryBaseInterval int  `json:"retryBaseInterval"` // Retry base interval in milliseconds
-	RetryMaxInterval  int  `json:"retryMaxInterval"`  // Retry max interval in milliseconds
-	Enable            bool `json:"enable"`            // Enable request forwarding
-	CircuitBreaker    CircuitBreakerConfig `json:"circuitBreaker"` // Circuit breaker configuration
+	Timeout           int                  `json:"timeout"`           // Request timeout in seconds
+	MaxRetry          int                  `json:"maxRetry"`          // Maximum retry attempts
+	RetryBaseInterval int                  `json:"retryBaseInterval"` // Retry base interval in milliseconds
+	RetryMaxInterval  int                  `json:"retryMaxInterval"`  // Retry max interval in milliseconds
+	Enable            bool                 `json:"enable"`            // Enable request forwarding
+	CircuitBreaker    CircuitBreakerConfig `json:"circuitBreaker"`    // Circuit breaker configuration
 }
 
 // CircuitBreakerConfig struct contains configuration for circuit breaker
@@ -148,12 +152,15 @@ type GlobalSchedulerConfig struct {
 	// Mode selects scheduling path: "instance" (default when empty) | "provider".
 	Mode string `json:"mode,omitempty"`
 	// ProviderPool holds config for mode=provider.
-	ProviderPool *ProviderPoolConfig `json:"providerPool,omitempty"`
-	InsConnectType       string             `json:"instanceConnectType"`
-	SkipInstanceConnection bool             `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing with mock instances)
+	ProviderPool           *ProviderPoolConfig `json:"providerPool,omitempty"`
+	InsConnectType         string              `json:"instanceConnectType"`
+	SkipInstanceConnection bool                `json:"skipInstanceConnection"` // Skip connecting to instances during registration (for testing with mock instances)
 
 	CacheRefreshIntervalMs uint32  `json:"cacheRefreshIntervalMs"`
 	TokenizationRatio      float64 `json:"tokenizationRatio"`
+
+	// RenderClient configures the render service client for prefix cache tokenization
+	RenderClient renderclient.RenderClientConfig `json:"renderClient"`
 }
 
 // ProviderPoolConfig configures a provider (SaaS API) pool for mode=provider.
@@ -185,6 +192,7 @@ type DeploymentConfig struct {
 	Provider         string   `json:"provider"`
 	APIBase          string   `json:"apiBase"`
 	APIKey           string   `json:"apiKey"`
+	Model            string   `json:"model,omitempty"` // upstream model name; the request body's "model" is rewritten to this when set
 	TPM              int      `json:"tpm,omitempty"`
 	RPM              int      `json:"rpm,omitempty"`
 	Tags             []string `json:"tags,omitempty"`
@@ -228,6 +236,7 @@ type AigwConfig struct {
 	Limits         Limits                  `json:"limits"`
 	Discovery      DiscoveryConfig         `json:"discovery"` // Service discovery configuration
 	Proxy          ProxyConfig             `json:"proxy"`     // Request proxy/forwarding configuration
+	Kvc            KvcConfig               `json:"kvc"`       // KVC management (Phase 2; ServiceMode only)
 }
 
 // String is the string method of AigwConfig

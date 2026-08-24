@@ -10,7 +10,7 @@ set -e
 build_rpm () {
   rm -rf /home/aigw/rpmbuild
   mkdir -p /home/aigw/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-  tar --warning no-file-changed -zcf /home/aigw/rpmbuild/SOURCES/aigw-${VERSION}-${RELEASE}.tar.gz --exclude .git --exclude ./rpmbuild  .
+  tar --warning no-file-changed -zcf /home/aigw/rpmbuild/SOURCES/aigw-${VERSION}-${RELEASE}.tar.gz --exclude .git --exclude ./rpmbuild --exclude ./output --exclude ./target --exclude ./example/build --exclude ./open_source/LightGBM-v4.6.0 --exclude ./open_source/eigen-3.4.0 --exclude ./open_source/compute-1.87.0.beta1 --exclude ./open_source/fast_double_parser-v0.8.0 --exclude ./open_source/fmt-11.1.2  .
 
   cp -r $ROOT_DIR/aigw.spec /home/aigw/rpmbuild/SPECS
   dos2unix /home/aigw/rpmbuild/SPECS/aigw.spec

@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"time"
 
+	"huawei.com/aigw/internal/agentregistry"
 	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/internal/cachecenter"
+	"huawei.com/aigw/internal/renderclient"
 	"huawei.com/aigw/internal/tokenizers"
 	"huawei.com/aigw/pkg/crypto"
 	"huawei.com/aigw/pkg/lightgbm"
@@ -124,6 +126,8 @@ func convertLBType(lb string) LoadBalancerType {
 		return LoadBalancerPrefillTimeAware
 	case "consistentHash":
 		return LoadBalancerConsistentHash
+	case "prefixCache":
+		return LoadBalancerPrefixCache
 	default:
 		return LoadBalancerNone
 	}
@@ -201,6 +205,42 @@ func WithPretrainTTFTPath(path string) GlobalSchedulerManagerOption {
 func WithRuntimeMode(runtimeMode base.RuntimeMode) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
 		gs.runtimeMode = runtimeMode
+		return nil
+	}
+}
+
+// WithKvc wires the per-model KvcSessionManager when KVC management is enabled
+// (Phase 2). Constructs a VllmKvcClient pointing at kvcCfg.Vllm.Endpoint and a
+// KvcSessionManager subscribed to the AgentRegistry. Called from AigwManager.RegisterModel.
+func WithKvc(reg agentregistry.Registry, kvcCfg base.KvcConfig, clock agentregistry.Clock) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		if !kvcCfg.Enabled || reg == nil {
+			return nil
+		}
+		vcfg := kvcCfg.Vllm
+		sender := NewVllmKvcClient(vcfg.Endpoint, VllmClientConfig{
+			Endpoint: vcfg.Endpoint, TimeoutMs: vcfg.TimeoutMs, MaxRetries: vcfg.MaxRetries,
+			RetryBaseDelayMs: vcfg.RetryBaseDelayMs, RetryMaxDelayMs: vcfg.RetryMaxDelayMs,
+			BatchSize: vcfg.BatchSize, HmacEnabled: vcfg.HmacEnabled,
+		})
+		sessionCfg := KvcSessionConfig{
+			SessionTtlSec:           kvcCfg.Session.SessionTtlSec,
+			BlockTtlSec:             kvcCfg.Session.BlockTtlSec,
+			PendingBlockMatchTtlSec: kvcCfg.Session.PendingBlockMatchTtlSec,
+			MaxRetries:              kvcCfg.Vllm.MaxRetries,
+			Offload:                 kvcCfg.Agent.Offload,
+			Prefetch:                kvcCfg.Agent.Prefetch,
+			Aging:                   kvcCfg.Agent.Aging,
+		}
+		gs.kvcSessionMgr = NewKvcSessionManager(gs.config.model, reg, sender, sessionCfg, clock)
+		return nil
+	}
+}
+
+// WithRenderClientConfig set render client config for gs
+func WithRenderClientConfig(renderCfg renderclient.RenderClientConfig) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.renderClientConfig = renderCfg
 		return nil
 	}
 }

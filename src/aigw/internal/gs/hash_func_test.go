@@ -1,8 +1,6 @@
 /*
  * SPDX-License-Identifier: MIT
  * Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
- * Description: Hash functions test for AIGW.
- * Create: 2026-04-29
  */
 
 package gs

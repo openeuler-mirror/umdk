@@ -1,0 +1,79 @@
+{
+  "global": {
+    "host": "127.0.0.1",
+    "port": "8701",
+    "logPath": "/tmp/aigw_logs",
+    "logLevel": "info",
+    "snapshotUpdateInterval": 3,
+    "securitySchema": "default",
+    "cryptoSock": "",
+    "reqTimeout": 600
+  },
+  "zookeeper": {
+    "address": "",
+    "aclScheme": "default",
+    "connectTimeout": 0,
+    "sessionTimeout": 0,
+    "inferenceInstancePath": "/mep/aigw/instances",
+    "scheduleServicePath": "/mep/aigw/global_schedulers"
+  },
+  "predictor": {
+    "predictType": "none"
+  },
+  "dataSync": {
+    "address": "",
+    "path": "/models",
+    "interval": 5
+  },
+  "tokenizers": [
+    {
+      "tokenizeModelName": "Qwen2.5-7B",
+      "tokenizerType": "huggingfaceTokenizers",
+      "configPath": "/etc/aigw/tokenizer-qwen25-7b.json"
+    }
+  ],
+  "globalSchedulers": [
+    {
+      "model": "Qwen2.5-7B",
+      "blockSize": 128,
+      "deployPolicy": "mixed",
+      "maxTimeToFirstToken": 200,
+      "maxTimeBetweenTokens": 50,
+      "tokenizeModelName": "Qwen2.5-7B",
+      "skipInstanceConnection": true,
+      "loadBalancer": {
+        "mixed": "prefixCache",
+        "batchSize": 1000000,
+        "reservedBlockNumber": 50,
+        "minMatchedLength": 10
+      },
+      "renderClient": {
+        "endpointTemplate": "http://{ip}:8000",
+        "timeout": 5000,
+        "maxRetries": 3,
+        "connPoolSize": 100,
+        "baseURL": "http://127.0.0.1:8081"
+      }
+    }
+  ],
+  "limits": {
+    "totalInsNum": 2048,
+    "insNumPerModel": 128,
+    "modelNum": 128,
+    "concurrency": 128,
+    "maxPromptRunes": 131072
+  },
+  "proxy": {
+    "enable": true,
+    "timeout": 60,
+    "maxRetry": 1,
+    "retryBaseInterval": 100,
+    "retryMaxInterval": 1000,
+    "circuitBreaker": {
+      "enabled": false,
+      "failureThreshold": 5,
+      "successThreshold": 1,
+      "timeout": 30
+    }
+  }
+}

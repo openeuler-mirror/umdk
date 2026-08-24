@@ -13,8 +13,8 @@ import (
 
 func TestInstanceRoleString(t *testing.T) {
 	tests := []struct {
-		role    InstanceRole
-		want    string
+		role InstanceRole
+		want string
 	}{
 		{MixedRoleInstance, "mixed"},
 		{PrefillRoleInstance, "prefill"},
@@ -77,6 +77,40 @@ func TestBuildInstanceAddress(t *testing.T) {
 			got := BuildInstanceAddress(tt.ip, tt.port)
 			if got != tt.expect {
 				t.Errorf("BuildInstanceAddress(%v, %v) = %v, want %v", tt.ip, tt.port, got, tt.expect)
+			}
+		})
+	}
+}
+
+// TestBuildInstanceAddress_DpRank pins the @<rank> suffix behavior.
+// A non-DP worker registers with dpRank=0 (the default int). Appending "@0"
+// produces a malformed URL like "http://172.17.0.2:8081@0/v1/chat/completions"
+// which net/url parses as userinfo="172.17.0.2:8081", host="0" →
+// "dial tcp: lookup 0: no such host". The @<rank> suffix must only be appended
+// for actual DP ranks > 0; rank 0 (non-DP) yields a clean host:port.
+// DP rank-0 still gets @0 in the snapshot path (instance_manager.go
+// fmt.Sprintf("%s@%d", snap.insUrl, rank)), so this does not break DP.
+func TestBuildInstanceAddress_DpRank(t *testing.T) {
+	tests := []struct {
+		name   string
+		ip     string
+		port   string
+		dpRank []int
+		expect string
+	}{
+		{"non-DP rank 0 no suffix", "172.17.0.2", "8081", []int{0}, "172.17.0.2:8081"},
+		{"DP rank 1 gets suffix", "172.17.0.2", "8081", []int{1}, "172.17.0.2:8081@1"},
+		{"DP rank 3 gets suffix", "172.17.0.2", "8081", []int{3}, "172.17.0.2:8081@3"},
+		{"no dpRank arg no suffix", "172.17.0.2", "8081", nil, "172.17.0.2:8081"},
+		{"negative rank no suffix", "172.17.0.2", "8081", []int{-1}, "172.17.0.2:8081"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildInstanceAddress(tt.ip, tt.port, tt.dpRank...)
+			if got != tt.expect {
+				t.Errorf("BuildInstanceAddress(%v, %v, %v) = %v, want %v",
+					tt.ip, tt.port, tt.dpRank, got, tt.expect)
 			}
 		})
 	}
