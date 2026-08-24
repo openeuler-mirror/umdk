@@ -8,6 +8,7 @@
  */
 
 #include <pthread.h>
+#include <sched.h>
 #include <malloc.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -2224,14 +2225,26 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data, uint32_t sc)
     }
 }
 
-int expand_global_pool(bool with_data, uint32_t sc)
+static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_locked)
 {
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_date;
     qbuf_expansion_pool_slot_t *slot = NULL;
     uint32_t alloc_sc = with_data ? sc : UMQ_QBUF_SIZE_CLASS_MAX;
+
+    if (!already_locked) {
+        uint32_t sync_expand_expected = 0;
+        if (!__atomic_compare_exchange_n(&exp_pool->is_expanding, &sync_expand_expected, 1, true,
+                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+            return -UMQ_ERR_EBUSY;
+        }
+    }
+
     int ret = alloc_expansion_pool_slot(&slot, alloc_sc);
     if (ret != UMQ_SUCCESS) {
+        if (!already_locked) {
+            __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+        }
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool count %u reached max %u\n", exp_pool->expansion_count,
                            QBUF_POOL_EXP_SLOT_TABLE_SIZE);
         return -UMQ_ERR_ENOMEM;
@@ -2239,6 +2252,9 @@ int expand_global_pool(bool with_data, uint32_t sc)
 
     ret = with_data ? slot_with_data_init(sc, slot) : slot_without_data_init(exp_pool, slot);
     if (ret != UMQ_SUCCESS) {
+        if (!already_locked) {
+            __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+        }
         if (!any_escape_buf_exists()) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "init %s slot failed\n", with_data ? "with data" : "without_data\n");
         }
@@ -2286,9 +2302,15 @@ int expand_global_pool(bool with_data, uint32_t sc)
                 g_dbg_stats.expand_without_data_sync++;
         }
     }
+    if (!already_locked) {
+        __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+    }
     return UMQ_SUCCESS;
 
 UNINIT_SLOT:
+    if (!already_locked) {
+        __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+    }
     if (slot->slot_id < QBUF_POOL_EXP_SLOT_TABLE_SIZE) {
         g_exp_slot_table[slot->slot_id] = NULL;
     }
@@ -2297,6 +2319,11 @@ UNINIT_SLOT:
 FREE_SLOT:
     free_expansion_pool_slot(slot);
     return -UMQ_ERR_ENOMEM;
+}
+
+int expand_global_pool(bool with_data, uint32_t sc)
+{
+    return expand_global_pool_impl(with_data, sc, false);
 }
 
 typedef struct async_expand_pool_param {
@@ -2319,7 +2346,7 @@ static void *async_expand_global_pool_callback(void *arg)
     }
     if (qbuf_debug_on())
         g_dbg_in_async_expand = true;
-    (void)expand_global_pool(async_param->with_data, async_param->sc);
+    (void)expand_global_pool_impl(async_param->with_data, async_param->sc, true);
     __atomic_store_n(&async_param->exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
     free(arg);
     return NULL;
@@ -3378,6 +3405,22 @@ void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
 bool umq_disable_scale_cap(void)
 {
     return g_qbuf_pool.disable_scale_cap;
+}
+
+#define QBUF_POOL_EXPAND_WAIT_SPINS_MAX 4096
+
+bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc)
+{
+    qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
+                                                  &g_qbuf_pool.exp_pool_without_date;
+
+    for (uint32_t i = 0; i < QBUF_POOL_EXPAND_WAIT_SPINS_MAX; i++) {
+        if (__atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) == 0) {
+            return true;
+        }
+        (void)sched_yield();
+    }
+    return false;
 }
 
 static void umq_flush_tls_nodata_to_global(void)
