@@ -525,11 +525,16 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
     (void)__atomic_add_fetch(&pool->acc_free_count, 1, __ATOMIC_RELAXED);
     if (node->is_jetty_err) {
         (void)pthread_spin_lock(&pool->lock);
-        pool->active_count++;
-        recycle_node_to_relay_q(pool, node);
+        // re-check under lock: is_jetty_err may have been rolled back by a concurrent
+        // modify_err_and_to_relay EBUSY path between the unlocked read and the lock.
+        if (node->is_jetty_err) {
+            pool->active_count++;
+            recycle_node_to_relay_q(pool, node);
+            (void)pthread_spin_unlock(&pool->lock);
+            umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
+            return UMQ_SUCCESS;
+        }
         (void)pthread_spin_unlock(&pool->lock);
-        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
-        return UMQ_SUCCESS;
     }
 
     urpc_list_push_back(&cache->cache_list, &node->node);
@@ -668,21 +673,54 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
     if (node == NULL) {
         return -UMQ_ERR_EINVAL;
     }
-    umq_ub_jetty_node_mark_err(node);
+    // mark err first: once is_jetty_err == true, any NEW post send is blocked at the
+    // pre-post check (umq_pro_ub.c: is_jetty_err -> RECOVER_JETTY_NODE) and never reaches
+    // urma_post_jetty_send_wr. poll is NOT blocked: is_jetty_err nodes still need poll to
+    // reap in-flight CQEs (otherwise buf leak), and urma_poll_jfc on an ERROR jetty is safe.
+    // Record whether *this* call flipped the flag, so the EBUSY rollback only undoes our
+    // own mark and never clobbers a concurrent mark_err from the CQE error path.
+    bool expected = false;
+    bool we_marked = __atomic_compare_exchange_n(&node->is_jetty_err, &expected, true, false,
+                                                 __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+    if (we_marked) {
+        (void)__atomic_add_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
+    }
+
+    // Wait until no urma op is in flight on this node: umq_ref.lo32 (ref_cnt) is held
+    // across urma_post_jetty_send_wr (get_jetty_node..post_release_jetty_node) and
+    // urma_poll_jfc (poll_get_jetty_node..poll_release_jetty_node). Once ref_cnt == 0,
+    // no thread is between the is_jetty_err check and the urma call — this closes the
+    // TOCTOU window the flag alone cannot (a post that passed the check before mark_err
+    // still holds ref_cnt > 0 until its urma_post returns). Unlike the old code, which
+    // waited for state == IDLE (node fully returned), this only waits for the urma call
+    // to drain, so the node may still be borrowed (IN_USE) when we proceed.
     uint64_t wait_timeout = UMQ_UB_WAIT_JETTY_IDLE_TIMEOUT_US;
     uint32_t retry_cnt = 0;
-    while (__atomic_load_n(&node->state, __ATOMIC_ACQUIRE) == JETTY_POOL_NODE_IN_USE) {
+    uint32_t ref_cnt;
+    do {
+        uint64_t umq_ref = __atomic_load_n(&node->umq_ref, __ATOMIC_ACQUIRE);
+        ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
+        if (ref_cnt == 0) {
+            break;
+        }
         if (retry_cnt < UMQ_UB_WAIT_JETTY_IDLE_RETRY_CNT) {
             retry_cnt++;
             usleep(wait_timeout);
             wait_timeout += wait_timeout;
             continue;
         }
-
-        __atomic_store_n(&node->is_jetty_err, false, __ATOMIC_RELEASE);
+        // timed out: an urma op is still in flight. Undo our own mark_err (if we set it)
+        // so the node is not left with is_jetty_err == true but outside relay_q (would
+        // leak: never re-allocated and never routed to relay_q). If the node has meanwhile
+        // been returned to a global pool list, reclaim it under the lock and succeed;
+        // otherwise fail and let the caller retry.
         (void)pthread_spin_lock(&g_jetty_pool.lock);
+        if (we_marked) {
+            __atomic_store_n(&node->is_jetty_err, false, __ATOMIC_RELEASE);
+            (void)__atomic_sub_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
+            we_marked = false;
+        }
         if (node->in_global_pool) {
-            // it has already been returned to the global pool. Lock it and reset this node to err
             umq_ub_jetty_node_mark_err(node);
             urpc_list_remove(&node->node);
             recycle_node_to_relay_q(&g_jetty_pool, node);
@@ -691,15 +729,17 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
         }
         (void)pthread_spin_unlock(&g_jetty_pool.lock);
         return -UMQ_ERR_EBUSY;
-    }
+    } while (true);
 
-    // the jetty node has already been set to err and cannot be allocated again
+    // ref_cnt == 0: safe to move the jetty to ERR. If the node is in a global pool list
+    // (free_q/active_q/cache), move it to relay_q so it is never re-allocated. If it is
+    // still borrowed (IN_USE, not in_global_pool), it is routed to relay_q on free via
+    // the is_jetty_err check in umq_ub_jetty_node_free.
     (void)pthread_spin_lock(&g_jetty_pool.lock);
     if (!node->in_global_pool) {
         (void)pthread_spin_unlock(&g_jetty_pool.lock);
         return UMQ_SUCCESS;
     }
-
     urpc_list_remove(&node->node);
     recycle_node_to_relay_q(&g_jetty_pool, node);
     (void)pthread_spin_unlock(&g_jetty_pool.lock);

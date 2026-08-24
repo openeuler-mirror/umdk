@@ -486,6 +486,7 @@ typedef struct jetty_pool_node {
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
     bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
     bool is_jetty_err;
+    bool tx_flush_done;                 // polled URMA_CR_WR_FLUSH_ERR_DONE on this jetty; flush_sqe pending
 } jetty_pool_node_t;
 
 typedef struct ub_queue {
