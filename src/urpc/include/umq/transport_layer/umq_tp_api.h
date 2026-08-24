@@ -43,12 +43,11 @@ typedef struct umq_ops {
     /**
     * Thread safety function
     * Create umq
-    * @param[in] umqh: umq handle
     * @param[in] ctx: UMQ context
     * @param[in] option: Configuration information for umq
     * Return umq handle (umqh_tp) on success, 0 on failure (get error code from errno)
     */
-    uint64_t (*umq_tp_create)(uint64_t umqh, uint8_t *ctx, umq_create_option_t *option);
+    uint64_t (*umq_tp_create)(uint8_t *ctx, umq_create_option_t *option);
 
     /**
     * Thread safety function

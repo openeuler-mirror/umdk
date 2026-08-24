@@ -909,8 +909,7 @@ static ALWAYS_INLINE uint32_t umq_ub_queue_info_serialize(
 
     urma_jetty_t *jetty = queue->jetty[UB_QUEUE_JETTY_IO];
     if (is_umq_ub_logic_queue(queue->create_flag)) {
-        umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
         jetty = main_queue->jetty[UB_QUEUE_JETTY_IO];
     }
 
@@ -949,8 +948,7 @@ static ALWAYS_INLINE uint32_t umq_ub_fc_info_serialize(
 
     urma_jetty_t *jetty = queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     if (is_umq_ub_logic_queue(queue->create_flag)) {
-        umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
         jetty = main_queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL];
     }
 
@@ -1524,8 +1522,7 @@ static int umq_share_rq_validate(umq_ub_ctx_t *dev_ctx, umq_create_option_t *opt
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_t *umq = (umq_t *)(uintptr_t)option->share_rq_umqh;
-    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)option->share_rq_umqh;
     if (share_rq == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "share_rq_umqh is invalid\n");
         return -UMQ_ERR_EINVAL;
@@ -1586,6 +1583,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
 
     queue->dev_ctx = dev_ctx;
     queue->create_flag = option->create_flag;
+    queue->mode = option->trans_mode;
 
     if (is_umq_ub_logic_queue(option->create_flag)) {
         // logic umq use cfg from share_rq_umqh
@@ -1759,12 +1757,10 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     qcfg->err_timeout = DEFAULT_ERR_TIMEOUT;
     qcfg->rnr_retry = DEFAULT_RNR_RETRY;
     qcfg->min_rnr_timer = DEFAULT_MIN_RNR_TIMER;
-    qcfg->umq_trans_mode = option->trans_mode;
     qcfg->order_type = URMA_DEF_ORDER;
 
     if ((option->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
-        umq_t *umq = (umq_t *)(uintptr_t)option->share_rq_umqh;
-        ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)option->share_rq_umqh;
         if (share_rq_param_reset(queue, share_rq) != UMQ_SUCCESS) {
             goto FREE_USED_PORT;
         }
@@ -2170,7 +2166,7 @@ void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_
             local->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jfc)) {
             find = true;
             umq_event->event_type = UMQ_EVENT_QH_SQ_CQ_ERR;
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
 
@@ -2183,7 +2179,7 @@ void handle_async_event_jfc_err(urma_async_event_t *urma_event, umq_async_event_
                 umq_event->element.umqh = local->share_rq_umqh;
                 break;
             }
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
     }
@@ -2214,7 +2210,7 @@ void handle_async_event_jfr_err(urma_async_event_t *urma_event, umq_async_event_
                 umq_event->element.umqh = local->share_rq_umqh;
                 break;
             }
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
     }
@@ -2244,7 +2240,7 @@ void handle_async_event_jfr_limit(urma_async_event_t *urma_event, umq_async_even
                 umq_event->element.umqh = local->share_rq_umqh;
                 break;
             }
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
     }
@@ -2270,7 +2266,7 @@ void handle_async_event_jetty_err(urma_async_event_t *urma_event, umq_async_even
         if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control != NULL &&
             local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
             find = true;
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
     }
@@ -2297,7 +2293,7 @@ void handle_async_event_jetty_limit(urma_async_event_t *urma_event, umq_async_ev
         if (local->jetty[UB_QUEUE_JETTY_IO] == urma_event->element.jetty || (local->flow_control != NULL &&
             local->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == urma_event->element.jetty)) {
             find = true;
-            umq_event->element.umqh = local->umqh;
+            umq_event->element.umqh = (uint64_t)(uintptr_t)local;
             break;
         }
     }

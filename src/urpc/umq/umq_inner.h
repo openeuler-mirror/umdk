@@ -33,11 +33,15 @@ extern "C" {
 #define SHM_MODE (0660)
 #define UMQ_MAX_SGE_NUM 1
 
+/*
+ * umq_t is the handle abstraction visible to the API layer (umq_api.c/umq_pro_api.c/umq_dfx_api.c).
+ * It only carries `mode` so the API layer can look up the global ops table (g_umq_fws[mode])
+ * before dispatching into umq_ub, which is invisible at this layer. The concrete ub_queue_t
+ * (defined in umq_ub_private.h) shares the same leading `mode` member at offset 0, so an
+ * external uint64_t handle (a ub_queue_t pointer) can be cast to umq_t* to read `mode`.
+ * -fno-strict-aliasing is enabled in CMake/Bazel, making this overlay cast well-defined.
+ */
 typedef struct umq {
-    umq_ops_t *tp_ops;
-    umq_pro_ops_t *pro_tp_ops;
-    umq_dfx_ops_t *dfx_tp_ops;
-    uint64_t umqh_tp;
     umq_trans_mode_t mode;
 } umq_t;
 
@@ -95,7 +99,9 @@ static ALWAYS_INLINE bool is_timeout(const struct timespec *last, uint32_t timeo
     return (t2 >= t1) && (t2 - t1) >= t3;
 }
 
-umq_dfx_ops_t *umq_get_dfx_tp_ops(umq_trans_mode_t trans_mode);
+umq_ops_t *umq_tp_ops_get(umq_trans_mode_t trans_mode);
+umq_pro_ops_t *umq_pro_tp_ops_get(umq_trans_mode_t trans_mode);
+umq_dfx_ops_t *umq_dfx_tp_ops_get(umq_trans_mode_t trans_mode);
 
 void umq_io_perf_process(umq_perf_record_type_t record_type, umq_buf_t *qbuf);
 int umq_thread_closure_register(umq_trans_mode_t trans_mode,
