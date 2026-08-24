@@ -265,7 +265,15 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
         (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
         thread_cache->stats.tid = (uint64_t)pthread_self();
         thread_cache->inited = true;
-        // Todo: register closure
+        /* Register thread-exit closure so pools->closure (set by qbuf_pool_base_init's
+         * callers, e.g. release_tiny_thread_cache) runs when this thread exits,
+         * removing tls_node from tls_register_head. Without this, exited threads leave
+         * dangling tls_node pointers in the list (cf. normal pool umq_qbuf_pool.c:1335).
+         * The fast-path check during g_tls_dtors_running skips cross-thread list ops
+         * to avoid UAF on already-freed TLS storage of other threads. */
+        if (pools->closure != NULL) {
+            urpc_thread_closure_register(pools->type, 0, pools->closure);
+        }
         // register TLS stats to global linked list
         (void)pthread_spin_lock(&pools->tls_stats_lock);
         urpc_list_push_back(&pools->tls_register_head, &thread_cache->tls_node);
