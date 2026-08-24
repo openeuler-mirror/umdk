@@ -90,6 +90,17 @@ void umq_qbuf_base_uninit(qbuf_pool_base_t *base, void (*release_thread_cache)(u
         return;
     }
 
+    /* Clear dangling TLS nodes left by worker threads that already exited
+     * (release_thread_cache was never invoked for them because // Todo: register
+     * closure was missing — see get_thread_local_cache). These nodes point to
+     * freed TLS storage and would cause SEGV if traversed by release_thread_cache(0)
+     * below. Re-init the list to empty, matching normal pool's workaround at
+     * umq_qbuf_pool.c:1975-1982. Caller is expected to have joined all worker
+     * threads before calling uninit. */
+    (void)pthread_spin_lock(&base->tls_pools.tls_stats_lock);
+    urpc_list_init(&base->tls_pools.tls_register_head);
+    (void)pthread_spin_unlock(&base->tls_pools.tls_stats_lock);
+
     if (release_thread_cache != NULL) {
         release_thread_cache(0);
     }
