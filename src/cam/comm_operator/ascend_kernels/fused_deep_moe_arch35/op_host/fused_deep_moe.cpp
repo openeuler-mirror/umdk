@@ -15,17 +15,17 @@ namespace {
 //   x:     BF16, FP16
 //   layout: ND, FRACTAL_NZ
 // Column index = quant_group * 4 + act * 2 + layout, where quant_group in [0..3].
-#define FUSED_DEEP_MOE_ACT_DTYPES                                                                                      \
-    ge::DT_BF16, ge::DT_BF16, ge::DT_FLOAT16, ge::DT_FLOAT16, ge::DT_BF16, ge::DT_BF16, ge::DT_FLOAT16,             \
+#define FUSED_DEEP_MOE_ACT_DTYPES                                                                               \
+    ge::DT_BF16, ge::DT_BF16, ge::DT_FLOAT16, ge::DT_FLOAT16, ge::DT_BF16,                                      \
         ge::DT_FLOAT16, ge::DT_BF16, ge::DT_FLOAT16
 
-#define FUSED_DEEP_MOE_GMM_WEIGHT_DTYPES                                                                               \
-    ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E5M2,     \
-        ge::DT_FLOAT8_E5M2, ge::DT_FLOAT8_E5M2, ge::DT_FLOAT8_E5M2, ge::DT_FLOAT4_E2M1, ge::DT_FLOAT4_E2M1
+#define FUSED_DEEP_MOE_GMM_WEIGHT_DTYPES                                                                        \
+    ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E4M3FN, ge::DT_FLOAT8_E5M2, \
+        ge::DT_FLOAT8_E5M2, ge::DT_FLOAT4_E2M1, ge::DT_FLOAT4_E2M1
 
-#define FUSED_DEEP_MOE_GMM_WEIGHT_FORMATS                                                                              \
-    ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, \
-        ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, ge::FORMAT_ND, ge::FORMAT_ND
+#define FUSED_DEEP_MOE_GMM_WEIGHT_FORMATS                                                                       \
+    ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, ge::FORMAT_ND, ge::FORMAT_FRACTAL_NZ, ge::FORMAT_ND,                  \
+        ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND
 }  // namespace
 
 class FusedDeepMoe : public OpDef {

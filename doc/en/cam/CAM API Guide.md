@@ -82,7 +82,7 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
 4. Support aclgraph only when graph in on.
 5. Do not support external shared experts, that is, shared experts are deployed on dedicated cards .
 6. The performance may decline when batch_size is lower than 16, as it is not the target scenario.
-7. When the weight data type is fp8_e4m3 or fp8_e5m2, both ND and NZ data layouts are supported; when the weight data type is fp4_e2m1, only ND layout is supported.
+7. When the weight data type is fp8_e4m3, both ND and NZ data layouts are supported; when the weight data type is fp4_e2m1 or fp8_e5m2, only ND layout is supported.
 8. Other Constraints need to be satisfied:
  - top_k range：[0， 12] and it should be lower than expert number.
  - BS range：[0，256]
