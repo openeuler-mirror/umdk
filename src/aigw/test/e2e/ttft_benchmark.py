@@ -31,6 +31,10 @@ W2 = "http://169.254.30.3:8082"
 AIGW = "http://127.0.0.1:8701/aigw/v1/openai/chat/completions"
 HITS_METRIC = "vllm:prefix_cache_hits_total"
 
+# Global RNG seed; reassigned in main() from --seed (default 42). Declared at
+# module level so `global seed` inside main() binds an existing name (G.VAR.02).
+seed = 42
+
 SENTENCE = ("The quick brown fox jumps over the lazy dog and chases "
             "the playful squirrel through the autumn forest.")
 WORDS = (

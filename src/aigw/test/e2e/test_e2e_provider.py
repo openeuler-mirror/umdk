@@ -18,6 +18,7 @@ Run:
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -214,6 +215,8 @@ def cluster():
         aigw.stop()
         primary.stop()
         backup.stop()
+        # Clean up the temp log dir created above (G.FIO.04)
+        shutil.rmtree(log_dir, ignore_errors=True)
 
 
 def _reset(cluster):

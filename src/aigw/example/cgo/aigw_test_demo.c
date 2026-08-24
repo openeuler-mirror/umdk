@@ -44,6 +44,12 @@
 
 #define NUM_OF_MAP_FIELDS 2
 
+// Demo configuration limits
+#define DEMO_MAX_INSTANCES_PER_MODEL 128
+#define DEMO_MAX_SUPPORTED_MODELS   128
+#define DEMO_MAX_PROMPT_LENGTH       20480
+#define DEMO_REQUEST_TTL_SECONDS     600
+
 #define AIGW_UUID_MAX_LEN 36
 #define AIGW_ROLE_MAX_LEN 32
 #define AIGW_MODEL_STR_MAX_LEN 64
@@ -174,10 +180,10 @@ int main(int argc, char *argv[])
     aigw_config_t cfg = {0};
     cfg.log_level = "info";
     cfg.log_path = "/tmp";
-    cfg.max_instances_per_model = 128;
-    cfg.max_supported_models = 128;
-    cfg.max_prompt_length = 20480;
-    cfg.request_ttl_seconds = 600;
+    cfg.max_instances_per_model = DEMO_MAX_INSTANCES_PER_MODEL;
+    cfg.max_supported_models = DEMO_MAX_SUPPORTED_MODELS;
+    cfg.max_prompt_length = DEMO_MAX_PROMPT_LENGTH;
+    cfg.request_ttl_seconds = DEMO_REQUEST_TTL_SECONDS;
 
     printf("Initializing AIGW...\n");
     aigw_error_t err = aigw_init(&cfg);

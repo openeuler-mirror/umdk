@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -45,11 +46,12 @@ from aigw_client import AigwClient, AigwError  # type: ignore
 # ---- tools (exec in the agent's workspace) ----
 
 def tool_bash_exec(arg: str, workspace: str) -> str:
-    # arg = the command line
+    # arg = the command line; shell=False requires a token list (no shell metachar
+    # expansion). shlex.split parses the command line into argv safely.
     try:
         r = subprocess.run(
-            arg, shell=True, cwd=workspace, capture_output=True, text=True,
-            timeout=10,
+            shlex.split(arg), shell=False, cwd=workspace, capture_output=True,
+            text=True, timeout=10,
         )
         out = r.stdout
         if r.returncode != 0:

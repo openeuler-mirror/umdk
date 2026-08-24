@@ -114,7 +114,7 @@ class K8sMockHandler(BaseHTTPRequestHandler):
             "kind": "EndpointsList",
             "items": []
         }
-        for port, worker in WORKERS.items():
+        for worker_port, worker in WORKERS.items():
             ep = {
                 "kind": "Endpoints",
                 "metadata": {
@@ -143,7 +143,7 @@ class K8sMockHandler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
 
-        for port, worker in WORKERS.items():
+        for worker_port, worker in WORKERS.items():
             event = {
                 "type": "ADDED",
                 "object": {
@@ -309,8 +309,8 @@ class RenderMockHandler(BaseHTTPRequestHandler):
 class ZMQPublisher:
     """ZMQ Publisher that sends KV events to AIGW on port 5557."""
 
-    def __init__(self, port=5557):
-        self.port = port
+    def __init__(self, pub_port=5557):
+        self.port = pub_port
         self.context = None
         self.socket = None
         self.running = False
@@ -370,8 +370,7 @@ class ZMQPublisher:
                 # Encode as msgpack
                 data = msgpack.packb(batch, use_bin_type=True)
             else:
-                # Fallback to JSON (may not work)
-                import json
+                # Fallback to JSON (may not work); json is imported at module level
                 data = json.dumps(batch).encode()
 
             # Send 3-part message: [topic, seq_bytes, data]
@@ -704,8 +703,11 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 # Wait before next heartbeat (5 seconds)
                 time.sleep(5)
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            # Client disconnected
+        except (BrokenPipeError, ConnectionResetError):
+            # Client disconnected (broken/reset connection)
+            pass
+        except OSError:
+            # Client disconnected (other I/O error)
             pass
 
     def _handle_chat(self, data):
@@ -888,14 +890,16 @@ class ServerThread(threading.Thread):
         self.server.shutdown()
 
 
-def wait_for_port(host, port, timeout=30):
+def wait_for_port(host, target_port, timeout=30):
     """Wait for a port to be ready."""
     start = time.time()
     while time.time() - start < timeout:
         try:
-            with socket.create_connection((host, port), timeout=1):
+            with socket.create_connection((host, target_port), timeout=1):
                 return True
-        except (ConnectionRefusedError, OSError):
+        except ConnectionRefusedError:
+            time.sleep(0.5)
+        except OSError:
             time.sleep(0.5)
     return False
 
@@ -942,19 +946,19 @@ def main():
     ZMQ_PORT_START = 55570
     worker_threads = []
     worker_publishers = {}
-    for i, port in enumerate(WORKER_PORTS):
+    for i, worker_port in enumerate(WORKER_PORTS):
         zmq_port = ZMQ_PORT_START + i
-        publisher = ZMQPublisher(port=zmq_port)
+        publisher = ZMQPublisher(pub_port=zmq_port)
         publisher.start()
-        worker_publishers[port] = publisher
-        logger.info(f"[INFO] ZMQ publisher for worker-{port} on port {zmq_port}")
+        worker_publishers[worker_port] = publisher
+        logger.info(f"[INFO] ZMQ publisher for worker-{worker_port} on port {zmq_port}")
 
-        handler = create_worker_handler(f"worker-{port}", publisher, args.seed, args.block_size)
-        server = ThreadingHTTPServer(("0.0.0.0", port), handler)
-        thread = ServerThread(server, f"WorkerMock(:{port})")
+        handler = create_worker_handler(f"worker-{worker_port}", publisher, args.seed, args.block_size)
+        server = ThreadingHTTPServer(("0.0.0.0", worker_port), handler)
+        thread = ServerThread(server, f"WorkerMock(:{worker_port})")
         thread.start()
         worker_threads.append(thread)
-        logger.info(f"[INFO] Worker mock on port {port}")
+        logger.info(f"[INFO] Worker mock on port {worker_port}")
 
     # Wait for all ports
     for port in [MOCK_K8S_PORT, MOCK_RENDER_PORT] + WORKER_PORTS:

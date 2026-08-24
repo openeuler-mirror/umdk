@@ -26,6 +26,8 @@
 #define MAX_REQ_ID_LEN     AIGW_CACHE_KEY_MAX_LEN
 #define MAX_JSON_STR_LEN   AIGW_CACHE_VALUE_MAX_LEN
 #define HASH_MAP_SIZE      1024  // Size of the hash table (simulated large array)
+#define DJB2_HASH_INIT     5381 // djb2 hash initial value
+#define DJB2_HASH_SHIFT    5    // djb2: (hash << DJB2_HASH_SHIFT) + hash == hash * 33
 
 // Entry states for linear probing
 #define STATE_EMPTY    0
@@ -56,10 +58,11 @@ static pthread_mutex_t global_mutex = PTHREAD_MUTEX_INITIALIZER;
 // Hash function for strings (djb2 algorithm)
 static unsigned int hash_string(const char* str)
 {
-    unsigned int hash = 5381;
+    unsigned int hash = DJB2_HASH_INIT;
     int c;
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    while ((c = *str++)) {
+        hash = ((hash << DJB2_HASH_SHIFT) + hash) + c; // hash * 33 + c
+    }
     return hash % HASH_MAP_SIZE;
 }
 
@@ -68,7 +71,9 @@ static unsigned int hash_string(const char* str)
  * Returns a pointer to the OuterEntry, or NULL if failed (e.g., table full).
  */
 OuterEntry* get_or_create_outer_entry(const char* model_name) {
-    if (!model_name) return NULL;
+    if (!model_name) {
+        return NULL;
+    }
 
     unsigned int start_index = hash_string(model_name);
     unsigned int index = start_index;
@@ -119,7 +124,9 @@ OuterEntry* get_or_create_outer_entry(const char* model_name) {
  */
 OuterEntry* get_outer_entry(const char* model_name)
 {
-    if (!model_name) return NULL;
+    if (!model_name) {
+        return NULL;
+    }
 
     unsigned int start = hash_string(model_name);
     unsigned int i = start;

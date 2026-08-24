@@ -10,6 +10,23 @@
 
 #include "redis_cache_driver.h"
 
+// Redis connection defaults
+#define REDIS_DEFAULT_HOST "127.0.0.1"
+#define REDIS_DEFAULT_PORT 6379
+
+// Index offsets for interleaved key/value pairs in Redis command argv arrays
+#define KV_PAIR_STRIDE 2 // each pair occupies 2 argv slots (key, value)
+#define KV_PAIR_OFFSET 2 // first pair starts at argv index 2 (after cmd + key)
+
+// Lengths of fixed Redis command-name literals (kept explicit to satisfy
+// G.CNS.02; these mirror strlen of the matching argv[] string literal)
+#define LEN_CMD_HSET   4
+#define LEN_CMD_EXPIRE 6
+#define LEN_CMD_HDEL   4
+
+// Test fixture: number of key/value pairs written in test_redis_cache()
+#define TEST_PAIR_COUNT 2
+
 // Thread-local Redis context (thread-safe for single-thread-per-connection)
 // Note: For multi-threaded use, ensure one thread uses one connection.
 static __thread redisContext *tls_redis_context = NULL;
@@ -24,7 +41,7 @@ static void free_redis_reply(void *reply) {
 // Get or create thread-local Redis connection
 static redisContext *get_redis_context(void) {
     if (tls_redis_context == NULL) {
-        tls_redis_context = redisConnect("127.0.0.1", 6379);
+        tls_redis_context = redisConnect(REDIS_DEFAULT_HOST, REDIS_DEFAULT_PORT);
         if (tls_redis_context == NULL) {
             printf("Failed to allocate Redis context\n");
             return NULL;
@@ -91,7 +108,7 @@ aigw_error_t redis_hash_get_all(const char *key, key_value_array_t *out_fields) 
     }
 
     int idx = 0;
-    for (size_t i = 0; i < reply->elements - 1; i += 2) {
+    for (size_t i = 0; i < reply->elements - 1; i += KV_PAIR_STRIDE) {
         redisReply *field = reply->element[i];
         redisReply *value = reply->element[i + 1];
 
@@ -125,7 +142,7 @@ aigw_error_t redis_hash_set_fields(const char *key, const key_value_array_t *fie
     }
 
     // Step 1: Build command: HSET key field1 value1 field2 value2 ...
-    int argc = 2 + fields->count * 2;
+    int argc = 2 + fields->count * KV_PAIR_STRIDE;
     const char **argv = (const char**)calloc(argc, sizeof(char*));
     size_t *argvlen = (size_t*)malloc(argc * sizeof(size_t));
 
@@ -136,12 +153,12 @@ aigw_error_t redis_hash_set_fields(const char *key, const key_value_array_t *fie
     }
 
     argv[0] = "HSET";
-    argvlen[0] = 4;
+    argvlen[0] = LEN_CMD_HSET;
     argv[1] = key;
     argvlen[1] = strlen(key);
 
     for (int i = 0; i < fields->count; i++) {
-        int idx = 2 + i * 2;
+        int idx = KV_PAIR_OFFSET + i * KV_PAIR_STRIDE;
         argv[idx] = fields->pairs[i].key;
         argvlen[idx] = strlen(fields->pairs[i].key);
         argv[idx + 1] = fields->pairs[i].value;
@@ -168,7 +185,7 @@ aigw_error_t redis_hash_set_fields(const char *key, const key_value_array_t *fie
     size_t expire_argvlen[3];
 
     expire_argv[0] = "EXPIRE";
-    expire_argvlen[0] = 6;
+    expire_argvlen[0] = LEN_CMD_EXPIRE;
     expire_argv[1] = key;
     expire_argvlen[1] = strlen(key);
 
@@ -177,8 +194,9 @@ aigw_error_t redis_hash_set_fields(const char *key, const key_value_array_t *fie
     if (len < 0 || len >= (int)sizeof(ttl_str)) {
         return AIGW_ERR_INTERNAL; // Should not happen
     }
-    expire_argv[2] = ttl_str;
-    expire_argvlen[2] = len;
+    // TTL value occupies the 3rd argv slot (index 2) of "EXPIRE key ttl"
+    expire_argv[KV_PAIR_STRIDE] = ttl_str;
+    expire_argvlen[KV_PAIR_STRIDE] = len;
 
     redisReply *expire_reply = redisCommandArgv(ctx, 3, expire_argv, expire_argvlen);
     if (!expire_reply || expire_reply->type == REDIS_REPLY_ERROR) {
@@ -220,13 +238,13 @@ aigw_error_t redis_hash_delete_fields(const char *key, char **field_keys, uint32
     }
 
     argv[0] = "HDEL";
-    argvlen[0] = 4;
+    argvlen[0] = LEN_CMD_HDEL;
     argv[1] = key;
     argvlen[1] = strlen(key);
 
     for (int i = 0; i < field_count; i++) {
-        argv[2 + i] = field_keys[i];
-        argvlen[2 + i] = strlen(field_keys[i]);
+        argv[KV_PAIR_OFFSET + i] = field_keys[i];
+        argvlen[KV_PAIR_OFFSET + i] = strlen(field_keys[i]);
     }
 
     redisReply *reply = redisCommandArgv(ctx, argc, argv, argvlen);
@@ -318,7 +336,7 @@ aigw_error_t redis_hash_get_all_batch(const char **keys, uint32_t key_count,
                 }
 
                 int idx = 0;
-                for (size_t j = 0; j < reply->elements - 1; j += 2) {
+                for (size_t j = 0; j < reply->elements - 1; j += KV_PAIR_STRIDE) {
                     redisReply *field = reply->element[j];
                     redisReply *value = reply->element[j + 1];
 
@@ -385,8 +403,8 @@ aigw_error_t test_redis_cache(void) {
 
     // === Test: Write data ===
     key_value_array_t fields;
-    fields.count = 2;
-    fields.pairs = (key_value_pair_t*)calloc(2, sizeof(key_value_pair_t));
+    fields.count = TEST_PAIR_COUNT;
+    fields.pairs = (key_value_pair_t*)calloc(TEST_PAIR_COUNT, sizeof(key_value_pair_t));
     if (!fields.pairs) {
         return AIGW_ERR_NO_MEMORY;
     }

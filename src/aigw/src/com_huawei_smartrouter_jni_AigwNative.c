@@ -39,6 +39,13 @@ static jmethodID g_staticCacheCallbackMethodID = NULL;
 static jclass g_objectArrayClass = NULL;
 static jclass g_stringClass = NULL;
 
+// Java callback result array layout: result[0] = status, result[1..] = payload
+#define CB_RESULT_MIN_LEN    2 // minimum entries: [status, payload]
+#define CB_RESULT_IDX_STATUS 0
+#define CB_RESULT_IDX_PAIRS  1
+// Interleaved key/value storage: key at 2*i, value at 2*i+1
+#define KV_INTERLEAVE_STRIDE 2
+
 // Helper function to get JNI environment
 static JNIEnv* getJNIEnv() {
     JNIEnv *env = NULL;
@@ -60,9 +67,13 @@ static JNIEnv* getJNIEnv() {
 
 // Helper function to convert Java string to C string
 static char* jstringToCStr(JNIEnv *env, jstring jstr) {
-    if (jstr == NULL) return NULL;
+    if (jstr == NULL) {
+        return NULL;
+    }
     const char *cstr = (*env)->GetStringUTFChars(env, jstr, NULL);
-    if (cstr == NULL) return NULL;
+    if (cstr == NULL) {
+        return NULL;
+    }
     char *result = strdup(cstr);
     (*env)->ReleaseStringUTFChars(env, jstr, cstr);
     return result;
@@ -70,16 +81,22 @@ static char* jstringToCStr(JNIEnv *env, jstring jstr) {
 
 // Helper function to create Java string from C string
 static jstring cStrToJString(JNIEnv *env, const char *cstr) {
-    if (cstr == NULL) return NULL;
+    if (cstr == NULL) {
+        return NULL;
+    }
     return (*env)->NewStringUTF(env, cstr);
 }
 
 // Helper function to convert Java config to C structure
 static aigw_config_t* convertAigwConfig(JNIEnv *env, jobject jconfig) {
-    if (jconfig == NULL) return NULL;
+    if (jconfig == NULL) {
+        return NULL;
+    }
 
     aigw_config_t *config = (aigw_config_t*)malloc(sizeof(aigw_config_t));
-    if (config == NULL) return NULL;
+    if (config == NULL) {
+        return NULL;
+    }
 
     jclass cls = (*env)->GetObjectClass(env, jconfig);
 
@@ -111,7 +128,9 @@ static aigw_config_t* convertAigwConfig(JNIEnv *env, jobject jconfig) {
 
 // Helper function to free aigw_config_t
 static void freeAigwConfig(aigw_config_t *config) {
-    if (config == NULL) return;
+    if (config == NULL) {
+        return;
+    }
     if (config->log_level) free((void*)config->log_level);
     if (config->log_path) free((void*)config->log_path);
     free(config);
@@ -249,6 +268,13 @@ JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNode
     }
     jsize msgCount = (*env)->GetArrayLength(env, jmessages);
     request.message_num = msgCount;
+    if (msgCount <= 0) {
+        (*env)->DeleteLocalRef(env, reqCls);
+        (*env)->DeleteLocalRef(env, jmessages);
+        free((void*)request.uuid);
+        free((void*)request.model);
+        return AIGW_ERR_INVALID_PARAM;
+    }
 
     aigw_openai_message_t *messages = (aigw_openai_message_t*)malloc(sizeof(aigw_openai_message_t) * msgCount);
     if (messages == NULL) {
@@ -445,7 +471,7 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
 
     jsize resultLen = (*env)->GetArrayLength(env, result);
 
-    if (resultLen < 2) {
+    if (resultLen < CB_RESULT_MIN_LEN) {
         out_array->pairs = NULL;
         out_array->count = 0;
         (*env)->DeleteLocalRef(env, result);
@@ -453,7 +479,7 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
     }
 
     // Get status code from result[0]
-    jobject jstatus = (*env)->GetObjectArrayElement(env, result, 0);
+    jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
 
     if (jstatus == NULL) {
         out_array->pairs = NULL;
@@ -494,7 +520,7 @@ static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *ou
 
     jsize pairsLen = (*env)->GetArrayLength(env, pairs);
 
-    if (pairsLen == 0) {
+    if (pairsLen <= 0) {
         out_array->pairs = NULL;
         out_array->count = 0;
         (*env)->DeleteLocalRef(env, pairs);
@@ -592,8 +618,8 @@ static aigw_error_t hash_set_fields_callback(const char *key, const key_value_ar
         }
 
         // Store key at index 2*i, value at index 2*i+1
-        (*env)->SetObjectArrayElement(env, jfields, 2 * i, jfkey);
-        (*env)->SetObjectArrayElement(env, jfields, 2 * i + 1, jfvalue);
+        (*env)->SetObjectArrayElement(env, jfields, KV_INTERLEAVE_STRIDE * i, jfkey);
+        (*env)->SetObjectArrayElement(env, jfields, KV_INTERLEAVE_STRIDE * i + 1, jfvalue);
 
         (*env)->DeleteLocalRef(env, jfkey);
         (*env)->DeleteLocalRef(env, jfvalue);
@@ -710,13 +736,13 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
 
     jsize resultLen = (*env)->GetArrayLength(env, result);
 
-    if (resultLen < 2) {
+    if (resultLen < CB_RESULT_MIN_LEN) {
         (*env)->DeleteLocalRef(env, result);
         return AIGW_ERR_INTERNAL;
     }
 
     // Get status code from result[0]
-    jobject jstatus = (*env)->GetObjectArrayElement(env, result, 0);
+    jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
     if (jstatus == NULL) {
         (*env)->DeleteLocalRef(env, result);
         return AIGW_ERR_INTERNAL;
@@ -773,7 +799,7 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
 
         jsize pairsLen = (*env)->GetArrayLength(env, pairs);
 
-        if (pairsLen == 0) {
+        if (pairsLen <= 0) {
             out_arrays[i].pairs = NULL;
             out_arrays[i].count = 0;
             (*env)->DeleteLocalRef(env, pairs);
