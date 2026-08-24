@@ -1224,6 +1224,20 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
                          urma_dev->name, (int)status);
             goto DEL_CTX;
         }
+
+        bondp_set_ctx_cfg_in_t cfg = {
+            .mask = BONDP_CTX_CFG_ENABLE_RNR_RETRY,
+            .enable_rnr_retry = true,
+        };
+        in.addr = (uint64_t)(uintptr_t)&cfg;
+        in.len = sizeof(cfg);
+        in.opcode = BONDP_USER_CTL_SET_CTX_CFG;
+        status = umq_symbol_urma()->urma_user_ctl(ub_ctx->urma_ctx, &in, &out);
+        if (status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_user_ctl for %s setting enable rnr retry failed, status:%d\n",
+                         urma_dev->name, (int)status);
+            goto DEL_CTX;
+        }
     }
 
     return UMQ_SUCCESS;
