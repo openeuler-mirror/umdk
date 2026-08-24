@@ -33,11 +33,11 @@ extern "C" {
 #define UMQ_MAX_SGE_NUM 1
 
 typedef struct umq {
-    umq_trans_mode_t mode;
     umq_ops_t *tp_ops;
     umq_pro_ops_t *pro_tp_ops;
     umq_dfx_ops_t *dfx_tp_ops;
     uint64_t umqh_tp;
+    umq_trans_mode_t mode;
 } umq_t;
 
 static inline uint32_t umq_get_post_rx_num(uint32_t rx_depth, volatile uint32_t *require_rx_count)
