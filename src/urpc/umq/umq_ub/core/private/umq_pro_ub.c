@@ -453,15 +453,12 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             *bad_qbuf = qbuf;
             goto RECOVER_WINDOW;
         }
-        if (!is_read_only && fc != NULL && fc->enabled) {
-            jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
-            uint32_t prev = __atomic_fetch_add(&jetty_node->borrow_count, wr_cnt_limit, __ATOMIC_ACQ_REL);
-            uint32_t total = prev + wr_cnt_limit;
-            if (total > jetty_node->borrow_limit) {
-                uint32_t excess = total - jetty_node->borrow_limit;
-                (void)__atomic_fetch_sub(&jetty_node->borrow_count, excess, __ATOMIC_ACQ_REL);
-                wr_cnt_limit -= excess;
-            }
+        jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
+        uint32_t tx_outstanding = __atomic_load_n(&jetty_node->tx_outstanding, __ATOMIC_ACQUIRE);
+        uint32_t total = tx_outstanding + wr_cnt_limit;
+        if (total > jetty_node->borrow_limit) {
+            uint32_t excess = total - jetty_node->borrow_limit;
+            wr_cnt_limit -= excess;
         }
     }
 
@@ -1782,13 +1779,6 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
             false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
         uint32_t tx_after = __atomic_sub_fetch(&node->tx_outstanding, cnt, __ATOMIC_ACQ_REL);
-        /* Decrement borrow_count on completion so it tracks in-flight WRs
-         * rather than total WRs per node lifecycle. Without this, concurrent
-         * posts on a long-lived connection accumulate borrow_count until it
-         * hits borrow_limit, causing permanent ENOBUFS. */
-        uint32_t borrow_now = __atomic_load_n(&node->borrow_count, __ATOMIC_RELAXED);
-        uint32_t borrow_dec = (borrow_now >= cnt) ? cnt : borrow_now;
-        (void)__atomic_fetch_sub(&node->borrow_count, borrow_dec, __ATOMIC_ACQ_REL);
         if (tx_after == 0) {
             uint64_t umq_ref = __atomic_load_n(&node->umq_ref, __ATOMIC_ACQUIRE);
             uint32_t ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
