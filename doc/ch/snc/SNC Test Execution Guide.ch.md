@@ -83,7 +83,7 @@ mvn package -Dmaven.test.skip=true
 ### 6.1 测试失败 — 检查点
 
 - JSON 测试资源文件是否存在（`src/test/resources/`）
-- ACL JSON 中的 EID/CNA 是否与拓扑 JSON 匹配
+- 拓扑 JSON 中的端口 EID/CNA 是否完整
 - 端口名称是否在拓扑数据中定义
 - 路由前缀是否与 `cnaToTargetAddr()` 结果一致（`/32` 精确匹配要求）
 

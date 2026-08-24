@@ -1,16 +1,12 @@
 # SNC PathService Main Success Scenario Test Design
 
-> Based on two test fixture sets — `topo_data_2npu_1port.json` / `acl_data_2npu_1port.json` and `topo_data_4npu_8port.json` / `acl_data_4npu_8port.json` — this document designs the planPath main success scenarios.
+> Based on two test fixture sets — `topo_data_2npu_1port.json` and `topo_data_4npu_8port.json` — this document designs the planPath main success scenarios.
 
 ---
 
 ## 1. Global Assumptions and Data Corrections
 
-### 1.1 AclData.superNodeName Mapping
-
-The identifier field of `AclData` has been renamed from `aclId` to `superNodeName`. The `aclId` field value (`"acl-001"`) in the ACL JSON must be mapped to `AclData.superNodeName` as `"A5-superPod-1"` during loading, to match the lookup logic of `aclStore.getAclData(request.getSuperNodeName())`.
-
-### 1.2 2npu_1port Route Prefix Corrections
+### 1.1 2npu_1port Route Prefix Corrections
 
 The route prefixes for L1SW0 in the JSON do not match the results of NPU port CNA values after `cnaToTargetAddr()`:
 
@@ -21,7 +17,7 @@ The route prefixes for L1SW0 in the JSON do not match the results of NPU port CN
 
 Otherwise, the LPM lookup in `routePhase` will fail due to `/32` exact match failure, resulting in `ROUTE_NOT_REACHABLE`.
 
-### 1.3 4npu_8port Route Prefix Corrections
+### 1.2 4npu_8port Route Prefix Corrections
 
 Only L1SW0's route prefixes match the CNA values of connected ports (NPU2 port0/0/0's CNA `221.221.221.68` = route prefix). L1SW1/2/3's route prefixes do not match the CNA values of their connected ports. If all L1SWs need to work, corrections are as follows:
 
@@ -78,14 +74,13 @@ rack1#os0#npu1:400GE 0/0/1  ←→  rack1#l1sw0:400GE 1/0/1  ←→  rack1#os0#n
 | 1 | Port direct connection | remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/1` |
 | 2 | Look up destPort | `400GE 0/1/1` → `npu2.findNpuPort()` → CNA=`221.221.221.66`, EID=`DDDDDD42000000000000000000000002` |
 | 2 | Port direct connection | remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/2` |
-| 3 | ACL bidirectional check | srcEid=AAAA...02, dstEid=DDDD...02, srcCna=170.170.170.18, destCna=221.221.221.66 → match |
-| 5 | interDevices not empty | Enter multi-hop logic |
-| 7 | Multi-hop path resolution | hops=[NPU1, L1SW0, NPU2] |
-| 8 | Forward routePhase | Intermediate hop L1SW0, target=`cnaToTargetAddr("221.221.221.66")`=`"221.221.221.66"` |
-| 8 | L1SW0 route lookup | Prefix `221.221.221.66/32` (corrected) → match, outPort=400GE 1/0/2 |
-| 9 | Reverse routePhase | Intermediate hop L1SW0, target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` |
-| 9 | L1SW0 route lookup | Prefix `170.170.170.18/32` (corrected) → match, outPort=400GE 1/0/1 |
-| 13-15 | Build result | SUCCESS |
+| 3 | interDevices not empty | Enter multi-hop logic |
+| 5 | Multi-hop path resolution | hops=[NPU1, L1SW0, NPU2] |
+| 6 | Forward routePhase | Intermediate hop L1SW0, target=`cnaToTargetAddr("221.221.221.66")`=`"221.221.221.66"` |
+| 6 | L1SW0 route lookup | Prefix `221.221.221.66/32` (corrected) → match, outPort=400GE 1/0/2 |
+| 7 | Reverse routePhase | Intermediate hop L1SW0, target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` |
+| 7 | L1SW0 route lookup | Prefix `170.170.170.18/32` (corrected) → match, outPort=400GE 1/0/1 |
+| 9-10 | Build result | SUCCESS |
 
 **Expected Output:**
 
@@ -156,14 +151,13 @@ This is the most direct path: npu1 and npu2 each use port0 to connect to l1sw0, 
 | 0 | Look up src/dest Device | npu1 / npu2 found in `superNode.getNpuDevices()` |
 | 1 | Look up srcPort | `npu1.findNpuPort("400GE 0/0/0")` → CNA=`170.170.170.17`, EID=`AAAAAA12000000000000000000000001`, remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/0` |
 | 2 | Look up destPort | `npu2.findNpuPort("400GE 0/0/0")` → CNA=`221.221.221.68`, EID=`DDDDDD42000000000000000000000001`, remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/2` |
-| 3 | ACL check | ACL entry AAAA...01 ↔ DDDD...01 exists |
-| 5 | interDevices not empty | Enter multi-hop logic |
-| 7 | Multi-hop path resolution | hops=[NPU1, L1SW0, NPU2] |
-| 8 | Forward routePhase | target=`cnaToTargetAddr("221.221.221.68")`=`"221.221.221.68"` |
-| 8 | L1SW0 route lookup | `221.221.221.68/32` → 1/0/2 → match, outPort=`400GE 1/0/2` |
-| 9 | Reverse routePhase | target=`cnaToTargetAddr("170.170.170.17")`=`"170.170.170.17"` |
-| 9 | L1SW0 route lookup | `170.170.170.17/32` → 1/0/0 → match, outPort=`400GE 1/0/0` |
-| 13-15 | Build result | SUCCESS |
+| 3 | interDevices not empty | Enter multi-hop logic |
+| 5 | Multi-hop path resolution | hops=[NPU1, L1SW0, NPU2] |
+| 6 | Forward routePhase | target=`cnaToTargetAddr("221.221.221.68")`=`"221.221.221.68"` |
+| 6 | L1SW0 route lookup | `221.221.221.68/32` → 1/0/2 → match, outPort=`400GE 1/0/2` |
+| 7 | Reverse routePhase | target=`cnaToTargetAddr("170.170.170.17")`=`"170.170.170.17"` |
+| 7 | L1SW0 route lookup | `170.170.170.17/32` → 1/0/0 → match, outPort=`400GE 1/0/0` |
+| 9-10 | Build result | SUCCESS |
 
 **Expected Output:**
 
@@ -193,7 +187,7 @@ This is the most direct path: npu1 and npu2 each use port0 to connect to l1sw0, 
 
 #### Test Case 3.2.2: npu1 → l1sw1 → npu3 (port 0/0/1)
 
-Requires route prefix corrections before use (see Section 1.3 L1SW1 route corrections).
+Requires route prefix corrections before use (see Section 1.2 L1SW1 route corrections).
 
 **Input:**
 
@@ -216,7 +210,6 @@ Requires route prefix corrections before use (see Section 1.3 L1SW1 route correc
 |---|---|
 | srcPort | `npu1.findNpuPort("400GE 0/0/1")` → CNA=`170.170.170.18`, EID=`AAAAAA12000000000000000000000002`, remote=`l1sw1:1/0/0` |
 | destPort | `npu3.findNpuPort("400GE 0/0/1")` → CNA=`238.238.238.86`, EID=`EEEEEE55000000000000000000000002`, remote=`l1sw1:1/0/4` |
-| ACL check | Matches AAAA...02 ↔ EEEE...02 entry |
 | Forward routePhase | target=`cnaToTargetAddr("238.238.238.86")`=`"238.238.238.86"` → L1SW1 route `238.238.238.86/32` (corrected) → outPort=`400GE 1/0/4` |
 | Reverse routePhase | target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` → L1SW1 route `170.170.170.18/32` (corrected) → outPort=`400GE 1/0/0` |
 
@@ -252,20 +245,6 @@ cnaToTargetAddr(NPU_port.CNA) ∈ L1SW.routingTables[].prefix.dstAddress
 ```
 
 That is: the NPU port's CNA, after `cnaToTargetAddr` transformation, must have a matching prefix in the routing table of the connected L1SW.
-
-### 4.2 ACL Consistency
-
-For each `(srcNPU_port, destNPU_port)` pair:
-
-```
-srcNPU_port.EID + "|" + destNPU_port.EID + "|RCTP" ∈ aclData.tpAcls
-```
-
-That is: each bidirectional rule in the ACL must have a corresponding NPU port pair in the topology data with matching EIDs.
-
-### 4.3 AclData.superNodeName
-
-`AclData.superNodeName` must equal the SuperNode's name, because `aclStore.getAclData(request.getSuperNodeName())` uses superNodeName for lookup. The `aclId` field value in the ACL JSON must be mapped to `superNodeName` during loading.
 
 ---
 

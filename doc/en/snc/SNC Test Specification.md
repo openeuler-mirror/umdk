@@ -14,7 +14,7 @@ A test strategy aligned with the development layering is adopted, using real ins
 | exception | Unit test | Exception classes; cover constructor/error codes |
 | util | Unit test | Utility classes; cover algorithm correctness (mask/IP conversion/CNA padding) |
 | store | Unit test | In-memory storage; cover init/replace/get/remove/clear |
-| engine | Unit test | Algorithm engines; cover LPM/ACL validation/path resolution |
+| engine | Unit test | Algorithm engines; cover LPM/path resolution |
 | service | Unit test | Business orchestration; validate store/engine flow |
 | SNCServiceImpl | Integration test | Full end-to-end path; combined with JSON test fixtures |
 
@@ -24,9 +24,7 @@ A test strategy aligned with the development layering is adopted, using real ins
 src/test/java/com/huawei/umdk/snc/
 ├── SNCServiceIntegrationTest.java    # Integration test (main entry point)
 ├── TestDataLoader.java               # Test data loading utility
-├── entity/                           # Entity layer unit tests (25 classes)
-│   ├── AclDataTest.java
-│   ├── AclKeyTest.java
+├── entity/                           # Entity layer unit tests (21 classes)
 │   ├── DeviceEntityTest.java
 │   ├── DeviceTypeTest.java
 │   ├── ForwardingChipTest.java
@@ -47,9 +45,7 @@ src/test/java/com/huawei/umdk/snc/
 │   ├── SwForwardingChipTest.java
 │   ├── SwitchLevelTest.java
 │   ├── SwPortEntityTest.java
-│   ├── SuperNodeTest.java
-│   ├── TpAclEntityTest.java
-│   └── TransportTypeTest.java
+│   └── SuperNodeTest.java
 ├── dto/                              # DTO layer unit tests
 │   ├── PathPlanRequestTest.java
 │   ├── PathPlanResultTest.java
@@ -61,20 +57,16 @@ src/test/java/com/huawei/umdk/snc/
 │   ├── SNCExceptionTest.java
 │   ├── SNCStateExceptionTest.java
 │   ├── SuperNodeNotFoundExceptionTest.java
-│   ├── AclNotFoundExceptionTest.java
 │   └── PathPlanExceptionTest.java
 ├── util/                             # Util layer unit tests
 │   └── AddressUtilsTest.java
 ├── store/                            # Store layer unit tests
-│   ├── SuperNodeStoreTest.java
-│   └── AclStoreTest.java
+│   └── SuperNodeStoreTest.java
 ├── engine/                           # Engine layer unit tests
 │   ├── RouteLookupEngineTest.java
-│   ├── AclCheckEngineTest.java
 │   └── PathEngineTest.java
 └── service/                          # Service layer unit tests
     ├── SuperNodeServiceTest.java
-    ├── AclServiceTest.java
     └── PathServiceTest.java
 ```
 
@@ -87,16 +79,13 @@ src/test/java/com/huawei/umdk/snc/
 | Layer | Test Class | Class Under Test | Case Count |
 |------|--------|--------|--------|
 | Service | `SuperNodeServiceTest` | `SuperNodeService` | 35 |
-| Service | `AclServiceTest` | `AclService` | 16 |
 | Service | `PathServiceTest` | `PathService` | 65 |
 | Engine | `PathEngineTest` | `PathEngine` | 20 |
 | Engine | `RouteLookupEngineTest` | `RouteLookupEngine` | 8 |
-| Engine | `AclCheckEngineTest` | `AclCheckEngine` | 7 |
 | Store | `SuperNodeStoreTest` | `SuperNodeStore` | 24 |
-| Store | `AclStoreTest` | `AclStore` | 10 |
-| Entity | 25 test files | Various Entity classes | ~174 |
+| Entity | 21 test files | Various Entity classes | ~150 |
 | DTO | 4 test files | DTO classes | 29 |
-| Exception | 5 test files | Exception classes | 22 |
+| Exception | 4 test files | Exception classes | 18 |
 | Config | `SNCConfigTest` | `SNCConfig` | 7 |
 | Util | `AddressUtilsTest` | `AddressUtils` | 31 |
 
@@ -104,7 +93,7 @@ src/test/java/com/huawei/umdk/snc/
 
 | Test Class | Case Count | Data Source |
 |--------|--------|---------|
-| `SNCServiceIntegrationTest` | 28+ | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`, `acl_data_2npu_1port.json`, `acl_data_4npu_8port.json`) |
+| `SNCServiceIntegrationTest` | 28+ | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
 
 ---
 
@@ -112,13 +101,12 @@ src/test/java/com/huawei/umdk/snc/
 
 ### 3.1 Entity Layer
 
-26 entity classes + 1 inner class, totaling 25 test files and approximately 174 test cases.
+22 entity classes + 1 inner class, totaling 21 test files and approximately 150 test cases.
 
 | Category | Class Name | Test File |
 |:-----|:-----|:---------|
 | Enum | DeviceType | DeviceTypeTest.java |
 | Enum | SwitchLevel | SwitchLevelTest.java |
-| Enum | TransportType | TransportTypeTest.java |
 | Enum | RouteSelectionRecord.Direction | Embedded in RouteSelectionRecordTest.java |
 | Abstract base | DeviceEntity | DeviceEntityTest.java |
 | Abstract base | ForwardingChip | ForwardingChipTest.java |
@@ -136,9 +124,6 @@ src/test/java/com/huawei/umdk/snc/
 | Domain class | RoutePrefix | RoutePrefixTest.java |
 | Domain class | RoutingEntry | RoutingEntryTest.java |
 | Domain class | OutPortInfo | OutPortInfoTest.java |
-| Domain class | AclData | AclDataTest.java |
-| Domain class | AclKey | AclKeyTest.java |
-| Domain class | TpAclEntity | TpAclEntityTest.java |
 | Computation model | InternalPathInfo | InternalPathInfoTest.java |
 | Computation model | InternalPathHop | InternalPathHopTest.java |
 | Computation model | RouteSelectionRecord | RouteSelectionRecordTest.java |
@@ -154,7 +139,7 @@ src/test/java/com/huawei/umdk/snc/
 
 **Specialized Patterns:**
 - Abstract base classes (ForwardingChip/DeviceEntity): Test parent methods via anonymous subclasses
-- `RoutePrefix`/`RoutingTableKey`/`AclKey` (HashMap key classes): Additional coverage for null field boundaries
+- `RoutePrefix`/`RoutingTableKey` (HashMap key classes): Additional coverage for null field boundaries
 - `SuperNode`: Additional coverage for `getNpuDevices`/`getSwDevices`/`getAllDevices` merge logic
 - `NpuDevice`: Additional coverage for `findNpuPort` cross-chip search, null chip/null port boundaries
 
@@ -163,7 +148,7 @@ src/test/java/com/huawei/umdk/snc/
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | PathPlanRequest | 8+ | Constructor/Getter/Setter/equals/hashCode/toString; `interDevices` null scenario |
-| PathPlanResult | 10+ | Same as above + `PlanStatus` enum coverage (11 status values) + success/failure constructors |
+| PathPlanResult | 10+ | Same as above + `PlanStatus` enum coverage (9 status values) + success/failure constructors |
 | PathInfo | 6+ | Constructor/Getter/Setter/equals/hashCode/toString; `hops` null scenario |
 | HopInfo | 8+ | Constructor + `multiPath`/`deviceType` fields + source/destination/intermediate node field constraints |
 
@@ -180,7 +165,6 @@ src/test/java/com/huawei/umdk/snc/
 | SNCException | 4 | Message constructor, Cause constructor |
 | SNCStateException | 4 | Inheritance relationship verification, constructor |
 | SuperNodeNotFoundException | 4 | Inheritance relationship verification |
-| AclNotFoundException | 4 | Inheritance relationship verification |
 | PathPlanException | 6 | Error code constructor, Detail constructor, getStatus() |
 
 ### 3.5 Util Layer
@@ -194,7 +178,6 @@ src/test/java/com/huawei/umdk/snc/
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | SuperNodeStore | 24 | init/replace/getSuperNodeData/getRoutingTable/removeSuperNode/clear; addNpuDevice/addSwDevice; multiple superNodeName coexistence; routing table extraction; empty devices/null parameters/beforeInit operations |
-| AclStore | 10 | init/replace/getAclData/removeAclData/clear; null values/null parameters |
 
 **SuperNodeStore Key Scenarios:**
 1. **Basic lifecycle**: init → replace → get → clear
@@ -209,7 +192,6 @@ src/test/java/com/huawei/umdk/snc/
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | RouteLookupEngine | 8 | LPM match/no-match/default route/empty route/ECMP multiple out-ports; maskLengths=[0] no match |
-| AclCheckEngine | 7 | Forward validation/reverse validation/bidirectional validation/CNA mismatch/Key not found/forward match but dest mismatch |
 | PathEngine | 20 | Direct path (NpuDevice/NpuPortEntity overload)/multi-hop path/cross-chip route lookup/path reversal/port lookup exception/null chip/half-connection |
 
 **RouteLookupEngine LPM Core Algorithm:**
@@ -219,15 +201,6 @@ src/test/java/com/huawei/umdk/snc/
 | {/24: eth0, /16: eth1, /0: wan} | "170.170.170.17" | eth0 (/24) |
 | {/24: eth0, /16: eth1, /0: wan} | "171.170.170.17" | wan (/0) |
 | {} | "1.2.3.4" | null |
-
-**AclCheckEngine Validation:**
-
-| Scenario | Expected |
-|:-----|:-----|
-| Complete match (EID + CNA consistent) | true |
-| CNA mismatch | false |
-| Key not found | false |
-| Bidirectional check | Both forward and reverse must pass for true |
 
 **PathEngine Path Resolution:**
 
@@ -243,8 +216,7 @@ src/test/java/com/huawei/umdk/snc/
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | SuperNodeService | 35 | importSuperNode validation, addNpuDevices/addSwDevices, getDevice, getRoutingTable, exception handling; null/empty string/empty collection parameter validation |
-| AclService | 16 | importAclData validation, getAclData, exception handling; null/empty string/empty collection parameter validation |
-| PathService | 65 | Complete planPath flow (16 steps), various error code branches, reflection tests (null fields), routePhase exception branches, NpuDevice.findNpuPort boundary |
+| PathService | 65 | Complete planPath flow (11 steps), various error code branches, reflection tests (null fields), routePhase exception branches, NpuDevice.findNpuPort boundary |
 
 **PathService Flow Coverage (corresponding to design document §9):**
 
@@ -254,11 +226,10 @@ src/test/java/com/huawei/umdk/snc/
 | 0 | Device not found | TOPO_INCOMPLETE (1007) |
 | 1 | srcPort not found/CNA/EID empty | SRC_INFO_ERR (1003) |
 | 2 | destPort not found/CNA/EID empty | DST_INFO_ERR (1004) |
-| 3 | ACL data not found/CNA mismatch | ACL_CHECK_FAILED (1005) |
-| 6 | Direct connection validation failed | TOPO_CONNECTION_ERROR (1008) |
-| 7 | Multi-hop path resolution failed | TOPO_CONNECTION_NOT_FOUND (1009) |
-| 10 | Route unreachable | ROUTE_NOT_REACHABLE (1010) |
-| 14 | Success | SUCCESS (0) |
+| 4 | Direct connection validation failed | TOPO_CONNECTION_ERROR (1008) |
+| 5 | Multi-hop path resolution failed | TOPO_CONNECTION_NOT_FOUND (1009) |
+| 8 | Route unreachable | ROUTE_NOT_REACHABLE (1010) |
+| 10 | Success | SUCCESS (0) |
 
 ### 3.9 SNCServiceImpl
 
@@ -267,14 +238,14 @@ src/test/java/com/huawei/umdk/snc/
 | Lifecycle state machine | 8 | INIT→READY→DATAREADY→UNINIT state transitions |
 | Parameter validation | 16 | All input parameter null/empty string checks |
 | Exception handling | 6 | Calling methods before init / after uninit |
-| Full end-to-end | 6 | From init → setSuperNodeData → setAclData → addNpuDevices → addSwDevices → planPath → uninit |
+| Full end-to-end | 6 | From init → setSuperNodeData → addNpuDevices → addSwDevices → planPath → uninit |
 
 **State Machine Tests:**
 
 | Test Scenario | Call Sequence | Expected Result |
 |:---------|:---------|:---------|
 | Call setSuperNode without init | setSuperNode(...) | SNCStateException |
-| Normal call after init | init → setSuperNode → setAclData | Normal execution |
+| Normal call after init | init → setSuperNode | Normal execution |
 | Call after uninit | init → ... → uninit → getSuperNode | SNCStateException |
 | Repeated init | init → init | Idempotent, no exception thrown |
 
@@ -288,16 +259,13 @@ src/test/java/com/huawei/umdk/snc/
 src/test/resources/
 ├── topo_data_2npu_1port.json     # 2 NPU + 1 L1 SW topology (single port)
 ├── topo_data_4npu_8port.json     # 4 NPU + 2 L1 SW topology (multi-port)
-├── topo_data_2box_16l2sw.json    # 2 chassis + 16 L2SW topology (cross-chassis path)
-├── acl_data_2npu_1port.json      # ACL data corresponding to 2npu
-└── acl_data_4npu_8port.json      # ACL data corresponding to 4npu
+└── topo_data_2box_16l2sw.json    # 2 chassis + 16 L2SW topology (cross-chassis path)
 ```
 
 ### 4.2 TestDataLoader Utility Class
 
 `TestDataLoader` is responsible for parsing JSON files into Java objects:
 - `loadSuperNode(resourcePath)` — Parse topology JSON into `SuperNode` (including npuDevices, swDevices, chips, ports, routing tables)
-- `loadAclData(resourcePath, superNodeName)` — Parse ACL JSON into `AclData`
 
 ### 4.3 2npu_1port Data (Minimal Validation)
 
@@ -305,7 +273,6 @@ src/test/resources/
 - **NPU2**: 1 port `400GE 0/1/1`, CNA=`221.221.221.66`, EID=`DDDDDD42000000000000000000000002`, UPI=`0A0A0A01`
 - **L1SW0**: 2 ports connected to NPU1/NPU2
 - **Routes**: NPU1→target 221.221.221.68, L1SW has two routes (170.170.170.17→NPU1 side, 221.221.221.68→NPU2 side)
-- **ACL**: Two bidirectional rules (AAAAAA11...↔DDDDDD44...)
 
 ### 4.4 4npu_8port Data (Full Validation)
 
@@ -313,7 +280,6 @@ src/test/resources/
 - 4 L1SWs each with 8 ports, no L2SW
 - Each NPU's 8 ports evenly distributed across 4 L1SWs (2 ports per L1SW)
 - Routing table: Each NPU has 8 routes to other NPUs (ECMP 2-way), each L1SW has 4 routes to each NPU (single-way)
-- ACL: 6 NPU pairs × 8 ports × 2 directions = 96 bidirectional rules
 
 ### 4.5 Port Naming and Encoding Rules
 

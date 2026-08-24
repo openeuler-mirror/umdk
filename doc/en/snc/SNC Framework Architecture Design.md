@@ -25,7 +25,6 @@
    - [7.7 Interface Implementation Mapping](#77-interface-implementation-mapping)
    - [7.8 Invalid Invocation Order Description](#78-invalid-invocation-order-description)
    - [7.9 SuperNodeStore (Topology Storage)](#79-supernodestore)
-   - [7.10 AclStore (ACL Storage)](#710-aclstore)
 8. [Path Planning Algorithm — Indexed Mask Match](#8-path-planning-algorithm--indexed-mask-match)
 9. [Detailed Path Planning Flow](#9-detailed-path-planning-flow)
 
@@ -35,7 +34,7 @@
 
 ### 1.1 Business Background
 
-SNC (Supernode Network Controller) is a super node controller responsible for managing network topology, ACL, and routing information, and providing path planning functionality that returns the parameters required for communication path coverage.
+SNC (Supernode Network Controller) is a super node controller responsible for managing network topology and routing information, and providing path planning functionality that returns the parameters required for communication path coverage.
 
 ### 1.2 Core Functional Requirements
 
@@ -43,8 +42,7 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 |:----------------:|:-------------------------------|:------:|
 | Initialization/Deinitialization | SNC service startup and shutdown | P0 |
 | SuperNode Data Management | Network topology structure provisioning, querying, and deletion | P1 |
-| TP-ACL Data Management | Transport policy access control list provisioning, querying, and deletion | P1 |
-| Path Planning | Path planning based on EID pairs and ACL validation | P2 |
+| Path Planning | Path planning based on EID pairs | P2 |
 
 ---
 
@@ -57,7 +55,6 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 ┌──────────────────────────────────────────────────┐
 │         Upper-layer Orchestrator/Management System│ (Northbound caller) │
 │   - Topology data entry (including routing info) │             │
-│   - ACL policy provisioning                     │             │
 │   - Path planning request                       │             │
 └──────────────┬───────────────────────────────────┘
                │ API Call
@@ -65,7 +62,6 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 │        SNC Module (this module)                  │             │
 │   - Data persistence and indexing               │             │
 │   - Path planning and path resolution           │             │
-│   - ACL validation                              │             │
 └──────────────┬──────────────────────────────────┘
                │ Southbound collection/injection (not developed in current phase)
 ┌──────────────▼──────────────────────────────────┐
@@ -78,13 +74,13 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 
 ### 2.2 Interaction Mode
 
-- **Configuration operations (topology/ACL provisioning):** Synchronous calls; the caller provides complete data snapshots.
+- **Configuration operations (topology provisioning):** Synchronous calls; the caller provides complete data snapshots.
 - **Query operations (path planning):** Synchronous calls; request-response mode; the caller sends a PathPlanRequest, SNC returns a PathPlanResult.
 - **Initialization/Deinitialization:** Synchronous calls; SNC loads data from the northbound at startup or receives full synchronization; deinitialization clears in-memory data.
 
 ### 2.3 Data Consistency Guarantee
 
-- Topology data (including routing information) and ACL data are provisioned as full snapshots; SNC does not maintain incremental change logs.
+- Topology data (including routing information) is provisioned as full snapshots; SNC does not maintain incremental change logs.
 - All data uses in-memory HashMap indexing, ensuring O(1) lookup efficiency.
 - Path planning is computed in real-time based on in-memory data, with no dependency on external storage.
 
@@ -126,10 +122,6 @@ com.huawei.umdk.snc
 │   ├── RoutePrefix.java               # Route prefix structure (§4.8)
 │   ├── RoutingTableKey.java           # Routing table composite key (superNodeName + deviceName + chipIndex, §4.7.1)
 │   ├── OutPortInfo.java               # Out port information (§4.9.1)
-│   ├── AclData.java                   # ACL data container (§4.10)
-│   ├── AclKey.java                    # ACL composite key (§4.11)
-│   ├── TpAclEntity.java               # TP-ACL entity (§4.12)
-│   ├── TransportType.java             # Transport type enum (RMTP/RCTP/CTP/UTP) (§4.10)
 │   ├── InternalPathInfo.java          # §5.1 Internal path information (engine computation context)
 │   ├── InternalPathHop.java           # §5.1 Internal path hop
 │   └── RouteSelectionRecord.java      # §5.2 Internal route selection record
@@ -142,23 +134,19 @@ com.huawei.umdk.snc
 │
 ├── service/                           # Business logic layer (orchestration)
 │   ├── SuperNodeService.java               # Topology data management
-│   ├── AclService.java                # ACL data management
 │   └── PathService.java               # Path planning orchestration (calls engine layer)
 │
 ├── store/                             # Data storage layer (HashMap indexing)
-│   ├── SuperNodeStore.java               # Topology index (superNodeName→SuperNode / routingTableMap)
-│   └── AclStore.java                  # ACL index (superNodeName→AclData / tpAclMap)
+│   └── SuperNodeStore.java               # Topology index (superNodeName→SuperNode / routingTableMap)
 │
 ├── engine/                            # Algorithm engine layer
-│   ├── PathEngine.java                # Path resolution engine (Step 5~7)
-│   ├── RouteLookupEngine.java         # Path planning engine / Indexed Mask Match (Step 8~12, §8)
-│   └── AclCheckEngine.java            # ACL validation engine (Step 3~4)
+│   ├── PathEngine.java                # Path resolution engine (Step 3~5)
+│   └── RouteLookupEngine.java         # Path planning engine / Indexed Mask Match (Step 6~8, §8)
 │
 ├── exception/                         # Exception definitions (§7.5.2)
 │   ├── SNCException.java              # Base exception
 │   ├── SNCStateException.java         # State exception
 │   ├── SuperNodeNotFoundException.java     # Topology data not found
-│   ├── AclNotFoundException.java      # ACL data not found
 │   └── PathPlanException.java         # Path planning failure (contains PlanStatus)
 │
 └── util/                              # Utility classes
@@ -173,7 +161,7 @@ com.huawei.umdk.snc
                     └────▲─────┘
                          │uses
                     ┌────┴─────┐
-                    │ service  │ (Orchestration layer: SuperNodeService / AclService / PathService)
+                    │ service  │ (Orchestration layer: SuperNodeService / PathService)
                     └─┬──┬──┬─┘
                       │  │  │
             ┌─────────┘  │  └─────────┘
@@ -208,32 +196,27 @@ com.huawei.umdk.snc
 SNCServiceImpl
     │
     ├── init(SNCConfig)
-    │     └→ SuperNodeStore.init() + AclStore.init()
+    │     └→ SuperNodeStore.init()
     │     └→ Only operates on config and store, does not involve dto
     │
     ├── setSuperNode(SuperNode)          // entity.SuperNode (§4.1 Domain Model)
     │     └→ SuperNodeService.importSuperNode(superNode)
     │              └→ SuperNodeStore.replace(superNode)
     │
-    ├── setAclData(AclData)            // entity.AclData (§4.12 Domain Model)
-    │     └→ AclService.importAclData(aclData)
-    │              └→ AclStore.replace(aclData)
-    │
     ├── planPath(PathPlanRequest)      // dto.PathPlanRequest (§6.1 DTO)
     │     └→ PathService.planPath(request)
     │              ├→ superNode.getNpuDevices().get(srcDevice/destDevice)  // Step 0: NPU device lookup
     │              ├→ srcNpuDevice.findNpuPort() + destNpuDevice.findNpuPort() // Step 1~2: Port lookup (directly uses NpuForwardingChip.getNpuPorts(), no instanceof/cast)
-    │              ├→ AclCheckEngine.check()                        // Step 3~4: ACL bidirectional validation (reads entity.TpAclEntity)
-    │              ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(→ InternalPathInfo) // Step 5~7: Path resolution
+    │              ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(→ InternalPathInfo) // Step 3~5: Path resolution
     │              │    Signature: (NpuDevice, NpuPortEntity, NpuDevice, NpuPortEntity, ...)
-    │              ├→ superNode.getAllDevices() + RouteLookupEngine.lookup() // Step 8~12: Path planning
-    │              └→ Assemble dto.PathPlanResult                       // Step 13~15: Output construction (§6.2 DTO)
+    │              ├→ superNode.getAllDevices() + RouteLookupEngine.lookup() // Step 6~8: Path planning
+    │              └→ Assemble dto.PathPlanResult                       // Step 9~10: Output construction (§6.2 DTO)
     │
     └── uninit()
-            └→ SuperNodeStore.clear() + AclStore.clear()
+            └→ SuperNodeStore.clear()
 ```
 
-> `setSuperNode` / `setAclData` input parameters directly use `entity.SuperNode` / `entity.AclData` (domain model) because they originate from JSON deserialization of the raw structure and correspond 1:1 to topology files, requiring no additional DTO wrapping. `planPath` input/output uses `dto.PathPlanRequest` / `dto.PathPlanResult` because they are oriented toward northbound callers and require stable API contracts.
+> `setSuperNode` input parameter directly uses `entity.SuperNode` (domain model) because it originates from JSON deserialization of the raw structure and corresponds 1:1 to topology files, requiring no additional DTO wrapping. `planPath` input/output uses `dto.PathPlanRequest` / `dto.PathPlanResult` because they are oriented toward northbound callers and require stable API contracts.
 
 ---
 
@@ -824,7 +807,7 @@ public class SwPortEntity extends PortEntity {
 ```
 
 **Field Constraints:**
-- Switch device ports have no CNA/EID/UPI concept; the `cna` field in switch port scenarios is **optional** (can be null) and does not participate in ACL validation or CNA matching in path planning.
+- Switch device ports have no CNA/EID/UPI concept; the `cna` field in switch port scenarios is **optional** (can be null) and does not participate in CNA matching in path planning.
 - `remoteDevice` / `remotePort` are core fields for switch ports, used for multi-hop topology path resolution.
 - SwPortEntity is stored in `SwForwardingChip.ports` (`Map<String, SwPortEntity>`, §4.4.2), accessed directly via `getSwPorts()` for the precise type, without instanceof/cast.
 
@@ -886,7 +869,7 @@ public class RoutingTable {
 ```
 
 **Key Notes:**
-- `RoutingTable`: Stored independently in `SuperNodeStore.routingTableMap`, keyed by `RoutingTableKey` (`superNodeName + deviceName + chipIndex`) (`Map<RoutingTableKey, RoutingTable>`, §4.7.1), supporting global O(1) lookup. Under multiple super nodes, deviceName may be duplicated, distinguished by superNodeName. `RoutingTable` is not used as a HashMap key; `equals()`/`hashCode()` is generated by Lombok `@EqualsAndHashCode` (all fields participate, consistent with `RoutePrefix` §4.8 and `AclKey` §4.11).
+- `RoutingTable`: Stored independently in `SuperNodeStore.routingTableMap`, keyed by `RoutingTableKey` (`superNodeName + deviceName + chipIndex`) (`Map<RoutingTableKey, RoutingTable>`, §4.7.1), supporting global O(1) lookup. Under multiple super nodes, deviceName may be duplicated, distinguished by superNodeName. `RoutingTable` is not used as a HashMap key; `equals()`/`hashCode()` is generated by Lombok `@EqualsAndHashCode` (all fields participate, consistent with `RoutePrefix` §4.8).
 - `chipIndex`: Corresponds to ForwardingChip.chipIndex, identifying the forwarding chip to which this routing table belongs.
 - `routes`: Map key is `RoutePrefix` object (including dstAddress and maskLength). Path planning no longer traverses the full table; instead, it takes the longest mask from `maskLengths` first, applies bitwise AND of `targetAddr` with that mask to get `networkAddr`, then constructs `(networkAddr, maskLen)` as a `RoutePrefix` HashMap key for O(1) hit (see §4.8).
 - `maskLengths`: List of actually existing mask lengths in the routing table (deduplicated, sorted descending). For example, if external input only provides mask 32 detailed routes and mask 20 chassis-level routes, then `maskLengths = [32, 20]`. This list is automatically extracted and maintained by the engine during `SuperNodeStore.replace()` or incremental updates. Lookup only tries masks from this list in order, without full table traversal.
@@ -981,7 +964,7 @@ public class RoutingTableKey {
 - `routingTableMap` type is `Map<RoutingTableKey, RoutingTable>`, see §7.9 SuperNodeStore definition.
 
 **HashMap Key Constraints:**
-- `equals()` and `hashCode()` are automatically generated by Lombok `@EqualsAndHashCode` (all three fields participate), ensuring HashMap lookup correctness. This approach is consistent with `AclKey` (§4.11) and `RoutePrefix` (§4.8).
+- `equals()` and `hashCode()` are automatically generated by Lombok `@EqualsAndHashCode` (all three fields participate), ensuring HashMap lookup correctness. This approach is consistent with `RoutePrefix` (§4.8).
 
 **Lookup Flow:**
 ```
@@ -1115,108 +1098,12 @@ public class OutPortInfo {
 - Mask length has been migrated to the `RoutePrefix` structure; `OutPortInfo` no longer contains a `maskLength` field.
 - The above five fields are uniformly encapsulated in `OutPortInfo`, serving as the value in `RoutingEntry.outPortInfos` Map; Map key is `portName`, supporting O(1) lookup and traversal, covering ECMP scenarios.
 
----
-
-### 4.10 AclData (ACL Data)
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class AclData {
-    /** ACL identifier, corresponding to SuperNode.name, indicating which super node this ACL data belongs to -- Required field */
-    private String superNodeName;
-
-    /** ACL Map -- Required field, Map key is AclKey (composite object) */
-    private Map<AclKey, TpAclEntity> tpAcls;
-}
-```
-
-**Key Notes:**
-- `superNodeName`: ACL identifier, corresponding to `SuperNode.name` (superNodeName), used for per-super-node differentiated storage in `AclStore`. External ACL data for multiple super nodes can be provisioned, each stored with `superNodeName` as the `AclStore.store` Map key (see §7.9).
-- `tpAcls`: Map key is `AclKey` (composite object, including sourceEid + destEid + transportType), used for O(1) ACL rule lookup.
-
----
-
-### 4.11 AclKey (ACL Composite Key)
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class AclKey {
-    /** Source EID -- 128 bit */
-    private String sourceEid;
-
-    /** Destination EID -- 128 bit */
-    private String destEid;
-
-    /** Transport type */
-    private TransportType transportType;
-}
-```
-
-**Constraints:**
-- `equals()` and `hashCode()` are automatically generated by Lombok `@EqualsAndHashCode` (based on three fields: sourceEid, destEid, transportType), ensuring HashMap lookup correctness.
-- The three fields (sourceEid, destEid, transportType) jointly uniquely identify one ACL rule.
-- **AclKey** stores the triple (sourceEid + destEid + transportType), serving as a HashMap index key for O(1) ACL rule lookup.
-- **TpAclEntity** stores validation fields (sourceCna + destCna + templateId), without redundantly storing the EID triple. During ACL validation, after locating TpAclEntity via AclKey, the CNA consistency between the entry's CNA and the port's CNA is verified (see §9.3 Step 3~4).
-
----
-
-### 4.12 TpAclEntity (TP-ACL Entity)
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class TpAclEntity {
-    /** Source address (only supports CNA) -- 32 bit -- Required field */
-    private String sourceCna;
-
-    /** Destination address (only supports CNA) -- 32 bit -- Required field */
-    private String destCna;
-
-    /** Template ID (1-19) */
-    private Integer templateId;
-}
-```
-
-**Transport Type Enum:**
-
-```java
-public enum TransportType {
-    RMTP,  // Reliable Transfer Protocol (Reliable Connection) -- supported in current version
-    RCTP,  // Reliable Transfer Protocol (Reliable Messaging) -- reserved, to be enabled in future versions
-    CTP,   // Connection-oriented Transport Protocol -- reserved, to be enabled in future versions
-    UTP    // Unreliable Transfer Protocol -- reserved, to be enabled in future versions
-}
-```
-
-> **Usage Note:** The current version (V1) ACL validation and path planning only supports `RCTP`; `RMTP`, `UTP`, `CTP` are reserved enum values. A `transportType` field will be added to `PathPlanRequest` in future versions, enabled once the caller specifies the transport type. Currently the `planPath()` flow hardcodes `RCTP` (see §9.3).
->
-> **Enum Definition Location Note:** The `TransportType` enum is defined in §4.12 (adjacent to `TpAclEntity`), but §4.11 `AclKey`'s `transportType` field already references this enum type; readers can refer forward to §4.12 for enum value definitions.
-
-**ACL Validation Rules:**
-- During path planning, lookup uses `(sourceEid, destEid, transportType)` in HashMap.
-- After finding the entry, verify `sourceCna` matches the source device port CNA, and `destCna` matches the destination device port CNA.
-- Bidirectional check: first check forward (EID1→EID2), then check reverse (EID2→EID1); both must pass for ACL validation to succeed.
-
 
 ## 5 Pure Internal Data Structures
 
 ### 5.1 InternalPathInfo (Internal Path Information)
 
-> **Design Basis:** Refer to §9.4 Phase 3 Step 7 — Multi-hop path resolution flow.
+> **Design Basis:** Refer to §9.3 Phase 2 Step 5 — Multi-hop path resolution flow.
 
 #### 5.1.1 InternalPathHop (Internal Path Hop)
 
@@ -1297,7 +1184,7 @@ public class InternalPathHop {
 
 #### 5.1.2 InternalPathInfo (Internal Path Information)
 
-Encapsulates the complete internal path, constructed in Step 7 and consumed in subsequent Steps 8~12.
+Encapsulates the complete internal path, constructed in Step 5 and consumed in subsequent Steps 6~8.
 
 ```java
 @Getter
@@ -1338,16 +1225,16 @@ public class InternalPathInfo {
 
 **Data Flow Description:**
 ```
-Step 7 (Multi-hop path resolution):
+Step 5 (Multi-hop path resolution):
     Input:  PathPlanRequest (srcDevice, srcPort, destDevice, destPort, interDevices)
     Output: InternalPathInfo (hop-by-hop populated with topology consistency validation)
     
-Step 8~12 (Path planning loop):
-    Input:  InternalPathInfo (constructed from Phase 3)
+Step 6~8 (Path planning loop):
+    Input:  InternalPathInfo (constructed from Phase 2)
     Process: Iterate InternalPathInfo.hops, perform path planning for each intermediate device
-    Output: RouteSelectionRecord list (produced from Step 11)
+    Output: RouteSelectionRecord list (produced from Step 9)
     
-Step 14 (Populate PathPlanResult):
+Step 10 (Populate PathPlanResult):
     Input:  InternalPathInfo.hops
     Output: PathPlanResult.paths (converted to external HopInfo list)
 ```
@@ -1356,7 +1243,7 @@ Step 14 (Populate PathPlanResult):
 
 ### 5.2 RouteSelectionRecord (Internal Route Selection Record)
 
-> **Design Basis:** Refer to §9.5 Phase 4 Step 11 — Out port determination and route selection recording.
+> **Design Basis:** Refer to §9.4 Phase 3 Step 9 — Out port determination and route selection recording.
 
 ```java
 @Getter
@@ -1383,7 +1270,7 @@ public class RouteSelectionRecord {
 
     /** Hash information -- for ECMP load balancing computation.
      *  <p>Hash algorithm input is triple: source CNA (SCNA, 32 bit), destination CNA (DCNA, 32 bit),
-     *  source UDP port number (8 bit, calculated and filled in by Step 13).
+     *  source UDP port number (8 bit, calculated and filled in by Step 9).
      *  Output is integer hash value, modulo candidate out port count to get the selected out port index.
      *  <p>Hash function can be stubbed; tests can inject specific implementations to ensure specific triples output specified hash values. */
     private String hashInfo;
@@ -1436,7 +1323,7 @@ public class RouteSelectionRecord {
 
 **Route Selection Record Field Source Description:**
 
-| Field | Source | Corresponding Item in Step 11 Pseudocode |
+| Field | Source | Corresponding Item in Step 9 Pseudocode |
 |:-----|:-----|:--------------------------|
 | prefix | Path planning result RoutingEntry.prefix | `Route information (prefix)` |
 | candidateOutPorts[].portName | OutPortInfo.portName | `Route information (portName)` |
@@ -1453,11 +1340,11 @@ public class RouteSelectionRecord {
 
 **Consumption Relationship:**
 ```
-Step 11 (Record):
+Step 9 (Record):
     For each intermediate device with ECMP → generate RouteSelectionRecord
     → candidateOutPorts records all candidate out interfaces + selected marker
     
-Step 13 (UDP port computation):
+Step 9 (UDP port computation):
     Iterate RouteSelectionRecord list
     → Based on hashInfo + scna/dcna compute 8-bit src_udp_port / dst_udp_port
     → Fill into PathPlanResult.ackUdpSrcPort / dataUdpSrcPort
@@ -1554,13 +1441,11 @@ public class PathPlanResult {
         SUCCESS(0, "success"),
         SRC_INFO_ERR(1003, "src info error"),
         DST_INFO_ERR(1004, "dst info error"),
-        ACL_CHECK_FAILED(1005, "acl check failed"),
         TOPO_INCOMPLETE(1007, "topo incomplete"),
         TOPO_CONNECTION_ERROR(1008, "topo connection error"),
         TOPO_CONNECTION_NOT_FOUND(1009, "topo connection not found"),
         ROUTE_NOT_REACHABLE(1010, "route not reachable"),
         TOPO_NOT_FOUND(1012, "topo not found"),
-        ACL_NOT_FOUND(1013, "acl not found"),
         SRC_AND_DST_MUST_BE_NPU(3002, "src and dst must be npu"),
         UPI_MISMATCH(3003, "upi mismatch");
 
@@ -1587,8 +1472,8 @@ public class PathPlanResult {
 | path | PathInfo | Path details, containing hop-by-hop information |
 | status | PlanStatus | Query status, 0=success, non-0=failure (error codes see table above) |
 | errorMessage | String | Failure reason description, filled when status is not SUCCESS |
-| ackUdpSrcPort | Integer | Ack UDP source port (8 bit), computed by Step 13, for hardware offload |
-| dataUdpSrcPort | Integer | Data UDP source port (8 bit), computed by Step 13, for hardware offload |
+| ackUdpSrcPort | Integer | Ack UDP source port (8 bit), computed by Step 9, for hardware offload |
+| dataUdpSrcPort | Integer | Data UDP source port (8 bit), computed by Step 9, for hardware offload |
 | spray | Boolean | Spray enable flag, true=multi-path spray enabled |
 
 ---
@@ -1709,12 +1594,6 @@ Northbound Interface (SNCService)
     ├── getSuperNode(String) → SuperNode           // Topology data query
     ├── removeSuperNode(String) → void             // Topology data deletion
     │
-    ├── setAclData(AclData) → void                 // ACL full provisioning
-    ├── addAclRules(String, Map<AclKey, TpAclEntity>) → void  // ACL incremental: batch add/update rules
-    ├── removeAclRules(String, List<AclKey>) → void          // ACL incremental: batch remove rules
-    ├── getAclData(String) → AclData               // ACL data query
-    ├── removeAclData(String) → void               // ACL data deletion
-    │
     ├── planPath(PathPlanRequest) → PathPlanResult     // Path planning (single path)
     └── uninit() → void                                // Deinitialization
 ```
@@ -1741,18 +1620,14 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * <pre>{@code
  *   sncService.init(config);                    // 1. Initialization
  *   sncService.setSuperNode(superNode);           // 2. Provision topology data (can be called multiple times to update)
- *   sncService.setAclData(aclData);             // 3. Provision ACL data (can be called multiple times to update)
- *   sncService.addNpuDevices("A5-superPod-1", List.of(npuDevice));  // 4. Incremental: batch add NPU devices
- *   sncService.addSwDevices("A5-superPod-1", List.of(swDevice));    // 5. Incremental: batch add SW devices
- *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 6. Incremental: batch remove devices
+ *   sncService.addNpuDevices("A5-superPod-1", List.of(npuDevice));  // 3. Incremental: batch add NPU devices
+ *   sncService.addSwDevices("A5-superPod-1", List.of(swDevice));    // 4. Incremental: batch add SW devices
+ *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 5. Incremental: batch remove devices
  *   sncService.addRoutingEntries("A5-superPod-1", "rack1#os0#npu1", 0, List.of(entry)); // 6. Incremental: batch add routes
- *   sncService.addAclRules("A5-superPod-1", Map.of(aclKey, aclEntity)); // 7. Incremental: batch add ACL rules
- *   sncService.planPath(request);               // 8. Path planning (can be called concurrently multiple times)
- *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 9. Topology data query
- *   AclData ad = sncService.getAclData("A5-superPod-1");     // 10. ACL data query
- *   sncService.removeSuperNode("A5-superPod-1");              // 11. Topology data deletion
- *   sncService.removeAclData("A5-superPod-1");               // 12. ACL data deletion
- *   sncService.uninit();                       // 13. Deinitialization
+ *   sncService.planPath(request);               // 7. Path planning (can be called concurrently multiple times)
+ *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 8. Topology data query
+ *   sncService.removeSuperNode("A5-superPod-1");              // 9. Topology data deletion
+ *   sncService.uninit();                       // 10. Deinitialization
  * }</pre>
  *
  * <h3>State Constraints</h3>
@@ -1763,7 +1638,6 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * @see PathPlanRequest
  * @see PathPlanResult
  * @see SuperNode
- * @see AclData
  */
 public interface SNCService {
 
@@ -1772,7 +1646,7 @@ public interface SNCService {
     /**
      * Initialize SNC service
      *
-     * Load configuration, initialize internal HashMaps (topology index, ACL index).
+     * Load configuration, initialize internal HashMaps (topology index).
      *
      * @param config SNC configuration (logging strategy, indexing strategy, etc.), can be null (uses default configuration)
      * @throws SNCStateException State exception (duplicate initialization, etc.)
@@ -1782,7 +1656,7 @@ public interface SNCService {
     /**
      * Deinitialize SNC service
      *
-     * Clear all in-memory data (topology Map, ACL Map), release resources.
+     * Clear all in-memory data (topology Map), release resources.
      *
      * @throws SNCStateException State exception (not initialized, etc.)
      */
@@ -1802,20 +1676,6 @@ public interface SNCService {
      * @throws SNCStateException SNC not initialized
      */
     void setSuperNode(SuperNode superNode);
-
-    /**
-     * Provision ACL data (full replacement)
-     *
-     * Parse and index AclData into in-memory HashMap.
-     * - Uses full replacement (replace) strategy.
-     * - Can be called multiple times; each call fully replaces all ACL entries.
-     * - Topology and ACL provisioning order can be swapped.
-     *
-     * @param aclData ACL data container (§4.12)
-     * @throws IllegalArgumentException aclData is null
-     * @throws SNCStateException SNC not initialized
-     */
-    void setAclData(AclData aclData);
 
     // ============ Incremental Update - Topology ============
 
@@ -1893,32 +1753,6 @@ public interface SNCService {
     void removeRoutingEntries(String superNodeName, String deviceName, Integer chipIndex,
                               List<RoutePrefix> prefixes);
 
-    // ============ Incremental Update - ACL ============
-
-    /**
-     * Incrementally batch add/update ACL rules
-     *
-     * Batch add or update TP-ACL rules in the specified ACL data.
-     *
-     * @param superNodeName ACL identifier (corresponding to AclData.superNodeName, §4.10)
-     * @param rules ACL rules Map (key=AclKey, value=TpAclEntity), each entry's key and value non-null
-     * @throws IllegalArgumentException Any parameter is null
-     * @throws SNCStateException SNC not initialized
-     */
-    void addAclRules(String superNodeName, Map<AclKey, TpAclEntity> rules);
-
-    /**
-     * Incrementally batch remove ACL rules
-     *
-     * Batch remove TP-ACL rules from the specified ACL data.
-     *
-     * @param superNodeName ACL identifier (corresponding to AclData.superNodeName, §4.10)
-     * @param keys ACL composite key list (§4.11), each element non-null
-     * @throws IllegalArgumentException Any parameter is null, or AclData does not exist
-     * @throws SNCStateException SNC not initialized
-     */
-    void removeAclRules(String superNodeName, List<AclKey> keys);
-
     // ============ Data Query ============
 
     /**
@@ -1945,29 +1779,6 @@ public interface SNCService {
      */
     void removeSuperNode(String superNodeName);
 
-    /**
-     * Query ACL data
-     *
-     * Get the corresponding AclData object from AclStore by superNodeName.
-     *
-     * @param superNodeName ACL identifier (corresponding to AclData.superNodeName, §4.10)
-     * @return AclData object, returns null if ACL data for the specified superNodeName does not exist
-     * @throws IllegalArgumentException superNodeName is null or empty string
-     * @throws SNCStateException SNC not initialized
-     */
-    AclData getAclData(String superNodeName);
-
-    /**
-     * Delete ACL data
-     *
-     * Remove the corresponding ACL data from AclStore by superNodeName.
-     *
-     * @param superNodeName ACL identifier (corresponding to AclData.superNodeName, §4.10)
-     * @throws IllegalArgumentException superNodeName is null or empty string
-     * @throws SNCStateException SNC not initialized
-     */
-    void removeAclData(String superNodeName);
-
     // ============ Path Planning ============
 
     /**
@@ -1975,21 +1786,19 @@ public interface SNCService {
      *
      * Based on source/destination device and port information, execute path planning and path resolution,
      * returning complete communication path parameters.
-     * Internally executes Step 0 ~ Step 15 flow.
+     * Internally executes Step 0 ~ Step 10 flow.
      *
      * <table>
      *   <tr><th>Phase</th><th>Step</th><th>Description</th></tr>
      *   <tr><td>Phase 1</td><td>Step 0~2</td><td>Device judgment and source/destination info lookup §9.2</td></tr>
-     *   <tr><td>Phase 2</td><td>Step 3~4</td><td>ACL bidirectional validation §9.3</td></tr>
-     *   <tr><td>Phase 3</td><td>Step 5~7</td><td>Path resolution (direct/multi-hop) §9.4</td></tr>
-     *   <tr><td>Phase 4</td><td>Step 8~12</td><td>Path planning loop (forward/reverse) §9.5</td></tr>
-     *   <tr><td>Phase 5</td><td>Step 13~15</td><td>Output construction (UDP port computation + PathPlanResult filling) §9.6</td></tr>
+     *   <tr><td>Phase 2</td><td>Step 3~5</td><td>Path resolution (direct/multi-hop) §9.3</td></tr>
+     *   <tr><td>Phase 3</td><td>Step 6~8</td><td>Path planning loop (forward/reverse) §9.4</td></tr>
+     *   <tr><td>Phase 4</td><td>Step 9~10</td><td>Output construction (UDP port computation + PathPlanResult filling) §9.5</td></tr>
      * </table>
      *
      * <h3>Prerequisites</h3>
      * - init() has been completed
      * - setSuperNode() has been called (topology data exists)
-     * - setAclData() has been called (ACL data exists)
      *
      * <h3>Concurrency Guarantee</h3>
      * This method is a read-only operation (does not modify in-memory data), supporting multi-threaded concurrent invocation.
@@ -2015,13 +1824,8 @@ public interface SNCService {
 | removeDevices | String, List\<String\> | void | Synchronous | No (write operations require serialization) | Incremental batch remove devices |
 | addRoutingEntries | String, String, Integer, List\<RoutingEntry\> | void | Synchronous | No (write operations require serialization) | Incremental batch add/update route entries |
 | removeRoutingEntries | String, String, Integer, List\<RoutePrefix\> | void | Synchronous | No (write operations require serialization) | Incremental batch remove route entries |
-| setAclData | AclData | void | Synchronous | No (write operations require serialization) | Full replacement of ACL data |
-| addAclRules | String, Map\<AclKey, TpAclEntity\> | void | Synchronous | No (write operations require serialization) | Incremental batch add/update ACL rules |
-| removeAclRules | String, List\<AclKey\> | void | Synchronous | No (write operations require serialization) | Incremental batch remove ACL rules |
 | getSuperNode | String | SuperNode | Synchronous | Yes (read-only, concurrent) | Query topology data by superNodeName |
 | removeSuperNode | String | void | Synchronous | No (write operations require serialization) | Delete topology data and associated routing tables by superNodeName |
-| getAclData | String | AclData | Synchronous | Yes (read-only, concurrent) | Query ACL data by superNodeName |
-| removeAclData | String | void | Synchronous | No (write operations require serialization) | Delete ACL data by superNodeName |
 | planPath | PathPlanRequest | PathPlanResult | Synchronous | Yes (read-only, concurrent) | Single path planning |
 
 ---
@@ -2037,33 +1841,24 @@ Northbound Caller                                     SNCService
    │── setSuperNode(superNode) ────────────────────────▶│  Phase 2: Topology provisioning
    │◀── void ────────────────────────────────────────│
    │                                                   │
-   │── setAclData(aclData) ───────────────────────────▶│  Phase 3: ACL provisioning
-   │◀── void ────────────────────────────────────────│
-   │                                                   │
-│── planPath(request1) ────────────────────────────▶│  Phase 4: Path planning
+│── planPath(request1) ────────────────────────────▶│  Phase 3: Path planning
 │◀── PathPlanResult { status=0, path=... } ───────│ (can be called concurrently multiple times)
 │                                                   │
 │── planPath(request2) ────────────────────────────▶│
-│◀── PathPlanResult { status=1005, ... } ─────────│
+│◀── PathPlanResult { status=1010, ... } ─────────│
 │                                                   │
-│── getSuperNode("A5-superPod-1") ──────────────────▶│  Phase 5: Data query
+│── getSuperNode("A5-superPod-1") ──────────────────▶│  Phase 4: Data query
 │◀── SuperNode { name="A5-superPod-1", ... } ──────│
 │                                                   │
-│── getAclData("A5-superPod-1") ───────────────────▶│
-│◀── AclData { superNodeName="A5-superPod-1", ... } ──────│
-│                                                   │
-│── removeSuperNode("A5-superPod-1") ───────────────▶│  Phase 6: Data deletion
+│── removeSuperNode("A5-superPod-1") ───────────────▶│  Phase 5: Data deletion
 │◀── void ────────────────────────────────────────│
 │                                                   │
-│── removeAclData("A5-superPod-1") ────────────────▶│
-│◀── void ────────────────────────────────────────│
-│                                                   │
-│── uninit() ──────────────────────────────────────▶│  Phase 7: Deinitialization
+│── uninit() ──────────────────────────────────────▶│  Phase 6: Deinitialization
 │◀── void ────────────────────────────────────────│
    │                                                   │
 ```
 
-> **Note:** The provisioning order of setSuperNode and setAclData can be swapped, but both must be completed before planPath.
+> **Note:** setSuperNode must be completed before planPath.
 
 ---
 
@@ -2072,12 +1867,12 @@ Northbound Caller                                     SNCService
 The SNC service internally maintains the following lifecycle states:
 
 ```
-         init()                                 uninit()
-  INIT ──────────▶ READY ──(setSuperNode & setAclData both completed)──▶ DATAREADY
+         init()                          uninit()
+  INIT ──────────▶ READY ──(setSuperNode completed)──▶ DATAREADY
    │                                │                                 │
    │                                │ Incremental operations (add/remove/get/…) │
-   │                                │ setSuperNode / setAclData         │ planPath (can be called concurrently)
-   │                                │ uninit()                         │ setSuperNode / setAclData (can update)
+   │                                │ setSuperNode                     │ planPath (can be called concurrently)
+   │                                │ uninit()                         │ setSuperNode (can update)
    │                                │ Incremental operations (add/remove/get/…) │
    │                                │                                 │
    └──── uninit() ───▶ UNINIT ◀───────────────────────────────────────┘
@@ -2086,15 +1881,15 @@ The SNC service internally maintains the following lifecycle states:
 | State | Description | Allowed Operations |
 |:-----|:-----|:----------|
 | INIT | Initial state (not initialized) | init(), uninit() |
-| READY | Ready state (initialized, data not ready) | setSuperNode, setAclData; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries, addAclRules, removeAclRules); all query operations (getSuperNode, getAclData); removeSuperNode, removeAclData; uninit |
-| DATAREADY | Data ready state (topology + ACL both provisioned) | Same as READY, plus planPath |
+| READY | Ready state (initialized, data not ready) | setSuperNode; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries); all query operations (getSuperNode); removeSuperNode; uninit |
+| DATAREADY | Data ready state (topology provisioned) | Same as READY, plus planPath |
 | UNINIT | Deinitialized | (None, calling any operation throws SNCStateException) |
 
 **State Transition Rules:**
 - `init()`: INIT → READY (non-idempotent, repeated init rebuilds all internal objects)
 - `uninit()`: INIT / READY / DATAREADY → UNINIT (calling in INIT state only clears state flag, no side effects)
-- `setSuperNode()` + `setAclData()`: READY → DATAREADY (auto-transitions when both are provisioned)
-- `setSuperNode()` / `setAclData()`: DATAREADY → DATAREADY (data ready state can continue updating data)
+- `setSuperNode()`: READY → DATAREADY (auto-transitions when topology data is provisioned)
+- `setSuperNode()`: DATAREADY → DATAREADY (data ready state can continue updating data)
 - `planPath()`: Only available in **DATAREADY** state; returns SNCStateException when not in DATAREADY
 
 ---
@@ -2113,15 +1908,13 @@ All path planning error codes are returned via `PathPlanResult.status` (`PlanSta
 | 1002 | `DEST_EID_NOT_FOUND` | Destination EID not found | Step 0 |
 | 1003 | `SRC_INFO_ERR` | Source info missing or incorrect | Step 1 |
 | 1004 | `DST_INFO_ERR` | Destination info missing or incorrect | Step 2 |
-| 1005 | `ACL_CHECK_FAILED` | ACL check failed (including ACL data not existing and ACL entry mismatch) | Step 3/4 |
 
-| 1007 | `TOPO_INCOMPLETE` | Topology incomplete (device not found in super node devices) | Step 0 / Step 5~7 |
-| 1008 | `TOPO_CONNECTION_ERROR` | Topology connection error (direct connection validation failed) | Step 6 |
-| 1009 | `TOPO_CONNECTION_NOT_FOUND` | Topology connection not found (multi-hop path resolution failed) | Step 7 |
-| 1010 | `ROUTE_NOT_REACHABLE` | Route not reachable (indexed mask match missed or route entry has no out port) | Step 10 |
-| 1011 | `MULTI_PATH_NOT_SUPPORTED` | Multiple paths exist and device does not support per-flow | Step 11 |
+| 1007 | `TOPO_INCOMPLETE` | Topology incomplete (device not found in super node devices) | Step 0 / Step 3~5 |
+| 1008 | `TOPO_CONNECTION_ERROR` | Topology connection error (direct connection validation failed) | Step 4 |
+| 1009 | `TOPO_CONNECTION_NOT_FOUND` | Topology connection not found (multi-hop path resolution failed) | Step 5 |
+| 1010 | `ROUTE_NOT_REACHABLE` | Route not reachable (indexed mask match missed or route entry has no out port) | Step 8 |
+| 1011 | `MULTI_PATH_NOT_SUPPORTED` | Multiple paths exist and device does not support per-flow | Step 9 |
 | 1012 | `TOPO_NOT_FOUND` | Topology data not found (superNodeName is empty or corresponding SuperNode does not exist) | Step 0 |
-| 1013 | `ACL_NOT_FOUND` | ACL data not found (setAclData not called or superNodeName has no corresponding AclData) | Step 3 |
 | 3002 | `SRC_AND_DST_MUST_BE_NPU` | Source and destination must be NPU | Step 0 |
 | 3003 | `UPI_MISMATCH` | Source and destination port UPI mismatch | Step 0 |
 
@@ -2129,7 +1922,7 @@ All path planning error codes are returned via `PathPlanResult.status` (`PlanSta
 
 **Error Code Encoding Rules:**
 - `0`: Success
-- `1xxx`: Path planning phase errors (device/port/ACL/route/topology related)
+- `1xxx`: Path planning phase errors (device/port/route/topology related)
 - `3xxx`: Parameter validation errors
 
 **Layer-by-layer Processing Principles:**
@@ -2166,7 +1959,6 @@ All northbound interfaces should return the following structure when an exceptio
 SNCException (base exception)
 ├── SNCStateException        // State exception (not initialized, deinitialized, duplicate initialization)
 ├── SuperNodeNotFoundException    // Topology data not found
-├── AclNotFoundException     // ACL data not found
 └── PathPlanException        // Path planning failure (contains PlanStatus error code and description)
 ```
 
@@ -2175,7 +1967,6 @@ SNCException (base exception)
 | `SNCStateException` | Illegal invocation order (calling planPath without init, calling after uninit, etc.) | Throw directly, northbound caller catches and handles |
 | `IllegalArgumentException` | Input parameter is null, required fields missing | Entry validation, throw directly |
 | `SuperNodeNotFoundException` | setSuperNode not called or topology data incomplete (including superNodeName not existing and device not found) | Service layer converts to error code 1012/1001/1002/1007 |
-| `AclNotFoundException` | setAclData not called or ACL data incomplete | Service layer converts to error code 1013/1005 |
 | `PathPlanException` | Any business failure during planPath execution | Contains PlanStatus, northbound interface converts to PathPlanResult |
 
 #### 7.5.3 Error Propagation Chain
@@ -2202,7 +1993,6 @@ Parameter validation is performed uniformly at the northbound interface entry po
 | `superNode` non-null | `setSuperNode(SuperNode)` input parameter | Throw `IllegalArgumentException` |
 | `superNode.name` non-empty | Super node name is required (§4.1) | Throw `IllegalArgumentException` |
 | `superNode.devices` non-empty | Device Map is required (§4.1) | Throw `IllegalArgumentException` |
-| `aclData` non-null | `setAclData(AclData)` input parameter | Throw `IllegalArgumentException` |
 | `request` non-null | `planPath(PathPlanRequest)` input parameter | Throw `IllegalArgumentException` |
 | `request.superNodeName` non-empty | Super node name is required (§6.1), used for multi-super-node scenario positioning | Throw `IllegalArgumentException` |
 | `request.srcDevice` non-empty | Source device is required (§6.1) | Throw `IllegalArgumentException` |
@@ -2210,7 +2000,6 @@ Parameter validation is performed uniformly at the northbound interface entry po
 | `request.srcPort` non-empty | Source port is required (§6.1) | Throw `IllegalArgumentException` |
 | `request.destPort` non-empty | Destination port is required (§6.1) | Throw `IllegalArgumentException` |
 | `superNodeName` non-empty | `getSuperNode(String)` / `removeSuperNode(String)` input parameter | Throw `IllegalArgumentException` |
-| `superNodeName` non-empty | `getAclData(String)` / `removeAclData(String)` input parameter | Throw `IllegalArgumentException` |
 | deviceName format | `rack#os#npu` or `rack#l1sw0` format | Engine layer validation, returns error code 1003/1004 |
 
 > **Business rule validation** (device type must be NPU, EID/CNA completeness, etc.) is performed in the engine layer, not at the entry point.
@@ -2225,7 +2014,7 @@ The `SNCServiceImpl` implementation class delegates interface methods to interna
 SNCServiceImpl
     │
     ├── init(SNCConfig)
-    │     └→ SuperNodeStore.init() + AclStore.init()  // Initialize HashMaps
+    │     └→ SuperNodeStore.init()  // Initialize HashMap
     │
     ├── setSuperNode(SuperNode)
     │     └→ SuperNodeService.importSuperNode(superNode)
@@ -2251,39 +2040,20 @@ SNCServiceImpl
     │     └→ SuperNodeService.removeRoutingEntries(superNodeName, deviceName, chipIndex, prefixes) // Loop calls store.removeRoutingEntry()
     │              └→ SuperNodeStore.removeRoutingEntry(superNodeName, deviceName, chipIndex, prefix)  // Incremental delete route (single entry)
     │
-    ├── setAclData(AclData)
-    │     └→ AclService.importAclData(aclData)
-    │              └→ AclStore.replace(aclData)    // Full replacement of ACL index
-    │
-    ├── addAclRules(String, Map<AclKey, TpAclEntity>)
-    │     └→ AclService.addAclRules(superNodeName, rules)              // Loop calls store.addAclRule()
-    │              └→ AclStore.addAclRule(superNodeName, key, entity)  // Incremental add/update ACL rule (single entry)
-    │
-    ├── removeAclRules(String, List<AclKey>)
-    │     └→ AclService.removeAclRules(superNodeName, keys)                  // Loop calls store.removeAclRule()
-    │              └→ AclStore.removeAclRule(superNodeName, key)  // Incremental delete ACL rule (single entry)
-    │
     ├── getSuperNode(String)
     │     └→ SuperNodeStore.getSuperNode(superNodeName)        // Query topology data
     │
     ├── removeSuperNode(String)
     │     └→ SuperNodeStore.removeSuperNode(superNodeName)     // Delete topology data and associated routing tables
     │
-    ├── getAclData(String)
-    │     └→ AclStore.getAclData(superNodeName)             // Query ACL data
-    │
-    ├── removeAclData(String)
-    │     └→ AclStore.removeAclData(superNodeName)          // Delete ACL data
-    │
     ├── planPath(PathPlanRequest)
     │     └→ PathService.planPath(request)
-    │              ├→ AclCheckEngine.check()        // ACL validation (Step 3~4)
-    │              ├→ PathEngine.resolvePath()      // Path resolution (Step 5~7)
-    │              ├→ RouteLookupEngine.lookup()    // Path planning (Step 8~12)
-    │              └→ Assemble PathPlanResult            // Output construction (Step 13~15)
+    │              ├→ PathEngine.resolvePath()      // Path resolution (Step 3~5)
+    │              ├→ RouteLookupEngine.lookup()    // Path planning (Step 6~8)
+    │              └→ Assemble PathPlanResult            // Output construction (Step 9~10)
     │
     └── uninit()
-            └→ SuperNodeStore.clear() + AclStore.clear()  // Clear data
+            └→ SuperNodeStore.clear()  // Clear data
 ```
 
 ### 7.8 Invalid Invocation Order Description
@@ -2295,7 +2065,6 @@ The following invocation sequences are illegal, and SNC should return an error:
 | Calling other interfaces without `init()` | Internal data structures not initialized | Throw SNCException |
 | Calling other interfaces after `uninit()` | Already deinitialized, in-memory data cleared | Throw SNCException |
 | Calling `planPath()` without provisioning topology data | Cannot find device information | Return error code 1001/1002 |
-| Calling `planPath()` without provisioning ACL data | ACL validation fails | Return error code 1005 |
 | Repeated `init()` without calling `uninit()` | State machine duplicate initialization | Idempotent handling or throw exception |
 
 
@@ -2437,92 +2206,9 @@ public class SuperNodeStore {
 // Step 0: Locate super node
 SuperNode superNode = superNodeStore.getSuperNode(request.getSuperNodeName());
 
-// Step 10: Lookup routing table
+// Step 8: Lookup routing table
 RoutingTableKey rtKey = new RoutingTableKey(superNodeName, deviceName, chipIndex);
 RoutingTable rt = superNodeStore.getRoutingTable(rtKey);
-```
-
----
-
-### 7.10 AclStore (ACL Storage)
-
-The core storage layer for ACL data, maintaining the super node → ACL data primary index.
-
-```java
-public class AclStore {
-    /** ACL data primary index -- Map key is AclData.superNodeName (corresponding to superNodeName, §4.10), supporting multi-super-node scenarios */
-    private Map<String, AclData> store;
-
-    // ========== Lifecycle Methods ==========
-
-    /**
-     * Initialize storage
-     * <p>Create an empty HashMap instance.
-     */
-    public void init() {
-        this.store = new HashMap<>();
-    }
-
-    /**
-     * Full replacement of ACL data
-     * <p>Store AclData object in store Map with aclData.superNodeName as key.
-     * Old data with the same superNodeName is overwritten.
-     *
-     * @param aclData ACL data container (§4.10), requires superNodeName non-empty
-     */
-    public void replace(AclData aclData) {
-        store.put(aclData.getSuperNodeName(), aclData);
-    }
-
-    /**
-     * Clear all ACL data
-     */
-    public void clear() {
-        if (store != null) {
-            store.clear();
-        }
-    }
-
-    /**
-     * Delete ACL data for the specified superNodeName
-     *
-     * <p>Remove the AclData corresponding to the specified superNodeName from store.
-     *
-     * @param superNodeName ACL identifier (§4.10 AclData.superNodeName)
-     */
-    public void removeAclData(String superNodeName) {
-        store.remove(superNodeName);
-    }
-
-    // ========== Query Methods ==========
-
-    /**
-     * Get ACL data by superNodeName
-     *
-     * @param superNodeName ACL identifier (§4.10 AclData.superNodeName)
-     * @return AclData object, returns null if not exists
-     */
-    public AclData getAclData(String superNodeName) {
-        return store.get(superNodeName);
-    }
-}
-```
-
-**Design Notes:**
-
-| Feature | Description |
-|:-----|:-----|
-| Primary index `store` | Keyed by `superNodeName`, O(1) locate super node's ACL data |
-| `replace()` strategy | Full replacement: old data with the same superNodeName is overwritten |
-| `clear()` strategy | Map.clear() to clear |
-| ACL rule lookup | Secondary O(1) lookup via `AclData.tpAcls` (`Map<AclKey, TpAclEntity>`, §4.10) |
-
-**Query Flow Example:**
-```
-// Step 3/4: ACL validation
-AclData aclData = aclStore.getAclData(request.getSuperNodeName());
-AclKey key = new AclKey(sourceEid, destEid, TransportType.RCTP);
-TpAclEntity acl = aclData.getTpAcls().get(key);
 ```
 
 ---
@@ -2608,7 +2294,7 @@ import java.util.Map;
  * returning the longest matching RoutingEntry.
  *
  * <h3>Caller</h3>
- * PathService → RouteLookupEngine, corresponding to §9.5 Phase 4 Step 10.
+ * PathService → RouteLookupEngine, corresponding to §9.4 Phase 3 Step 8.
  */
 public class RouteLookupEngine {
 
@@ -2638,14 +2324,14 @@ public class RouteLookupEngine {
 
 ### 9.1 Flow Overview
 
-Path planning uses a **two-phase loop (forward → reverse) + direct connection short-circuit** as the overall control structure, with a total of 16 steps (Step 0 ~ Step 15):
+Path planning uses a **two-phase loop (forward → reverse) + direct connection short-circuit** as the overall control structure, with a total of 11 steps (Step 0 ~ Step 10):
 
 ```
-                                      Phase 1+2
+                                      Phase 1
                                   ┌──────────────┐
-                                  │ Step 0 ~ 5    │
+                                  │ Step 0 ~ 2    │
                                   │ Device check/ │
-                                  │ ACL/Node check│
+                                  │ Node check    │
                                   └───────┬──────┘
                                           │
                               ┌───────────┴───────────┐
@@ -2654,7 +2340,7 @@ Path planning uses a **two-phase loop (forward → reverse) + direct connection 
                      │ interDevices   │     │ interDevices     │
                      │ empty (direct) │     │ non-empty (multi)│
                      └───────┬────────┘     └────────┬─────────┘
-                             │ Step 6               │ Step 7
+                             │ Step 4               │ Step 5
                              ▼                      ▼
                      ┌────────────────┐     ┌──────────────────┐
                      │ Direct path    │     │ Multi-hop path   │
@@ -2666,36 +2352,36 @@ Path planning uses a **two-phase loop (forward → reverse) + direct connection 
                              │ (code 0)               │
                              │                        ▼
                              │              ┌──────────────────┐
-                             │              │ Step 8           │
+                             │              │ Step 6           │
                              │              │ Forward init     │
                              │              │ dst=dev2         │
                              │              └────────┬─────────┘
                              │                       ▼
                              │              ╔══════════════════╗
                              │              ║ Forward loop     ║
-                             │              ║ Step 10→11 × n   ║
+                             │              ║ Step 8→9 × n     ║
                              │              ╚══════╤═══════════╝
                              │                       ▼
                              │              ┌──────────────────┐
-                             │              │ Step 12          │
-                             │              │ dst==dev2?       │──→ Step 9 (Reverse)
+                             │              │ Step 10          │
+                             │              │ dst==dev2?       │──→ Step 7 (Reverse)
                              │              │ Yes (forward done)│     dst=dev1
                              │              └──────────────────┘         │
                              │                                          ▼
                              │                                 ╔════════════════════╗
                              │                                 ║ Reverse loop       ║
-                             │                                 ║ Step 10→11 × n     ║
+                             │                                 ║ Step 8→9 × n       ║
                              │                                 ╚══════╤═════════════╝
                              │                                          ▼
                              │                                 ┌──────────────────┐
-                             │                                 │ Step 12          │
-                             │                                 │ dst==dev1?       │──→ Step 14 (Output construction)
+                             │                                 │ Step 10          │
+                             │                                 │ dst==dev1?       │──→ §9.5 (construct output)
                              │                                 │ Yes (reverse done)│
                              │                                 └──────────────────┘
                              │                                          │
                              │                                          ▼
                              │                                 ┌──────────────────┐
-                             │                                 │ Step 13~15       │
+                             │                                 │ Step 9~10        │
                              │                                 │ UDP port compute │
                              └─────────────────────────────────┴──────────────────┘
 ```
@@ -2704,11 +2390,11 @@ Path planning uses a **two-phase loop (forward → reverse) + direct connection 
 
 | Phase | Direction | Target Address (targetAddr) | Destination Device | Execution Path |
 |:-----|:-----|:----------------------|:---------|:---------|
-| Forward (Step 8) | dev1 → dev2 | CNA2 (= dev2 port IP) | dev2 | Step 8 → [10 → 11]^n → 12 |
-| Reverse (Step 9) | dev2 → dev1 | CNA1 (= dev1 port IP) | dev1 | Step 9 → [10 → 11]^n → 12 → 14 |
+| Forward (Step 6) | dev1 → dev2 | CNA2 (= dev2 port IP) | dev2 | Step 6 → [8 → 9]^n → 10 |
+| Reverse (Step 7) | dev2 → dev1 | CNA1 (= dev1 port IP) | dev1 | Step 7 → [8 → 9]^n → 10 → §9.5 (construct output) |
 
 **Direct Connection Short-circuit Description:**
-- Step 6 is a **terminal step** — after direct path validation passes, it **returns success directly** (code 0), skipping Phase 4 (route planning Step 8~12) and Phase 5 (output construction Step 13~15).
+- Step 4 is a **terminal step** — after direct path validation passes, it **returns success directly** (code 0), skipping Phase 3 (route planning Step 6~8) and Phase 4 (output construction Step 9~10).
 - In direct connection scenarios, two devices' NPU ports are directly connected; the path does not pass through any switch devices, therefore **no routing table lookup is needed**. The communication path is guaranteed by physical port connection relationships.
 
 ---
@@ -2746,63 +2432,39 @@ Success → proceed to Step 3.
 
 ---
 
-### 9.3 Phase 2: ACL Bidirectional Validation (Step 3 ~ 4)
-
-> **Data Structure Reference:** §4.10 AclData, §4.11 AclKey, §4.12 TpAclEntity
-
-**Step 3 - Forward ACL Validation:**
-Construct `AclKey` (§4.11) using `(sourceEid=EID1, destEid=EID2, transportType=RCTP)` and look up in TP-ACL HashMap (`AclData.tpAcls`, §4.10).
-- If `AclData` object does not exist → return error code **1013** (`ACL_NOT_FOUND`, §6.2).
-- Lookup failed (key does not exist) → return error code **1005** (`ACL_CHECK_FAILED`, §6.2).
-- Lookup successful: verify that `sourceCna == CNA1` and `destCna == CNA2` in the ACL entry (`TpAclEntity`, §4.12).
-  - CNA mismatch → return error code **1005** (`ACL_CHECK_FAILED`).
-- Validation passed → proceed to Step 4.
-
-**Step 4 - Reverse ACL Validation:**
-Construct `AclKey` using `(sourceEid=EID2, destEid=EID1, transportType=RCTP)` and look up in TP-ACL HashMap.
-- If `AclData` object does not exist → return error code **1013** (`ACL_NOT_FOUND`, §6.2).
-- Lookup failed (key does not exist) → return error code **1005** (`ACL_CHECK_FAILED`).
-- Lookup successful: verify that `sourceCna == CNA2` and `destCna == CNA1` in the ACL entry.
-  - CNA mismatch → return error code **1005** (`ACL_CHECK_FAILED`).
-- Validation passed → proceed to Step 5.
-
-> **Transport Type Note:** The current version only supports `RCTP` (Reliable Transfer Protocol — Reliable Messaging); ACL validation hardcodes `transportType=RCTP`. `RMTP` (Reliable Connection), `UTP` (Unreliable Transfer Protocol) and `CTP` (Connection-oriented Transport Protocol) are reserved enum values, to be enabled in future versions when `PathPlanRequest` adds a `transportType` field. See §4.12 TransportType enum.
-
----
-
-### 9.4 Phase 3: Path Resolution (Step 5 ~ 7)
+### 9.3 Phase 2: Path Resolution (Step 3 ~ 5)
 
 > **Data Structure Reference:** §4.3 DeviceEntity (with getForwardingChips() abstract method), §4.4 ForwardingChip (with getPorts() abstract method), §4.5 PortEntity, §5.1 InternalPathInfo/InternalPathHop, §6.1 PathPlanRequest
 
-**Step 5 - Determine Intermediate Nodes:**
+**Step 3 - Determine Intermediate Nodes:**
 Check whether `request.interDevices` (§6.1) is empty:
-- No intermediate nodes → jump to Step 6 (direct connection scenario).
+- No intermediate nodes → jump to Step 4 (direct connection scenario).
   > **V1 Behavior Note:** The current version V1 does not implement auto-routing algorithm. When `interDevices` is empty, the engine only handles direct connection scenarios:
-  > - First execute Step 6 direct connection validation: if port connection relationship validation passes → return direct connection result (success).
+  > - First execute Step 4 direct connection validation: if port connection relationship validation passes → return direct connection result (success).
   > - If direct connection validation fails → return error code **1008** (`TOPO_CONNECTION_ERROR`, §6.2), flow terminates. The engine will not attempt to auto-discover multi-hop paths.
   > - The caller must ensure: if source and destination devices are not directly connected, intermediate devices and out ports must be explicitly specified in `interDevices`.
-- Has intermediate nodes → jump to Step 7 (multi-hop scenario, must explicitly specify intermediate devices and out ports).
+- Has intermediate nodes → jump to Step 5 (multi-hop scenario, must explicitly specify intermediate devices and out ports).
 
-**Step 6 - Direct Path Validation (Terminal Step):**
+**Step 4 - Direct Path Validation (Terminal Step):**
 Validate bidirectional connection relationships:
 - `port1.remoteDevice == dev2.deviceName` and `port1.remotePort == port2.portName`
 - `port2.remoteDevice == dev1.deviceName` and `port2.remotePort == port1.portName`
 
-If validation passes → construct return result per `PathPlanResult` (two-hop path, §6.2), **return success directly (code 0)**, no further execution of Phase 4 and Phase 5.
+If validation passes → construct return result per `PathPlanResult` (two-hop path, §6.2), **return success directly (code 0)**, no further execution of Phase 3 and Phase 4.
 
 If validation fails → return error code **1008** (`TOPO_CONNECTION_ERROR`, §6.2).
 
-> **Direct Connection Short-circuit Semantics:** Step 6 is a terminal step. In direct connection scenarios, the communication path is guaranteed by physical port connection relationships, without relying on routing table (§4.7) forwarding, therefore **Phase 4** (Step 8~12, route planning) and **Phase 5** (Step 13~15, UDP port computation and output construction) are **not executed**. This is intentional by design.
+> **Direct Connection Short-circuit Semantics:** Step 4 is a terminal step. In direct connection scenarios, the communication path is guaranteed by physical port connection relationships, without relying on routing table (§4.7) forwarding, therefore **Phase 3** (Step 6~8, route planning) and **Phase 4** (Step 9~10, UDP port computation and output construction) are **not executed**. This is intentional by design.
 
-**Step 7 - Multi-hop Path Resolution:**
+**Step 5 - Multi-hop Path Resolution:**
 Use `request.interDevices` and real topology data to construct the complete `InternalPathInfo` (§5.1).
 
-**7.1 Topology Data Validation:**
+**5.1 Topology Data Validation:**
 Iterate each `{deviceName → outPort}` entry in `interDevices`, check in `SuperNode.devices`:
 - Device existence: if `superNode.devices.get(deviceName)` returns null → return error code **1007** (`TOPO_INCOMPLETE`), flow terminates.
 - Port existence: if `outPort` cannot be found in any forwarding chip's `ports` of that device (iterate all chips via `device.getForwardingChips()`, then call `chip.getPorts()` to find port) → return error code **1007** (`TOPO_INCOMPLETE`), flow terminates.
 
-**7.2 Path Construction:**
+**5.2 Path Construction:**
 Assemble the complete `InternalPathInfo.hops` list in order:
 
 ```
@@ -2820,53 +2482,47 @@ hops[n+1] = dev2           (inPort=last hop remotePort, outPort=null)
   - **Connection validation:** For each hop, verify `currentHop.remoteDevice == nextHop.deviceName` and `currentHop.remotePort == nextHop.inPort` to ensure path continuity.
 - **Destination node (hops[n+1]):** `outPort=null`, `inPort` taken from previous hop's `remotePort`.
 
-**7.3 Connection Relationship Validation:**
+**5.3 Connection Relationship Validation:**
 Each hop's `remoteDevice` / `remotePort` must be consistent with the next hop's `deviceName` / `inPort`. If inconsistent → return error code **1009** (`TOPO_CONNECTION_NOT_FOUND`, §6.2).
 
-> **Implementation Note:** Device lookup uses the unified view returned by `superNode.getAllDevices()` (merged npuDevices + swDevices), with HashMap O(1) locating; port lookup via `NpuDevice.findNpuPort()` (NPU device, directly uses `NpuForwardingChip.getNpuPorts()`, no instanceof/cast needed) or iterating forwarding chips' `getPorts()` Map (SW devices) (§4.4, §4.5). The port's belonging chip (`chipIndex`) is automatically covered in Step 10 route lookup by iterating all `ForwardingChip` (via `device.getForwardingChips()`) of the device, without needing to be separately recorded in Step 7.
+> **Implementation Note:** Device lookup uses the unified view returned by `superNode.getAllDevices()` (merged npuDevices + swDevices), with HashMap O(1) locating; port lookup via `NpuDevice.findNpuPort()` (NPU device, directly uses `NpuForwardingChip.getNpuPorts()`, no instanceof/cast needed) or iterating forwarding chips' `getPorts()` Map (SW devices) (§4.4, §4.5). The port's belonging chip (`chipIndex`) is automatically covered in Step 8 route lookup by iterating all `ForwardingChip` (via `device.getForwardingChips()`) of the device, without needing to be separately recorded in Step 5.
 
 ---
 
-### 9.5 Phase 4: Path Planning Loop (Step 8 ~ 12)
+### 9.4 Phase 3: Path Planning Loop (Step 6 ~ 8)
 
 > **Data Structure Reference:** §4.7 RoutingTable (with maskLengths), §4.8 RoutePrefix, §4.9 RoutingEntry/OutPortInfo, §5.2 RouteSelectionRecord, §8 Indexed Mask Match algorithm
 
-The core structure of Phase 4 is a **two-phase loop**, distinguished by `currentPhase` state flag for forward/reverse:
+The core structure of Phase 3 is a **two-phase loop**, distinguished by `currentPhase` state flag for forward/reverse:
 
 ```
-Forward (Step 8)          Reverse (Step 9)
+Forward (Step 6)          Reverse (Step 7)
      │                       │
      ▼                       ▼
 ┌─────────────────────────────────────┐
-│ Step 10: Path planning loop (execute for each intermediate device) │
+│ Step 8: Path planning loop (execute for each intermediate device) │
 │   for each intermediate device:     │
 │     1. Iterate all ForwardingChips of the device │
 │     2. For each chip, do indexed mask match (targetAddr) │
 │     3. Take best result from all chips          │
 │     4. Validate route out port consistency with topology connection │
 │     5. If ECMP → record RouteSelectionRecord │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│ Step 12: Direction switch judgment   │
-│   if currentPhase == FORWARD:        │
-│       → Step 9 (switch to reverse)   │
-│   if currentPhase == REVERSE:        │
-│       → Step 14 (construct output)   │
+│   After loop:                          │
+│     if FORWARD → switch to reverse (Step 7) │
+│     if REVERSE → construct output (§9.5) │
 └─────────────────────────────────────┘
 ```
 
-#### 9.5.1 Forward Phase (Step 8 → 10 → 11 → 12)
+#### 9.4.1 Forward Phase (Step 6 → 8)
 
-**Step 8 - Forward Path Planning Initial Setup:**
+**Step 6 - Forward Path Planning Initial Setup:**
 - Set current phase flag `currentPhase = FORWARD`
 - Destination device = `dev2`, destination port = `port2`, destination address = `CNA2` (32 bit), source address = `CNA1` (32 bit)
-- Proceed to Step 10
+- Proceed to Step 8
 
-#### 9.5.2 Reverse Phase (Step 9 → 10 → 11 → 12)
+#### 9.4.2 Reverse Phase (Step 7 → 8)
 
-**Step 9 - Reverse Path Planning Initial Setup:**
+**Step 7 - Reverse Path Planning Initial Setup:**
 - Set current phase flag `currentPhase = REVERSE`
 - **Path reversal:** Reverse the current `InternalPathInfo.hops` list (`Collections.reverse()`)
 
@@ -2879,9 +2535,9 @@ Forward (Step 8)          Reverse (Step 9)
   | hopIndex | Renumber (0 ~ hops.size()-1) |
 
 - Destination device = `dev1`, destination port = `port1`, destination address = `CNA1` (32 bit), source address = `CNA2` (32 bit)
-- Proceed to Step 10
+- Proceed to Step 8
 
-#### 9.5.3 Step 10 - Path Planning Loop (Core)
+#### 9.4.3 Step 8 - Path Planning Loop (Core)
 
 From the current `InternalPathInfo.hops` list, **exclude head and tail nodes** (head = current source device, tail = current destination device), and execute path planning for each remaining intermediate device.
 
@@ -2894,7 +2550,7 @@ From the current `InternalPathInfo.hops` list, **exclude head and tail nodes** (
 
 **① Address Determination:**
 - `targetAddr` = current phase's destination address (forward = `CNA2`, reverse = `CNA1`), 32-bit CNA address.
-- `prevHop` = previous hop (the device already processed in the loop), used for Step 10 ⑤ next-hop validation.
+- `prevHop` = previous hop (the device already processed in the loop), used for Step 8 ⑤ next-hop validation.
 
 **② Cross-chip Route Lookup:**
 Routing tables are stored per chip (§4.7); the inbound port's chip may not contain the route to the destination. Therefore, **iterate all `ForwardingChip` of the current device** (via `device.getForwardingChips()` abstract method, §4.3), and for each chip execute the following steps:
@@ -2938,18 +2594,18 @@ Compare the route-matched `outPort` (or the first port among ECMP candidates) wi
 
 > **Validation Significance:** `interDevices` specifies path topology (which device connects to which), routing tables specify forwarding decisions. Both must be consistent — the out port pointed to by the routing table should connect to the next-hop device in the path. This validation captures routing configuration misalignment issues.
 
-**⑤ Result Summary then proceed to Step 11:**
-Pass the final `RoutingEntry` and current device information to Step 11 for out port judgment.
+**⑤ Result Summary then proceed to Step 9:**
+Pass the final `RoutingEntry` and current device information to Step 9 for out port judgment.
 
 > **Next-hop Relationship:** For the currently processing intermediate device `currentHop`:
 > - Forward phase: `currentHop`'s next hop has a larger index in the path (closer to destination device)
 > - Reverse phase: `currentHop`'s next hop has a larger index in the path (closer to original dev1, i.e., reversed destination)
 
-If current loop has processed all intermediate devices → skip Step 11, proceed to Step 12.
+If current loop has processed all intermediate devices → skip Step 9, proceed to Step 10.
 
-#### 9.5.4 Step 11 - Out Port Judgment and Route Selection Recording
+#### 9.4.4 Step 9 - Out Port Judgment and Route Selection Recording
 
-Judge the out port for `RoutingEntry.outPortInfos` returned by Step 10:
+Judge the out port for `RoutingEntry.outPortInfos` returned by Step 8:
 
 | Condition | Handling |
 |:-----|:-----|
@@ -2967,16 +2623,16 @@ record.setCandidateOutPorts(candidateList);                // All candidate OutP
 record.setScna(CNA1);                                      // Source CNA (unchanged)
 record.setDcna(CNA2);                                      // Destination CNA (unchanged)
 record.setDirection(currentPhase == FORWARD ? Direction.FORWARD : Direction.REVERSE);
-// hashInfo records tuple identifier (SCNA:DCNA), for Step 13 hash computation
+// hashInfo records tuple identifier (SCNA:DCNA), for §9.5 Step 9 hash computation
 record.setHashInfo(CNA1 + ":" + CNA2);
 ```
 
 - `candidateOutPorts`: All candidate `OutPortInfo` are added; the port consistent with `interDevices` specified out port is marked as `selected=true` (i.e., path-specified target port), others as `false`.
-- This record is appended to the end of `RouteSelectionRecord` list for Step 13 use.
+- This record is appended to the end of `RouteSelectionRecord` list for §9.5 Step 9 use.
 
-> **Inter-chassis Multi-path Route Selection Note:** When multiple ECMP segments exist on the path (e.g., L1SW0→L2SW and L2SW→L1SW1 are both multi-path), Step 11 only records candidate out port list and the path-specified target port (`selected=true`). The detailed flow of hash algorithm searching UDP port numbers satisfying all ECMP segment constraints is in Step 13.
+> **Inter-chassis Multi-path Route Selection Note:** When multiple ECMP segments exist on the path (e.g., L1SW0→L2SW and L2SW→L1SW1 are both multi-path), Step 9 only records candidate out port list and the path-specified target port (`selected=true`). The detailed flow of hash algorithm searching UDP port numbers satisfying all ECMP segment constraints is in §9.5 Step 9.
 
-#### 9.5.5 Step 12 - Direction Switch Judgment
+#### 9.4.5 Step 10 - Direction Switch Judgment
 
 Determine the flow direction based on current phase flag `currentPhase`:
 
@@ -2984,22 +2640,22 @@ Determine the flow direction based on current phase flag `currentPhase`:
 if currentPhase == FORWARD:
     // Forward phase has completed route lookup for all intermediate devices
     // Switch to reverse phase
-    → Jump to Step 9 (reverse path setup)
+    → Jump to Step 7 (reverse path setup)
 
 if currentPhase == REVERSE:
     // Reverse phase also completed
     // Restore path to forward order (reverse again)
-    → Execute path reversal (same rules as Step 9), restore to forward order
-    → Jump to Step 14 (construct output)
+    → Execute path reversal (same rules as Step 7), restore to forward order
+    → Enter output construction phase (§9.5, Step 9~10)
 ```
 
 ---
 
-### 9.6 Phase 5: Output Construction (Step 13 ~ 15)
+### 9.5 Phase 4: Output Construction (Step 9 ~ 10)
 
 > **Data Structure Reference:** §5.2 RouteSelectionRecord, §6.2 PathPlanResult/PathInfo/HopInfo
 
-**Step 13 - UDP Port Computation (Inter-chassis Multi-path Scenario):**
+**Step 9 - UDP Port Computation (Inter-chassis Multi-path Scenario):**
 
 When `RouteSelectionRecord` list is non-empty, a 8-bit source UDP port number (0~255) needs to be computed for forward and reverse directions separately, so that the hash algorithm selects the `interDevices` specified path on each ECMP segment.
 
@@ -3007,7 +2663,7 @@ When `RouteSelectionRecord` list is non-empty, a 8-bit source UDP port number (0
 
 > **Background:** In inter-chassis multi-path scenarios (e.g., NPU0↔L1SW0↔L2SW↔L1SW1↔NPU1), routing tables on intermediate devices L1SW0 and L2SW may simultaneously have multiple out ports (ECMP). The same source UDP port number must simultaneously satisfy hash route selection constraints on all ECMP segments, ensuring the entire path connects according to `interDevices` specified ports.
 
-**13.1 Hash Algorithm Definition:**
+**9.1 Hash Algorithm Definition:**
 
 ```
 Selected port index = hash(SCNA, DCNA, srcUdpPort) % candidateOutPorts.size()
@@ -3017,7 +2673,7 @@ Selected port index = hash(SCNA, DCNA, srcUdpPort) % candidateOutPorts.size()
 - **Output**: Integer hash value, modulo candidate port count to get selected out port index
 - **Stubbable**: Hash function can be stub injected during testing, precisely controlling output values for specific tuples, bypassing multi-segment coupled search complexity
 
-**13.2 Forward Path Port Computation (dataUdpSrcPort):**
+**9.2 Forward Path Port Computation (dataUdpSrcPort):**
 
 The forward path's UDP source port corresponds to `PathPlanResult.dataUdpSrcPort`, computed as follows:
 
@@ -3039,7 +2695,7 @@ Iterate port ∈ [0, 255]:
 - Condition satisfied: All FORWARD direction ECMP segments selected target port → record `dataUdpSrcPort`
 - No solution (no port value in 0~255 range satisfies all constraints) → return error code **1** (`FAILED`)
 
-**13.3 Reverse Path Port Computation (ackUdpSrcPort):**
+**9.3 Reverse Path Port Computation (ackUdpSrcPort):**
 
 The reverse path's UDP source port corresponds to `PathPlanResult.ackUdpSrcPort`, computed similarly to forward but with SCNA/DCNA swapped:
 
@@ -3058,7 +2714,7 @@ Iterate port ∈ [0, 255]:
         break
 ```
 
-**13.4 Forward-Reverse Relationship Description:**
+**9.4 Forward-Reverse Relationship Description:**
 
 | Attribute | Forward (dataUdpSrcPort) | Reverse (ackUdpSrcPort) |
 |:-----|:----------------------|:----------------------|
@@ -3071,50 +2727,47 @@ Iterate port ∈ [0, 255]:
 - When only one ECMP segment exists on the path, typically multiple UDP port values satisfy the constraint, with ample search space.
 - When multiple ECMP segments exist on the path (e.g., both L1SW0 and L2SW have multi-path), the same UDP port must simultaneously satisfy multi-segment constraints, narrowing search space. Since hash is stub-implemented, testing can inject precise mappings to bypass multi-segment coupling.
 
-**13.5 No ECMP Scenario:**
+**9.5 No ECMP Scenario:**
 
 If `RouteSelectionRecord` list is empty (all device out ports on the path are unique), this step is skipped; `dataUdpSrcPort` and `ackUdpSrcPort` use default values or are left empty.
 
-**13.6 RouteSelectionRecord Lifecycle Review:**
+**9.6 RouteSelectionRecord Lifecycle Review:**
 
 | Phase | Operation | Record Direction |
 |:-----|:-----|:---------|
-| Forward (Step 8→10→11→12) | Forward path ECMP nodes → append records | FORWARD |
-| Reverse (Step 9→10→11→12) | Reverse path ECMP nodes → append records | REVERSE |
-| Step 13 | Consume by direction group, independently compute dataUdpSrcPort / ackUdpSrcPort | Both directions |
+| Forward (Step 6→8→9→10) | Forward path ECMP nodes → append records | FORWARD |
+| Reverse (Step 7→8→9→10) | Reverse path ECMP nodes → append records | REVERSE |
+| §9.5 Step 9 | Consume by direction group, independently compute dataUdpSrcPort / ackUdpSrcPort | Both directions |
 
-**Step 14 - Fill PathPlanResult:**
+**Step 10 - Fill PathPlanResult:**
 Fill the following information into `PathPlanResult` object (§6.2):
 - `sourceEid` / `destEid`: EID pair information (from Step 1/2)
 - `path`: Path hop-by-hop information (`PathInfo` → `List<HopInfo>`), converted from `InternalPathInfo.hops` (§5.1) to external `HopInfo` (§6.2.2)
-- `ackUdpSrcPort` / `dataUdpSrcPort`: UDP port pair information (if Step 13 has computed)
+- `ackUdpSrcPort` / `dataUdpSrcPort`: UDP port pair information (if §9.5 Step 9 has computed)
 
-**Step 15 - Return Success:**
 Return success (code **0**), with complete `PathPlanResult` information.
 
 ---
 
-### 9.7 Error Code and Step Mapping
+### 9.6 Error Code and Step Mapping
 
 | Error Code | Name | Trigger Step | Description |
 |:-------|:-----|:---------|:-----|
-| 0 | SUCCESS | Step 6 / 15 | Success (direct connection success or complete path planning success) |
+| 0 | SUCCESS | Step 4 / 10 | Success (direct connection success or complete path planning success) |
 | 1003 | SRC_INFO_ERR | Step 1 | Source information missing |
 | 1004 | DST_INFO_ERR | Step 2 | Destination information missing |
-| 1005 | ACL_CHECK_FAILED | Step 3 / 4 | ACL validation failed (key not existing or CNA mismatch) |
-| 1007 | TOPO_INCOMPLETE | Step 0 / 7 | Topology incomplete (device not found in SuperNode) |
-| 1008 | TOPO_CONNECTION_ERROR | Step 6 | Direct connection validation failed (port connection relationship mismatch) |
-| 1009 | TOPO_CONNECTION_NOT_FOUND | Step 7 | Multi-hop path resolution failed (connection relationship error) |
-| 1010 | ROUTE_NOT_REACHABLE | Step 10 | Route unreachable (no route, no out port, or out port inconsistent with topology) |
-| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 11 | Multiple paths (ECMP) and device does not support autonomous per-flow |
+| 1007 | TOPO_INCOMPLETE | Step 0 / 5 | Topology incomplete (device not found in SuperNode) |
+| 1008 | TOPO_CONNECTION_ERROR | Step 4 | Direct connection validation failed (port connection relationship mismatch) |
+| 1009 | TOPO_CONNECTION_NOT_FOUND | Step 5 | Multi-hop path resolution failed (connection relationship error) |
+| 1010 | ROUTE_NOT_REACHABLE | Step 8 | Route unreachable (no route, no out port, or out port inconsistent with topology) |
+| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 9 | Multiple paths (ECMP) and device does not support autonomous per-flow |
 | 1012 | TOPO_NOT_FOUND | Step 0 | Super node does not exist |
-| 1013 | ACL_NOT_FOUND | Step 3 / 4 | AclData object does not exist (supplementary check) |
 | 3002 | SRC_AND_DST_MUST_BE_NPU | Step 0 | Source and destination must be NPU devices |
 | 3003 | UPI_MISMATCH | Step 0 | Source and destination port UPI mismatch |
 
 ---
 
-### 9.8 Flow Data Flow Overview
+### 9.7 Flow Data Flow Overview
 
 ```
 PathPlanRequest (§6.1)
@@ -3128,18 +2781,11 @@ PathPlanRequest (§6.1)
 │   Error codes: 3002, 3003, 1003, 1004, 1007, 1012                      │
 └─────────────────────────┬────────────────────────────────────────────────┘
                           │
-┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase 2 (Step 3~4): ACL Bidirectional Validation                       │
-│   AclData.tpAcls → AclKey(EID1, EID2, RCTP) → TpAclEntity               │
-│   Validate: sourceCna == CNA1, destCna == CNA2 (forward + reverse)     │
-│   Error codes: 1005, 1013                                               │
-└─────────────────────────┬────────────────────────────────────────────────┘
-                          │
              ┌────────────┴────────────┐
              ▼                         ▼
 ┌─────────────────────────┐  ┌──────────────────────────────────────────────┐
-│ Phase 3: interDevices empty │  │ Phase 3: interDevices non-empty              │
-│ Step 6: Direct validation │  │ Step 7: Multi-hop resolution → InternalPathInfo│
+│ Phase 2: interDevices empty │  │ Phase 2: interDevices non-empty              │
+│ Step 4: Direct validation │  │ Step 5: Multi-hop resolution → InternalPathInfo│
 │ (terminal)                │  │   Validate: device existence, port existence, │
 │ Error code: 1008          │  │   connection continuity                      │
 │ Success: Return directly  │  │   Error codes: 1007, 1009                    │
@@ -3147,21 +2793,21 @@ PathPlanRequest (§6.1)
 ┌─────────────────────────┐  │                       │
                             │
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase 4 (Step 8→9→10→11→12): Path Planning Loop (Forward + Reverse)    │
-│   Step 8: Forward setup (target=CNA2, dst=dev2, phase=FORWARD)          │
-│   Step 9: Reverse setup (reverse path, target=CNA1, dst=dev1, phase=REVERSE) │
+│ Phase 3 (Step 6→7→8→9→10): Path Planning Loop (Forward + Reverse)    │
+│   Step 6: Forward setup (target=CNA2, dst=dev2, phase=FORWARD)          │
+│   Step 7: Reverse setup (reverse path, target=CNA1, dst=dev1, phase=REVERSE) │
 │                                                                           │
-│   Step 10 (for each intermediate device):                                 │
+│   Step 8 (for each intermediate device):                                 │
 │     ┌─────────────────────────────────────────────────────────────────┐  │
 │     │ ① Iterate device.getForwardingChips() all chips                    │  │
 │     │ ② For each chip: RoutingTableKey → superNodeStore.getRoutingTable│  │
 │     │ ③ Indexed mask match: maskLengths[0..n] → RoutePrefix → O(1) hit │  │
 │     │ ④ Cross-chip selection: take RoutingEntry with largest maskLen    │  │
 │     │ ⑤ Out port and next-hop consistency validation                   │  │
-│     │ ⑥ Result forwarded to Step 11                                   │  │
+│     │ ⑥ Result forwarded to Step 9                                   │  │
 │     └─────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│   Step 11: Out Port Judgment                                             │
+│   Step 9: Out Port Judgment                                             │
 │     1 out port → proceed to next hop normally                           │
 │     Multiple out ports (no ECMP support) → 1011                        │
 │     Multiple out ports (ECMP supported) → append RouteSelectionRecord  │
@@ -3170,10 +2816,10 @@ PathPlanRequest (§6.1)
 └──────────────────────────────────┬───────────────────────────────────────┘
                                    │
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Phase 5 (Step 13~15): Output Construction                              │
-│   Step 13: UDP port computation (based on forward + reverse RouteSelectionRecord list) │
-│   Step 14: InternalPathInfo → PathPlanResult [§6.2]                     │
-│   Step 15: Return success (code 0)                                       │
+│ Phase 4 (Step 9~10): Output Construction                              │
+│   Step 9: UDP port computation (based on forward + reverse RouteSelectionRecord list) │
+│   Step 10: InternalPathInfo → PathPlanResult [§6.2]                     │
+│   Return success (code 0)                                                │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

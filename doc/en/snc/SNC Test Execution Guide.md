@@ -83,7 +83,7 @@ mvn package -Dmaven.test.skip=true
 ### 6.1 Test Failure — Checklist
 
 - Check whether JSON test resource files exist (`src/test/resources/`)
-- Verify that EID/CNA in ACL JSON match those in topology JSON
+- Verify that port EID/CNA in topology JSON are complete
 - Verify that port names are defined in topology data
 - Verify that route prefixes match the results of `cnaToTargetAddr()` (requires `/32` exact match)
 
