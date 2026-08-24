@@ -21,6 +21,16 @@
 - Lightning Indexer 返回当前 token 的 TopK 相关历史 token 位置；`gather_selection_kv_cache` 算子据此从 Host Full KVCache 中 gather 出参与 SFA（Sparse Flash Attention）计算的 KV，写入设备侧 selection cache。
 - 算子利用相邻 decode step 间 TopK 的高命中率：已在设备 selection cache 中的 token 直接复用，仅对 Host 侧新增 token 做 H2D，降低 gather 与传输开销。
 
+**Decode 双流 Offload 优化（可选）**
+
+Decode 阶段的 `gather_selection_kv_cache`（含 H2D 搬运）与后续 SFA 计算默认在同一条流上串行执行，搬运与计算无法重叠。开启双流 Offload 后：
+
+- 按 batch 将 `gather + SFA` 均匀切成 **2 块**，`gather`（H2D）下发到 OffloadCache 的专用 `gather_stream`，SFA 在主流上计算。
+- 每块 SFA 通过 event 等待其对应块的 gather 完成，从而让第 `i+1` 块的 gather 与第 `i` 块的 SFA 并行，把 SFA 的计算时间藏进 gather 的搬运时间里，降低 decode 时延。
+- 正确性依据：不同 batch 使用的 selection block 区间与 status 行互不重叠，可安全并发；输出与单流路径逐块等价。
+
+该优化通过 yaml 的 `model_config.enable_dual_stream_offload` 开关控制，仅在 `exe_mode: eager` + `enable_offload: True` 的 decode 场景生效（依赖运行时 stream/event 原语，无法被图捕获，graph 模式下自动回退到单流路径）。
+
 > 本特性依赖 CAM 自定义算子库 `umdk_cam_op_lib`（其中需提供 `gather_selection_kv_cache` 等算子）。代码中通过 `import umdk_cam_op_lib` 注册算子，运行前请确保该 whl 已构建并安装（见下文“构建并安装 CAM 算子库”）。
 
 ---
@@ -170,6 +180,8 @@ bash utils/weight_convert.sh --input_fp8_hf_path /data/models/DeepSeek-V3.2-Exp-
   ```
 
 - 若要开启 KVCache Offload，请选择带 `offload` 的配置（如 `config/deepseek_v3.2_exp_rank_128_128ep_w8a8c8_offload_benchmark.yaml`），或在 yaml 中将 `model_config.enable_offload` 置为 `True`。
+
+- 若要在 offload decode 上开启 **双流 Offload 优化**（gather 与 SFA 计算重叠，详见“方案设计”），在 yaml 中将 `model_config.enable_dual_stream_offload` 置为 `True`（默认 `False`）。该开关需与 `enable_offload: True` 且 `exe_mode: eager` 搭配使用，其他模式下不生效。
 
 - 在各个节点上修改 `infer.sh` 中的 `YAML_FILE_NAME`，指定为上一步需要执行的 yaml 文件名。
 
