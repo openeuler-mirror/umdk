@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "urma_api.h"
 #include "urma_ubagg.h"
@@ -484,7 +485,6 @@ typedef struct jetty_pool_node {
 
 typedef struct ub_queue_cfg {
     bondp_port_id_t *used_port;
-    umq_trans_mode_t umq_trans_mode;
     urma_order_type_t order_type;
     urma_transport_mode_t tp_mode;
     urma_tp_type_t tp_type;
@@ -509,6 +509,13 @@ typedef struct ub_queue_cfg {
 } ub_queue_cfg_t;
 
 typedef struct ub_queue {
+    /* `mode` MUST be the first member (offset 0) so an external uint64_t handle
+     * (a ub_queue_t pointer) can be cast to umq_t* to read mode, matching the
+     * umq_t layout defined in umq_inner.h. `state` follows at offset 4 to fill
+     * the 4B alignment pad before qctx_node (8B-aligned), avoiding memory waste;
+     * moved up from its previous position with no net increase of sizeof(ub_queue_t). */
+    umq_trans_mode_t mode;
+    umq_state_t state;
     urpc_list_t qctx_node;
     // queue param
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
@@ -525,7 +532,6 @@ typedef struct ub_queue {
     volatile uint64_t jetty_node;       // jetty_pool_node_t *, atomically accessed
     pthread_spinlock_t get_jetty_node_lock;
 
-    uint64_t umqh;
     uint64_t share_rq_umqh;
     uint64_t umq_ctx;
     volatile uint64_t *packet_stats;
@@ -533,7 +539,6 @@ typedef struct ub_queue {
     volatile uint32_t tx_outstanding;
 
     uint32_t create_flag;
-    umq_state_t state;
     uint32_t umq_id;
     uint32_t remote_umq_id;
     uint32_t remote_rx_buf_size;
@@ -549,6 +554,11 @@ typedef struct ub_queue {
     // config param, logic umq get cfg from share_rq_umqh
     ub_queue_cfg_t cfg[0];
 } ub_queue_t;
+
+/* Lock the overlay cast contract: ub_queue_t::mode MUST sit at offset 0 so an
+ * external uint64_t handle (a ub_queue_t pointer) can be cast to umq_t* to read
+ * mode before dispatching into umq_ub. See umq_inner.h for the umq_t layout. */
+_Static_assert(offsetof(ub_queue_t, mode) == 0, "ub_queue_t.mode must be at offset 0 for umq_t overlay cast");
 
 typedef struct user_ctx {
     umq_buf_t *dst_buf;
@@ -788,8 +798,7 @@ static inline ub_queue_cfg_t *umq_ub_queue_cfg_get(ub_queue_t *queue)
     }
 
     // share_rq_umqh has been validated
-    umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
     return share_rq->cfg;
 }
 

@@ -36,12 +36,12 @@
 int umq_stats_flow_control_get(uint64_t umqh, umq_flow_control_stats_t *flow_control_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_stats_flow_control_get == NULL || flow_control_stats == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_stats_flow_control_get == NULL || flow_control_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or flow control stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->dfx_tp_ops->umq_tp_stats_flow_control_get(umq->umqh_tp, flow_control_stats);
+    return ops->umq_tp_stats_flow_control_get(umqh, flow_control_stats);
 }
 
 int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_stats, char *buf, int max_buf_len)
@@ -156,13 +156,13 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
     }
 
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_stats_qbuf_pool_get == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_stats_qbuf_pool_get == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or qbuf pool stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq->dfx_tp_ops->umq_tp_stats_qbuf_pool_get(umq->umqh_tp, qbuf_pool_stats);
+    return ops->umq_tp_stats_qbuf_pool_get(umqh, qbuf_pool_stats);
 }
 
 static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
@@ -358,13 +358,13 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
 int umq_info_get(uint64_t umqh, umq_info_t *umq_info)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_info_get == NULL || umq_info == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_info_get == NULL || umq_info == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or umq info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq->dfx_tp_ops->umq_tp_info_get(umq->umqh_tp, umq_info);
+    return ops->umq_tp_info_get(umqh, umq_info);
 }
 
 int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
@@ -421,23 +421,23 @@ int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
 int umq_stats_io_get(uint64_t umqh, umq_packet_stats_t *packet_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_stats_io_get == NULL || packet_stats == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_stats_io_get == NULL || packet_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or packet stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->dfx_tp_ops->umq_tp_stats_io_get(umq->umqh_tp, packet_stats);
+    return ops->umq_tp_stats_io_get(umqh, packet_stats);
 }
 
 int umq_stats_io_reset(uint64_t umqh)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_stats_io_reset == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_stats_io_reset == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->dfx_tp_ops->umq_tp_stats_io_reset(umq->umqh_tp);
+    return ops->umq_tp_stats_io_reset(umqh);
 }
 
 int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int max_buf_len)
@@ -479,12 +479,13 @@ int umq_io_stats_to_str(const umq_packet_stats_t *packet_stats, char *buf, int m
 int umq_stats_transport_pool_get(uint64_t umqh, umq_transport_pool_stats_t *umq_transport_pool_stats)
 {
     umq_t *umq = (umq_t *)(uintptr_t)umqh;
-    if (umq == NULL || umq->umqh_tp == UMQ_INVALID_HANDLE || umq->dfx_tp_ops == NULL ||
-        umq->dfx_tp_ops->umq_tp_stats_transport_pool_get == NULL || umq_transport_pool_stats == NULL) {
+    umq_dfx_ops_t *ops = (umq == NULL) ? NULL : umq_dfx_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_stats_transport_pool_get == NULL ||
+        umq_transport_pool_stats == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umqh or transport pool stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    return umq->dfx_tp_ops->umq_tp_stats_transport_pool_get(umq_transport_pool_stats);
+    return ops->umq_tp_stats_transport_pool_get(umq_transport_pool_stats);
 }
 
 int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transport_pool_stats,
@@ -621,7 +622,7 @@ int umq_stats_tp_perf_start(umq_trans_mode_t trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_start == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
@@ -644,7 +645,7 @@ int umq_stats_tp_perf_stop(umq_trans_mode_t trans_mode)
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_stop == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
@@ -667,7 +668,7 @@ int umq_stats_tp_perf_info_get(umq_trans_mode_t trans_mode, char *perf_buf, uint
         return -UMQ_ERR_EINVAL;
     }
 
-    umq_dfx_ops_t *dfx_tp_ops = umq_get_dfx_tp_ops(trans_mode);
+    umq_dfx_ops_t *dfx_tp_ops = umq_dfx_tp_ops_get(trans_mode);
     if (dfx_tp_ops == NULL || dfx_tp_ops->umq_tp_stats_tp_perf_info_get == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "trans mode %u ops not support\n", trans_mode);
         return -UMQ_ERR_EINVAL;
