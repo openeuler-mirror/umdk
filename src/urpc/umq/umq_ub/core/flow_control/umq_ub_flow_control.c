@@ -603,8 +603,7 @@ static int umq_ub_fc_msg_retry_list_init(ub_queue_t *queue)
     int ret = 0;
     uint32_t list_size = UMQ_UB_FC_MSG_RETRY_LIST_SIZE_STANDALONE;
     if (is_umq_ub_share_rq(queue->create_flag)) {
-        umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        ub_queue_t *main_queue = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
         queue->flow_control->fc_msg_retry_list = main_queue->flow_control->fc_msg_retry_list;
         return UMQ_SUCCESS;
     } else if (is_umq_ub_main_queue(queue->create_flag)) {
