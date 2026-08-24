@@ -51,7 +51,7 @@ typedef enum umq_buf_status {
     UMQ_BUF_REM_OPERATION_ERR,          /* Error when target jetty can not complete the operation */
     UMQ_BUF_REM_ACCESS_ABORT_ERR,       /* Error when target jetty access memory error or abort the operation */
     UMQ_BUF_ACK_TIMEOUT_ERR,            /* Retransmission exceeds the maximum number of times */
-    UMQ_BUF_RNR_RETRY_CNT_EXC_ERR,      /* RNR retries exhausted (fatal): remote jfr has no buffer */
+    UMQ_BUF_RNR_RETRY_CNT_EXC_ERR,      /* RNR retries exceeded the maximum number: remote jfr has no buffer */
     UMQ_BUF_WR_FLUSH_ERR,               /* Jetty in the error state, and the hardware has processed the WR. */
     UMQ_BUF_WR_SUSPEND_DONE,            /* Hardware constructs a fake CQE, and user_ctx is invalid. */
     UMQ_BUF_WR_FLUSH_ERR_DONE,          /* Hardware constructs a fake CQE, and user_ctx is invalid. */
@@ -59,8 +59,7 @@ typedef enum umq_buf_status {
     UMQ_BUF_LOC_DATA_POISON,            /* Local Data Poison */
     UMQ_BUF_REM_DATA_POISON,            /* Remote Data Poison */
 
-    /* RNR soft backpressure signal: retransmission in progress (URMA passthrough), not fatal */
-    UMQ_BUF_RNR_RETRY_CNT_EXC = 99,
+    UMQ_BUF_RNR_RETRY_CNT_EXC = 99,     /* RNR retries: reduce the post frequency and do not free qbuf */
 
     UMQ_BUF_FLOW_CONTROL_UPDATE = 128,  /* Umq flow control window is updated, this is not error case */
     UMQ_MEMPOOL_UPDATE_SUCCESS,
