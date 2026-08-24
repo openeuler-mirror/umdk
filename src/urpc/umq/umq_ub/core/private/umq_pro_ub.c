@@ -1074,8 +1074,7 @@ static ub_queue_t *umq_ub_get_main_umq(ub_queue_t *queue)
     if (queue->share_rq_umqh == UMQ_INVALID_HANDLE) {
         return queue;
     }
-    umq_t *umq = (umq_t *)(uintptr_t)queue->share_rq_umqh;
-    return (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+    return (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
 }
 
 static void umq_ub_fc_msg_retry_enqueue(ub_queue_t *queue, umq_ub_imm_t *imm, umq_ub_retry_type_t retry_type)

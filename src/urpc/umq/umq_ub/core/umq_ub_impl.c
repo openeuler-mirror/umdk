@@ -1296,7 +1296,7 @@ int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_ha
     return UMQ_SUCCESS;
 }
 
-uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *option)
+uint64_t umq_ub_create_impl(uint8_t *ctx, umq_create_option_t *option)
 {
     uint64_t start_timestamp;
     ub_queue_cfg_t *qcfg = NULL;
@@ -1339,8 +1339,7 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     }
 
     if (is_umq_ub_share_rq(option->create_flag)) {
-        umq_t *umq = (umq_t *)(uintptr_t)option->share_rq_umqh;
-        share_rq = (ub_queue_t *)(uintptr_t)umq->umqh_tp;
+        share_rq = (ub_queue_t *)(uintptr_t)option->share_rq_umqh;
     }
     if (umq_ub_jfr_ctx_get(queue, dev_ctx, option, share_rq, UB_QUEUE_JETTY_IO) != UMQ_SUCCESS) {
         goto FREE_QUEUE_ID;
@@ -1416,7 +1415,6 @@ uint64_t umq_ub_create_impl(uint64_t umqh, uint8_t *ctx, umq_create_option_t *op
     queue->ref_cnt = 1;
     queue->tx_outstanding = 0;
     queue->state = queue->flow_control != NULL ? QUEUE_STATE_IDLE : QUEUE_STATE_READY;
-    queue->umqh = umqh;
     (void)pthread_spin_init(&queue->get_jetty_node_lock, PTHREAD_PROCESS_PRIVATE);
     umq_ub_queue_ctx_list_push(&queue->qctx_node);
     if (is_umq_ub_logic_queue(queue->create_flag)) {
@@ -1510,7 +1508,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     uint32_t io_id;
     int ret = UMQ_SUCCESS;
     if (is_umq_ub_logic_queue(queue->create_flag)) {
-        ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)((umq_t *)(uintptr_t)queue->share_rq_umqh)->umqh_tp;
+        ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
         io_eid = &share_rq->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
         io_id = share_rq->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     } else {
@@ -1518,9 +1516,9 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         io_id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     }
 
-    if (qcfg->umq_trans_mode != UMQ_TRANS_MODE_UB && qcfg->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
+    if (queue->mode != UMQ_TRANS_MODE_UB && queue->mode != UMQ_TRANS_MODE_UB_PLUS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, destroy umq failed, trans mode %d is not UB\n",
-            EID_ARGS(*io_eid), io_id, qcfg->umq_trans_mode);
+            EID_ARGS(*io_eid), io_id, queue->mode);
         return -UMQ_ERR_EINVAL;
     }
     if (queue->flow_control != NULL) {
@@ -2803,7 +2801,7 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     }
     urma_seg_t *seg = &tseg->seg;
 
-    umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), 1, queue->umqh, NULL);
+    umq_buf_t *send_buf = umq_buf_alloc(umq_buf_size_small(), 1, (uint64_t)(uintptr_t)queue, NULL);
     if (send_buf == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, umq malloc failed\n", EID_ARGS(*eid), id);
         return -UMQ_ERR_ENOMEM;
@@ -2927,7 +2925,7 @@ int umq_ub_cfg_get_impl(uint64_t umqh_tp, umq_cfg_get_t *cfg)
     cfg->tx_depth = qcfg->tx_depth;
     cfg->umq_ctx = queue->umq_ctx;
     cfg->share_rq_umqh = queue->share_rq_umqh;
-    cfg->trans_mode = qcfg->umq_trans_mode;
+    cfg->trans_mode = queue->mode;
     cfg->mode = qcfg->mode;
     cfg->state = queue->state;
     cfg->priority = qcfg->priority;
