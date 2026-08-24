@@ -1394,11 +1394,12 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             wr_entry->rnr_retry_cnt++;
             if (bondp_resend_jfs_wr(bdp_comp, wr_entry, send_idx, target_idx) != 0) {
                 URMA_LOG_ERR("Failed to resend first rnr retry jfs wr, wr_id=%lu\n", wr_id);
+            } else {
+                cr->status = BOND_CR_FLOW_CONTROL_NOTIFY;
             }
         } else if (retry_cnt >= comp_ctx->rnr_retry_max) {
             URMA_LOG_ERR("RNR retry exceeded, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
                          wr_id, retry_cnt, comp_ctx->rnr_retry_max);
-            cr->status = BOND_CR_RNR_RETRY_CNT_EXC_ERR;
             wr_entry->rnr_retry_pending = false;
             jfs_wr_put_refs(&wr_entry->wr);
             jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
@@ -1408,12 +1409,12 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             if (schedule_ret != 0) {
                 URMA_LOG_ERR("Failed to schedule rnr retry jfs wr, wr_id=%lu retry_cnt=%u retry_max=%lu\n",
                              wr_id, retry_cnt, comp_ctx->rnr_retry_max);
-                cr->status = BOND_CR_RNR_RETRY_CNT_EXC_ERR;
                 wr_entry->rnr_retry_pending = false;
                 jfs_wr_put_refs(&wr_entry->wr);
                 jfs_wr_buf_release(&bdp_comp->send_wr_buf, wr_entry);
             } else {
                 wr_entry->rnr_retry_cnt++;
+                cr->status = BOND_CR_FLOW_CONTROL_NOTIFY;
                 if (new_task) {
                     URMA_LOG_INFO("Schedule RNR retry resend, path=[%u, %u], "
                                   "retry_cnt=%u, local_id=%u, tjetty_id=%u\n",
