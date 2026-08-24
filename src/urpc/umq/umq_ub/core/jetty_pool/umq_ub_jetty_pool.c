@@ -533,7 +533,6 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
         return UMQ_SUCCESS;
     }
 
-    node->borrow_count = 0;
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
     urpc_list_push_front(&cache->cache_list, &node->node);
     cache->cached_count++;
