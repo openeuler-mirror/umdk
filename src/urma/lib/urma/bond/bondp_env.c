@@ -144,7 +144,7 @@ static void read_all_env(bondp_env_t *env)
     const bool default_enable_health_check = true;
     const bool default_enable_failback = true;
     const bool default_enable_failover = true;
-    const bool default_enable_rnr_retry = true;
+    const bool default_enable_rnr_retry = false;
     const uint64_t default_health_check_interval_ms = BONDP_HC_DEFAULT_PROBE_INTERVAL_MS;
     const uint64_t default_rnr_retry_sleep_ms = 100;
     const uint64_t default_rnr_retry_max = 15;

@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-#define BOND_CR_RNR_RETRY_CNT_EXC_ERR 99
+#define BOND_CR_FLOW_CONTROL_NOTIFY 99
 
 /* For version compatibility */
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
