@@ -388,6 +388,8 @@ uint64_t return_list_to_pools(umq_buf_t *local_head, umq_buf_list_t *global_head
 
 bool umq_disable_scale_cap(void);
 
+bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc);
+
 typedef struct umq_qbuf_fetch_req_info {
     uint64_t *global_buf_cnt;
     umq_buf_list_t *global_head;
@@ -487,7 +489,18 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
 #endif
     }
     while (count < batch_count) {
+        if (umq_qbuf_wait_expansion_done(with_data, sc)) {
+            uint32_t _retry_cnt =
+                fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
+            if (_retry_cnt > 0) {
+                count += _retry_cnt;
+                continue;
+            }
+        }
         int ret = expand_global_pool(with_data, sc);
+        if (ret == -UMQ_ERR_EBUSY) {
+            continue;
+        }
         if (ret != UMQ_SUCCESS) {
             if (count > 0) {
                 break;
