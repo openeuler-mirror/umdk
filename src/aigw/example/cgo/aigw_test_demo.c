@@ -31,6 +31,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "aigw.h"
 #include "simple_cache.h"
@@ -84,6 +86,23 @@ static void safe_strcpy(char *dst, const char *src, size_t max_len)
     }
 }
 
+// Utility function: draw a non-negative pseudo-random integer from
+// /dev/urandom (G.OTH.03 forbids rand()/random()). Falls back to a
+// time-seeded value only if /dev/urandom cannot be opened.
+static unsigned int urandom_rand(void)
+{
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        unsigned int val = 0;
+        ssize_t got = read(fd, &val, sizeof(val));
+        close(fd);
+        if (got == (ssize_t)sizeof(val)) {
+            return val;
+        }
+    }
+    return (unsigned int)time(NULL);
+}
+
 static char* g_model[] = {
     "qwen-72b",
     "qwen-32b",
@@ -120,10 +139,11 @@ static const char* g_contents[] = {
 
 static const char *default_pretrain_ttft_filepath = "/etc/aigw/example/ttft_pretrain.txt";
 
-// Thread function: process one inference request
-static void* process_request(void *arg)
+// Thread function: process one inference request. Takes the typed request
+// struct (not void*) so G.FUD.03 is satisfied; the pthread_create call site
+// casts this to the POSIX-mandated void*(*)(void*) signature.
+static void* process_request(request_arg_t *req)
 {
-    request_arg_t *req = (request_arg_t *)arg;
     int req_id = req->req_id;
     free(req); // Free dynamically allocated argument
 
@@ -147,8 +167,8 @@ static void* process_request(void *arg)
         .node_list = g_nodes
     };
 
-    // G.OTH.03: use random() instead of rand() for non-security sleep jitter
-    int sleep_us1 = (random() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us1 = (urandom_rand() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
     printf("Request %s: Sleeping %d ms before node selection...\n", uuid, sleep_us1 / 1000);
     usleep(sleep_us1);
 
@@ -169,16 +189,16 @@ static void* process_request(void *arg)
     event.request_id = request.uuid;
     event.event_name = "DECODE_RECEIVED_KVC";
 
-    // G.OTH.03: use random() instead of rand() for non-security sleep jitter
-    int sleep_us2 = (random() % 1000 + 6000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us2 = (urandom_rand() % 1000 + 6000) * 1000;  // 6000ms ~ 7000ms => 6s ~ 7s
     printf("Request %s: Sleeping %d ms before notifying event DECODE_RECEIVED_KVC\n", uuid, sleep_us2 / 1000);
     usleep(sleep_us2);
     aigw_notify_event(AIGW_EVENT_REQUEST, &event);
 
     // Notify event: decode finished
     event.event_name = "REQUEST_IS_FINISHED";
-    // G.OTH.03: use random() instead of rand() for non-security sleep jitter
-    int sleep_us3 = (random() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us3 = (urandom_rand() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
     printf("Request %s: Sleeping %d ms before notifying event REQUEST_IS_FINISHED\n", uuid, sleep_us3 / 1000);
     usleep(sleep_us3);
     aigw_notify_event(AIGW_EVENT_REQUEST, &event);
@@ -268,7 +288,8 @@ static void run_concurrent_requests(void)
             continue;
         }
         req->req_id = i + 1;
-        int ret = pthread_create(&threads[i], NULL, process_request, req);
+        int ret = pthread_create(&threads[i], NULL,
+                                 (void *(*)(void *))process_request, req);
         if (ret != 0) {
             fprintf(stderr, "Failed to create thread %d\n", i);
             free(req);

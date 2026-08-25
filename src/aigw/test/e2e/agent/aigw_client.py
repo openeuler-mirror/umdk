@@ -106,8 +106,11 @@ class AigwClient:
     # ---- get-suggestion (carries implicit heartbeat) ----
     def get_suggestion(self, model: str, body: dict[str, Any], agent_id: str,
                        session_id: str) -> Any:
-        """POST /aigw/v1/openai/get-suggestion. Sets X-Agent-Id + X-Session-Id
-        so AIGW's implicit-heartbeat path (http_server.go:392-398) fires.
+        """
+        POST /aigw/v1/openai/get-suggestion.
+
+        Sets X-Agent-Id + X-Session-Id so AIGW's implicit-heartbeat path
+        (http_server.go:392-398) fires.
 
         AIGW's scheduleForOpenAi decodes an OpenAI-shaped body and reads
         req.Messages (processMessages), so the body must carry a `messages`
@@ -117,7 +120,8 @@ class AigwClient:
         of UUID is invalid') — *before* the implicit-heartbeat path runs, so a
         missing UUID silently disables implicit heartbeat (and never registers
         a KVC session for the agent). Generate a fresh UUID per call so each
-        turn's request is distinct (CheckReqExists dedups by UUID)."""
+        turn's request is distinct (CheckReqExists dedups by UUID).
+        """
         if "messages" not in body:
             # wrap a plain prompt into the OpenAI messages shape
             prompt = body.get("prompt", body.get("text", "phase3 turn"))

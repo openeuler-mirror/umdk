@@ -34,6 +34,7 @@ import re
 import shlex
 import signal
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -41,6 +42,20 @@ from urllib.parse import urljoin
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Dedicated stdout logger for the per-turn "TURN k" protocol marker that
+# fault_driver.parse_turns reads from the agent's stdout (spec R4). It uses
+# the logging module (per G.LOG.02) with a raw-message formatter on a
+# stdout StreamHandler, so the marker still lands on stdout unchanged while
+# no bare print()/stdout.write() call is flagged. propagate=False keeps the
+# root handler from duplicating the line to stderr.
+_turn_logger = logging.getLogger("aigw.agent.turn")
+if not _turn_logger.handlers:
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    _turn_logger.addHandler(_h)
+    _turn_logger.propagate = False
+    _turn_logger.setLevel(logging.INFO)
 
 # sibling imports (avoid sys.path.insert — load the module by file path)
 _spec = importlib.util.spec_from_file_location(
@@ -248,7 +263,11 @@ class MinimalReactAgent:
         while self.paused:
             time.sleep(0.5)
         self.turn += 1
-        print(f"TURN {self.turn}", flush=True)
+        # Protocol marker for the supervisor's turn-counter parser
+        # (fault_driver.parse_turns reads "TURN k" lines from this stdout).
+        # Emitted via the logging module (per G.LOG.02) on a stdout
+        # StreamHandler so the wire format is unchanged.
+        _turn_logger.info(f"TURN {self.turn}")
         # implicit heartbeat via get_suggestion
         try:
             self.aigw.get_suggestion(

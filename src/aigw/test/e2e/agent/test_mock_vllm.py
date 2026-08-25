@@ -115,12 +115,14 @@ def test_evict_returns_purged(mv):
 
 
 def test_chat_completions_stub_drives_script(mv):
-    """Stub LLM emits the scripted action sequence for fix_failing_test.
+    """
+    Stub LLM emits the scripted action sequence for fix_failing_test.
 
     The stub indexes its step by the number of assistant messages already in
     the transcript (so it resumes correctly after a restart). To drive the
     script forward we must accumulate each assistant reply back into the
-    messages, exactly as minimal_react_agent does."""
+    messages, exactly as minimal_react_agent does.
+    """
     messages = [
         {"role": "system", "content": "You are a coder. TASK: fix_failing_test"},
         {"role": "user", "content": "fix it"},
@@ -151,13 +153,16 @@ def test_call_log_records_all_kvc_ops(mv):
 
 
 def test_stub_resumes_from_transcript_length_after_restart(mv):
-    """Regression for the restart-after-kill desync (Phase 3 F2 bug).
+    """
+    Regression for the restart-after-kill desync (Phase 3 F2 bug).
 
-    After a kill+restart, minimal_react_agent reloads transcript.json and posts
-    a request whose messages already contain N assistant entries. The stub
-    must return script[N] (resume in sync), NOT script[0] (which would desync
-    the loop and make the agent stop early). This must hold even though the
-    stub keeps no per-agent state and the same task name was used before."""
+    After a kill+restart, minimal_react_agent reloads transcript.json and
+    posts a request whose messages already contain N assistant entries. The
+    stub must return script[N] (resume in sync), NOT script[0] (which would
+    desync the loop and make the agent stop early). This must hold even
+    though the stub keeps no per-agent state and the same task name was used
+    before.
+    """
     # first "incarnation": run 3 turns, building up a transcript
     messages = [
         {"role": "system", "content": "TASK: fix_failing_test"},

@@ -1,9 +1,11 @@
-"""FaultDriver unit tests (Phase 3 Group D1) for scenario state machines.
+"""
+FaultDriver unit tests (Phase 3 Group D1).
 
 Exercises the 3 scenario state machines + turn parser against a fake
 supervisor (no real agent process). The fake supervisor records calls and
 lets await_turn return immediately (or after a tiny sleep), so the scenarios
-run fast. delay_s / wait_gone_s are shrunk to ~0 in tests."""
+run fast. delay_s / wait_gone_s are shrunk to ~0 in tests.
+"""
 
 from __future__ import annotations
 

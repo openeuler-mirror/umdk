@@ -1,6 +1,10 @@
-"""Judge unit tests (Phase 3 Group B5) — prove each judge catches pass AND fail
-(spec R5: judges must check observable artifacts, and must fail when the agent
-didn't actually do the work). No AIGW / no agent loop needed."""
+"""
+Judge unit tests (Phase 3 Group B5).
+
+Prove each judge catches pass AND fail (spec R5: judges must check
+observable artifacts, and must fail when the agent didn't actually do the
+work). No AIGW / no agent loop needed.
+"""
 
 from __future__ import annotations
 

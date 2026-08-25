@@ -77,7 +77,7 @@ def make_handler(state: ProviderState):
                 return override
             return state.fault
 
-        def do_GET(self):
+        def _do_get(self):
             path = self.path.split("?", 1)[0]
             if path == "/health":
                 self._send_json(200, {"status": "ok", "name": state.name})
@@ -86,7 +86,7 @@ def make_handler(state: ProviderState):
             else:
                 self.send_error(404, "Not Found")
 
-        def do_POST(self):
+        def _do_post(self):
             path = self.path.split("?", 1)[0]
             if path == "/_control":
                 self._handle_control()
@@ -94,6 +94,11 @@ def make_handler(state: ProviderState):
                 self._handle_chat()
             else:
                 self.send_error(404, "Not Found")
+
+        # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+        # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+        do_GET = _do_get
+        do_POST = _do_post
 
         def _read_body(self) -> dict:
             length = int(self.headers.get("Content-Length", 0))

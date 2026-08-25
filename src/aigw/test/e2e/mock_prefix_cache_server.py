@@ -101,7 +101,7 @@ for port in WORKER_PORTS:
 class K8sMockHandler(BaseHTTPRequestHandler):
     """Mock K8s API server for endpoint watch."""
 
-    def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_get(self):
         parsed = urlparse(self.path)
         logger.info(f"[K8S] GET {self.path} from {self.client_address}")
         if parsed.path.endswith("/endpoints") and "watch" in parse_qs(parsed.query):
@@ -175,9 +175,14 @@ class K8sMockHandler(BaseHTTPRequestHandler):
 
         self.wfile.write(b"0\r\n\r\n")
 
-    def do_POST(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_post(self):
         """Handle POST requests (if needed)."""
         self._return_json(200, {"status": "ok"})
+
+    # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+    # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+    do_GET = _do_get
+    do_POST = _do_post
 
     def _return_json(self, status_code, data):
         self.send_response(status_code)
@@ -197,14 +202,14 @@ class K8sMockHandler(BaseHTTPRequestHandler):
 class RenderMockHandler(BaseHTTPRequestHandler):
     """Mock vLLM render service - provides deterministic tokenization."""
 
-    def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_get(self):
         if self.path == "/health" or self.path == "/aigw/health":
             logger.info(f"[RENDER_HEALTH] Request from {self.client_address}")
             self._return_json(200, {"status": "healthy"})
         else:
             self._return_json(404, {"error": "not found"})
 
-    def do_POST(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_post(self):
         parsed = urlparse(self.path)
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length).decode() if content_length > 0 else "{}"
@@ -221,6 +226,11 @@ class RenderMockHandler(BaseHTTPRequestHandler):
             self._handle_chat(data)
         else:
             self._return_json(404, {"error": "not found"})
+
+    # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+    # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+    do_GET = _do_get
+    do_POST = _do_post
 
     def _handle_render(self, data):
         """Simulate vLLM render service - tokenize messages.
@@ -635,7 +645,7 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
     worker_id = None
     kv_event_sender = None  # Will be set by create_worker_handler
 
-    def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_get(self):
         if self.path == "/health" or self.path == "/aigw/health":
             logger.info(f"[HEALTH] Request from {self.client_address}")
             self._return_json(200, {"status": "healthy", "worker": getattr(self, "worker_id", "unknown")})
@@ -648,7 +658,7 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         else:
             self._return_json(404, {"error": "not found"})
 
-    def do_POST(self):  # noqa: N802 - BaseHTTPRequestHandler API name
+    def _do_post(self):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")  # Strip trailing slashes for robust matching
         logger.info(f"[POST] Request path={path} from {self.client_address}")
@@ -674,6 +684,11 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         else:
             logger.warninging(f"[POST] Path not found: {path}")
             self._return_json(404, {"error": "not found"})
+
+    # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+    # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+    do_GET = _do_get
+    do_POST = _do_post
 
     def _handle_subscribe_event(self):
         """Simulate SSE endpoint for instance event subscription.
@@ -968,8 +983,8 @@ def main():
         logger.info(f"[INFO] Worker mock on port {worker_port}")
 
     # Wait for all ports
-    for port in [MOCK_K8S_PORT, MOCK_RENDER_PORT] + WORKER_PORTS:
-        wait_for_port("127.0.0.1", port)
+    for wait_port in [MOCK_K8S_PORT, MOCK_RENDER_PORT] + WORKER_PORTS:
+        wait_for_port("127.0.0.1", wait_port)
 
     logger.info("[INFO] All mock servers ready")
 

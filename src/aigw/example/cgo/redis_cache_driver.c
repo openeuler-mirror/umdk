@@ -431,6 +431,59 @@ static aigw_error_t build_test_fields(key_value_array_t *fields)
     return AIGW_SUCCESS;
 }
 
+// Helper: read and print all fields for a model key (extracted from
+// test_redis_cache; G.FUD.05). Returns the driver call status.
+static aigw_error_t test_redis_read_fields(aigw_cache_driver_t *driver,
+                                           const char *model_key)
+{
+    key_value_array_t out_fields = {0};
+    aigw_error_t ret = driver->ops.hash_get_all((char*)model_key, &out_fields);
+    if (ret != AIGW_SUCCESS) {
+        printf("hash_get_all failed: %d\n", ret);
+        return ret;
+    }
+    printf("Retrieved %d fields:\n", out_fields.count);
+    for (int i = 0; i < out_fields.count; i++) {
+        printf("  %s = %s\n", out_fields.pairs[i].key, out_fields.pairs[i].value);
+    }
+    if (out_fields.pairs) {
+        free(out_fields.pairs);
+    }
+    return AIGW_SUCCESS;
+}
+
+// Helper: delete one field and verify the remaining contents (extracted from
+// test_redis_cache; G.FUD.05).
+static aigw_error_t test_redis_delete_and_verify(aigw_cache_driver_t *driver,
+                                                 const char *model_key)
+{
+    char *fields_to_del[] = {(char*)TEST_REQ_ID_1};
+    aigw_error_t ret = driver->ops.hash_delete_fields(
+        (char*)model_key, fields_to_del, 1);
+    if (ret != AIGW_SUCCESS) {
+        printf("hash_delete_fields failed: %d\n", ret);
+        return ret;
+    }
+    printf("Deleted field: %s\n", TEST_REQ_ID_1);
+
+    // Verify remaining data
+    key_value_array_t out_fields = {0};
+    ret = driver->ops.hash_get_all((char*)model_key, &out_fields);
+    if (ret == AIGW_SUCCESS) {
+        printf("After delete, remaining fields (%d):\n", out_fields.count);
+        for (int i = 0; i < out_fields.count; i++) {
+            printf("  %s = %s\n", out_fields.pairs[i].key,
+                    out_fields.pairs[i].value);
+        }
+        free(out_fields.pairs);
+    } else if (ret == AIGW_ERR_NOT_FOUND) {
+        printf("No fields left in hash.\n");
+    } else {
+        printf("hash_get_all after delete failed: %d\n", ret);
+    }
+    return AIGW_SUCCESS;
+}
+
 // Test function to verify Redis cache operations
 aigw_error_t test_redis_cache(void)
 {
@@ -458,46 +511,17 @@ aigw_error_t test_redis_cache(void)
     printf("hash_set_fields succeeded\n");
 
     // === Test: Read data ===
-    key_value_array_t out_fields = {0};
-    ret = driver->ops.hash_get_all((char*)model_key, &out_fields);
+    ret = test_redis_read_fields(driver, model_key);
     if (ret != AIGW_SUCCESS) {
-        printf("hash_get_all failed: %d\n", ret);
         free(fields.pairs);
         return ret;
-    }
-
-    printf("Retrieved %d fields:\n", out_fields.count);
-    for (int i = 0; i < out_fields.count; i++) {
-        printf("  %s = %s\n", out_fields.pairs[i].key, out_fields.pairs[i].value);
-    }
-
-    // Free output pairs
-    if (out_fields.pairs) {
-        free(out_fields.pairs);
     }
 
     // === Test: Delete field ===
-    char *fields_to_del[] = {(char*)TEST_REQ_ID_1};
-    ret = driver->ops.hash_delete_fields((char*)model_key, fields_to_del, 1);
+    ret = test_redis_delete_and_verify(driver, model_key);
     if (ret != AIGW_SUCCESS) {
-        printf("hash_delete_fields failed: %d\n", ret);
         free(fields.pairs);
         return ret;
-    }
-    printf("Deleted field: %s\n", TEST_REQ_ID_1);
-
-    // Verify remaining data
-    ret = driver->ops.hash_get_all((char*)model_key, &out_fields);
-    if (ret == AIGW_SUCCESS) {
-        printf("After delete, remaining fields (%d):\n", out_fields.count);
-        for (int i = 0; i < out_fields.count; i++) {
-            printf("  %s = %s\n", out_fields.pairs[i].key, out_fields.pairs[i].value);
-        }
-        free(out_fields.pairs);
-    } else if (ret == AIGW_ERR_NOT_FOUND) {
-        printf("No fields left in hash.\n");
-    } else {
-        printf("hash_get_all after delete failed: %d\n", ret);
     }
 
     // Cleanup

@@ -42,8 +42,13 @@ class ScenarioResult:
 
 @dataclass
 class AgentCtx:
-    """Correlated agent identity params grouped to keep scenario methods
-    below the too-many-arguments threshold (G.FNM.03)."""
+    """
+    Correlated agent identity params.
+
+    Grouped to keep scenario methods below the too-many-arguments threshold
+    (G.FNM.03).
+    """
+
     agent_id: str
     session_id: str
     task: str
@@ -109,12 +114,16 @@ class FaultDriver:
 
     # ---- scenario 3: heartbeat timeout ----
     def heartbeat_timeout(self, ctx: AgentCtx, turn_k: int = 3, wait_gone_s: float = 0.0) -> ScenarioResult:
-        """SIGUSR1 freezes the agent (no explicit hb, no get-suggestion implicit
-        hb). Returns immediately — run_scenario's assert_state_sequence polls
-        the AIGW debug endpoint and captures Active->Suspected->Recovering->Gone
-        as it happens (rather than sleeping blind then missing states already
-        finalized + removed). wait_gone_s is kept for backward compat but
-        defaults to 0 (no blind sleep)."""
+        """
+        SIGUSR1 freezes the agent.
+
+        No explicit hb, no get-suggestion implicit hb. Returns immediately —
+        run_scenario's assert_state_sequence polls the AIGW debug endpoint and
+        captures Active->Suspected->Recovering->Gone as it happens (rather
+        than sleeping blind then missing states already finalized + removed).
+        wait_gone_s is kept for backward compat but defaults to 0 (no blind
+        sleep).
+        """
         r = ScenarioResult(ctx.agent_id, "heartbeat_timeout", turn_k, wait_gone_s)
         self.sup.await_turn(ctx.agent_id, turn_k)
         r.add(f"reached turn {turn_k}; sending SIGUSR1 to freeze agent")

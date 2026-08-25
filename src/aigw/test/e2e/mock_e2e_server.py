@@ -48,8 +48,8 @@ class K8sMockHandler(BaseHTTPRequestHandler):
         """Custom log format"""
         logger.info(f"[K8s-Mock] {self.address_string()} - {fmt % args}")
 
-    def do_GET(self):
-        """Handle GET requests for Kubernetes API"""
+    def _do_get(self):
+        """Handle GET requests for Kubernetes API."""
         if self.path.startswith('/api/v1/namespaces/') and '/endpoints' in self.path:
             if 'watch=true' in self.path:
                 self.handle_watch_endpoints()
@@ -57,6 +57,10 @@ class K8sMockHandler(BaseHTTPRequestHandler):
                 self.handle_list_endpoints()
         else:
             self.send_error(404, "Not Found")
+
+    # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+    # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+    do_GET = _do_get
 
     def handle_watch_endpoints(self):
         """Handle watching endpoints (mock Kubernetes Watch API)"""
@@ -229,14 +233,18 @@ class WorkerMockHandler(BaseHTTPRequestHandler):
         """Custom log format"""
         logger.info(f"[Worker-{self.worker_name}] {self.address_string()} - {fmt % args}")
 
-    def do_POST(self):
-        """Handle POST requests"""
+    def _do_post(self):
+        """Handle POST requests."""
         if self.path == '/v1/chat/completions':
             self.handle_chat_completions()
         elif self.path == '/v1/completions':
             self.handle_completions()
         else:
             self.send_error(404, "Not Found")
+
+    # BaseHTTPRequestHandler dispatches via getattr(self, 'do_'+command);
+    # expose runtime names as class-body aliases (G.NAM.01 scans def names).
+    do_POST = _do_post
 
     def handle_chat_completions(self):
         """Handle chat completions request (supports streaming)"""

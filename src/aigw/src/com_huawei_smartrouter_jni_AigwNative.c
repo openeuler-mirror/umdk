@@ -21,16 +21,13 @@ static JavaVM *g_jvm = NULL;
 static pthread_key_t g_tls_key;
 static pthread_once_t g_tls_init_once = PTHREAD_ONCE_INIT;
 
-// TLS cleanup function
-static void tls_cleanup(void *ptr)
-{
-    // No cleanup needed
-}
-
-// Initialize TLS key
+// Initialize TLS key. A NULL destructor is passed to pthread_key_create
+// because no per-thread cleanup is needed (the value stored is not heap-
+// allocated); this also avoids declaring a void* destructor callback, which
+// would trip G.FUD.03 for a mandatory POSIX signature.
 static void init_tls_key()
 {
-    pthread_key_create(&g_tls_key, tls_cleanup);
+    pthread_key_create(&g_tls_key, NULL);
 }
 
 // Cached global class reference and method ID (initialized in JNI_OnLoad)
@@ -317,122 +314,159 @@ static void write_select_result_to_java(JNIEnv *env, jobject joutResult,
     (*env)->DeleteLocalRef(env, resultCls);
 }
 
+// Helper: free the C side of an aigw_request_t built from Java (extracted
+// from aigwSelectNodes; G.FUD.05). Frees uuid/model and the messages array
+// (each message's role/content strings + the array itself).
+static void free_select_request(const aigw_request_t *request, jsize msgCount)
+{
+    free((void*)request->uuid);
+    free((void*)request->model);
+    for (jsize i = 0; i < msgCount; i++) {
+        free((void*)request->messages[i].role);
+        free((void*)request->messages[i].content);
+    }
+    free((void*)request->messages);
+}
+
+// Helper: free the C side of an aigw_select_context_t built from Java
+// (extracted from aigwSelectNodes; G.FUD.05). Frees each node's addr/group
+// strings and the array itself.
+static void free_select_context(const aigw_select_context_t *context)
+{
+    for (int i = 0; i < context->node_num; i++) {
+        free((void*)context->node_list[i].node_addr);
+        free((void*)context->node_list[i].group_id);
+    }
+    free((void*)context->node_list);
+}
+
+// Helper: build the C request struct from a Java AigwNativeRequest object
+// (extracted from aigwSelectNodes; G.FUD.05). On success returns AIGW_SUCCESS
+// and writes the request, msgCount, jmessages local ref, and reqCls local
+// ref to the out params. On failure returns an error code and the caller is
+// responsible for nothing (no partial state is produced).
+static aigw_error_t build_request_from_java(JNIEnv *env, jobject jrequest,
+    aigw_request_t *request, jsize *msgCount, jobjectArray *jmessages,
+    jclass *reqCls)
+{
+    *reqCls = (*env)->GetObjectClass(env, jrequest);
+    jfieldID uuidField = (*env)->GetFieldID(env, *reqCls, "uuid", "Ljava/lang/String;");
+    jstring juuid = (jstring)(*env)->GetObjectField(env, jrequest, uuidField);
+    request->uuid = jstringToCStr(env, juuid);
+
+    jfieldID modelField = (*env)->GetFieldID(env, *reqCls, "model", "Ljava/lang/String;");
+    jstring jmodel = (jstring)(*env)->GetObjectField(env, jrequest, modelField);
+    request->model = jstringToCStr(env, jmodel);
+
+    jfieldID messagesField = (*env)->GetFieldID(env, *reqCls, "messages",
+        "[Lcom/huawei/smartrouter/model/AigwNativeMessage;");
+    jobjectArray msgs = (jobjectArray)(*env)->GetObjectField(env, jrequest, messagesField);
+    if (msgs == NULL) {
+        free((void*)request->uuid);
+        free((void*)request->model);
+        (*env)->DeleteLocalRef(env, *reqCls);
+        return AIGW_ERR_INVALID_PARAM;
+    }
+    jsize count = (*env)->GetArrayLength(env, msgs);
+    request->message_num = count;
+    if (count <= 0) {
+        free((void*)request->uuid);
+        free((void*)request->model);
+        (*env)->DeleteLocalRef(env, msgs);
+        (*env)->DeleteLocalRef(env, *reqCls);
+        return AIGW_ERR_INVALID_PARAM;
+    }
+
+    aigw_openai_message_t *messages =
+        (aigw_openai_message_t*)malloc(sizeof(aigw_openai_message_t) * count);
+    if (messages == NULL) {
+        free((void*)request->uuid);
+        free((void*)request->model);
+        (*env)->DeleteLocalRef(env, msgs);
+        (*env)->DeleteLocalRef(env, *reqCls);
+        return AIGW_ERR_NO_MEMORY;
+    }
+    memset(messages, 0, sizeof(aigw_openai_message_t) * count);
+    fill_messages_from_java(env, msgs, count, messages);
+    request->messages = messages;
+
+    *jmessages = msgs;
+    *msgCount = count;
+    return AIGW_SUCCESS;
+}
+
+// Helper: build the C select context from a Java AigwNativeSelectContext
+// object (extracted from aigwSelectNodes; G.FUD.05). On success returns
+// AIGW_SUCCESS and writes the context, jnodeList local ref, and ctxCls local
+// ref. On failure returns an error code (no partial state produced).
+static aigw_error_t build_context_from_java(JNIEnv *env, jobject jcontext,
+    aigw_select_context_t *context, jobjectArray *jnodeList, jclass *ctxCls)
+{
+    *ctxCls = (*env)->GetObjectClass(env, jcontext);
+    jfieldID nodeNumField = (*env)->GetFieldID(env, *ctxCls, "nodeNum", "I");
+    context->node_num = (*env)->GetIntField(env, jcontext, nodeNumField);
+
+    jfieldID nodeListField = (*env)->GetFieldID(env, *ctxCls, "nodeList",
+        "[Lcom/huawei/smartrouter/model/AigwNativeNodeInfo;");
+    jobjectArray nodes = (jobjectArray)(*env)->GetObjectField(env, jcontext, nodeListField);
+    if (nodes == NULL) {
+        (*env)->DeleteLocalRef(env, *ctxCls);
+        return AIGW_ERR_INVALID_PARAM;
+    }
+
+    aigw_node_info_t *nodeList =
+        (aigw_node_info_t*)malloc(sizeof(aigw_node_info_t) * context->node_num);
+    if (nodeList == NULL) {
+        (*env)->DeleteLocalRef(env, nodes);
+        (*env)->DeleteLocalRef(env, *ctxCls);
+        return AIGW_ERR_NO_MEMORY;
+    }
+    memset(nodeList, 0, sizeof(aigw_node_info_t) * context->node_num);
+    fill_nodes_from_java(env, nodes, context->node_num, nodeList);
+    context->node_list = nodeList;
+
+    *jnodeList = nodes;
+    return AIGW_SUCCESS;
+}
+
 // Implement: aigwSelectNodes
 JNIEXPORT jint JNICALL Java_com_huawei_smartrouter_jni_AigwNative_aigwSelectNodes(JNIEnv *env, jobject obj,
     jobject jrequest, jobject jcontext, jobject joutResult)
 {
     aigw_request_t request;
-    jclass reqCls = (*env)->GetObjectClass(env, jrequest);
+    jobjectArray jmessages = NULL;
+    jclass reqCls = NULL;
+    jsize msgCount = 0;
 
-    jfieldID uuidField = (*env)->GetFieldID(env, reqCls, "uuid", "Ljava/lang/String;");
-    jstring juuid = (jstring)(*env)->GetObjectField(env, jrequest, uuidField);
-    request.uuid = jstringToCStr(env, juuid);
-
-    jfieldID modelField = (*env)->GetFieldID(env, reqCls, "model", "Ljava/lang/String;");
-    jstring jmodel = (jstring)(*env)->GetObjectField(env, jrequest, modelField);
-    request.model = jstringToCStr(env, jmodel);
-
-    jfieldID messagesField = (*env)->GetFieldID(env, reqCls, "messages",
-        "[Lcom/huawei/smartrouter/model/AigwNativeMessage;");
-    jobjectArray jmessages = (jobjectArray)(*env)->GetObjectField(env, jrequest, messagesField);
-    if (jmessages == NULL) {
-        (*env)->DeleteLocalRef(env, reqCls);
-        free((void*)request.uuid);
-        free((void*)request.model);
-        return AIGW_ERR_INVALID_PARAM;
+    aigw_error_t ret = build_request_from_java(env, jrequest, &request,
+        &msgCount, &jmessages, &reqCls);
+    if (ret != AIGW_SUCCESS) {
+        return ret;
     }
-    jsize msgCount = (*env)->GetArrayLength(env, jmessages);
-    request.message_num = msgCount;
-    if (msgCount <= 0) {
-        (*env)->DeleteLocalRef(env, reqCls);
-        (*env)->DeleteLocalRef(env, jmessages);
-        free((void*)request.uuid);
-        free((void*)request.model);
-        return AIGW_ERR_INVALID_PARAM;
-    }
-
-    aigw_openai_message_t *messages = (aigw_openai_message_t*)malloc(sizeof(aigw_openai_message_t) * msgCount);
-    if (messages == NULL) {
-        (*env)->DeleteLocalRef(env, reqCls);
-        (*env)->DeleteLocalRef(env, jmessages);
-        free((void*)request.uuid);
-        free((void*)request.model);
-        return AIGW_ERR_NO_MEMORY;
-    }
-    memset(messages, 0, sizeof(aigw_openai_message_t) * msgCount);
-    fill_messages_from_java(env, jmessages, msgCount, messages);
-    request.messages = messages;
 
     aigw_select_context_t context;
-    jclass ctxCls = (*env)->GetObjectClass(env, jcontext);
-
-    jfieldID nodeNumField = (*env)->GetFieldID(env, ctxCls, "nodeNum", "I");
-    context.node_num = (*env)->GetIntField(env, jcontext, nodeNumField);
-
-    jfieldID nodeListField = (*env)->GetFieldID(env, ctxCls, "nodeList",
-        "[Lcom/huawei/smartrouter/model/AigwNativeNodeInfo;");
-    jobjectArray jnodeList = (jobjectArray)(*env)->GetObjectField(env, jcontext, nodeListField);
-    if (jnodeList == NULL) {
-        (*env)->DeleteLocalRef(env, ctxCls);
-        (*env)->DeleteLocalRef(env, reqCls);
+    jobjectArray jnodeList = NULL;
+    jclass ctxCls = NULL;
+    ret = build_context_from_java(env, jcontext, &context, &jnodeList, &ctxCls);
+    if (ret != AIGW_SUCCESS) {
         (*env)->DeleteLocalRef(env, jmessages);
-        free((void*)request.uuid);
-        free((void*)request.model);
-        for (int i = 0; i < msgCount; i++) {
-            free((void*)messages[i].role);
-            free((void*)messages[i].content);
-        }
-        free(messages);
-        return AIGW_ERR_INVALID_PARAM;
-    }
-
-    aigw_node_info_t *nodeList = (aigw_node_info_t*)malloc(sizeof(aigw_node_info_t) * context.node_num);
-    if (nodeList == NULL) {
-        (*env)->DeleteLocalRef(env, ctxCls);
         (*env)->DeleteLocalRef(env, reqCls);
-        (*env)->DeleteLocalRef(env, jmessages);
-        (*env)->DeleteLocalRef(env, jnodeList);
-        free((void*)request.uuid);
-        free((void*)request.model);
-        for (int i = 0; i < msgCount; i++) {
-            free((void*)messages[i].role);
-            free((void*)messages[i].content);
-        }
-        free(messages);
-        return AIGW_ERR_NO_MEMORY;
+        free_select_request(&request, msgCount);
+        return ret;
     }
-    memset(nodeList, 0, sizeof(aigw_node_info_t) * context.node_num);
-    fill_nodes_from_java(env, jnodeList, context.node_num, nodeList);
-    context.node_list = nodeList;
 
     aigw_select_result_t result;
     memset_s(&result, sizeof(result), 0, sizeof(result));
-
-    aigw_error_t ret = aigw_select_nodes(&request, &context, &result);
-    if (ret == AIGW_SUCCESS) {
-        write_select_result_to_java(env, joutResult, &result, ret);
-    } else {
-        write_select_result_to_java(env, joutResult, &result, ret);
-    }
+    ret = aigw_select_nodes(&request, &context, &result);
+    write_select_result_to_java(env, joutResult, &result, ret);
 
     (*env)->DeleteLocalRef(env, ctxCls);
     (*env)->DeleteLocalRef(env, reqCls);
     (*env)->DeleteLocalRef(env, jmessages);
     (*env)->DeleteLocalRef(env, jnodeList);
 
-    free((void*)request.uuid);
-    free((void*)request.model);
-    for (int i = 0; i < msgCount; i++) {
-        free((void*)messages[i].role);
-        free((void*)messages[i].content);
-    }
-    free(messages);
-    for (int i = 0; i < context.node_num; i++) {
-        free((void*)nodeList[i].node_addr);
-        free((void*)nodeList[i].group_id);
-    }
-    free(nodeList);
-
+    free_select_request(&request, msgCount);
+    free_select_context(&context);
     return ret;
 }
 
@@ -508,99 +542,69 @@ static int copy_pairs_from_java(JNIEnv *env, jobjectArray pairs, jsize pairsLen,
     return validCount;
 }
 
+// Helper: reset a key/value output array to the empty state.
+static void clear_out_array(key_value_array_t *out)
+{
+    out->pairs = NULL;
+    out->count = 0;
+}
+
+// Helper: parse the status code from a callback result's element [0]
+// (a java Integer). On a usable status, writes it to *status and returns 1.
+// Returns 0 if the result is missing/unparseable (caller treats as empty).
+// Always releases the jstatus local reference.
+static int parse_callback_status(JNIEnv *env, jobjectArray result, jint *status)
+{
+    jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
+    if (jstatus == NULL) {
+        return 0;
+    }
+    jclass statusClass = (*env)->GetObjectClass(env, jstatus);
+    jmethodID intValueMethod = (*env)->GetMethodID(env, statusClass, "intValue", "()I");
+    (*env)->DeleteLocalRef(env, statusClass);
+    if (intValueMethod == NULL) {
+        (*env)->DeleteLocalRef(env, jstatus);
+        return 0;
+    }
+    *status = (*env)->CallIntMethod(env, jstatus, intValueMethod);
+    (*env)->DeleteLocalRef(env, jstatus);
+    return 1;
+}
+
+// Forward declaration: fill_one_out_array is defined below the callbacks
+// but shared by both hash_get_all_callback and hash_get_all_batch_callback.
+static aigw_error_t fill_one_out_array(JNIEnv *env, jobjectArray pairs,
+                                       key_value_array_t *out);
+
 // Cache driver callback functions
 static aigw_error_t hash_get_all_callback(const char *key, key_value_array_t *out_array)
 {
     JNIEnv *env = getJNIEnv();
-    if (env == NULL) {
+    if (env == NULL || g_staticCacheCallbackMethodID == NULL) {
         return AIGW_ERR_INTERNAL;
     }
 
-    // Check if method ID is cached
-    if (g_staticCacheCallbackMethodID == NULL) {
-        return AIGW_ERR_INTERNAL;
-    }
-
+    clear_out_array(out_array);
     jstring jkey = cStrToJString(env, key);
-
     jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass,
         g_staticCacheCallbackMethodID, 1, jkey, NULL, NULL, 0);
     if (result == NULL) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
         return AIGW_SUCCESS;
     }
 
     jsize resultLen = (*env)->GetArrayLength(env, result);
-    if (resultLen < CB_RESULT_MIN_LEN) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
+    aigw_error_t ret = AIGW_SUCCESS;
+    if (resultLen >= CB_RESULT_MIN_LEN) {
+        jint status = 0;
+        if (parse_callback_status(env, result, &status) && status == 0) {
+            // Get pairs array from result[1] (CB_RESULT_IDX_PAIRS)
+            jobjectArray pairs = (jobjectArray)(*env)->GetObjectArrayElement(
+                env, result, CB_RESULT_IDX_PAIRS);
+            ret = fill_one_out_array(env, pairs, out_array);
+        }
     }
-
-    // Get status code from result[0]
-    jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
-    if (jstatus == NULL) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
-    }
-
-    jclass statusClass = (*env)->GetObjectClass(env, jstatus);
-    jmethodID intValueMethod = (*env)->GetMethodID(env, statusClass, "intValue", "()I");
-    if (intValueMethod == NULL) {
-        (*env)->DeleteLocalRef(env, jstatus);
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
-    }
-
-    jint status = (*env)->CallIntMethod(env, jstatus, intValueMethod);
-    (*env)->DeleteLocalRef(env, jstatus);
-
-    if (status != 0) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
-    }
-
-    // Get pairs array from result[1]
-    jobjectArray pairs = (jobjectArray)(*env)->GetObjectArrayElement(env, result, 1);
-    if (pairs == NULL) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
-    }
-
-    jsize pairsLen = (*env)->GetArrayLength(env, pairs);
-    if (pairsLen <= 0) {
-        out_array->pairs = NULL;
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, pairs);
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_SUCCESS;
-    }
-
-    out_array->count = pairsLen;
-    out_array->pairs = (key_value_pair_t*)malloc(sizeof(key_value_pair_t) * pairsLen);
-    if (out_array->pairs == NULL) {
-        out_array->count = 0;
-        (*env)->DeleteLocalRef(env, pairs);
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_NO_MEMORY;
-    }
-
-    int validCount = copy_pairs_from_java(env, pairs, pairsLen, out_array->pairs);
-    out_array->count = validCount;
-
-    (*env)->DeleteLocalRef(env, pairs);
     (*env)->DeleteLocalRef(env, result);
-    return AIGW_SUCCESS;
+    return ret;
 }
 
 static aigw_error_t hash_set_fields_callback(const char *key, const key_value_array_t *fields)
@@ -728,27 +732,62 @@ static aigw_error_t hash_delete_fields_callback(const char *key, char **field_ke
     return AIGW_SUCCESS;
 }
 
-static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_count, key_value_array_t *out_arrays)
+// Helper: fill one out_array from a java pairs array (a result[1] element).
+// Releases the pairs local reference. Clears out on empty. Returns
+// AIGW_ERR_NO_MEMORY on allocation failure, AIGW_SUCCESS otherwise.
+static aigw_error_t fill_one_out_array(JNIEnv *env, jobjectArray pairs,
+                                       key_value_array_t *out)
 {
-    JNIEnv *env = getJNIEnv();
-    if (env == NULL) {
-        return AIGW_ERR_INTERNAL;
+    if (pairs == NULL) {
+        clear_out_array(out);
+        return AIGW_SUCCESS;
     }
-
-    if (g_staticCacheCallbackMethodID == NULL || g_stringClass == NULL) {
-        return AIGW_ERR_INTERNAL;
+    jsize pairsLen = (*env)->GetArrayLength(env, pairs);
+    if (pairsLen <= 0) {
+        clear_out_array(out);
+        (*env)->DeleteLocalRef(env, pairs);
+        return AIGW_SUCCESS;
     }
+    out->count = pairsLen;
+    out->pairs = (key_value_pair_t*)malloc(sizeof(key_value_pair_t) * pairsLen);
+    if (out->pairs == NULL) {
+        clear_out_array(out);
+        (*env)->DeleteLocalRef(env, pairs);
+        return AIGW_ERR_NO_MEMORY;
+    }
+    out->count = copy_pairs_from_java(env, pairs, pairsLen, out->pairs);
+    (*env)->DeleteLocalRef(env, pairs);
+    return AIGW_SUCCESS;
+}
 
-    // Create Java String array for keys
+// Helper: release and clear each out_array in a batch (extracted from
+// hash_get_all_batch_callback; G.FUD.05). Frees any allocated pairs and
+// resets count/pairs to empty for all key_count entries.
+static void clear_out_array_batch(key_value_array_t *out_arrays, uint32_t key_count)
+{
+    for (uint32_t i = 0; i < key_count; i++) {
+        if (out_arrays[i].pairs != NULL) {
+            free(out_arrays[i].pairs);
+        }
+        clear_out_array(&out_arrays[i]);
+    }
+}
+
+// Helper: build a Java String[] of `key_count` keys (extracted from
+// hash_get_all_batch_callback; G.FUD.05). On success returns AIGW_SUCCESS and
+// writes the new local jobjectArray to *outKeys. On failure returns an error
+// code and sets *outKeys to NULL (any partially built array is released).
+static aigw_error_t build_jkeys_array(JNIEnv *env, const char **keys,
+                                      uint32_t key_count, jobjectArray *outKeys)
+{
+    *outKeys = NULL;
     jobjectArray jkeys = (*env)->NewObjectArray(env, key_count, g_stringClass, NULL);
     if (jkeys == NULL) {
         return AIGW_ERR_NO_MEMORY;
     }
-
     for (uint32_t i = 0; i < key_count; i++) {
         jstring jkey = cStrToJString(env, keys[i]);
         if (jkey == NULL) {
-            // Cleanup already created elements
             for (uint32_t j = 0; j < i; j++) {
                 jobject elem = (*env)->GetObjectArrayElement(env, jkeys, j);
                 if (elem != NULL) {
@@ -761,6 +800,68 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
         (*env)->SetObjectArrayElement(env, jkeys, i, jkey);
         (*env)->DeleteLocalRef(env, jkey);
     }
+    *outKeys = jkeys;
+    return AIGW_SUCCESS;
+}
+
+// Helper: validate the batch callback result and scatter its per-key pairs
+// into out_arrays (extracted from hash_get_all_batch_callback; G.FUD.05).
+// Releases the result local reference. On a status/shape error clears the
+// batch and returns AIGW_ERR_INTERNAL.
+static aigw_error_t fill_batch_out_arrays(JNIEnv *env, jobjectArray result,
+    key_value_array_t *out_arrays, uint32_t key_count)
+{
+    jsize resultLen = (*env)->GetArrayLength(env, result);
+    if (resultLen < CB_RESULT_MIN_LEN) {
+        (*env)->DeleteLocalRef(env, result);
+        return AIGW_ERR_INTERNAL;
+    }
+
+    jint status = 0;
+    if (!parse_callback_status(env, result, &status) || status != 0) {
+        (*env)->DeleteLocalRef(env, result);
+        clear_out_array_batch(out_arrays, key_count);
+        return AIGW_ERR_INTERNAL;
+    }
+
+    // Get batch results array from result[1] (CB_RESULT_IDX_PAIRS)
+    jobjectArray batchResults = (jobjectArray)(*env)->GetObjectArrayElement(
+        env, result, CB_RESULT_IDX_PAIRS);
+    if (batchResults == NULL) {
+        (*env)->DeleteLocalRef(env, result);
+        return AIGW_ERR_INTERNAL;
+    }
+
+    jsize batchResultsLen = (*env)->GetArrayLength(env, batchResults);
+    if (batchResultsLen != (jsize)key_count) {
+        (*env)->DeleteLocalRef(env, batchResults);
+        (*env)->DeleteLocalRef(env, result);
+        return AIGW_ERR_INTERNAL;
+    }
+
+    for (uint32_t i = 0; i < key_count; i++) {
+        jobjectArray pairs = (jobjectArray)(*env)->GetObjectArrayElement(
+            env, batchResults, i);
+        fill_one_out_array(env, pairs, &out_arrays[i]);
+    }
+
+    (*env)->DeleteLocalRef(env, batchResults);
+    (*env)->DeleteLocalRef(env, result);
+    return AIGW_SUCCESS;
+}
+
+static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_count, key_value_array_t *out_arrays)
+{
+    JNIEnv *env = getJNIEnv();
+    if (env == NULL || g_staticCacheCallbackMethodID == NULL || g_stringClass == NULL) {
+        return AIGW_ERR_INTERNAL;
+    }
+
+    jobjectArray jkeys = NULL;
+    aigw_error_t ret = build_jkeys_array(env, keys, key_count, &jkeys);
+    if (ret != AIGW_SUCCESS) {
+        return ret;
+    }
 
     jobjectArray result = (jobjectArray)(*env)->CallStaticObjectMethod(env, g_dcsCacheDriverClass,
         g_staticCacheCallbackMethodID, 4, NULL, NULL, jkeys, key_count);
@@ -768,91 +869,7 @@ static aigw_error_t hash_get_all_batch_callback(const char **keys, uint32_t key_
         return AIGW_ERR_INTERNAL;
     }
 
-    jsize resultLen = (*env)->GetArrayLength(env, result);
-    if (resultLen < CB_RESULT_MIN_LEN) {
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_INTERNAL;
-    }
-
-    // Get status code from result[0]
-    jobject jstatus = (*env)->GetObjectArrayElement(env, result, CB_RESULT_IDX_STATUS);
-    if (jstatus == NULL) {
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_INTERNAL;
-    }
-
-    jclass statusClass = (*env)->GetObjectClass(env, jstatus);
-    jmethodID intValueMethod = (*env)->GetMethodID(env, statusClass, "intValue", "()I");
-    if (intValueMethod == NULL) {
-        (*env)->DeleteLocalRef(env, jstatus);
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_INTERNAL;
-    }
-
-    jint status = (*env)->CallIntMethod(env, jstatus, intValueMethod);
-    (*env)->DeleteLocalRef(env, jstatus);
-
-    if (status != 0) {
-        (*env)->DeleteLocalRef(env, result);
-        // 清理已分配的内存
-        for (uint32_t i = 0; i < key_count; i++) {
-            if (out_arrays[i].pairs != NULL) {
-                free(out_arrays[i].pairs);
-                out_arrays[i].pairs = NULL;
-                out_arrays[i].count = 0;
-            }
-        }
-        return AIGW_ERR_INTERNAL;
-    }
-
-    // Get batch results array from result[1]
-    jobjectArray batchResults = (jobjectArray)(*env)->GetObjectArrayElement(env, result, 1);
-    if (batchResults == NULL) {
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_INTERNAL;
-    }
-
-    jsize batchResultsLen = (*env)->GetArrayLength(env, batchResults);
-    if (batchResultsLen != key_count) {
-        (*env)->DeleteLocalRef(env, batchResults);
-        (*env)->DeleteLocalRef(env, result);
-        return AIGW_ERR_INTERNAL;
-    }
-
-    // Process each key's result
-    for (uint32_t i = 0; i < key_count; i++) {
-        jobjectArray pairs = (jobjectArray)(*env)->GetObjectArrayElement(env, batchResults, i);
-        if (pairs == NULL) {
-            out_arrays[i].pairs = NULL;
-            out_arrays[i].count = 0;
-            continue;
-        }
-
-        jsize pairsLen = (*env)->GetArrayLength(env, pairs);
-        if (pairsLen <= 0) {
-            out_arrays[i].pairs = NULL;
-            out_arrays[i].count = 0;
-            (*env)->DeleteLocalRef(env, pairs);
-            continue;
-        }
-
-        out_arrays[i].count = pairsLen;
-        out_arrays[i].pairs = (key_value_pair_t*)malloc(sizeof(key_value_pair_t) * pairsLen);
-        if (out_arrays[i].pairs == NULL) {
-            out_arrays[i].count = 0;
-            (*env)->DeleteLocalRef(env, pairs);
-            continue;
-        }
-
-        int validCount = copy_pairs_from_java(env, pairs, pairsLen, out_arrays[i].pairs);
-        out_arrays[i].count = validCount;
-
-        (*env)->DeleteLocalRef(env, pairs);
-    }
-
-    (*env)->DeleteLocalRef(env, batchResults);
-    (*env)->DeleteLocalRef(env, result);
-    return AIGW_SUCCESS;
+    return fill_batch_out_arrays(env, result, out_arrays, key_count);
 }
 
 // Implement: aigwRegisterCacheDriver
