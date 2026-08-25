@@ -9,6 +9,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -16,11 +17,16 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"huawei.com/aigw/internal/alarmmonitor"
 	"huawei.com/aigw/internal/base"
+	"huawei.com/aigw/internal/cachecenter"
 	"huawei.com/aigw/internal/core"
+	"huawei.com/aigw/internal/discovery"
+	"huawei.com/aigw/internal/gs"
 	"huawei.com/aigw/internal/modelmonitor"
+	"huawei.com/aigw/internal/proxy"
 	"huawei.com/aigw/internal/zk"
 	"huawei.com/aigw/pkg/crypto"
 	"huawei.com/aigw/pkg/log"
@@ -40,6 +46,18 @@ const (
 
 	defaultCfgPath = "/etc/aigw/conf/aigw.json"
 )
+
+// RegMsgCtx is the northbound interface request message
+type RegMsgCtx struct {
+	RegInstanceMsg []*gs.RegisterInstanceMsg
+}
+
+// RequestEvent is the northbound interface request event
+type RequestEvent struct {
+	Model     string
+	ID        string
+	EventDesc string
+}
 
 // keyData records key and password temporarily, clear it to zero after use
 type keyData struct {
@@ -73,8 +91,15 @@ type aigwServerHandler struct {
 	monitorMgr *alarmmonitor.MonitorManager
 	modelMgr   *modelmonitor.ModelManager
 
-	httpServer *HttpServer
-	crypto     keyData
+	httpServer     *HttpServer
+	crypto         keyData
+	cacheDriverOps *cachecenter.CacheDriverOps
+
+	// Service discovery
+	discoveryMgr *discovery.ServiceRegistry
+	k8sDiscovery  discovery.ServiceDiscovery
+	// Request proxy/forwarding
+	proxyMgr *proxy.ProxyManager
 }
 
 var serverHandler = aigwServerHandler{}
@@ -307,6 +332,140 @@ func initZooKeeperManager(globalCfg *base.GlobalConfig, cfg *base.ZookeeperConfi
 	return zkMgr, nil
 }
 
+func initDiscovery(cfg *base.DiscoveryConfig) (discovery.ServiceDiscovery, *discovery.ServiceRegistry, error) {
+	log.Info().Msgf("[initDiscovery] called with Enable=%v, Type=%s", cfg.Enable, cfg.Type)
+	if !cfg.Enable {
+		log.Info().Msg("Discovery is disabled")
+		return nil, nil, nil
+	}
+
+	var disc discovery.ServiceDiscovery
+	var err error
+
+	switch cfg.Type {
+	case "k8s":
+		log.Info().Msg("[initDiscovery] Creating K8sDiscovery...")
+		disc, err = discovery.NewK8sDiscovery(&discovery.DiscoveryConfig{
+			Type:          cfg.Type,
+			KubeconfigPath: cfg.KubeconfigPath,
+			Namespace:     cfg.Namespace,
+			ResyncPeriod:  time.Duration(cfg.ResyncPeriod) * time.Second,
+		})
+		if err != nil {
+			log.Error().Msgf("failed to create K8s discovery: %v", err)
+			return nil, nil, err
+		}
+		log.Info().Msgf("K8s discovery initialized, namespace: %s", cfg.Namespace)
+	default:
+		log.Error().Msgf("unsupported discovery type: %s", cfg.Type)
+		return nil, nil, fmt.Errorf("unsupported discovery type: %s", cfg.Type)
+	}
+
+	registry := discovery.NewServiceRegistry(disc)
+	log.Info().Msg("Service registry created")
+	return disc, registry, nil
+}
+
+func startDiscoveryWatch(ctx context.Context, registry *discovery.ServiceRegistry, aigwMgr *core.AigwManager, namespace string) {
+	if registry == nil {
+		return
+	}
+
+	// Start watching for service changes
+	if err := registry.StartDiscovery(ctx, &discovery.DiscoverOptions{Namespace: namespace}); err != nil {
+		log.Error().Msgf("failed to start discovery watch: %v", err)
+		return
+	}
+
+	// Start a goroutine to handle discovery events and register/unregister instances
+	go func() {
+		watcher := registry.AddWatcher()
+		defer registry.RemoveWatcher(watcher)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-watcher:
+				if !ok {
+					return
+				}
+				if event.Instance == nil {
+					continue
+				}
+
+				// Get model from labels
+				model := ""
+				if event.Instance.Labels != nil {
+					model = event.Instance.Labels["model"]
+				}
+				if model == "" {
+					continue
+				}
+
+				switch event.Type {
+				case discovery.WatchEventAdd, discovery.WatchEventModify:
+					// Register instance
+					// For mixed deployPolicy, always use "mixed" role
+					// For separated policy, use the specific role
+					role := "mixed"
+					gsCfg := serverHandler.cfgMgr.GetAigwConfig().GsConfigs
+					for _, cfg := range gsCfg {
+						if cfg.Model == model {
+							if cfg.DeployPolicy == "separated" {
+								switch event.Instance.Role {
+								case base.PrefillRoleInstance:
+									role = "prefill"
+								case base.DecodeRoleInstance:
+									role = "decode"
+								}
+							}
+							break
+						}
+					}
+					groupID := ""
+					if event.Instance.Labels != nil {
+						groupID = event.Instance.Labels["groupId"]
+					}
+
+					registerIn := &base.RegisterInstanceIn{
+						Name:    event.Instance.Name,
+						Model:   model,
+						IP:      event.Instance.IP,
+						Port:    fmt.Sprintf("%d", event.Instance.Port),
+						Role:    role,
+						GroupID: groupID,
+						DpRank:  event.Instance.DpRank,
+					}
+					if err := aigwMgr.RegisterInstance(registerIn); err != nil {
+						log.Warn().Msgf("failed to register discovered instance: %v", err)
+					} else {
+						log.Info().Msgf("registered discovered instance: %s (%s:%d)",
+							event.Instance.ID, event.Instance.IP, event.Instance.Port)
+					}
+
+				case discovery.WatchEventDelete:
+					// Unregister instance
+					unregisterIn := &base.UnregisterInstanceIn{
+						Model:  model,
+						IP:     event.Instance.IP,
+						Port:   fmt.Sprintf("%d", event.Instance.Port),
+						DpRank: event.Instance.DpRank,
+					}
+					if err := aigwMgr.UnregisterInstance(unregisterIn); err != nil {
+						log.Warn().Msgf("failed to unregister discovered instance: %v", err)
+					} else {
+						log.Info().Msgf("unregistered discovered instance: %s (%s:%d)",
+							event.Instance.ID, event.Instance.IP, event.Instance.Port)
+					}
+				}
+			}
+		}
+	}()
+
+	log.Info().Msg("Discovery watch started")
+}
+
 func initMonitorManager(globalCfg *base.GlobalConfig, monitorCfg *base.MonitorConfig,
 	mgr *crypto.HmacManager) (*alarmmonitor.MonitorManager, error) {
 	hostIP := globalCfg.Host
@@ -385,6 +544,7 @@ func startManagers(aigwConfig *base.AigwConfig) error {
 	serverHandler.aigwMgr = aigwMgr
 
 	if err := aigwMgr.Init(); err != nil {
+		serverHandler.aigwMgr = nil
 		log.Error().Msgf("failed to init aigw manager, err: %v", err)
 		return err
 	}
@@ -421,10 +581,54 @@ func startManagers(aigwConfig *base.AigwConfig) error {
 		serverHandler.zkMgr = zkMgr
 	}
 
+	// Initialize service discovery
+	discoveryCfg := serverHandler.cfgMgr.GetAigwConfig().Discovery
+	log.Info().Msgf("[Server] Discovery config: Enable=%v, Type=%s, Namespace=%s, Kubeconfig=%s",
+		discoveryCfg.Enable, discoveryCfg.Type, discoveryCfg.Namespace, discoveryCfg.KubeconfigPath)
+	if discoveryCfg.Enable {
+		log.Info().Msg("[Server] Initializing service discovery...")
+		k8sDisc, discoveryMgr, err := initDiscovery(&discoveryCfg)
+		if err != nil {
+			log.Error().Msgf("failed to init discovery: %v", err)
+			return err
+		}
+		serverHandler.k8sDiscovery = k8sDisc
+		serverHandler.discoveryMgr = discoveryMgr
+		// Start watching for service changes
+		startDiscoveryWatch(serverHandler.aigwMgr.GetContext(), discoveryMgr, serverHandler.aigwMgr, discoveryCfg.Namespace)
+	}
+
+	// Initialize proxy manager for request forwarding
+	proxyCfg := serverHandler.cfgMgr.GetAigwConfig().Proxy
+	if proxyCfg.Enable {
+		serverHandler.proxyMgr = proxy.NewProxyManager(serverHandler.aigwMgr.GetContext(), &proxy.ProxyConfig{
+			Timeout:           time.Duration(proxyCfg.Timeout) * time.Second,
+			MaxRetry:          proxyCfg.MaxRetry,
+			RetryBaseInterval: time.Duration(proxyCfg.RetryBaseInterval) * time.Millisecond,
+			RetryMaxInterval:  time.Duration(proxyCfg.RetryMaxInterval) * time.Millisecond,
+			CircuitBreaker: &proxy.CircuitBreakerConfig{
+				Enabled:          proxyCfg.CircuitBreaker.Enabled,
+				FailureThreshold: proxyCfg.CircuitBreaker.FailureThreshold,
+				SuccessThreshold: proxyCfg.CircuitBreaker.SuccessThreshold,
+				Timeout:          time.Duration(proxyCfg.CircuitBreaker.Timeout) * time.Second,
+			},
+		})
+		log.Info().Msg("Proxy manager initialized")
+	}
+
 	return nil
 }
 
 func stopManagers() {
+	if serverHandler.discoveryMgr != nil {
+		serverHandler.discoveryMgr.StopDiscovery()
+	}
+	if serverHandler.k8sDiscovery != nil {
+		serverHandler.k8sDiscovery.Close()
+	}
+	if serverHandler.proxyMgr != nil {
+		serverHandler.proxyMgr.Stop()
+	}
 	if serverHandler.zkMgr != nil {
 		serverHandler.zkMgr.Stop()
 	}
@@ -446,7 +650,7 @@ func startHttpServer(aigwConfig *base.AigwConfig) error {
 		crypto.WithHmacSchema(aigwConfig.GlobalConfig.SecuritySchema))
 	aesMgr := crypto.NewAesManager(serverHandler.crypto.apiAesKey,
 		crypto.WithAesSchema(aigwConfig.GlobalConfig.SecuritySchema))
-	httpServer := NewHttpServer(serverHandler.aigwMgr, aigwConfig.GlobalConfig.Host, aigwConfig.GlobalConfig.Port)
+	httpServer := NewHttpServer(serverHandler.aigwMgr, aigwConfig.GlobalConfig.Host, aigwConfig.GlobalConfig.Port, serverHandler.proxyMgr)
 	httpServer.serHmacMgr = hmacMgr
 	httpServer.serAesMgr = aesMgr
 	if !hmacMgr.EnableHmac() {
@@ -552,4 +756,114 @@ func Execute() error {
 			return err
 		}
 	}
+}
+
+// IsInitComp is whether the aigw has been initialized.
+func IsInitComp() bool {
+	return serverHandler.aigwMgr != nil
+}
+
+// InitComp is initialize the AIGW.
+func InitComp(cfg *base.AigwConfig) error {
+	if err := initLog(&cfg.GlobalConfig); err != nil {
+		fmt.Println("Failed to initialize logs.")
+		return err
+	}
+
+	aigwMgr, err := core.NewAigwManager(cfg, core.WithRuntimeMode(base.SdkMode))
+	if err != nil {
+		log.Error().Msgf("failed to create aigw manager, err: %v", err)
+		return err
+	}
+
+	if err = aigwMgr.Init(); err != nil {
+		log.Error().Msgf("failed to init aigw manager, err: %v", err)
+		return err
+	}
+
+	serverHandler.aigwMgr = aigwMgr
+	log.Info().Msgf("aigw_init is successfully, configuration:\n%v", cfg)
+	return nil
+}
+
+// UninitComp is uninitialize the AIGW.
+func UninitComp() {
+	stopManagers()
+	serverHandler.aigwMgr = nil
+	log.Info().Msgf("uninit aigw done.")
+}
+
+// SelectWithContext is context selection the AIGW.
+func SelectWithContext(req *base.OpenAiRequest, ctx *RegMsgCtx) (*base.GetSuggestionOut, error) {
+	if req == nil || ctx == nil {
+		return nil, fmt.Errorf("invalid parameter")
+	}
+	prompt := processMessages(req.Messages)
+	in := &core.GetSuggestionIn{
+		UUID:   req.UUID,
+		Model:  req.Model,
+		Prompt: prompt,
+	}
+
+	res, err := serverHandler.aigwMgr.SelectOptimalNode(in, ctx.RegInstanceMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// NotifyEvent is event notification the AIGW.
+func NotifyEvent(reqEvent *RequestEvent) error {
+	if reqEvent == nil {
+		return fmt.Errorf("reqEvent is nil")
+	}
+	return serverHandler.aigwMgr.HandlerReqEvent(reqEvent.Model, reqEvent.ID, reqEvent.EventDesc)
+}
+
+// IsRegCacheDriver is whether the aigw has been registered.
+func IsRegCacheDriver() bool {
+	return serverHandler.cacheDriverOps != nil
+}
+
+// DeleteDriverOps is uninitialize the driver ops.
+func DeleteDriverOps() {
+	serverHandler.cacheDriverOps = nil
+}
+
+// RegisterCacheDriverOps is register driver ops
+func RegisterCacheDriverOps(name string, ops *cachecenter.CacheDriverOps) {
+	if ops == nil {
+		panic("ops cannot be nil")
+	}
+	if serverHandler.aigwMgr != nil {
+		serverHandler.aigwMgr.CacheDriverOps = ops
+	}
+	serverHandler.cacheDriverOps = ops
+}
+
+// RegisterModel register predefined model by user.
+func RegisterModel(config *base.GlobalSchedulerConfig) error {
+	if config == nil || config.Model == "" {
+		return fmt.Errorf("invalid parameter")
+	}
+
+	err := serverHandler.aigwMgr.RegisterModel(config)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnregisterModel unregister predefined model by user.
+func UnregisterModel(model string) error {
+	if model == "" {
+		return fmt.Errorf("invalid empty model name")
+	}
+
+	err := serverHandler.aigwMgr.UnregisterModel(model)
+	if err != nil {
+		return err
+	}
+	return nil
 }

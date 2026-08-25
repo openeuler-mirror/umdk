@@ -8,7 +8,10 @@
 // Package core contains the core functions for AIGW.
 package core
 
-import "huawei.com/aigw/pkg/crypto"
+import (
+	"huawei.com/aigw/internal/base"
+	"huawei.com/aigw/pkg/crypto"
+)
 
 // AIGWManagerOption AIGW ManagerOption
 type AIGWManagerOption func(m *AigwManager) error
@@ -25,6 +28,14 @@ func WithHmac(hm *crypto.HmacManager) AIGWManagerOption {
 func WithAes(am *crypto.AesManager) AIGWManagerOption {
 	return func(m *AigwManager) error {
 		m.AesMgr = am
+		return nil
+	}
+}
+
+// WithRuntimeMode set runtime mode for aigw manager
+func WithRuntimeMode(runtimeMode base.RuntimeMode) AIGWManagerOption {
+	return func(m *AigwManager) error {
+		m.runtimeMode = runtimeMode
 		return nil
 	}
 }

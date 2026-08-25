@@ -1,0 +1,75 @@
+{
+  "global": {
+    "host": "127.0.0.1",
+    "port": "8888",
+    "logPath": "/var/log/aigw/",
+    "logLevel": "debug",
+    "snapshotUpdateInterval": 60,
+    "securitySchema": "default",
+    "reqTimeout": 600
+  },
+  "discovery": {
+    "type": "k8s",
+    "kubeconfigPath": "/app/yangxl/sandbox/aigw-fork/test/e2e/mock_kubeconfig.yaml",
+    "namespace": "vllm",
+    "resyncPeriod": 30,
+    "enable": true
+  },
+  "proxy": {
+    "timeout": 30,
+    "maxRetry": 3,
+    "retryBaseInterval": 100,
+    "retryMaxInterval": 5000,
+    "enable": true,
+    "circuitBreaker": {
+      "enabled": true,
+      "failureThreshold": 5,
+      "successThreshold": 2,
+      "timeout": 30
+    }
+  },
+  "tokenizers": [
+    {
+      "tokenizeModelName": "DeepSeek-R1-Distill-Qwen-7B",
+      "configPath": "../../test/tokenizer/DeepSeek-R1-Distill-Qwen-7B/tokenizer.json",
+      "tokenizerType": "huggingfaceTokenizers"
+    }
+  ],
+  "globalSchedulers": [
+    {
+      "model": "test-model",
+      "blockSize": 64,
+      "deployPolicy": "mixed",
+      "maxTimeToFirstToken": 100,
+      "maxTimeBetweenTokens": 200,
+      "tokenizeModelName": "DeepSeek-R1-Distill-Qwen-7B",
+      "skipInstanceConnection": true,
+      "loadBalancer": {
+        "mixed": "consistentHash",
+        "prefill": "true",
+        "decode": "false",
+        "batchSize": 100,
+        "reservedBlockNumber": 10,
+        "minMatchedLength": 50,
+        "powerOfTwo": false,
+        "virtualNodes": 160,
+        "fallbackNum": 3,
+        "dpSize": 2
+      }
+    }
+  ],
+  "limits": {
+    "totalInsNum": 2048,
+    "insNumPerModel": 128,
+    "modelNum": 128,
+    "concurrency": 128,
+    "maxPromptRunes": 1024
+  },
+  "predictor": {
+    "predictType": "none",
+    "lightgbm": {
+      "classifierFile": "classifier.pkl",
+      "vectorizerFile": "vectorizer.pkl"
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "global": {
+    "host": "127.0.0.1",
+    "port": "8701",
+    "logPath": "/tmp/aigw-phase3-log",
+    "logLevel": "info",
+    "snapshotUpdateInterval": 3,
+    "securitySchema": "default",
+    "cryptoSock": "",
+    "reqTimeout": 60
+  },
+  "zookeeper": {
+    "address": "",
+    "aclScheme": "default",
+    "connectTimeout": 0,
+    "sessionTimeout": 0,
+    "inferenceInstancePath": "/mep/aigw/instances",
+    "scheduleServicePath": "/mep/aigw/global_schedulers"
+  },
+  "predictor": {
+    "predictType": "none"
+  },
+  "dataSync": {
+    "address": "",
+    "path": "/models",
+    "interval": 5
+  },
+  "tokenizers": [
+    {
+      "tokenizeModelName": "test-model",
+      "tokenizerType": "huggingfaceTokenizers",
+      "configPath": "/aigw_verify/src/test/tokenizer/DeepSeek-R1-Distill-Qwen-7B/tokenizer.json"
+    }
+  ],
+  "globalSchedulers": [
+    {
+      "model": "test-model",
+      "blockSize": 16,
+      "deployPolicy": "mixed",
+      "maxTimeToFirstToken": 200,
+      "maxTimeBetweenTokens": 50,
+      "tokenizeModelName": "test-model",
+      "skipInstanceConnection": true,
+      "loadBalancer": {
+        "mixed": "roundRobin",
+        "batchSize": 32,
+        "reservedBlockNumber": 10,
+        "minMatchedLength": 50
+      },
+      "renderClient": {
+        "endpointTemplate": "http://127.0.0.1:18000",
+        "timeout": 5000,
+        "maxRetries": 1,
+        "connPoolSize": 10,
+        "baseURL": "http://127.0.0.1:18000"
+      }
+    }
+  ],
+  "limits": {
+    "totalInsNum": 2048,
+    "insNumPerModel": 128,
+    "modelNum": 128,
+    "concurrency": 128,
+    "maxPromptRunes": 131072
+  },
+  "kvc": {
+    "enabled": true,
+    "agent": {
+      "heartbeatIntervalSec": 2,
+      "heartbeatTimeoutSec": 3,
+      "recoverWindowSec": 3,
+      "recoverTimeoutSec": 5,
+      "goneFinalizeSec": 5,
+      "registerGraceSec": 1,
+      "implicitHeartbeatFromRequests": true,
+      "offload": {"mode": "all", "batchSize": 64, "targetTier": "cpu", "delayBetweenBatchesMs": 0},
+      "prefetch": {"mode": "mru", "topN": 64, "batchSize": 64, "delayBetweenBatchesMs": 0},
+      "aging": {"mode": "ttl", "loopIntervalSec": 1, "evictGraceSec": 1, "sessionIdleEvictSec": 5, "batchSize": 64}
+    },
+    "session": {
+      "sessionTtlSec": 300,
+      "blockTtlSec": 300,
+      "pendingBlockMatchTtlSec": 60,
+      "accessFrequencyEmaWeight": 0.5,
+      "accessFrequencyWindowSec": 300
+    },
+    "vllm": {
+      "endpoint": "http://127.0.0.1:18000",
+      "timeoutMs": 5000,
+      "maxRetries": 2,
+      "retryBaseDelayMs": 100,
+      "retryMaxDelayMs": 2000,
+      "batchSize": 64,
+      "hmacEnabled": false
+    }
+  }
+}

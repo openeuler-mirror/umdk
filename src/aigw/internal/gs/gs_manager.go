@@ -17,6 +17,8 @@ import (
 
 	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/internal/cachecenter"
+	"huawei.com/aigw/internal/prefixcache"
+	"huawei.com/aigw/internal/renderclient"
 	"huawei.com/aigw/internal/stats"
 	"huawei.com/aigw/internal/tokenizers"
 	"huawei.com/aigw/internal/vectorizer"
@@ -124,11 +126,22 @@ type GlobalSchedulerManager struct {
 	lgm       *lightgbm.Booster
 	stats     *stats.DataPlaneStats
 
+	renderClientConfig renderclient.RenderClientConfig
+
 	lastAccessTime time.Time // last access timestamp of this gs
 
 	cacheDriverOps *cachecenter.CacheDriverOps
 	runtimeMode    base.RuntimeMode
 	metricProvider MetricProvider
+
+	// kvcSessionMgr drives vLLM KVC offload/prefetch on agent lifecycle events.
+	// nil when KVC management is disabled (SdkMode or kvc.enabled=false). Wired in H1.
+	kvcSessionMgr *KvcSessionManager
+}
+
+// GetKvcSessionManager returns the per-model KvcSessionManager (nil if KVC disabled).
+func (m *GlobalSchedulerManager) GetKvcSessionManager() *KvcSessionManager {
+	return m.kvcSessionMgr
 }
 
 // AlgorithmParams when pdMode=mixedDeployment, decodeScheduler is not effective
@@ -157,6 +170,9 @@ type AlgorithmParams struct {
 	VirtualNodes int // Number of virtual nodes per worker (default: 160)
 	FallbackNum  int // Number of fallback workers to try on failure (default: 3)
 	DpSize       int // DP size for DP-aware workers (default: 1)
+
+	// Phase 2: KvcSessionManager to receive kvevents fan-out (nil if KVC disabled).
+	KvcSessionMgr *KvcSessionManager
 }
 
 // NewGlobalSchedulerManager creates a new GS with options
@@ -221,11 +237,28 @@ func NewGlobalSchedulerManager(parentCtx context.Context, gsConfig *base.GlobalS
 	}
 	manager.metricProvider = metricProvider
 
+	// Phase 2: thread the per-model KvcSessionMgr into the LB so prefixcache can fan
+	// out kvevents to it via a MultiHandler (enables session/block attribution).
+	if manager.kvcSessionMgr != nil {
+		manager.config.lbConfig.KvcSessionMgr = manager.kvcSessionMgr
+	}
+
 	gsLB, err := newLoadBalancer(metricProvider, &manager.config.lbConfig)
 	if err != nil {
 		return nil, err
 	}
 	manager.scheduler = gsLB
+
+	// Inject render client into LB if configured
+	if manager.renderClientConfig.BaseURL != "" || manager.renderClientConfig.EndpointTemplate != "" {
+		log.Info().Msgf("[GS] init render client config: %+v, model: %s, baseURL: %s", manager.renderClientConfig, manager.config.model,
+			manager.renderClientConfig.BaseURL)
+		renderClient := renderclient.NewRenderClient(manager.renderClientConfig, manager.config.model, manager.renderClientConfig.BaseURL)
+		if pcLB, ok := gsLB.(*prefixCacheLoadBalancer); ok {
+			pcLB.SetRenderClient(renderClient)
+			pcLB.SetModelName(manager.config.model)
+		}
+	}
 
 	manager.dispatcher = newGlobalScheduleDispatcher(manager.ctx)
 
@@ -243,6 +276,15 @@ func (m *GlobalSchedulerManager) setConfig(gsConfig *base.GlobalSchedulerConfig)
 		WithAlgorithmThreshold(lbCfg.ReservedBlockNumber, lbCfg.BatchSize, lbCfg.PowerOfTwo, gsConfig.BlockSize),
 		WithInsConnectType(gsConfig.InsConnectType),
 		WithPretrainTTFTPath(lbCfg.PretrainTTFTPath),
+	}
+
+	// Add render client config if provided
+	if gsConfig.RenderClient.BaseURL != "" || gsConfig.RenderClient.EndpointTemplate != "" {
+		log.Info().Msgf("[GS] setConfig: found renderClient config in JSON, baseURL=%s, template=%s",
+			gsConfig.RenderClient.BaseURL, gsConfig.RenderClient.EndpointTemplate)
+		options = append(options, WithRenderClientConfig(gsConfig.RenderClient))
+	} else {
+		log.Info().Msg("[GS] setConfig: no renderClient config found in JSON")
 	}
 
 	for _, opt := range options {
@@ -280,6 +322,12 @@ func (m *GlobalSchedulerManager) Start() error {
 	m.cacheManager.Start()
 	m.dispatcher.start()
 
+	// Phase 2: start the per-model KvcSessionManager (subscribes to AgentRegistry,
+	// runs the aging + hint-recovery loops). No-op if KVC disabled (kvcSessionMgr == nil).
+	if m.kvcSessionMgr != nil {
+		m.kvcSessionMgr.Start()
+	}
+
 	m.wg.Add(1)
 	go m.controlLoop()
 
@@ -304,6 +352,11 @@ func (m *GlobalSchedulerManager) Stop() {
 		m.dispatcher.stop()
 	}
 
+	// Phase 2: stop the per-model KvcSessionManager (aging + recovery loops).
+	if m.kvcSessionMgr != nil {
+		m.kvcSessionMgr.Stop()
+	}
+
 	m.cacheManager.Stop()
 
 	if m.instanceManager != nil {
@@ -316,6 +369,14 @@ func (m *GlobalSchedulerManager) Stop() {
 // GetStats Get the stats of GlobalSchedulerManager
 func (m *GlobalSchedulerManager) GetStats() map[string]uint64 {
 	return m.stats.GetStatsMap()
+}
+
+// getPrefixCacheManager returns the prefix cache manager if the scheduler supports it.
+func (m *GlobalSchedulerManager) getPrefixCacheManager() prefixcache.PrefixCacheManager {
+	if pcLB, ok := m.scheduler.(PrefixCacheCapable); ok {
+		return pcLB.GetPrefixCacheManager()
+	}
+	return nil
 }
 
 func (m *GlobalSchedulerManager) registerInstance(ctrlMsg *ControlMessage) {
@@ -376,6 +437,19 @@ func (m *GlobalSchedulerManager) registerInstance(ctrlMsg *ControlMessage) {
 	}
 	m.instanceManager.updatePoolShot()
 
+	// Subscribe to KV events if prefix cache is enabled
+	if pcMgr := m.getPrefixCacheManager(); pcMgr != nil {
+		log.Info().Msgf("[prefixCache] attempting to subscribe to KV events for %s (ip=%s, port=%s, model=%s)",
+			registerMsg.Name, registerMsg.IP, registerMsg.Port, registerMsg.Model)
+		if subErr := pcMgr.SubscribeInstance(registerMsg.Name, registerMsg.IP, registerMsg.Port, registerMsg.Model); subErr != nil {
+			log.Error().Msgf("failed to subscribe to KV events for %s: %v", registerMsg.Name, subErr)
+		} else {
+			log.Info().Msgf("subscribed to KV events for instance %s", registerMsg.Name)
+		}
+	} else {
+		log.Info().Msgf("[prefixCache] no prefix cache manager, skipping KV events subscription for %s", registerMsg.Name)
+	}
+
 	log.Info().Msgf("instance %s registered successfully", registerMsg.Name)
 }
 
@@ -397,6 +471,12 @@ func (m *GlobalSchedulerManager) unregisterInstance(ctrlMsg *ControlMessage) {
 		return
 	}
 	m.instanceManager.updatePoolShot()
+
+	// Unsubscribe from KV events if prefix cache is enabled
+	if pcMgr := m.getPrefixCacheManager(); pcMgr != nil {
+		pcMgr.UnsubscribeInstance(insAddr)
+		log.Info().Msgf("unsubscribed from KV events for instance %s", insAddr)
+	}
 
 	log.Info().Msgf("instance (%v:%v) unregistered successfully", unregisterMsg.IP, unregisterMsg.Port)
 }
@@ -485,6 +565,14 @@ func (m *GlobalSchedulerManager) handleSchedule(msg *ControlMessage) {
 			}); err != nil {
 				msg.Response <- fmt.Errorf("failed to add request to provider with err: %v", err)
 				return
+			}
+			// KVC management: record the scheduled prefill instance for block attribution.
+			// expectedHashes is nil in degraded mode (R1 unvalidated) — attribution then
+			// falls back to instance-only matching inside OnBlockStored. See Task D4.
+			if m.kvcSessionMgr != nil {
+				sessionID := headerVal(request.Headers, "x-session-id")
+				agentID := headerVal(request.Headers, "x-agent-id")
+				m.kvcSessionMgr.OnRequestScheduled(sessionID, agentID, result.PrefillUrl, nil)
 			}
 		}
 

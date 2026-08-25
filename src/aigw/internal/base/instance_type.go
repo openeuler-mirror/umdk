@@ -60,8 +60,14 @@ func BuildInstanceAddress(ip, port string, dpRank ...int) string {
 		ipaddr = i.String()
 	}
 	addr := net.JoinHostPort(ipaddr, port)
-	// If dpRank is provided and valid, append @rank suffix
-	if len(dpRank) > 0 && dpRank[0] >= 0 {
+	// Append @<rank> suffix only for actual DP ranks > 0. A non-DP worker
+	// registers with dpRank=0 (default int); appending "@0" yields a malformed
+	// URL ("http://ip:port@0/path" is parsed as userinfo=ip:port, host=0),
+	// which breaks both the SSE instance watcher and the proxy forwarder with
+	// "dial tcp: lookup 0: no such host". DP rank-0 still receives its @0
+	// suffix via the snapshot path (instance_manager.go:
+	// fmt.Sprintf("%s@%d", snap.insUrl, rank)), so DP routing is unaffected.
+	if len(dpRank) > 0 && dpRank[0] > 0 {
 		addr = fmt.Sprintf("%s@%d", addr, dpRank[0])
 	}
 	return addr

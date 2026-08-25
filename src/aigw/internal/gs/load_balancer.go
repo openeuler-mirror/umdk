@@ -51,6 +51,7 @@ const (
 	LoadBalancerDecode
 	LoadBalancerPrefillTimeAware
 	LoadBalancerConsistentHash // Consistent hash for session affinity
+	LoadBalancerPrefixCache
 )
 
 // VirtualNodesPerWorker is the number of virtual nodes per worker in consistent hash.
@@ -99,6 +100,8 @@ func createMetaLB(lbType LoadBalancerType, metricProvider MetricProvider,
 		return newPrefillTimeLB(metricProvider, config)
 	case LoadBalancerConsistentHash:
 		return newConsistentHashLB(metricProvider, config)
+	case LoadBalancerPrefixCache:
+		return newPrefixCacheLB(metricProvider, config)
 	default:
 		log.Error().Msgf("[LB] error loadBalancerType.")
 		return nil, fmt.Errorf("error loadBalancerType")

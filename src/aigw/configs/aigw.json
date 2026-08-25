@@ -1,0 +1,110 @@
+{
+  "global": {
+    "host": "",
+    "port": "",
+    "logPath": "/var/log/aigw",
+    "logLevel": "info",
+    "cryptoSock": "",
+    "snapshotUpdateInterval": 1,
+    "securitySchema": "default/mep",
+    "reqTimeout": 600
+  },
+  "zookeeper": {
+    "address": "",
+    "aclScheme": "default/digest",
+    "connectTimeout": 0,
+    "sessionTimeout": 0,
+
+    "inferenceInstancePath": "/mep/aigw/instances",
+    "scheduleServicePath":"/mep/aigw/global_schedulers",
+    "enableTls": false,
+    "tlsCaFile": "",
+    "tlsCrtFile": "",
+    "tlsKeyFile": "",
+    "tlsServerName": ""
+  },
+  "monitor": {
+    "address": "",
+    "alarmPath": "/mep/v1/modelmonitor/alarm",
+    "serviceName": "aigw_service",
+    "version" : "1.0.0",
+    "businessId" : ""
+  },
+  "dataSync": {
+    "address": "",
+    "path": "/getAIGWEnableModelList",
+    "interval": 5
+  },
+  "prefixCache": {
+    "enabled": false,
+    "blockSize": 16,
+    "seed": 12345678901234567890,
+    "maxContexts": 1000,
+    "maxPrefixsPerContext": 10000,
+    "matchThreshold": 50,
+    "evictionIntervalSeconds": 60,
+    "evictionDurationMinutes": 20
+  },
+  "predictor": {
+    "predictType": "none/ema/lightgbm",
+    "lightgbm": {
+      "classifierFile": "",
+      "vectorizerFile": ""
+    }
+  },
+  "tokenizers": [
+    {
+      "tokenizeModelName": "DeepSeek-R1",
+      "configPath": "/home/DeepSeek-R1/tokenizer.json",
+      "tokenizerType": "huggingfaceTokenizers"
+    }
+  ],
+  "globalSchedulers": [
+    {
+      "model": "DeepSeek-R1-Distill-Qwen-7B",
+      "blockSize": 128,
+      "deployPolicy": "mixed/separated",
+      "maxTimeToFirstToken": 200,
+      "maxTimeBetweenTokens": 50,
+      "tokenizeModelName": "DeepSeek-R1",
+
+      "loadBalancer": {
+        "mixed": "roundRobin/leastConn/capacity/token",
+        "prefill": "roundRobin/leastConn/capacity/token/prefillTimeAware",
+        "decode": "roundRobin/leastConn/capacity/token/decode",
+        "batchSize": 32,
+        "enablePowerOfTwo": false,
+        "reservedBlockNumber": 50,
+        "minMatchedLength": 200,
+        "pretrainTTFTPath": ""
+      },
+      "instanceConnectType": "sse"
+    },
+    {
+      "model": "gpt-4o-mini",
+      "mode": "provider",
+      "providerPool": {
+        "strategy": "adaptive",
+        "strategyOptions": {
+          "tokenThreshold": 1000,
+          "rpmThreshold": 10,
+          "explorationRatio": 0.1,
+          "weights": { "health": 1.0, "token": 0.5, "rpm": 0.3, "latency": 0.2 }
+        },
+        "cooldown": { "failureThreshold": 3, "durationSec": 60, "rateLimitDurationSec": 90, "auth401FloorSec": 300 },
+        "retry": { "maxFailoverEndpoints": 3, "maxRetriesPerEndpoint": 2 },
+        "deployments": [
+          { "id": "openai-primary", "provider": "openai", "apiBase": "https://api.openai.com", "apiKey": "REPLACE_ME", "tpm": 60000, "rpm": 500 },
+          { "id": "deepseek-backup", "provider": "deepseek", "apiBase": "https://api.deepseek.com", "apiKey": "REPLACE_ME", "tpm": 100000, "rpm": 1000 }
+        ]
+      }
+    }
+  ],
+  "limits": {
+    "totalInsNum": 2048,
+    "insNumPerModel": 128,
+    "modelNum": 128,
+    "concurrency": 128,
+    "maxPromptRunes": 131072
+  }
+}

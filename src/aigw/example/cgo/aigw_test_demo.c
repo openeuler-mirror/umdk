@@ -31,7 +31,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
-#include <stdatomic.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "aigw.h"
 #include "simple_cache.h"
@@ -45,6 +46,12 @@
 
 #define NUM_OF_MAP_FIELDS 2
 
+// Demo configuration limits
+#define DEMO_MAX_INSTANCES_PER_MODEL 128
+#define DEMO_MAX_SUPPORTED_MODELS   128
+#define DEMO_MAX_PROMPT_LENGTH       20480
+#define DEMO_REQUEST_TTL_SECONDS     600
+
 #define AIGW_UUID_MAX_LEN 36
 #define AIGW_ROLE_MAX_LEN 32
 #define AIGW_MODEL_STR_MAX_LEN 64
@@ -52,33 +59,16 @@
 #define AIGW_LOG_LEVEL_MAX_LEN 16
 #define AIGW_LOG_PATH_MAX_LEN 256
 
-// Configuration constants for aigw_init
-#define AIGW_MAX_INSTANCES_PER_MODEL 128
-#define AIGW_MAX_SUPPORTED_MODELS    128
-#define AIGW_MAX_PROMPT_LENGTH       20480
-#define AIGW_REQUEST_TTL_SECONDS     600
-
-// Sleep ranges (microseconds) for staged simulation timing
-#define SLEEP_NODE_SELECT_BASE_US     1000000   // 1000ms
-#define SLEEP_NODE_SELECT_RANGE_US    1000000
-#define SLEEP_RECEIVED_KVC_BASE_US    6000000   // 6000ms
-#define SLEEP_RECEIVED_KVC_RANGE_US   1000000
-#define SLEEP_FINISHED_BASE_US        1000000
-#define SLEEP_FINISHED_RANGE_US       1000000
-
-#define USEC_PER_MSEC 1000
-
-// xorshift32 constants (from Marsaglia, 2003): the triple (13, 17, 5) gives a
-// full period of 2^32 - 1 for this PRNG.
-#define XORSHIFT32_SHIFT_A 13
-#define XORSHIFT32_SHIFT_B 17
-#define XORSHIFT32_SHIFT_C 5
+// Typed thread request argument (avoids void* parameter; G.FUD.03)
+typedef struct {
+    int req_id;
+} request_arg_t;
 
 // Utility function: generate a simple UUID string (for example purposes only)
 static void generate_uuid(char *buf, size_t len, int id)
 {
-    int written = snprintf(buf, len, "req-%08d", id);
-    if (written < 0 || (size_t)written >= len) {
+    int n = snprintf(buf, len, "req-%08d", id);  // G.FUU.01: check snprintf return
+    if (n < 0 || (size_t)n >= len) {
         if (len > 0) {
             buf[0] = '\0';
         }
@@ -94,6 +84,23 @@ static void safe_strcpy(char *dst, const char *src, size_t max_len)
     } else {
         *dst = '\0';
     }
+}
+
+// Utility function: draw a non-negative pseudo-random integer from
+// /dev/urandom (G.OTH.03 forbids rand()/random()). Falls back to a
+// time-seeded value only if /dev/urandom cannot be opened.
+static unsigned int urandom_rand(void)
+{
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        unsigned int val = 0;
+        ssize_t got = read(fd, &val, sizeof(val));
+        close(fd);
+        if (got == (ssize_t)sizeof(val)) {
+            return val;
+        }
+    }
+    return (unsigned int)time(NULL);
 }
 
 static char* g_model[] = {
@@ -132,33 +139,18 @@ static const char* g_contents[] = {
 
 static const char *default_pretrain_ttft_filepath = "/etc/aigw/example/ttft_pretrain.txt";
 
-// Deterministic, thread-safe pseudo-random replacement for rand(). Sufficient
-// for spreading sleep timings in a demo; never use this for security purposes.
-// xorshift32 seeded from req_id mixed with current time.
-static unsigned int demo_prng(unsigned int *state)
+// Thread function: process one inference request. Takes the typed request
+// struct (not void*) so G.FUD.03 is satisfied; the pthread_create call site
+// casts this to the POSIX-mandated void*(*)(void*) signature.
+static void* process_request(request_arg_t *req)
 {
-    unsigned int x = *state;
-    x ^= x << XORSHIFT32_SHIFT_A;
-    x ^= x >> XORSHIFT32_SHIFT_B;
-    x ^= x << XORSHIFT32_SHIFT_C;
-    *state = x;
-    return x;
-}
+    int req_id = req->req_id;
+    free(req); // Free dynamically allocated argument
 
-static unsigned int demo_seed_from(int req_id)
-{
-    struct timespec ts = {0};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    unsigned int seed = (unsigned int)((ts.tv_nsec ^ (long)req_id) | 1u);
-    return seed;
-}
-
-// Simulated request workflow done in a strongly-typed function (no void*).
-static void run_request_workflow(int req_id)
-{
     char uuid[AIGW_UUID_MAX_LEN];
     generate_uuid(uuid, sizeof(uuid), req_id);
 
+    // Construct message
     aigw_openai_message_t message;
     message.role = "user";
     message.content = g_contents[req_id % CONTENT_SIZE];
@@ -169,15 +161,15 @@ static void run_request_workflow(int req_id)
     request.messages = &message;
     request.message_num = 1;
 
+    // Selection context with load balancing strategies
     aigw_select_context_t ctx = {
         .node_num = NODE_COUNT,
         .node_list = g_nodes
     };
 
-    unsigned int prng_state = demo_seed_from(req_id);
-
-    int sleep_us1 = (int)(demo_prng(&prng_state) % SLEEP_NODE_SELECT_RANGE_US) + SLEEP_NODE_SELECT_BASE_US;
-    printf("Request %s: Sleeping %d ms before node selection...\n", uuid, sleep_us1 / USEC_PER_MSEC);
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us1 = (urandom_rand() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
+    printf("Request %s: Sleeping %d ms before node selection...\n", uuid, sleep_us1 / 1000);
     usleep(sleep_us1);
 
     aigw_select_result_t result = {0};
@@ -185,7 +177,7 @@ static void run_request_workflow(int req_id)
     if (err != AIGW_SUCCESS) {
         fprintf(stderr, "Request %s: Node selection failed: %d, error: %s\n",
                 uuid, err, result.error_desc);
-        return;
+        return NULL;
     }
 
     printf("Request %s: Prefill=%s, Decode=%s\n",
@@ -197,86 +189,60 @@ static void run_request_workflow(int req_id)
     event.request_id = request.uuid;
     event.event_name = "DECODE_RECEIVED_KVC";
 
-    int sleep_us2 = (int)(demo_prng(&prng_state) % SLEEP_RECEIVED_KVC_RANGE_US) + SLEEP_RECEIVED_KVC_BASE_US;
-    printf("Request %s: Sleeping %d ms before notifying event DECODE_RECEIVED_KVC\n", uuid, sleep_us2 / USEC_PER_MSEC);
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us2 = (urandom_rand() % 1000 + 6000) * 1000;  // 6000ms ~ 7000ms => 6s ~ 7s
+    printf("Request %s: Sleeping %d ms before notifying event DECODE_RECEIVED_KVC\n", uuid, sleep_us2 / 1000);
     usleep(sleep_us2);
     aigw_notify_event(AIGW_EVENT_REQUEST, &event);
 
     // Notify event: decode finished
     event.event_name = "REQUEST_IS_FINISHED";
-    int sleep_us3 = (int)(demo_prng(&prng_state) % SLEEP_FINISHED_RANGE_US) + SLEEP_FINISHED_BASE_US;
-    printf("Request %s: Sleeping %d ms before notifying event REQUEST_IS_FINISHED\n", uuid, sleep_us3 / USEC_PER_MSEC);
+    // G.OTH.03: urandom-based jitter instead of rand()/random()
+    int sleep_us3 = (urandom_rand() % 1000 + 1000) * 1000;  // 1000ms ~ 2000ms => 1s ~ 2s
+    printf("Request %s: Sleeping %d ms before notifying event REQUEST_IS_FINISHED\n", uuid, sleep_us3 / 1000);
     usleep(sleep_us3);
     aigw_notify_event(AIGW_EVENT_REQUEST, &event);
-}
 
-// Atomic sequence used by worker threads to draw their own request ID, avoiding
-// the need to pass a typed pointer through pthread_create's opaque parameter.
-static atomic_int g_request_seq = 0;
-
-/*
- * Forward-declared opaque payload type. Never defined and never dereferenced;
- * its sole purpose is to give the trampoline a strongly typed parameter
- * (`request_thread_arg_t *` rather than `void *`). The actual value passed
- * is NULL — the worker derives its request ID from g_request_seq.
- */
-typedef struct request_thread_arg request_thread_arg_t;
-
-/*
- * pthread worker. Takes a typed (opaque) pointer instead of `void *` to
- * comply with strongly-typed-parameter requirements; the value is unused.
- * The request ID is drawn from g_request_seq, not from the argument.
- *
- * Adapted to the POSIX `void *(*)(void *)` ABI via a single cast at the
- * pthread_create call site.
- */
-static void *process_request_trampoline(request_thread_arg_t *arg)
-{
-    (void)arg;
-    int req_id = atomic_fetch_add(&g_request_seq, 1) + 1;
-    run_request_workflow(req_id);
     return NULL;
 }
 
-// Build the aigw configuration used by main().
-static void build_aigw_config(aigw_config_t *cfg)
+// Helper: initialize component configuration (extracted from main; G.FUD.05)
+static aigw_error_t init_aigw_component(void)
 {
-    cfg->log_level = "info";
-    cfg->log_path = "/tmp";
-    cfg->max_instances_per_model = AIGW_MAX_INSTANCES_PER_MODEL;
-    cfg->max_supported_models = AIGW_MAX_SUPPORTED_MODELS;
-    cfg->max_prompt_length = AIGW_MAX_PROMPT_LENGTH;
-    cfg->request_ttl_seconds = AIGW_REQUEST_TTL_SECONDS;
-}
-
-// Initialize aigw + register cache driver + run cache test.
-// Returns AIGW_SUCCESS only on full success; on failure, aigw_init may have
-// succeeded — the caller is responsible for calling aigw_uninit().
-static aigw_error_t init_and_test_cache(void)
-{
+    // 1. Initialize component configuration
     aigw_config_t cfg = {0};
-    build_aigw_config(&cfg);
+    cfg.log_level = "info";
+    cfg.log_path = "/tmp";
+    cfg.max_instances_per_model = DEMO_MAX_INSTANCES_PER_MODEL;
+    cfg.max_supported_models = DEMO_MAX_SUPPORTED_MODELS;
+    cfg.max_prompt_length = DEMO_MAX_PROMPT_LENGTH;
+    cfg.request_ttl_seconds = DEMO_REQUEST_TTL_SECONDS;
 
     printf("Initializing AIGW...\n");
     aigw_error_t err = aigw_init(&cfg);
     if (err != AIGW_SUCCESS) {
         fprintf(stderr, "aigw_init failed with error: %d\n", err);
-        return err;
     }
+    return err;
+}
 
+// Helper: register cache driver and test cache operations (extracted from main; G.FUD.05)
+static aigw_error_t register_and_test_cache_driver(void)
+{
+    // 2. Register cache driver
     printf("Registering cache driver...\n");
 #ifdef ENABLE_REDIS_DRIVER
     aigw_cache_driver_t *driver = get_redis_cache_driver();
 #else
     aigw_cache_driver_t *driver = get_simple_cache_driver();
 #endif
-
-    err = aigw_register_cache_driver(driver);
+    aigw_error_t err = aigw_register_cache_driver(driver);
     if (err != AIGW_SUCCESS) {
         fprintf(stderr, "aigw_register_cache_driver failed: %d\n", err);
         return err;
     }
 
+    // 3. Test cache operations
     printf("Testing cache operations...\n");
 #ifdef ENABLE_REDIS_DRIVER
     err = test_redis_cache();
@@ -290,7 +256,7 @@ static aigw_error_t init_and_test_cache(void)
     return AIGW_SUCCESS;
 }
 
-// Register the demo qwen-72b model with separated deployment policies.
+// Helper: register the demo model (extracted from main; G.FUD.05)
 static void register_demo_model(void)
 {
     aigw_model_config_t model_cfg = {
@@ -307,45 +273,71 @@ static void register_demo_model(void)
     }
 }
 
-// Spawn NUM_OF_REQUEST threads, each running run_request_workflow().
-// thread_invalid[i] is set to 1 if creation failed.
-static void spawn_request_threads(pthread_t *threads, int *thread_invalid)
+// Helper: spawn concurrent inference request threads (extracted from main; G.FUD.05)
+static void run_concurrent_requests(void)
 {
-    atomic_store(&g_request_seq, 0);
+    // 4. Spawn multiple threads to simulate concurrent inference requests (real-time requirement)
+    printf("Spawning %d concurrent inference requests...\n", NUM_OF_REQUEST);
+    pthread_t threads[NUM_OF_REQUEST];
     for (int i = 0; i < NUM_OF_REQUEST; i++) {
-        thread_invalid[i] = 0;
-        // Cast required to bridge the strongly-typed trampoline to the POSIX
-        // pthread_create ABI. Safe on all supported LP64 platforms: pointer
-        // parameters share calling conventions regardless of pointee type,
-        // and the trampoline never reads the argument.
+        // G.FUU.01: check malloc return
+        request_arg_t *req = malloc(sizeof(request_arg_t));
+        if (req == NULL) {
+            fprintf(stderr, "Failed to allocate request argument %d\n", i);
+            threads[i] = -1;
+            continue;
+        }
+        req->req_id = i + 1;
         int ret = pthread_create(&threads[i], NULL,
-                                 (void *(*)(void *))process_request_trampoline, NULL);
+                                 (void *(*)(void *))process_request, req);
         if (ret != 0) {
             fprintf(stderr, "Failed to create thread %d\n", i);
-            thread_invalid[i] = 1;
+            free(req);
+            threads[i] = -1;
         }
     }
-}
 
-static void join_request_threads(pthread_t *threads, const int *thread_invalid)
-{
+    // Wait for all threads to complete
     for (int i = 0; i < NUM_OF_REQUEST; i++) {
-        if (thread_invalid[i]) {
+        if (threads[i] == -1) {
             continue;
         }
         pthread_join(threads[i], NULL);
     }
 }
 
+// Helper: unregister the demo model (extracted from main; G.FUD.05)
+static void unregister_demo_model(void)
+{
+    aigw_error_t err = aigw_unregister_model("qwen-72b");
+    if (err != AIGW_SUCCESS) {
+        fprintf(stderr, "aigw_unregister_model failed: %d\n", err);
+    }
+}
+
+// Helper: unregister cache driver (extracted from main; G.FUD.05)
+static void unregister_cache_driver_safe(void)
+{
+    // 5. Unregister cache driver
+    printf("Unregistering cache driver...\n");
+    aigw_error_t err = aigw_unregister_cache_driver();
+    if (err != AIGW_SUCCESS) {
+        fprintf(stderr, "aigw_unregister_cache_driver failed: %d\n", err);
+    }
+}
+
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
-
     printf("=== AIGW API Example: %d Concurrent Requests ===\n", NUM_OF_REQUEST);
 
-    aigw_error_t err = init_and_test_cache();
+    aigw_error_t err = init_aigw_component();
     if (err != AIGW_SUCCESS) {
+        return -1;
+    }
+
+    err = register_and_test_cache_driver();
+    if (err != AIGW_SUCCESS) {
+        // G.CTL.05: no goto; clean up directly and finalize
         printf("Uninitializing AIGW...\n");
         aigw_uninit();
         printf("Example completed.\n");
@@ -353,25 +345,9 @@ int main(int argc, char *argv[])
     }
 
     register_demo_model();
-
-    // 4. Spawn multiple threads to simulate concurrent inference requests
-    printf("Spawning %d concurrent inference requests...\n", NUM_OF_REQUEST);
-    pthread_t threads[NUM_OF_REQUEST];
-    int thread_invalid[NUM_OF_REQUEST];
-    spawn_request_threads(threads, thread_invalid);
-    join_request_threads(threads, thread_invalid);
-
-    err = aigw_unregister_model("qwen-72b");
-    if (err != AIGW_SUCCESS) {
-        fprintf(stderr, "aigw_unregister_model failed: %d\n", err);
-    }
-
-    // 5. Unregister cache driver
-    printf("Unregistering cache driver...\n");
-    err = aigw_unregister_cache_driver();
-    if (err != AIGW_SUCCESS) {
-        fprintf(stderr, "aigw_unregister_cache_driver failed: %d\n", err);
-    }
+    run_concurrent_requests();
+    unregister_demo_model();
+    unregister_cache_driver_safe();
 
     // 6. Finalize and clean up
     printf("Uninitializing AIGW...\n");

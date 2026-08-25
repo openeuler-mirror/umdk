@@ -1,0 +1,26 @@
+{
+  "global": {
+    "host": "172.17.0.3", "port": "8888", "logPath": "/aigw/logs", "logLevel": "debug",
+    "cryptoSock": "", "snapshotUpdateInterval": 1, "securitySchema": "default", "reqTimeout": 600
+  },
+  "predictor": { "predictType": "none" },
+  "proxy": {
+    "enable": true, "timeout": 600, "maxRetry": 2, "retryBaseInterval": 200, "retryMaxInterval": 2000,
+    "circuitBreaker": { "enabled": false, "failureThreshold": 5, "successThreshold": 2, "timeout": 30 }
+  },
+  "globalSchedulers": [
+    {
+      "model": "chat", "mode": "provider",
+      "providerPool": {
+        "strategy": "adaptive",
+        "cooldown": { "failureThreshold": 3, "durationSec": 60, "rateLimitDurationSec": 90, "auth401FloorSec": 300 },
+        "retry": { "maxFailoverEndpoints": 3, "maxRetriesPerEndpoint": 2 },
+        "deployments": [
+          { "id": "deepseek-primary", "provider": "deepseek", "apiBase": "https://api.deepseek.com", "apiKey": "REPLACE_WITH_DEEPSEEK_API_KEY", "model": "deepseek-v4-flash", "tpm": 100000, "rpm": 1000 },
+          { "id": "zhipu-primary", "provider": "zhipu", "apiBase": "https://open.bigmodel.cn/api/paas/v4", "apiKey": "REPLACE_WITH_ZHIPU_API_KEY", "model": "glm-4", "tpm": 100000, "rpm": 1000 }
+        ]
+      }
+    }
+  ],
+  "limits": { "totalInsNum": 2048, "insNumPerModel": 128, "modelNum": 128, "concurrency": 128, "maxPromptRunes": 131072 }
+}

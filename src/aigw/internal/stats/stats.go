@@ -41,6 +41,29 @@ const (
 	TokenLbLatencyOverLimit
 	// LbNoInstances indicates there is no instances registered
 	LbNoInstances
+	// --- KVC management (Phase 2) ---
+	StatAgentRegistered
+	StatAgentActive
+	StatAgentSuspected
+	StatAgentRecovered
+	StatAgentGone
+	StatAgentUnregistered
+	StatSessionsActive
+	StatSessionsSuspended
+	StatSessionsRecovering
+	StatSessionsTerminated
+	StatSessionsEvicted
+	StatHintsIssuedOffload
+	StatHintsIssuedPrefetch
+	StatHintsIssuedEvict
+	StatHintsAcked
+	StatHintsRejected
+	StatHintsFailed
+	StatHintsRetried
+	StatHintsPending
+	StatBlocksTracked
+	StatBlocksAttributed
+	StatBlockMatchMiss
 	TypeCount
 )
 
