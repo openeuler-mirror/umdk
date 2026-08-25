@@ -659,34 +659,27 @@ static inline uint32_t umq_qbuf_pool_shrink_threshold(void)
 }
 
 // Adaptive batch count: per size_class fetch granularity.
-// Problem: a uniform batch_count (e.g. 64) is unreasonable for large blocks.
-//   64 x 1M = 64MB per fetch, which is 2x the entire expansion slot (32MB),
-//   causing expansion pools to drain instantly and triggering frequent re-expansion.
-// Algorithm: batch = TARGET_FETCH_BYTES / block_sizes[sc], clamped to [MIN, MAX].
-//   - TARGET_FETCH_BYTES = 4MB: each fetch moves roughly 4MB of memory regardless
-//     of block size, keeping TLS pool refill rate balanced across size classes.
-//   - MIN = 4: prevents degenerate single-block fetches for very large blocks.
-//   - MAX = 64: preserves original batch size for small blocks where it works well.
-// Resulting batch counts per size class:
-//   sc=0  4K   -> 4M/4K   = 1024 -> clamp to 64
-//   sc=1  64K  -> 4M/64K  = 64
-//   sc=1  128K -> 4M/128K = 32
-//   sc=1  256K -> 4M/256K = 16
-//   sc=1  512K -> 4M/512K = 8
-//   sc=2  1M   -> 4M/1M   = 4
+//
+// Adaptive batch count based on per-SC total block count.
+// batch = per_sc_block_counts[sc] / QBUF_POOL_BATCH_CNT_DIVISOR(24),
+// clamped to [QBUF_POOL_BATCH_CNT_MIN(4), QBUF_POOL_BATCH_CNT(64)].
+// Rationale: a larger pool can afford a bigger batch to reduce global-pool lock
+// contention, while a smaller pool must use a small batch to avoid draining the
+// global pool in a single fetch. The MAX(64) cap bounds a single fetch to keep
+// the TLS pool and global pool balanced — an uncapped batch on a large pool
+// could drain the global pool in one shot.
 static inline uint32_t get_batch_count(uint32_t sc)
 {
     if (sc >= g_qbuf_pool.size_class_count) {
         return QBUF_POOL_BATCH_CNT_MIN;
     }
 
-    uint32_t blk_sz = g_qbuf_pool.block_sizes[sc];
-    if (blk_sz == 0) {
-        return QBUF_POOL_BATCH_CNT;
+    uint64_t blk_cnt = g_qbuf_pool.per_sc_block_counts[sc];
+    if (blk_cnt == 0) {
+        return QBUF_POOL_BATCH_CNT_MIN;
     }
 
-    uint32_t cnt = (uint32_t)(QBUF_POOL_TARGET_FETCH_BYTES / blk_sz);
-
+    uint32_t cnt = (uint32_t)(blk_cnt / QBUF_POOL_BATCH_CNT_DIVISOR);
     if (cnt < QBUF_POOL_BATCH_CNT_MIN) {
         cnt = QBUF_POOL_BATCH_CNT_MIN;
     } else if (cnt > QBUF_POOL_BATCH_CNT) {

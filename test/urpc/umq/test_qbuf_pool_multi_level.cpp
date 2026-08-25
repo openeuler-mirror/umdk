@@ -448,25 +448,22 @@ TEST_F(TestQbufPoolMultiLevel, TlsByteBudgetEnforcement)
 TEST_F(TestQbufPoolMultiLevel, BatchDynamicCalculation)
 {
     /* Given: block_sizes [4K, 64K]
-     * get_batch_count is adaptive: QBUF_POOL_TARGET_FETCH_BYTES(4MB) / blk_size,
+     * get_batch_count is adaptive: per_sc_block_counts[sc] / 24,
      * clamped to [QBUF_POOL_BATCH_CNT_MIN(4), QBUF_POOL_BATCH_CNT(64)]. */
     InitPool(2, 16);
 
-    /* sc=0 (4K): 4MB/4K = 1024 -> clamped to 64 */
+    /* Auto-derived per_sc_block_counts[sc] = 2941 -> 2941/24 = 122 -> clamp to 64 */
     EXPECT_EQ(get_batch_count(0), 64u);
-    /* sc=1 (64K): 4MB/64K = 64 (no clamping needed) */
     EXPECT_EQ(get_batch_count(1), 64u);
 
     /* Given: custom config count=3, mult=8 -> [4K, 32K, 256K] */
     umq_qbuf_pool_uninit();
     InitPool(3, 8);
 
-    /* sc=0 (4K): 4MB/4K = 1024 -> clamped to 64 */
-    EXPECT_EQ(get_batch_count(0), 64u);
-    /* sc=1 (32K): 4MB/32K = 128 -> clamped to 64 */
-    EXPECT_EQ(get_batch_count(1), 64u);
-    /* sc=2 (256K): 4MB/256K = 16 */
-    EXPECT_EQ(get_batch_count(2), 16u);
+    /* Auto-derived per_sc_block_counts[sc] = 686 -> 686/24 = 28 */
+    EXPECT_EQ(get_batch_count(0), 28u);
+    EXPECT_EQ(get_batch_count(1), 28u);
+    EXPECT_EQ(get_batch_count(2), 28u);
 }
 
 /* 9.7 Escape alloc comprehensive (merged 9.7+9.29+9.80+9.87+9.96)
@@ -777,7 +774,7 @@ TEST_F(TestQbufPoolMultiLevel, TlsBatchFetchFromGlobalOnFirstAlloc)
     uint64_t globalBefore = g_qbuf_pool.block_pool[0].buf_cnt_with_data;
     ASSERT_GT(globalBefore, 0u);
 
-    /* batch_count = QBUF_POOL_BATCH_CNT = 64 */
+    /* batch_count = per_sc_block_counts[0] / 24 = 2941 / 24 = 122 -> clamp to 64 */
     uint32_t batch = get_batch_count(0);
     EXPECT_EQ(batch, 64u);
 
@@ -1056,14 +1053,13 @@ TEST_F(TestQbufPoolMultiLevel, BufDataToSizeClassEdgeCases)
     umq_qbuf_free(&list1);
 }
 
-/* 9.22 get_batch_count: uniform QBUF_POOL_BATCH_CNT regardless of SC */
+/* 9.22 get_batch_count: adaptive per_sc_block_counts[sc] / 24 */
 TEST_F(TestQbufPoolMultiLevel, GetBatchCountEdgeCase)
 {
     InitPool(2, 16); /* [4K, 64K] */
 
-    /* get_batch_count is adaptive: 4MB / blk_size, clamped [4, 64].
-     * sc=0 (4K): 4MB/4K = 1024 -> clamped to 64.
-     * sc=1 (64K): 4MB/64K = 64 (no clamping). */
+    /* get_batch_count is adaptive: per_sc_block_counts[sc] / 24, clamped to [4, 64].
+     * Auto-derived per_sc_block_counts[sc] = 2941 -> 2941/24 = 122 -> clamp to 64. */
     EXPECT_EQ(get_batch_count(0), 64u);
     EXPECT_EQ(get_batch_count(1), 64u);
 }
