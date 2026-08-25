@@ -59,6 +59,8 @@ typedef enum umq_buf_status {
     UMQ_BUF_LOC_DATA_POISON,            /* Local Data Poison */
     UMQ_BUF_REM_DATA_POISON,            /* Remote Data Poison */
 
+    UMQ_BUF_RNR_RETRY_CNT_EXC = 99,     /* RNR retries: reduce the post frequency and do not free qbuf */
+
     UMQ_BUF_FLOW_CONTROL_UPDATE = 128,  /* Umq flow control window is updated, this is not error case */
     UMQ_MEMPOOL_UPDATE_SUCCESS,
     UMQ_MEMPOOL_UPDATE_FAILED,
