@@ -1,16 +1,12 @@
 # SNC PathService 主成功场景测试设计
 
-> 基于 `topo_data_2npu_1port.json` / `acl_data_2npu_1port.json` 和 `topo_data_4npu_8port.json` / `acl_data_4npu_8port.json` 两组测试工具，设计 planPath 主成功场景。
+> 基于 `topo_data_2npu_1port.json` 和 `topo_data_4npu_8port.json` 两组测试工具，设计 planPath 主成功场景。
 
 ---
 
 ## 1. 全局假设与数据修正
 
-### 1.1 AclData.superNodeName 映射
-
-`AclData` 的标识字段已从 `aclId` 重命名为 `superNodeName`。JSON 中 ACL 的 `aclId` 字段值（`"acl-001"`）在加载时需映射为 `AclData.superNodeName` 为 `"A5-superPod-1"`，以匹配 `aclStore.getAclData(request.getSuperNodeName())` 的查找逻辑。
-
-### 1.2 2npu_1port 路由前缀修正
+### 1.1 2npu_1port 路由前缀修正
 
 JSON 中 L1SW0 路由前缀与 NPU 端口 CNA 经 `cnaToTargetAddr()` 后的结果不匹配：
 
@@ -21,7 +17,7 @@ JSON 中 L1SW0 路由前缀与 NPU 端口 CNA 经 `cnaToTargetAddr()` 后的结�
 
 否则 `routePhase` 中 LPM 查找因 `/32` 精确匹配失败，抛出 `ROUTE_NOT_REACHABLE`。
 
-### 1.3 4npu_8port 路由前缀修正
+### 1.2 4npu_8port 路由前缀修正
 
 仅 L1SW0 的路由前缀与所连端口的 CNA 匹配（NPU2 port0/0/0 的 CNA `221.221.221.68` = 路由前缀），L1SW1/2/3 的路由前缀不匹配各自所连端口的 CNA。若需在所有 L1SW 上工作，修正如下：
 
@@ -78,14 +74,13 @@ rack1#os0#npu1:400GE 0/0/1  ←→  rack1#l1sw0:400GE 1/0/1  ←→  rack1#os0#n
 | 1 | 端口直连 | remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/1` |
 | 2 | 查 destPort | `400GE 0/1/1` → `npu2.findNpuPort()` → CNA=`221.221.221.66`, EID=`DDDDDD42000000000000000000000002` |
 | 2 | 端口直连 | remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/2` |
-| 3 | ACL 双向检查 | srcEid=AAAA...02, dstEid=DDDD...02, srcCna=170.170.170.18, destCna=221.221.221.66 → 匹配 |
-| 5 | interDevices 非空 | 进入多跳逻辑 |
-| 7 | 多跳路径还原 | hops=[NPU1, L1SW0, NPU2] |
-| 8 | 正向 routePhase | 中间跳 L1SW0, target=`cnaToTargetAddr("221.221.221.66")`=`"221.221.221.66"` |
-| 8 | L1SW0 路由查找 | 前缀 `221.221.221.66/32`(修正后) → 匹配, outPort=400GE 1/0/2 |
-| 9 | 反向 routePhase | 中间跳 L1SW0, target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` |
-| 9 | L1SW0 路由查找 | 前缀 `170.170.170.18/32`(修正后) → 匹配, outPort=400GE 1/0/1 |
-| 13-15 | 构建结果 | SUCCESS |
+| 3 | interDevices 非空 | 进入多跳逻辑 |
+| 5 | 多跳路径还原 | hops=[NPU1, L1SW0, NPU2] |
+| 6 | 正向 routePhase | 中间跳 L1SW0, target=`cnaToTargetAddr("221.221.221.66")`=`"221.221.221.66"` |
+| 6 | L1SW0 路由查找 | 前缀 `221.221.221.66/32`(修正后) → 匹配, outPort=400GE 1/0/2 |
+| 7 | 反向 routePhase | 中间跳 L1SW0, target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` |
+| 7 | L1SW0 路由查找 | 前缀 `170.170.170.18/32`(修正后) → 匹配, outPort=400GE 1/0/1 |
+| 9-10 | 构建结果 | SUCCESS |
 
 **期望输出：**
 
@@ -156,14 +151,13 @@ rack1#os0#npu1:400GE 0/0/1  ←→  rack1#l1sw0:400GE 1/0/1  ←→  rack1#os0#n
 | 0 | 查 src/dest Device | `superNode.getNpuDevices()`中 npu1 / npu2 找到 |
 | 1 | 查 srcPort | `npu1.findNpuPort("400GE 0/0/0")` → CNA=`170.170.170.17`, EID=`AAAAAA12000000000000000000000001`, remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/0` |
 | 2 | 查 destPort | `npu2.findNpuPort("400GE 0/0/0")` → CNA=`221.221.221.68`, EID=`DDDDDD42000000000000000000000001`, remoteDevice=`rack1#l1sw0`, remotePort=`400GE 1/0/2` |
-| 3 | ACL 检查 | ACL 中存在 AAAA...01 ↔ DDDD...01 条目 |
-| 5 | interDevices 非空 | 进入多跳逻辑 |
-| 7 | 多跳路径还原 | hops=[NPU1, L1SW0, NPU2] |
-| 8 | 正向 routePhase | target=`cnaToTargetAddr("221.221.221.68")`=`"221.221.221.68"` |
-| 8 | L1SW0 路由查找 | `221.221.221.68/32` → 1/0/2 → 匹配 outPort=`400GE 1/0/2` |
-| 9 | 反向 routePhase | target=`cnaToTargetAddr("170.170.170.17")`=`"170.170.170.17"` |
-| 9 | L1SW0 路由查找 | `170.170.170.17/32` → 1/0/0 → 匹配 outPort=`400GE 1/0/0` |
-| 13-15 | 构建结果 | SUCCESS |
+| 3 | interDevices 非空 | 进入多跳逻辑 |
+| 5 | 多跳路径还原 | hops=[NPU1, L1SW0, NPU2] |
+| 6 | 正向 routePhase | target=`cnaToTargetAddr("221.221.221.68")`=`"221.221.221.68"` |
+| 6 | L1SW0 路由查找 | `221.221.221.68/32` → 1/0/2 → 匹配 outPort=`400GE 1/0/2` |
+| 7 | 反向 routePhase | target=`cnaToTargetAddr("170.170.170.17")`=`"170.170.170.17"` |
+| 7 | L1SW0 路由查找 | `170.170.170.17/32` → 1/0/0 → 匹配 outPort=`400GE 1/0/0` |
+| 9-10 | 构建结果 | SUCCESS |
 
 **期望输出：**
 
@@ -193,7 +187,7 @@ rack1#os0#npu1:400GE 0/0/1  ←→  rack1#l1sw0:400GE 1/0/1  ←→  rack1#os0#n
 
 #### 用例 3.2.2：npu1 → l1sw1 → npu3（port 0/0/1）
 
-需修正路由前缀后使用（见 1.3 节 L1SW1 路由修正）。
+需修正路由前缀后使用（见 1.2 节 L1SW1 路由修正）。
 
 **输入：**
 
@@ -216,7 +210,6 @@ rack1#os0#npu1:400GE 0/0/1  ←→  rack1#l1sw0:400GE 1/0/1  ←→  rack1#os0#n
 |---|---|
 | srcPort | `npu1.findNpuPort("400GE 0/0/1")` → CNA=`170.170.170.18`, EID=`AAAAAA12000000000000000000000002`, remote=`l1sw1:1/0/0` |
 | destPort | `npu3.findNpuPort("400GE 0/0/1")` → CNA=`238.238.238.86`, EID=`EEEEEE55000000000000000000000002`, remote=`l1sw1:1/0/4` |
-| ACL 检查 | 匹配 AAAA...02 ↔ EEEE...02 条目 |
 | 正向 routePhase | target=`cnaToTargetAddr("238.238.238.86")`=`"238.238.238.86"` → L1SW1 路由 `238.238.238.86/32`(修正后) → outPort=`400GE 1/0/4` |
 | 反向 routePhase | target=`cnaToTargetAddr("170.170.170.18")`=`"170.170.170.18"` → L1SW1 路由 `170.170.170.18/32`(修正后) → outPort=`400GE 1/0/0` |
 
@@ -252,20 +245,6 @@ cnaToTargetAddr(NPU端口.CNA) ∈ L1SW.routingTables[].prefix.dstAddress
 ```
 
 即：NPU 端口的 CNA 经过 `cnaToTargetAddr` 变换后，必须在所连 L1SW 的路由表中有匹配的前缀。
-
-### 4.2 ACL 一致性
-
-对每对 `(srcNPU端口, destNPU端口)`：
-
-```
-srcNPU端口.EID + "|" + destNPU端口.EID + "|RCTP" ∈ aclData.tpAcls
-```
-
-即：ACL 中的每条双向规则，其 EID 对必须在 topo 数据中存在对应的 NPU 端口。
-
-### 4.3 AclData.superNodeName
-
-`AclData.superNodeName` 必须等于 superNode 的 name，因为 `aclStore.getAclData(request.getSuperNodeName())` 使用 superNodeName 查找。JSON 中 ACL 的 `aclId` 字段值需在映射时赋值为 `superNodeName`。
 
 ---
 

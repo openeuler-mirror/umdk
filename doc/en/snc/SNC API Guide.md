@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The SNC (SuperNode Network Controller) module provides SuperNode topology management, ACL access control, and path planning capabilities. It exposes a unified `SNCService` interface, with an internal layered architecture: Service → Engine → Store.
+The SNC (SuperNode Network Controller) module provides SuperNode topology management and path planning capabilities. It exposes a unified `SNCService` interface, with an internal layered architecture: Service → Engine → Store.
 
 ---
 
@@ -40,17 +40,7 @@ Package path: `com.huawei.umdk.snc.SNCService`
 | `getSuperNode` | `String name` | `SuperNode` | Query SuperNode by name | INIT/UNINIT → `SNCStateException`; returns `null` if not found (not an exception) |
 | `removeSuperNode` | `String name` | `void` | Delete SuperNode by name | INIT/UNINIT → `SNCStateException` |
 
-### 2.3 ACL Management
-
-| Method | Parameters | Return Value | Description | Exception Notes |
-|------|------|--------|------|---------|
-| `setAclData` | `AclData aclData` | `void` | Import (**replace by superNodeName**) ACL data, mark aclLoaded, update data ready state; old ACL with the same superNodeName is overwritten, ACL data with different names coexist without interference | INIT/UNINIT → `SNCStateException`; null name/empty name → `IllegalArgumentException`; **Sub-fields (tpAcls/AclKey/TpAclEntity internal fields) are not validated** — missing values cause `planPath` to return `ACL_CHECK_FAILED` |
-| `addAclRules` | `String superNodeName, Map<AclKey, TpAclEntity> rules` | `void` | Batch add ACL rules; if ACL data does not exist, **throws IllegalStateException** ("ACL data not found for superNode: \<name\>") | INIT/UNINIT → `SNCStateException`; null parameters → `IllegalArgumentException`; null key/value → `IllegalArgumentException`; target ACL not found → `IllegalStateException` |
-| `removeAclRules` | `String superNodeName, List<AclKey> keys` | `void` | Batch remove ACL rules; if target ACL data does not exist, **throws IllegalStateException** ("ACL data not found for superNode: \<name\>") | INIT/UNINIT → `SNCStateException`; null parameters → `IllegalArgumentException`; null key → `IllegalArgumentException`; target ACL not found → `IllegalStateException` |
-| `getAclData` | `String superNodeName` | `AclData` | Query ACL data for the specified SuperNode | INIT/UNINIT → `SNCStateException`; returns `null` if not found (not an exception) |
-| `removeAclData` | `String superNodeName` | `void` | Delete ACL data for the specified SuperNode | INIT/UNINIT → `SNCStateException` |
-
-### 2.4 Path Planning
+### 2.3 Path Planning
 
 | Method | Parameters | Return Value | Description | Exception Notes |
 |------|------|--------|------|---------|
@@ -65,11 +55,11 @@ Package path: `com.huawei.umdk.snc.SNCService`
 ## 3. State Machine
 
 ```
-         init()                                 uninit()
-  INIT ──────────▶ READY ──(setSuperNode & setAclData both completed)──▶ DATAREADY
+         init()                  uninit()
+  INIT ──────────▶ READY ──(setSuperNode completed)──▶ DATAREADY
    │                                │                                 │
    │                                │ Incremental ops (add/remove/get/…) │ planPath (may be called multiple times concurrently)
-   │                                │ setSuperNode / setAclData         │ setSuperNode / setAclData (may update data)
+   │                                │ setSuperNode         │ setSuperNode (may update data)
    │                                │ uninit()                         │ Incremental ops (add/remove/get/…)
    │                                │                                 │
    └──── uninit() ───▶ UNINIT ◀───────────────────────────────────────┘
@@ -78,15 +68,15 @@ Package path: `com.huawei.umdk.snc.SNCService`
 | State | Description | Allowed Operations |
 |:-----|:-----|:----------|
 | `INIT` | Initial state (not initialized) | init(), uninit() |
-| `READY` | Ready state (initialized, data not ready) | setSuperNode, setAclData; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries, addAclRules, removeAclRules); all query operations (getSuperNode, getAclData); removeSuperNode, removeAclData; uninit |
-| `DATAREADY` | Data ready state (both topology and ACL have been loaded) | Same as READY, plus planPath |
+| `READY` | Ready state (initialized, data not ready) | setSuperNode; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries); all query operations (getSuperNode); removeSuperNode; uninit |
+| `DATAREADY` | Data ready state (topology has been loaded) | Same as READY, plus planPath |
 | `UNINIT` | Deinitialized | (None — any operation throws SNCStateException) |
 
 **State Transition Rules:**
 - `init()`: INIT → READY (non-idempotent, repeated init rebuilds all internal objects)
 - `uninit()`: INIT / READY / DATAREADY → UNINIT (calling in INIT state only clears state markers, no side effects)
-- `setSuperNode()` + `setAclData()`: READY → DATAREADY (auto-transition after both have been loaded)
-- `setSuperNode()` / `setAclData()`: DATAREADY → DATAREADY (data can still be updated in data-ready state)
+- `setSuperNode()`: READY → DATAREADY (auto-transition after topology has been loaded)
+- `setSuperNode()`: DATAREADY → DATAREADY (data can still be updated in data-ready state)
 - `planPath()`: Only available in **DATAREADY** state; throws `SNCStateException` if not in DATAREADY, message is `"SNC is not in DATAREADY state, current state: <STATE>"` (**Note**: planPath does not use `checkNotUninit`, has its own state check, message format differs from other methods)
 
 ---
@@ -114,22 +104,9 @@ Package path: `com.huawei.umdk.snc.SNCService`
 | L5 | `RoutingEntry.prefix` | **Not validated** | `addRoutingEntries` with null entry.prefix → `IllegalArgumentException` (Service layer checks) |
 | L5 | `OutPortInfo` fields | **Not validated** | Stored; route lookup may cause NPE later |
 
-### 3a.2 setAclData Validation Levels
+### 3a.2 Incremental Operation Validation Levels
 
-| Level | Field | Validation Rule | Behavior on Invalid Input |
-|------|------|---------|-----------|
-| L0 | `aclData` itself | non-null | `IllegalArgumentException` |
-| L1 | `aclData.superNodeName` | non-null, non-empty | `IllegalArgumentException` |
-| L1 | `aclData.tpAcls` | **Not validated** | Can be null/empty; subsequent `addAclRules` requires ACL data to exist, otherwise throws `IllegalStateException` |
-| L2 | `AclKey.srcEid` | **Not validated** | `AclCheckEngine.checkBothDirection` uses null to search Map → match fails |
-| L2 | `AclKey.dstEid` | **Not validated** | Same as above |
-| L2 | `AclKey.transportType` | **Not validated** | Same as above (RCTP hardcoded lookup, other types don't match) |
-| L2 | `TpAclEntity.sourceCna/destCna` | **Not validated** | `checkBothDirection` compares null CNA → `ACL_CHECK_FAILED` |
-| L2 | `TpAclEntity.templateId` | **Not validated** | Currently unused |
-
-### 3a.3 Incremental Operation Validation Levels
-
-Same as import: incremental operations (`addNpuDevices`, `addSwDevices`, `addAclRules`, etc.) only validate their own input parameters; **nested object fields are not validated**:
+Same as import: incremental operations (`addNpuDevices`, `addSwDevices`, etc.) only validate their own input parameters; **nested object fields are not validated**:
 
 ```java
 addNpuDevices("sn1", Arrays.asList(
@@ -145,7 +122,6 @@ Complete validation boundary principles:
 | Method input non-null | `devices != null` | Device internal fields (deviceName, forwardingChips...) |
 | Collection elements non-null | Each `device != null` in list | Port fields (eid, cna, remoteDevice...) |
 | Identifier non-empty string | `superNodeName != ""` | Routing table fields (prefix, outPortInfos...) |
-| None | None | ACL rule internal fields (srcEid, sourceCna...) |
 
 ---
 
@@ -164,7 +140,7 @@ All methods (except `init`) throw `SNCStateException` when called in an incorrec
 
 ### 3b.2 Parameter Validation Exceptions
 
-**Methods with validation** (setSuperNode, addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries, setAclData, addAclRules, removeAclRules, planPath, getSuperNode, removeSuperNode, getAclData, removeAclData):
+**Methods with validation** (setSuperNode, addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries, planPath, getSuperNode, removeSuperNode):
 
 | Check | Condition | Exception |
 |--------|------|------|
@@ -183,13 +159,12 @@ All methods (except `init`) throw `SNCStateException` when called in an incorrec
 | Method | Return When Found | Return When Not Found |
 |------|-----------|--------|
 | `getSuperNode(name)` | SuperNode object | `null` (not an exception) |
-| `getAclData(name)` | AclData object | `null` (not an exception) |
 
 ---
 
 ## 3c. Invocation Order Exception Scenarios
 
-### 3c.1 Incremental Operation Before setSuperNode/setAclData
+### 3c.1 Incremental Operation Before setSuperNode
 
 ```java
 // Incorrect order: incremental add before import
@@ -202,9 +177,8 @@ sncService.setSuperNode(completeSN);         // ③ Normal import
 |---------|------|------|
 | `addNpuDevices` → `setSuperNode` | addNpuDevices requires SuperNode to exist, will not implicitly create | `IllegalStateException` |
 | `addRoutingEntries` → `setSuperNode` | addRoutingEntries requires routing table to exist | `IllegalStateException` |
-| `addAclRules` → `setAclData` | Same logic applies to ACL side | `IllegalStateException` |
 
-### 3c.2 Incremental Operations Without Prior Topology/ACL Import
+### 3c.2 Incremental Operations Without Prior Topology Import
 
 | Operation | Condition | Behavior | Result |
 |------|------|------|------|
@@ -213,12 +187,9 @@ sncService.setSuperNode(completeSN);         // ③ Normal import
 | `removeDevices("nonExistent", ...)` | SuperNode not found | **Silent no-op** | Data not deleted, no exception |
 | `addRoutingEntries("nonExistent", ...)` | Routing table not found | **Throws IllegalStateException** | Clear error message |
 | `removeRoutingEntries("nonExistent", ...)` | Routing table not found | **Silent no-op** | Same as above |
-| `addAclRules("nonExistent", ...)` | ACL data not found | **Throws IllegalStateException** | Clear error message: "ACL data not found for superNode: nonExistent" |
-| `removeAclRules("nonExistent", ...)` | ACL data not found | **Throws IllegalStateException** | Same as above |
 | `removeSuperNode("nonExistent")` | SuperNode not found | **Silent no-op** | Map.remove null → no effect |
-| `removeAclData("nonExistent")` | ACL not found | **Silent no-op** | Same as above |
 
-### 3c.3 Only Incremental Operations, Without setSuperNode/setAclData
+### 3c.3 Only Incremental Operations, Without setSuperNode
 
 ```java
 sncService.init(config);
@@ -226,33 +197,25 @@ sncService.addNpuDevices("sn1", devices);       // Throws IllegalStateException 
 // Cannot skip setSuperNode and directly do incremental operations
 ```
 
-Only `setSuperNode()` and `setAclData()` set the `superNodeLoaded`/`aclLoaded` flags. All incremental operations **do not set** these flags → state never transitions to DATAREADY → `planPath` always fails.
+Only `setSuperNode()` sets the `superNodeLoaded` flag. All incremental operations **do not set** this flag → state never transitions to DATAREADY → `planPath` always fails.
 
 ### 3c.4 Repeated Import
 
 | Operation | Behavior |
 |------|------|
 | `setSuperNode(SN1)` → `setSuperNode(SN2)` | **Same name**: Second call overwrites first (`Map.put` semantics), SN1 old data lost; **Different name**: Both coexist independently |
-| `setAclData(AD1)` → `setAclData(AD2)` | Same logic on ACL side (overwrite by `superNodeName`) |
 | `init()` → `init()` | Creates new Store/Engine/Service instances each time; old instances discarded |
 | `init()` → `uninit()` → `init()` | Normal: clean first, then reinitialize |
 
-### 3c.5 Cross-SuperNode Mismatch
-
-| Scenario | Behavior | Result |
-|------|------|------|
-| `setSuperNode("snA", ...)` + `setAclData("snB", ...)` | SuperNode name "snA" ≠ ACL name "snB" | Both exist in their respective stores, but `planPath("snA", ...)` finds null ACL → `ACL_NOT_FOUND` |
-
-### 3c.5a Data Deletion After Entering DATAREADY Causes State Rollback
+### 3c.5 Data Deletion After Entering DATAREADY Causes State Rollback
 
 ```java
-setSuperNode(sn);                         // superNodeLoaded=true
-setAclData(acl);                           // aclLoaded=true  → DATAREADY
+setSuperNode(sn);                         // superNodeLoaded=true → DATAREADY
 removeSuperNode("sn1");                    // Data deleted, superNodeLoaded = getSuperNode("sn1") != null → false
 planPath(req);                             // State check fails → SNCStateException (state rolled back to READY)
 ```
 
-`updateDataReadyState()` rolls the state back from DATAREADY to READY when `superNodeLoaded` or `aclLoaded` becomes false. After data deletion, **state rolls back**, and subsequent `planPath` calls throw `SNCStateException`.
+`updateDataReadyState()` rolls the state back from DATAREADY to READY when `superNodeLoaded` becomes false. After data deletion, **state rolls back**, and subsequent `planPath` calls throw `SNCStateException`.
 
 ### 3c.6 Batch Operation Validation Failure (Atomicity)
 
@@ -272,12 +235,12 @@ Batch operations use a **pre-validate + all-commit (two-phase)** design: Phase 1
 ### 3c.7 Incomplete State After setSuperNode
 
 ```java
-setSuperNode(sn);  // superNodeLoaded = true, aclLoaded = false
-// State remains READY
-planPath(req);     // SNCStateException
+setSuperNode(sn);  // superNodeLoaded = true
+// State transitions to DATAREADY
+planPath(req);      // Normal execution
 ```
 
-Both `setSuperNode` and `setAclData` must be called for the state to transition to DATAREADY.
+`setSuperNode` alone transitions the state to DATAREADY.
 
 ### 3c.8 init Exception Scenarios
 
@@ -285,7 +248,7 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 |------|------|------|
 | `init(null)` | config unused, runs normally | No exception, enters READY normally |
 | `init()` called twice consecutively | Second call rebuilds all Store/Engine/Service | First call's data completely lost (no merge), state reset to READY |
-| `init()` field state | Creates new instance, resets `superNodeLoaded=false, aclLoaded=false` | Previous state completely cleared |
+| `init()` field state | Creates new instance, resets `superNodeLoaded=false` | Previous state completely cleared |
 | `init()` → immediately call other methods | Normal execution, state is READY | Only `planPath` is blocked (requires DATAREADY) |
 
 ### 3c.9 uninit Exception Scenarios
@@ -309,11 +272,10 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | `planPath(request)` with srcDevice/destDevice being a switch (not NPU) | PathService.planPath two-layer check: device exists in swDevices but deviceType ≠ NPU | `SRC_AND_DST_MUST_BE_NPU(3002)` |
 | `planPath(request)` with srcPort not on device | NpuDevice.findNpuPort returns null | `SRC_INFO_ERR` |
 | `planPath(request)` with destPort not on device | Same | `DST_INFO_ERR` |
-| `planPath` with ACL data not in store (cross-name mismatch) | getAclData returns null | `ACL_NOT_FOUND` |
 | `planPath` direct connection with mismatched remote ports | PathService validation fails | `TOPO_CONNECTION_ERROR` |
 | `planPath` multi-hop with inconsistent intermediate connections | PathEngine.resolveMultiHopPath throws exception | `TOPO_CONNECTION_NOT_FOUND` |
 | `planPath` route unreachable (intermediate device LPM miss or no out port) | PathService.routePhase throws `PathPlanException(ROUTE_NOT_REACHABLE)` | `ROUTE_NOT_REACHABLE(1010)` |
-| `planPath` direct connection after init reset without reloading topology/ACL | State is READY | `SNCStateException` (does not enter planPath logic) |
+| `planPath` direct connection after init reset without reloading topology | State is READY | `SNCStateException` (does not enter planPath logic) |
 
 ---
 
@@ -350,13 +312,11 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | `SUCCESS` | 0 | success | Path planning successful |
 | `SRC_INFO_ERR` | 1003 | src info error | Source port not found / EID or CNA is null / format error |
 | `DST_INFO_ERR` | 1004 | dst info error | Destination port not found / EID or CNA is null / format error |
-| `ACL_CHECK_FAILED` | 1005 | acl check failed | Forward or reverse ACL entry missing / CNA mismatch |
 | `TOPO_INCOMPLETE` | 1007 | topo incomplete | srcDevice or destDevice not found in SuperNode |
 | `TOPO_CONNECTION_ERROR` | 1008 | topo connection error | Direct topology: src and dest port remoteDevice/remotePort mismatch |
 | `TOPO_CONNECTION_NOT_FOUND` | 1009 | topo connection not found | Multi-hop topology: inconsistent connection between hops |
 | `ROUTE_NOT_REACHABLE` | 1010 | route not reachable | Intermediate device route unreachable |
 | `TOPO_NOT_FOUND` | 1012 | topo not found | Requested SuperNode name not found in store |
-| `ACL_NOT_FOUND` | 1013 | acl not found | ACL data for requested SuperNode not loaded |
 | `SRC_AND_DST_MUST_BE_NPU` | 3002 | src and dst must be npu | srcDevice or destDevice type is not NPU |
 | `UPI_MISMATCH` | 3003 | upi mismatch | Source and destination ports both have UPI but they differ |
 
@@ -385,7 +345,6 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | `SNCException` | `RuntimeException` | Base exception |
 | `SNCStateException` | `SNCException` | SNC state error |
 | `SuperNodeNotFoundException` | `SNCException` | SuperNode or device not found |
-| `AclNotFoundException` | `SNCException` | ACL data not found |
 | `PathPlanException` | `SNCException` | Path planning failure (contains `PlanStatus status`) |
 
 ---
@@ -405,16 +364,6 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | `getSuperNode` | `String` | `SuperNode` |
 | `removeSuperNode` | `String` | `void` |
 
-### `AclService`
-
-| Method | Parameters | Return Value |
-|------|------|--------|
-| `importAclData` | `AclData` | `void` |
-| `addAclRules` | `String, Map<AclKey, TpAclEntity>` | `void` |
-| `removeAclRules` | `String, List<AclKey>` | `void` |
-| `getAclData` | `String` | `AclData` |
-| `removeAclData` | `String` | `void` |
-
 ### `PathService`
 
 | Method | Parameters | Return Value |
@@ -433,7 +382,6 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | `PathEngine` | `findPortByName` | `DeviceEntity, String` | `PortEntity` |
 | `PathEngine` | `findPortByConnection` | `DeviceEntity` | `PortEntity` |
 | `RouteLookupEngine` | `lookup` | `String, Map, List<Integer>` | `RoutingEntry` |
-| `AclCheckEngine` | `checkBothDirection` | `AclData, String, String, String, String` | `boolean` |
 
 ---
 
@@ -442,4 +390,3 @@ Both `setSuperNode` and `setAclData` must be called for the state to transition 
 | Store | Methods |
 |-------|------|
 | `SuperNodeStore` | `init, clear, replace, removeSuperNode, getSuperNode, getRoutingTable, addNpuDevice, addSwDevice, removeDevice, addRoutingEntry, removeRoutingEntry` |
-| `AclStore` | `init, clear, replace, removeAclData, getAclData, addAclRule, removeAclRule` |

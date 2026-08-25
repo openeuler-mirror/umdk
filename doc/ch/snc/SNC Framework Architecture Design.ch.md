@@ -25,7 +25,6 @@
    - [7.7 接口实现映射](#77-接口实现映射)
    - [7.8 错误调用顺序说明](#78-错误调用顺序说明)
    - [7.9 SuperNodeStore（拓扑存储）](#79-supernodestore拓扑存储)
-   - [7.10 AclStore（ACL存储）](#710-aclstoreacl存储)
 8. [路径规划算法 — 索引掩码匹配（Indexed Mask Match）](#8-路径规划算法--索引掩码匹配indexed-mask-match)
 9. [路径规划详细流程](#9-路径规划详细流程)
 
@@ -35,7 +34,7 @@
 
 ### 1.1 业务背景
 
-SNC（Supernode Network Controller）是一个超级节点控制器，负责网络拓扑、ACL、路由信息的管理，并提供路径规划功能，返回通信覆盖当前路径时所需参数。
+SNC（Supernode Network Controller）是一个超级节点控制器，负责网络拓扑、路由信息的管理，并提供路径规划功能，返回通信覆盖当前路径时所需参数。
 
 ### 1.2 核心功能需求
 
@@ -43,8 +42,7 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 |:----------------:|:-------------------------------|:------:|
 | 初始化/去初始化   | SNC服务的启动与停止             | P0     |
 | SuperNode数据管理     | 网络拓扑结构下发、查询与删除     | P1     |
-| TP-ACL数据管理   | 传输策略访问控制列表下发、查询与删除 | P1     |
-| 路径规划   | 基于EID对的路径规划与ACL校验     | P2     |
+| 路径规划   | 基于EID对的路径规划     | P2     |
 
 ---
 
@@ -57,7 +55,6 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 ┌──────────────────────────────────────────────────┐
 │         上层编排器/管理系统        │ (北向调用方) │
 │   - 拓扑数据录入（包含路由信息）    │             │
-│   - ACL策略下发                 │             │
 │   - 路径规划请求                 │             │
 └──────────────┬───────────────────────────────────┘
                │ API 调用
@@ -65,7 +62,6 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 │        SNC 模块 (本模块)         │             │
 │   - 数据持久化与索引              │             │
 │   - 路径规划与路径还原           │             │
-│   - ACL 校验                    │             │
 └──────────────┬──────────────────────────────────┘
                │ 南向采集/注入（当前阶段不进行开发）
 ┌──────────────▼──────────────────────────────────┐
@@ -78,13 +74,13 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 
 ### 2.2 交互模式
 
-- **配置类操作（拓扑/ACL下发）：** 同步调用，调用方下发完整数据快照。
+- **配置类操作（拓扑下发）：** 同步调用，调用方下发完整数据快照。
 - **查询类操作（路径规划）：** 同步调用，请求-响应模式，调用方发送 PathPlanRequest，SNC 返回 PathPlanResult。
 - **初始化/去初始化：** 同步调用，SNC 启动时从北向加载数据或接收全量同步；去初始化时清理内存数据。
 
 ### 2.3 数据一致性保证
 
-- 拓扑数据（包含路由信息）和 ACL 数据以全量快照方式下发，SNC 不维护增量变更日志。
+- 拓扑数据（包含路由信息）以全量快照方式下发，SNC 不维护增量变更日志。
 - 所有数据使用内存 HashMap 索引，保证 O(1) 查找效率。
 - 路径规划基于内存中的数据实时计算，不依赖外部存储。
 
@@ -126,10 +122,6 @@ com.huawei.umdk.snc
 │   ├── RoutePrefix.java               # 路由前缀结构体（§4.8）
 │   ├── RoutingTableKey.java           # 路由表联合键（superNodeName + deviceName + chipIndex，§4.7.1）
 │   ├── OutPortInfo.java               # 出端口信息（§4.9.1）
-│   ├── AclData.java                   # ACL 数据容器（§4.10）
-│   ├── AclKey.java                    # ACL 复合键（§4.11）
-│   ├── TpAclEntity.java               # TP-ACL 实体（§4.12）
-│   ├── TransportType.java             # 传输类型枚举（RMTP/RCTP/CTP/UTP）（§4.10）
 │   ├── InternalPathInfo.java          # §5.1 内部路径信息（引擎计算上下文）
 │   ├── InternalPathHop.java           # §5.1 内部路径跳
 │   └── RouteSelectionRecord.java      # §5.2 内部选路记录
@@ -142,23 +134,19 @@ com.huawei.umdk.snc
 │
 ├── service/                           # 业务逻辑层（编排）
 │   ├── SuperNodeService.java               # 拓扑数据管理
-│   ├── AclService.java                # ACL 数据管理
 │   └── PathService.java               # 路径规划编排（调用 engine 层）
 │
 ├── store/                             # 数据存储层（HashMap 索引）
-│   ├── SuperNodeStore.java                 # 拓扑索引（superNodeName→SuperNode / routingTableMap）
-│   └── AclStore.java                  # ACL 索引（superNodeName→AclData / tpAclMap）
+│   └── SuperNodeStore.java                 # 拓扑索引（superNodeName→SuperNode / routingTableMap）
 │
 ├── engine/                            # 算法引擎层
-│   ├── PathEngine.java                # 路径还原引擎（Step 5~7）
-│   ├── RouteLookupEngine.java         # 路径规划引擎 / 索引掩码匹配（Step 8~12，§8）
-│   └── AclCheckEngine.java            # ACL 校验引擎（Step 3~4）
+│   ├── PathEngine.java                # 路径还原引擎（Step 3~5）
+│   └── RouteLookupEngine.java         # 路径规划引擎 / 索引掩码匹配（Step 6~8，§8）
 │
 ├── exception/                         # 异常定义（§7.5.2）
 │   ├── SNCException.java              # 基础异常
 │   ├── SNCStateException.java         # 状态异常
 │   ├── SuperNodeNotFoundException.java     # 拓扑数据未找到
-│   ├── AclNotFoundException.java      # ACL 数据未找到
 │   └── PathPlanException.java         # 路径规划失败（内含 PlanStatus）
 │
 └── util/                              # 工具类
@@ -173,7 +161,7 @@ com.huawei.umdk.snc
                     └────▲─────┘
                          │使用
                     ┌────┴─────┐
-                    │ service  │ （编排层：SuperNodeService / AclService / PathService）
+                    │ service  │ （编排层：SuperNodeService / PathService）
                     └─┬──┬──┬─┘
                       │  │  │
             ┌─────────┘  │  └─────────┘
@@ -208,32 +196,27 @@ com.huawei.umdk.snc
 SNCServiceImpl
     │
     ├── init(SNCConfig)
-    │     └→ SuperNodeStore.init() + AclStore.init()
+    │     └→ SuperNodeStore.init()
     │     └→ 仅操作 config 和 store，不涉及 dto
     │
     ├── setSuperNode(SuperNode)          // entity.SuperNode（§4.1 领域模型）
     │     └→ SuperNodeService.importSuperNode(superNode)
     │              └→ SuperNodeStore.replace(superNode)
     │
-    ├── setAclData(AclData)            // entity.AclData（§4.12 领域模型）
-    │     └→ AclService.importAclData(aclData)
-    │              └→ AclStore.replace(aclData)
-    │
     ├── planPath(PathPlanRequest)      // dto.PathPlanRequest（§6.1 DTO）
     │     └→ PathService.planPath(request)
     │              ├→ superNode.getNpuDevices().get(srcDevice/destDevice)  // Step 0: NPU 设备查找
     │              ├→ srcNpuDevice.findNpuPort() + destNpuDevice.findNpuPort() // Step 1~2: 端口查找（直接使用 NpuForwardingChip.getNpuPorts()，无需 instanceof/cast）
-    │              ├→ AclCheckEngine.check()                        // Step 3~4: ACL 双向校验（读 entity.TpAclEntity）
-    │              ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(→ InternalPathInfo) // Step 5~7: 路径还原
+    │              ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(→ InternalPathInfo) // Step 3~5: 路径还原
     │              │    签名: (NpuDevice, NpuPortEntity, NpuDevice, NpuPortEntity, ...)
-    │              ├→ superNode.getAllDevices() + RouteLookupEngine.lookup() // Step 8~12: 路径规划
-    │              └→ 组装 dto.PathPlanResult                       // Step 13~15: 输出构造（§6.2 DTO）
+    │              ├→ superNode.getAllDevices() + RouteLookupEngine.lookup() // Step 6~8: 路径规划
+    │              └→ 组装 dto.PathPlanResult                       // Step 9~10: 输出构造（§6.2 DTO）
     │
     └── uninit()
-            └→ SuperNodeStore.clear() + AclStore.clear()
+            └→ SuperNodeStore.clear()
 ```
 
-> `setSuperNode` / `setAclData` 的入参直接使用 `entity.SuperNode` / `entity.AclData`（领域模型），因为它们来自 JSON 反序列化的原始结构，与拓扑文件 1:1 对应，无需额外 DTO 包装。`planPath` 的入参/出参使用 `dto.PathPlanRequest` / `dto.PathPlanResult`，因为它们面向北向调用方，需要稳定的 API 契约。
+> `setSuperNode` 的入参直接使用 `entity.SuperNode`（领域模型），因为它们来自 JSON 反序列化的原始结构，与拓扑文件 1:1 对应，无需额外 DTO 包装。`planPath` 的入参/出参使用 `dto.PathPlanRequest` / `dto.PathPlanResult`，因为它们面向北向调用方，需要稳定的 API 契约。
 
 ---
 
@@ -824,7 +807,7 @@ public class SwPortEntity extends PortEntity {
 ```
 
 **字段约束：**
-- 交换设备的端口无 CNA/EID/UPI 概念，`cna` 字段在交换端口场景下为**可选**（可为 null），不参与 ACL 校验和路径规划中的 CNA 匹配。
+- 交换设备的端口无 CNA/EID/UPI 概念，`cna` 字段在交换端口场景下为**可选**（可为 null），不参与路径规划中的 CNA 匹配。
 - `remoteDevice` / `remotePort` 为交换端口的核心字段，用于多跳拓扑路径还原。
 - SwPortEntity 存储于 `SwForwardingChip.ports`（`Map<String, SwPortEntity>`，§4.4.2），通过 `getSwPorts()` 直接获取精确类型，无需 instanceof/cast。
 
@@ -886,7 +869,7 @@ public class RoutingTable {
 ```
 
 **Key说明：**
-- `RoutingTable`：路由表独立存储于 `SuperNodeStore.routingTableMap` 中，以 `RoutingTableKey`（`superNodeName + deviceName + chipIndex`）为 key（`Map<RoutingTableKey, RoutingTable>`，§4.7.1），支持全局 O(1) 定位。多个超节点下 deviceName 可能重复，通过 superNodeName 区分。`RoutingTable` 不作为 HashMap key 使用，`equals()`/`hashCode()` 由 Lombok `@EqualsAndHashCode` 生成（全部字段参与，与 `RoutePrefix` §4.8、`AclKey` §4.11 一致）。
+- `RoutingTable`：路由表独立存储于 `SuperNodeStore.routingTableMap` 中，以 `RoutingTableKey`（`superNodeName + deviceName + chipIndex`）为 key（`Map<RoutingTableKey, RoutingTable>`，§4.7.1），支持全局 O(1) 定位。多个超节点下 deviceName 可能重复，通过 superNodeName 区分。`RoutingTable` 不作为 HashMap key 使用，`equals()`/`hashCode()` 由 Lombok `@EqualsAndHashCode` 生成（全部字段参与，与 `RoutePrefix` §4.8 一致）。
 - `chipIndex`：对应 ForwardingChip.chipIndex，标识该路由表所属的转发芯片。
 - `routes`：Map 的 key 为 `RoutePrefix` 对象（包含 dstAddress 和 maskLength）。路径规划时不再遍历全表，而是先取 `maskLengths` 列表中最长的掩码，将 `targetAddr` 按该掩码做按位与得到 `networkAddr`，再以 `(networkAddr, maskLen)` 构造 `RoutePrefix` 作为 HashMap key 做 O(1) 命中（见 §4.8）。
 - `maskLengths`：路由表中实际存在的掩码长度列表（去重后按从大到小排序）。例如外部只输入了掩码 32 的明细路由和掩码 20 的框级路由，则 `maskLengths = [32, 20]`。该列表在 `SuperNodeStore.replace()` 或增量更新时由引擎自动提取维护。查找时仅按此列表中的掩码逐级尝试，无需遍历全表。
@@ -981,7 +964,7 @@ public class RoutingTableKey {
 - `routingTableMap` 类型为 `Map<RoutingTableKey, RoutingTable>`，详见 §7.9 SuperNodeStore 定义。
 
 **HashMap Key 约束：**
-- `equals()` 和 `hashCode()` 由 Lombok `@EqualsAndHashCode` 自动生成（三个字段参与），保证 HashMap 查找正确性。此做法与 `AclKey`（§4.11）、`RoutePrefix`（§4.8）一致。
+- `equals()` 和 `hashCode()` 由 Lombok `@EqualsAndHashCode` 自动生成（三个字段参与），保证 HashMap 查找正确性。此做法与 `RoutePrefix`（§4.8）一致。
 
 **查找流程：**
 ```
@@ -1115,109 +1098,12 @@ public class OutPortInfo {
 - 掩码长度已迁移至 `RoutePrefix` 结构体，`OutPortInfo` 不再包含 `maskLength` 字段。
 - 上述五个字段统一封装在 `OutPortInfo`，作为 `RoutingEntry.outPortInfos` Map 的 value；Map 的 key 为 `portName`，支持 O(1) 查找和遍历，覆盖 ECMP 场景。
 
----
-
-
-### 4.10 AclData（ACL数据）
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class AclData {
-    /** ACL标识，对应 SuperNode.name，表示该 ACL 数据归属于哪个超节点 -- 必填字段 */
-    private String superNodeName;
-
-    /** ACL Map -- 必填字段，Map的key为AclKey（复合对象） */
-    private Map<AclKey, TpAclEntity> tpAcls;
-}
-```
-
-**Key说明：**
-- `superNodeName`：ACL 标识，与 `SuperNode.name`（superNodeName）对应，用于 `AclStore` 中按超节点区分存储。外部可下发多个超节点的 ACL 数据，各自以 `superNodeName` 作为 `AclStore.store` Map 的 key（见 §7.9）。
-- `tpAcls`：Map 的 key 为 `AclKey`（复合对象，包含 sourceEid + destEid + transportType），用于 O(1) 查找 ACL 规则。
-
----
-
-### 4.11 AclKey（ACL复合键）
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class AclKey {
-    /** 源 EID -- 128 bit */
-    private String sourceEid;
-
-    /** 目的 EID -- 128 bit */
-    private String destEid;
-
-    /** 传输类型 */
-    private TransportType transportType;
-}
-```
-
-**约束条件：**
-- `equals()` 和 `hashCode()` 由 Lombok `@EqualsAndHashCode` 自动生成（基于三个字段 sourceEid, destEid, transportType），保证 HashMap 查找正确性。
-- 三个字段（sourceEid, destEid, transportType）联合唯一标识一条 ACL 规则。
-- **AclKey** 存储三元组（sourceEid + destEid + transportType），作为 HashMap 索引键，用于 O(1) 定位 ACL 规则。
-- **TpAclEntity** 存储校验字段（sourceCna + destCna + templateId），不冗余存储 EID 三元组。ACL 校验时通过 AclKey 定位 TpAclEntity 后，验证表项中的 CNA 与端口 CNA 的一致性（见 §9.3 Step 3~4）。
-
----
-
-### 4.12 TpAclEntity（TP-ACL实体）
-
-```java
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@EqualsAndHashCode
-@ToString
-public class TpAclEntity {
-    /** 源地址（只支持CNA）-- 32 bit -- 必填字段 */
-    private String sourceCna;
-
-    /** 目的地址（只支持CNA）-- 32 bit -- 必填字段 */
-    private String destCna;
-
-    /** 模板ID (1-19) */
-    private Integer templateId;
-}
-```
-
-**传输类型枚举：**
-
-```java
-public enum TransportType {
-    RMTP,  // Reliable Transfer Protocol (Reliable Connecion)   -- 可靠传输协议(可靠连接)（当前版本已支持）
-    RCTP,  // Reliable Transfer Protocol (Reliable Masseging)   -- 可靠传输协议(可靠不连接)（预留，待后续版本启用）
-    CTP,   // Connection-oriented Transport Protocol -- 面向连接传输协议（预留，待后续版本启用）
-    UTP    // Unreliable Transfer Protocol -- 不可靠传输协议（预留，待后续版本启用）
-}
-```
-
-> **使用说明：** 当前版本（V1）ACL 校验和路径规划仅支持 `RCTP`，`RMTP`、`UTP`、`CTP` 为预留枚举值。后续版本将在 `PathPlanRequest` 中增加 `transportType` 字段，由调用方指定传输类型后启用。当前 `planPath()` 流程硬编码使用 `RCTP`（见 §9.3）。
-> 
-> **枚举定义位置说明：** `TransportType` 枚举虽在 §4.12 定义（紧邻 `TpAclEntity`），但 §4.11 `AclKey` 的 `transportType` 字段已引用该枚举类型，读者可向前翻阅 §4.12 查看枚举值定义。
-
-**ACL 校验规则：**
-- 路径规划时，使用 `(sourceEid, destEid, transportType)` 在 HashMap 中查找。
-- 查找到表项后，验证 `sourceCna` 与源设备端口 CNA 一致，`destCna` 与目的设备端口 CNA 一致。
-- 双向检查：先查正向 (EID1→EID2)，再查反向 (EID2→EID1)，两者均通过才认为 ACL 校验成功。
-
 
 ## 5  纯内部数据结构
 
 ### 5.1 InternalPathInfo（内部路径信息）
 
-> **设计依据：** 参照 §9.4 阶段3 Step 7 — 多跳路径还原流程。
+> **设计依据：** 参照 §9.3 阶段2 Step 5 — 多跳路径还原流程。
 
 #### 5.1.1 InternalPathHop（内部路径跳）
 
@@ -1298,7 +1184,7 @@ public class InternalPathHop {
 
 #### 5.1.2 InternalPathInfo（内部路径信息）
 
-封装完整的内部路径，在 Step 7 构建并在后续 Step 8~12 中消费。
+封装完整的内部路径，在 Step 5 构建并在后续 Step 6~8 中消费。
 
 ```java
 @Getter
@@ -1339,16 +1225,16 @@ public class InternalPathInfo {
 
 **数据流说明：**
 ```
-Step 7 (多跳路径还原):
+Step 5 (多跳路径还原):
     Input:  PathPlanRequest (srcDevice, srcPort, destDevice, destPort, interDevices)
     Output: InternalPathInfo (按拓扑一致性校验逐跳填充)
     
-Step 8~12 (路径规划循环):
-    Input:  InternalPathInfo (从 Stage 3 构建)
+Step 6~8 (路径规划循环):
+    Input:  InternalPathInfo (从 Stage 2 构建)
     Process: 遍历 InternalPathInfo.hops，对每个中间设备执行路径规划
-    Output: RouteSelectionRecord 列表 (从 Step 11 产生)
+    Output: RouteSelectionRecord 列表 (从 Step 9 产生)
     
-Step 14 (填充 PathPlanResult):
+Step 10 (填充 PathPlanResult):
     Input:  InternalPathInfo.hops
     Output: PathPlanResult.paths (转换为外部 HopInfo 列表)
 ```
@@ -1357,7 +1243,7 @@ Step 14 (填充 PathPlanResult):
 
 ### 5.2 RouteSelectionRecord（内部选路记录）
 
-> **设计依据：** 参照 §9.5 阶段4 Step 11 — 出端口判断与选路记录。
+> **设计依据：** 参照 §9.4 阶段3 Step 9 — 出端口判断与选路记录。
 
 ```java
 @Getter
@@ -1384,7 +1270,7 @@ public class RouteSelectionRecord {
 
     /** Hash 信息 — 用于 ECMP 负载均衡计算。
      *  <p>hash 算法输入为三元组：源 CNA（SCNA，32 bit）、目的 CNA（DCNA，32 bit）、
-     *  源 UDP 端口号（8 bit，由 Step 13 计算填入）。
+     *  源 UDP 端口号（8 bit，由 Step 9 计算填入）。
      *  输出为整数 hash 值，对候选出端口数取模后得到选中的出端口索引。
      *  <p>hash 函数可打桩（stub），测试时注入特定实现保证特定三元组输出指定 hash 值。 */
     private String hashInfo;
@@ -1437,7 +1323,7 @@ public class RouteSelectionRecord {
 
 **选路记录字段来源说明：**
 
-| 字段 | 来源 | 对应 Step 11 伪代码中的项 |
+| 字段 | 来源 | 对应 Step 9 伪代码中的项 |
 |:-----|:-----|:--------------------------|
 | prefix | 路径规划结果 RoutingEntry.prefix | `路由信息（prefix）` |
 | candidateOutPorts[].portName | OutPortInfo.portName | `路由信息（portName）` |
@@ -1454,11 +1340,11 @@ public class RouteSelectionRecord {
 
 **消费关系：**
 ```
-Step 11 (记录):
+§9.4.4 Step 9 (记录):
     对每个存在 ECMP 的中间设备 → 生成 RouteSelectionRecord
     → candidateOutPorts 记录所有候选出接口 + 选中标记
     
-Step 13 (UDP 端口计算):
+§9.5 Step 9 (UDP 端口计算):
     遍历 RouteSelectionRecord 列表
     → 基于 hashInfo + scna/dcna 计算 8-bit src_udp_port / dst_udp_port
     → 填入 PathPlanResult.ackUdpSrcPort / dataUdpSrcPort
@@ -1554,13 +1440,11 @@ public class PathPlanResult {
         SUCCESS(0, "success"),
         SRC_INFO_ERR(1003, "src info error"),
         DST_INFO_ERR(1004, "dst info error"),
-        ACL_CHECK_FAILED(1005, "acl check failed"),
         TOPO_INCOMPLETE(1007, "topo incomplete"),
         TOPO_CONNECTION_ERROR(1008, "topo connection error"),
         TOPO_CONNECTION_NOT_FOUND(1009, "topo connection not found"),
         ROUTE_NOT_REACHABLE(1010, "route not reachable"),
         TOPO_NOT_FOUND(1012, "topo not found"),
-        ACL_NOT_FOUND(1013, "acl not found"),
         SRC_AND_DST_MUST_BE_NPU(3002, "src and dst must be npu"),
         UPI_MISMATCH(3003, "upi mismatch");
 
@@ -1587,8 +1471,8 @@ public class PathPlanResult {
 | path | PathInfo | 路径详情，包含逐跳信息 |
 | status | PlanStatus | 查询状态，0=成功，非0=失败（错误码见上表） |
 | errorMessage | String | 失败原因描述，status 非 SUCCESS 时填写 |
-| ackUdpSrcPort | Integer | Ack UDP 源端口（8 bit），由 Step 13 计算，用于硬件卸载 |
-| dataUdpSrcPort | Integer | Data UDP 源端口（8 bit），由 Step 13 计算，用于硬件卸载 |
+| ackUdpSrcPort | Integer | Ack UDP 源端口（8 bit），由 Step 9 计算，用于硬件卸载 |
+| dataUdpSrcPort | Integer | Data UDP 源端口（8 bit），由 Step 9 计算，用于硬件卸载 |
 | spray | Boolean | Spray 使能标识，true=启用多路径喷洒 |
 
 ---
@@ -1710,12 +1594,6 @@ SNC 模块对外暴露统一的北向接口 `SNCService`，位于包 `com.huawei
     ├── getSuperNode(String) → SuperNode           // 拓扑数据查询
     ├── removeSuperNode(String) → void             // 拓扑数据删除
     │
-    ├── setAclData(AclData) → void                 // ACL 全量下发
-    ├── addAclRules(String, Map<AclKey, TpAclEntity>) → void  // ACL 增量：批量添加/更新规则
-    ├── removeAclRules(String, List<AclKey>) → void          // ACL 增量：批量删除规则
-    ├── getAclData(String) → AclData               // ACL 数据查询
-    ├── removeAclData(String) → void               // ACL 数据删除
-    │
     ├── planPath(PathPlanRequest) → PathPlanResult     // 路径规划（单路径）
     └── uninit() → void                                // 去初始化
 ```
@@ -1742,18 +1620,14 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * <pre>{@code
  *   sncService.init(config);                    // 1. 初始化
  *   sncService.setSuperNode(superNode);           // 2. 下发拓扑数据（可多次调用更新）
- *   sncService.setAclData(aclData);             // 3. 下发 ACL 数据（可多次调用更新）
- *   sncService.addNpuDevices("A5-superPod-1", List.of(npuDevice));  // 4. 增量：批量添加 NPU 设备
- *   sncService.addSwDevices("A5-superPod-1", List.of(swDevice));    // 5. 增量：批量添加 SW 设备
- *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 6. 增量：批量移除设备
+ *   sncService.addNpuDevices("A5-superPod-1", List.of(npuDevice));  // 3. 增量：批量添加 NPU 设备
+ *   sncService.addSwDevices("A5-superPod-1", List.of(swDevice));    // 4. 增量：批量添加 SW 设备
+ *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 5. 增量：批量移除设备
  *   sncService.addRoutingEntries("A5-superPod-1", "rack1#os0#npu1", 0, List.of(entry)); // 6. 增量：批量添加路由
- *   sncService.addAclRules("A5-superPod-1", Map.of(aclKey, aclEntity)); // 7. 增量：批量添加 ACL 规则
- *   sncService.planPath(request);               // 8. 路径规划（可多次并发调用）
- *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 9. 拓扑数据查询
- *   AclData ad = sncService.getAclData("A5-superPod-1");     // 10. ACL 数据查询
- *   sncService.removeSuperNode("A5-superPod-1");              // 11. 拓扑数据删除
- *   sncService.removeAclData("A5-superPod-1");               // 12. ACL 数据删除
- *   sncService.uninit();                       // 13. 去初始化
+ *   sncService.planPath(request);               // 7. 路径规划（可多次并发调用）
+ *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 8. 拓扑数据查询
+ *   sncService.removeSuperNode("A5-superPod-1");              // 9. 拓扑数据删除
+ *   sncService.uninit();                       // 10. 去初始化
  * }</pre>
  *
  * <h3>状态约束</h3>
@@ -1764,7 +1638,6 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * @see PathPlanRequest
  * @see PathPlanResult
  * @see SuperNode
- * @see AclData
  */
 public interface SNCService {
 
@@ -1773,7 +1646,7 @@ public interface SNCService {
     /**
      * 初始化 SNC 服务
      *
-     * 加载配置，初始化内部 HashMap（拓扑索引、ACL 索引）。
+     * 加载配置，初始化内部 HashMap（拓扑索引）。
      *
      * @param config SNC 配置（日志策略、索引策略等），可为 null（使用默认配置）
      * @throws SNCStateException 状态异常（重复初始化等）
@@ -1783,7 +1656,7 @@ public interface SNCService {
     /**
      * 去初始化 SNC 服务
      *
-     * 清空所有内存数据（拓扑 Map、ACL Map），释放资源。
+     * 清空所有内存数据（拓扑 Map），释放资源。
      *
      * @throws SNCStateException 状态异常（未初始化等）
      */
@@ -1803,20 +1676,6 @@ public interface SNCService {
      * @throws SNCStateException SNC 未初始化
      */
     void setSuperNode(SuperNode superNode);
-
-    /**
-     * 下发 ACL 数据（全量替换）
-     *
-     * 将 AclData 解析并索引到内存 HashMap 中。
-     * - 使用全量替换（replace）策略。
-     * - 可多次调用，每次调用全量替换全部 ACL 表项。
-     * - 拓扑和 ACL 下发顺序可互换。
-     *
-     * @param aclData ACL 数据容器（§4.12）
-     * @throws IllegalArgumentException aclData 为 null
-     * @throws SNCStateException SNC 未初始化
-     */
-    void setAclData(AclData aclData);
 
     // ============ 增量更新 - 拓扑 ============
 
@@ -1891,32 +1750,6 @@ public interface SNCService {
     void removeRoutingEntries(String superNodeName, String deviceName, Integer chipIndex,
                               List<RoutePrefix> prefixes);
 
-    // ============ 增量更新 - ACL ============
-
-    /**
-     * 增量批量添加/更新 ACL 规则
-     *
-     * 在指定 ACL 数据中批量添加或更新 TP-ACL 规则。
-     *
-     * @param superNodeName ACL 标识（对应 AclData.superNodeName，§4.10）
-     * @param rules ACL 规则 Map（key=AclKey，value=TpAclEntity），每个 entry 的 key 和 value 非 null
-     * @throws IllegalArgumentException 任一参数为 null
-     * @throws SNCStateException SNC 未初始化
-     */
-    void addAclRules(String superNodeName, Map<AclKey, TpAclEntity> rules);
-
-    /**
-     * 增量批量删除 ACL 规则
-     *
-     * 从指定 ACL 数据中批量删除 TP-ACL 规则。
-     *
-     * @param superNodeName ACL 标识（对应 AclData.superNodeName，§4.10）
-     * @param keys ACL 复合键列表（§4.11），每个元素非 null
-     * @throws IllegalArgumentException 任一参数为 null，或 AclData 不存在
-     * @throws SNCStateException SNC 未初始化
-     */
-    void removeAclRules(String superNodeName, List<AclKey> keys);
-
     // ============ 数据查询 ============
 
     /**
@@ -1942,50 +1775,25 @@ public interface SNCService {
      */
     void removeSuperNode(String superNodeName);
 
-    /**
-     * 查询 ACL 数据
-     *
-     * 根据 superNodeName（对应 superNodeName）从 AclStore 中获取对应的 AclData 对象。
-     *
-     * @param superNodeName ACL 标识（对应 AclData.superNodeName，§4.10）
-     * @return AclData 对象，若指定 superNodeName 的 ACL 数据不存在则返回 null
-     * @throws IllegalArgumentException superNodeName 为 null 或空字符串
-     * @throws SNCStateException SNC 未初始化
-     */
-    AclData getAclData(String superNodeName);
-
-    /**
-     * 删除 ACL 数据
-     *
-     * 根据 superNodeName（对应 superNodeName）从 AclStore 中移除对应的 ACL 数据。
-     *
-     * @param superNodeName ACL 标识（对应 AclData.superNodeName，§4.10）
-     * @throws IllegalArgumentException superNodeName 为 null 或空字符串
-     * @throws SNCStateException SNC 未初始化
-     */
-    void removeAclData(String superNodeName);
-
     // ============ 路径规划 ============
 
     /**
      * 路径规划（同步请求-响应模式）
      *
      * 基于源/目的设备及端口信息，执行路径规划与路径规划，返回完整的通信路径参数。
-     * 内部执行 Step 0 ~ Step 15 流程。
+     * 内部执行 Step 0 ~ Step 10 流程。
      *
      * <table>
      *   <tr><th>阶段</th><th>步骤</th><th>说明</th></tr>
      *   <tr><td>阶段1</td><td>Step 0~2</td><td>设备判断与源/目的信息查找 §9.2</td></tr>
-     *   <tr><td>阶段2</td><td>Step 3~4</td><td>ACL 双向校验 §9.3</td></tr>
-     *   <tr><td>阶段3</td><td>Step 5~7</td><td>路径还原（直连/多跳）§9.4</td></tr>
-     *   <tr><td>阶段4</td><td>Step 8~12</td><td>路径规划循环（正向/反向）§9.5</td></tr>
-     *   <tr><td>阶段5</td><td>Step 13~15</td><td>构造输出（UDP端口计算+PathPlanResult 填充）§9.6</td></tr>
+     *   <tr><td>阶段2</td><td>Step 3~5</td><td>路径还原（直连/多跳）§9.3</td></tr>
+     *   <tr><td>阶段3</td><td>Step 6~8</td><td>路径规划循环（正向/反向）§9.4</td></tr>
+     *   <tr><td>阶段4</td><td>Step 9~10</td><td>构造输出（UDP端口计算+PathPlanResult 填充）§9.5</td></tr>
      * </table>
      *
      * <h3>前置条件</h3>
      * - init() 已完成
      * - setSuperNode() 已调用（拓扑数据存在）
-     * - setAclData() 已调用（ACL 数据存在）
      *
      * <h3>并发保证</h3>
      * 本方法为只读操作（不修改内存数据），支持多线程并发调用。
@@ -2011,13 +1819,8 @@ public interface SNCService {
 | removeDevices | String, List\<String\> | void | 同步 | 否（写操作需串行） | 增量批量移除设备 |
 | addRoutingEntries | String, String, Integer, List\<RoutingEntry\> | void | 同步 | 否（写操作需串行） | 增量批量添加/更新路由条目 |
 | removeRoutingEntries | String, String, Integer, List\<RoutePrefix\> | void | 同步 | 否（写操作需串行） | 增量批量删除路由条目 |
-| setAclData | AclData | void | 同步 | 否（写操作需串行） | 全量替换 ACL 数据 |
-| addAclRules | String, Map\<AclKey, TpAclEntity\> | void | 同步 | 否（写操作需串行） | 增量批量添加/更新 ACL 规则 |
-| removeAclRules | String, List\<AclKey\> | void | 同步 | 否（写操作需串行） | 增量批量删除 ACL 规则 |
 | getSuperNode | String | SuperNode | 同步 | 是（只读，可并发） | 根据 superNodeName 查询拓扑数据 |
 | removeSuperNode | String | void | 同步 | 否（写操作需串行） | 根据 superNodeName 删除拓扑数据及关联路由表 |
-| getAclData | String | AclData | 同步 | 是（只读，可并发） | 根据 superNodeName 查询 ACL 数据 |
-| removeAclData | String | void | 同步 | 否（写操作需串行） | 根据 superNodeName 删除 ACL 数据 |
 | planPath | PathPlanRequest | PathPlanResult | 同步 | 是（只读，可并发） | 单路径规划 |
 
 ---
@@ -2033,33 +1836,24 @@ public interface SNCService {
    │── setSuperNode(superNode) ─────────────────────────▶│  阶段2: 拓扑下发
    │◀── void ────────────────────────────────────────│
    │                                                   │
-   │── setAclData(aclData) ───────────────────────────▶│  阶段3: ACL下发
-   │◀── void ────────────────────────────────────────│
-   │                                                   │
-│── planPath(request1) ────────────────────────────▶│  阶段4: 路径规划
+│── planPath(request1) ────────────────────────────▶│  阶段3: 路径规划
 │◀── PathPlanResult { status=0, path=... } ───────│ (可多次并发)
 │                                                   │
 │── planPath(request2) ────────────────────────────▶│
-│◀── PathPlanResult { status=1005, ... } ─────────│
+│◀── PathPlanResult { status=1010, ... } ─────────│
 │                                                   │
-│── getSuperNode("A5-superPod-1") ──────────────────▶│  阶段5: 数据查询
+│── getSuperNode("A5-superPod-1") ──────────────────▶│  阶段4: 数据查询
 │◀── SuperNode { name="A5-superPod-1", ... } ──────│
 │                                                   │
-│── getAclData("A5-superPod-1") ───────────────────▶│
-│◀── AclData { superNodeName="A5-superPod-1", ... } ──────│
-│                                                   │
-│── removeSuperNode("A5-superPod-1") ───────────────▶│  阶段6: 数据删除
+│── removeSuperNode("A5-superPod-1") ───────────────▶│  阶段5: 数据删除
 │◀── void ────────────────────────────────────────│
 │                                                   │
-│── removeAclData("A5-superPod-1") ────────────────▶│
-│◀── void ────────────────────────────────────────│
-│                                                   │
-│── uninit() ──────────────────────────────────────▶│  阶段7: 去初始化
+│── uninit() ──────────────────────────────────────▶│  阶段6: 去初始化
 │◀── void ────────────────────────────────────────│
    │                                                   │
 ```
 
-> **说明：** setSuperNode 和 setAclData 调用顺序可互换，但都必须在 planPath 之前完成。
+> **说明：** setSuperNode 必须在 planPath 之前完成。
 
 ---
 
@@ -2068,11 +1862,11 @@ public interface SNCService {
 SNC 服务内部维护以下生命周期状态：
 
 ```
-         init()                                 uninit()
-  INIT ──────────▶ READY ──(setSuperNode & setAclData 均已完成)──▶ DATAREADY
+         init()                          uninit()
+  INIT ──────────▶ READY ──(setSuperNode 已完成)──▶ DATAREADY
    │                                │                                 │
    │                                │ 增量操作 (add/remove/get/…)       │ planPath (可多次并发)
-   │                                │ setSuperNode / setAclData         │ setSuperNode / setAclData (可更新)
+   │                                │ setSuperNode                     │ setSuperNode (可更新)
    │                                │ uninit()                         │ 增量操作 (add/remove/get/…)
    │                                │                                 │
    └──── uninit() ───▶ UNINIT ◀───────────────────────────────────────┘
@@ -2081,15 +1875,15 @@ SNC 服务内部维护以下生命周期状态：
 | 状态 | 说明 | 允许的操作 |
 |:-----|:-----|:----------|
 | INIT | 初始状态（未初始化） | init()、uninit() |
-| READY | 就绪状态（已初始化，数据未就绪） | setSuperNode、setAclData；所有增量操作（addNpuDevices、addSwDevices、removeDevices、addRoutingEntries、removeRoutingEntries、addAclRules、removeAclRules）；所有查询操作（getSuperNode、getAclData）；removeSuperNode、removeAclData；uninit |
-| DATAREADY | 数据就绪状态（拓扑+ACL 均已下发） | 同 READY，追加 planPath |
+| READY | 就绪状态（已初始化，数据未就绪） | setSuperNode；所有增量操作（addNpuDevices、addSwDevices、removeDevices、addRoutingEntries、removeRoutingEntries）；所有查询操作（getSuperNode）；removeSuperNode；uninit |
+| DATAREADY | 数据就绪状态（拓扑已下发） | 同 READY，追加 planPath |
 | UNINIT | 已去初始化 | （无，调用任何操作均抛 SNCStateException） |
 
 **状态转换规则：**
 - `init()`: INIT → READY（非幂等，重复 init 重建全部内部对象）
 - `uninit()`: INIT / READY / DATAREADY → UNINIT（INIT 状态调用仅清空状态标记，无副作用）
-- `setSuperNode()` + `setAclData()`: READY → DATAREADY（二者均下发后自动迁移）
-- `setSuperNode()` / `setAclData()`: DATAREADY → DATAREADY（数据就绪态可继续更新数据）
+- `setSuperNode()`: READY → DATAREADY（拓扑下发后自动迁移）
+- `setSuperNode()`: DATAREADY → DATAREADY（数据就绪态可继续更新数据）
 - `planPath()`: 仅在 **DATAREADY** 状态下可用，未到 DATAREADY 时返回 SNCStateException
 
 ---
@@ -2108,15 +1902,13 @@ SNC 服务内部维护以下生命周期状态：
 | 1002 | `DEST_EID_NOT_FOUND` | 目的 EID 未找到 | Step 0 |
 | 1003 | `SRC_INFO_ERR` | 源信息缺失或错误 | Step 1 |
 | 1004 | `DST_INFO_ERR` | 目的信息缺失或错误 | Step 2 |
-| 1005 | `ACL_CHECK_FAILED` | ACL 检查失败（含 ACL 数据不存在和 ACL 表项不匹配） | Step 3/4 |
 
-| 1007 | `TOPO_INCOMPLETE` | 拓扑不完整（设备在超节点 devices 中找不到） | Step 0 / Step 5~7 |
-| 1008 | `TOPO_CONNECTION_ERROR` | 拓扑连接错误（直连验证失败） | Step 6 |
-| 1009 | `TOPO_CONNECTION_NOT_FOUND` | 未找到拓扑连接（多跳路径还原失败） | Step 7 |
-| 1010 | `ROUTE_NOT_REACHABLE` | 路由不可达（索引掩码匹配未命中或路由条目无出端口） | Step 10 |
-| 1011 | `MULTI_PATH_NOT_SUPPORTED` | 存在多路径且设备不支持逐流 | Step 11 |
+| 1007 | `TOPO_INCOMPLETE` | 拓扑不完整（设备在超节点 devices 中找不到） | Step 0 / Step 3~5 |
+| 1008 | `TOPO_CONNECTION_ERROR` | 拓扑连接错误（直连验证失败） | Step 4 |
+| 1009 | `TOPO_CONNECTION_NOT_FOUND` | 未找到拓扑连接（多跳路径还原失败） | Step 5 |
+| 1010 | `ROUTE_NOT_REACHABLE` | 路由不可达（索引掩码匹配未命中或路由条目无出端口） | Step 8 |
+| 1011 | `MULTI_PATH_NOT_SUPPORTED` | 存在多路径且设备不支持逐流 | Step 9 |
 | 1012 | `TOPO_NOT_FOUND` | 拓扑数据未找到（superNodeName 为空或对应的 SuperNode 不存在） | Step 0 |
-| 1013 | `ACL_NOT_FOUND` | ACL 数据未找到（setAclData 未调用或 superNodeName 对应 AclData 不存在） | Step 3 |
 | 3002 | `SRC_AND_DST_MUST_BE_NPU` | 源和目的必须为 NPU | Step 0 |
 | 3003 | `UPI_MISMATCH` | 源和目的端口 UPI 不一致 | Step 0 |
 
@@ -2124,7 +1916,7 @@ SNC 服务内部维护以下生命周期状态：
 
 **错误码编码规则：**
 - `0`：成功
-- `1xxx`：路径规划阶段错误（设备/端口/ACL/路由/拓扑相关）
+- `1xxx`：路径规划阶段错误（设备/端口/路由/拓扑相关）
 - `3xxx`：参数校验错误
 
 **各层处理原则：**
@@ -2161,7 +1953,6 @@ SNC 服务内部维护以下生命周期状态：
 SNCException (基础异常)
 ├── SNCStateException        // 状态异常（未初始化、已去初始化、重复初始化）
 ├── SuperNodeNotFoundException    // 拓扑数据未找到
-├── AclNotFoundException     // ACL 数据未找到
 └── PathPlanException        // 路径规划失败（内含 PlanStatus 错误码和描述）
 ```
 
@@ -2170,7 +1961,6 @@ SNCException (基础异常)
 | `SNCStateException` | 非法调用顺序（未 init 就 planPath、uninit 后再次调用等） | 直接抛出，北向调用方捕获并处理 |
 | `IllegalArgumentException` | 入参为 null、必填字段缺失 | 入口校验，直接抛出 |
 | `SuperNodeNotFoundException` | `setSuperNode` 未调用或拓扑数据不完整（含 superNodeName 不存在和设备找不到） | service 层转换为错误码 1012/1001/1002/1007 |
-| `AclNotFoundException` | `setAclData` 未调用或 ACL 数据不完整 | service 层转换为错误码 1013/1005 |
 | `PathPlanException` | planPath 执行过程中任何业务失败 | 内含 PlanStatus，北向接口转换为 PathPlanResult |
 
 #### 7.5.3 错误传播链
@@ -2197,7 +1987,6 @@ Engine / Store 层
 | `superNode` 非 null | `setSuperNode(SuperNode)` 入参 | 抛出 `IllegalArgumentException` |
 | `superNode.name` 非空 | 超节点名称必填（§4.1） | 抛出 `IllegalArgumentException` |
 | `superNode.devices` 非空 | 设备 Map 必填（§4.1） | 抛出 `IllegalArgumentException` |
-| `aclData` 非 null | `setAclData(AclData)` 入参 | 抛出 `IllegalArgumentException` |
 | `request` 非 null | `planPath(PathPlanRequest)` 入参 | 抛出 `IllegalArgumentException` |
 | `request.superNodeName` 非空 | 超节点名称必填（§6.1），用于多超节点场景定位 | 抛出 `IllegalArgumentException` |
 | `request.srcDevice` 非空 | 源设备必填（§6.1） | 抛出 `IllegalArgumentException` |
@@ -2205,7 +1994,6 @@ Engine / Store 层
 | `request.srcPort` 非空 | 源端口必填（§6.1） | 抛出 `IllegalArgumentException` |
 | `request.destPort` 非空 | 目的端口必填（§6.1） | 抛出 `IllegalArgumentException` |
 | `superNodeName` 非空 | `getSuperNode(String)` / `removeSuperNode(String)` 入参 | 抛出 `IllegalArgumentException` |
-| `superNodeName` 非空 | `getAclData(String)` / `removeAclData(String)` 入参 | 抛出 `IllegalArgumentException` |
 | deviceName 格式 | `rack#os#npu` 或 `rack#l1sw0` 格式 | engine 层校验，返回错误码 1003/1004 |
 
 > **业务规则校验**（设备类型必须为 NPU、EID/CNA 完整性等）在 engine 层进行，不在入口处校验。
@@ -2220,7 +2008,7 @@ Engine / Store 层
 SNCServiceImpl
     │
     ├── init(SNCConfig)
-    │     └→ SuperNodeStore.init() + AclStore.init()  // 初始化 HashMap
+    │     └→ SuperNodeStore.init()  // 初始化 HashMap
     │
     ├── setSuperNode(SuperNode)
     │     └→ SuperNodeService.importSuperNode(superNode)
@@ -2246,39 +2034,20 @@ SNCServiceImpl
     │     └→ SuperNodeService.removeRoutingEntries(superNodeName, deviceName, chipIndex, prefixes) // 循环调用 store.removeRoutingEntry()
     │              └→ SuperNodeStore.removeRoutingEntry(superNodeName, deviceName, chipIndex, prefix)  // 增量删除路由（单条）
     │
-    ├── setAclData(AclData)
-    │     └→ AclService.importAclData(aclData)
-    │              └→ AclStore.replace(aclData)    // 全量替换 ACL 索引
-    │
-    ├── addAclRules(String, Map<AclKey, TpAclEntity>)
-    │     └→ AclService.addAclRules(superNodeName, rules)              // 循环调用 store.addAclRule()
-    │              └→ AclStore.addAclRule(superNodeName, key, entity)  // 增量添加/更新 ACL 规则（单条）
-    │
-    ├── removeAclRules(String, List<AclKey>)
-    │     └→ AclService.removeAclRules(superNodeName, keys)                  // 循环调用 store.removeAclRule()
-    │              └→ AclStore.removeAclRule(superNodeName, key)  // 增量删除 ACL 规则（单条）
-    │
     ├── getSuperNode(String)
     │     └→ SuperNodeStore.getSuperNode(superNodeName)        // 查询拓扑数据
     │
     ├── removeSuperNode(String)
     │     └→ SuperNodeStore.removeSuperNode(superNodeName)     // 删除拓扑数据及关联路由表
     │
-    ├── getAclData(String)
-    │     └→ AclStore.getAclData(superNodeName)             // 查询 ACL 数据
-    │
-    ├── removeAclData(String)
-    │     └→ AclStore.removeAclData(superNodeName)          // 删除 ACL 数据
-    │
     ├── planPath(PathPlanRequest)
     │     └→ PathService.planPath(request)
-    │              ├→ AclCheckEngine.check()        // ACL 校验 (Step 3~4)
-    │              ├→ PathEngine.resolvePath()      // 路径还原 (Step 5~7)
-    │              ├→ RouteLookupEngine.lookup()    // 路径规划 (Step 8~12)
-    │              └→ 组装 PathPlanResult            // 输出构造 (Step 13~15)
+    │              ├→ PathEngine.resolvePath()      // 路径还原 (Step 3~5)
+    │              ├→ RouteLookupEngine.lookup()    // 路径规划 (Step 6~8)
+    │              └→ 组装 PathPlanResult            // 输出构造 (Step 9~10)
     │
     └── uninit()
-            └→ SuperNodeStore.clear() + AclStore.clear()  // 清空数据
+            └→ SuperNodeStore.clear()  // 清空数据
 ```
 
 ### 7.8 错误调用顺序说明
@@ -2290,10 +2059,7 @@ SNCServiceImpl
 | 未 `init()` 直接调用其他接口            | 内部数据结构未初始化               | 抛出 SNCException   |
 | `uninit()` 后再次调用其他接口          | 已去初始化，内存数据已清空         | 抛出 SNCException   |
 | 未下发拓扑数据直接调用 `planPath()`   | 查不到设备信息                     | 返回错误码 1001/1002 |
-| 未下发 ACL 数据直接调用 `planPath()`  | ACL 校验失败                      | 返回错误码 1005      |
 | 重复 `init()` 不调用 `uninit()`       | 状态机重复初始化                   | 幂等处理或抛异常     |
-
-
 
 ---
 
@@ -2432,92 +2198,9 @@ public class SuperNodeStore {
 // Step 0: 定位超节点
 SuperNode superNode = superNodeStore.getSuperNode(request.getSuperNodeName());
 
-// Step 10: 查找路由表
+// Step 8: 查找路由表
 RoutingTableKey rtKey = new RoutingTableKey(superNodeName, deviceName, chipIndex);
 RoutingTable rt = superNodeStore.getRoutingTable(rtKey);
-```
-
----
-
-### 7.10 AclStore（ACL存储）
-
-ACL 数据的核心存储层，维护超节点→ACL数据的一级索引。
-
-```java
-public class AclStore {
-    /** ACL 数据一级索引 -- Map的key为AclData.superNodeName（与superNodeName对应，§4.10），支持多超节点场景 */
-    private Map<String, AclData> store;
-
-    // ========== 生命周期方法 ==========
-
-    /**
-     * 初始化存储
-     * <p>创建空的 HashMap 实例。
-     */
-    public void init() {
-        this.store = new HashMap<>();
-    }
-
-    /**
-     * 全量替换 ACL 数据
-     * <p>以 aclData.superNodeName 为 key，将 AclData 对象存入 store Map。
-     * 同一 superNodeName 的旧数据被覆盖。
-     *
-     * @param aclData ACL 数据容器（§4.10），要求 superNodeName 非空
-     */
-    public void replace(AclData aclData) {
-        store.put(aclData.getSuperNodeName(), aclData);
-    }
-
-    /**
-     * 清空所有 ACL 数据
-     */
-    public void clear() {
-        if (store != null) {
-            store.clear();
-        }
-    }
-
-    /**
-     * 删除指定 superNodeName 的 ACL 数据
-     *
-     * <p>从 store 中移除指定 superNodeName 对应的 AclData。
-     *
-     * @param superNodeName ACL 标识（§4.10 AclData.superNodeName）
-     */
-    public void removeAclData(String superNodeName) {
-        store.remove(superNodeName);
-    }
-
-    // ========== 查询方法 ==========
-
-    /**
-     * 根据 superNodeName（对应 superNodeName）获取 ACL 数据
-     *
-     * @param superNodeName ACL 标识（§4.10 AclData.superNodeName）
-     * @return AclData 对象，不存在返回 null
-     */
-    public AclData getAclData(String superNodeName) {
-        return store.get(superNodeName);
-    }
-}
-```
-
-**设计说明：**
-
-| 特性 | 说明 |
-|:-----|:-----|
-| 一级索引 `store` | 以 `superNodeName`（即 superNodeName）为 key，O(1) 定位超节点的 ACL 数据 |
-| `replace()` 策略 | 全量替换：同一 superNodeName 的旧数据被覆盖 |
-| `clear()` 策略 | Map.clear() 清空 |
-| ACL 规则查找 | 通过 `AclData.tpAcls`（`Map<AclKey, TpAclEntity>`，§4.10）进行二级 O(1) 查找 |
-
-**查询流程示例：**
-```
-// Step 3/4: ACL 校验
-AclData aclData = aclStore.getAclData(request.getSuperNodeName());
-AclKey key = new AclKey(sourceEid, destEid, TransportType.RCTP);
-TpAclEntity acl = aclData.getTpAcls().get(key);
 ```
 
 ---
@@ -2602,7 +2285,7 @@ import java.util.Map;
  * 按已知掩码逐级 O(1) 查找算法，返回最长匹配的 RoutingEntry。
  *
  * <h3>调用方</h3>
- * PathService → RouteLookupEngine，对应 §9.5 阶段4 Step 10。
+ * PathService → RouteLookupEngine，对应 §9.4 阶段3 Step 8。
  */
 public class RouteLookupEngine {
 
@@ -2630,14 +2313,14 @@ public class RouteLookupEngine {
 
 ### 9.1 流程概述
 
-路径规划以**二阶段循环（前向→反向）+ 直连短路**为整体控制结构，共 16 个步骤（Step 0 ~ Step 15）：
+路径规划以**二阶段循环（前向→反向）+ 直连短路**为整体控制结构，共 11 个步骤（Step 0 ~ Step 10）：
 
 ```
-                                      阶段1+2
+                                      阶段1
                                   ┌──────────────┐
-                                  │ Step 0 ~ 5    │
-                                  │ 设备判断/ACL  │
-                                  │ /节点判断     │
+                                  │ Step 0 ~ 2    │
+                                  │ 设备判断/      │
+                                  │ 节点判断       │
                                   └───────┬──────┘
                                           │
                               ┌───────────┴───────────┐
@@ -2646,7 +2329,7 @@ public class RouteLookupEngine {
                      │ interDevices   │     │ interDevices     │
                      │ 为空 (直连)    │     │ 非空 (多跳)      │
                      └───────┬────────┘     └────────┬─────────┘
-                             │ Step 6               │ Step 7
+                             │ Step 4               │ Step 5
                              ▼                      ▼
                      ┌────────────────┐     ┌──────────────────┐
                      │ 直连路径验证    │     │ 多跳路径还原      │
@@ -2656,36 +2339,36 @@ public class RouteLookupEngine {
                              │ (码0)                 │
                              │                       ▼
                              │              ┌──────────────────┐
-                             │              │ Step 8           │
+                             │              │ Step 6           │
                              │              │ 前向初始化        │
                              │              │ dst=dev2         │
                              │              └────────┬─────────┘
                              │                       ▼
                              │              ╔══════════════════╗
                              │              ║ 前向规划循环     ║
-                             │              ║ Step 10→11 × n  ║
+                             │              ║ Step 8→9 × n    ║
                              │              ╚══════╤═══════════╝
                              │                       ▼
                              │              ┌──────────────────┐
-                             │              │ Step 12          │
-                             │              │ dst==dev2?       │──→ Step 9 (反向)
+                             │              │ Step 10          │
+                             │              │ dst==dev2?       │──→ Step 7 (反向)
                              │              │ 是 (前向完成)    │     dst=dev1
                              │              └──────────────────┘         │
                              │                                          ▼
                              │                                 ╔════════════════════╗
                              │                                 ║ 反向规划循环       ║
-                             │                                 ║ Step 10→11 × n    ║
+                             │                                 ║ Step 8→9 × n      ║
                              │                                 ╚══════╤═════════════╝
                              │                                          ▼
                              │                                 ┌──────────────────┐
-                             │                                 │ Step 12          │
-                             │                                 │ dst==dev1?       │──→ Step 14 (构造输出)
+                             │                                 │ Step 10          │
+                             │                                 │ dst==dev1?       │──→ §9.5 (构造输出)
                              │                                 │ 是 (反向完成)    │
                              │                                 └──────────────────┘
                              │                                          │
                              │                                          ▼
                              │                                 ┌──────────────────┐
-                             │                                 │ Step 13~15       │
+                             │                                 │ Step 9~10        │
                              │                                 │ UDP端口计算+输出 │
                              └─────────────────────────────────┴──────────────────┘
 ```
@@ -2694,11 +2377,11 @@ public class RouteLookupEngine {
 
 | 阶段 | 方向 | 目标地址 (targetAddr) | 目的设备 | 执行路径 |
 |:-----|:-----|:----------------------|:---------|:---------|
-| 前向 (Step 8) | dev1 → dev2 | CNA2 (= dev2 端口 IP) | dev2 | Step 8 → [10 → 11]^n → 12 |
-| 反向 (Step 9) | dev2 → dev1 | CNA1 (= dev1 端口 IP) | dev1 | Step 9 → [10 → 11]^n → 12 → 14 |
+| 前向 (Step 6) | dev1 → dev2 | CNA2 (= dev2 端口 IP) | dev2 | Step 6 → [8 → 9]^n → 10 |
+| 反向 (Step 7) | dev2 → dev1 | CNA1 (= dev1 端口 IP) | dev1 | Step 7 → [8 → 9]^n → 10 → §9.5（构造输出） |
 
 **直连短路说明：**
-- Step 6 为**终端步骤**——直连路径验证通过后**直接返回成功**（码 0），跳过阶段4（路由规划 Step 8~12）和阶段5（构造输出 Step 13~15）。
+- Step 4 为**终端步骤**——直连路径验证通过后**直接返回成功**（码 0），跳过阶段3（路由规划 Step 6~8）和阶段4（构造输出 Step 9~10）。
 - 直连场景两设备 NPU 端口直接相连，路径中不经过任何交换设备，因此**无需执行路由表查找**。通信路径由端口物理连接关系保证。
 
 ---
@@ -2736,63 +2419,39 @@ public class RouteLookupEngine {
 
 ---
 
-### 9.3 阶段2：ACL双向校验（Step 3 ~ 4）
-
-> **数据结构参见：** §4.10 AclData、§4.11 AclKey、§4.12 TpAclEntity
-
-**Step 3 - 正向 ACL 校验：**
-使用 `(sourceEid=EID1, destEid=EID2, transportType=RCTP)` 构造 `AclKey`（§4.11），在 TP-ACL HashMap（`AclData.tpAcls`，§4.10）中查找。
-- 若 `AclData` 对象不存在 → 返回错误码 **1013**（`ACL_NOT_FOUND`，§6.2）。
-- 查找失败（key 不存在）→ 返回错误码 **1005**（`ACL_CHECK_FAILED`，§6.2）。
-- 查找成功：验证 ACL 表项（`TpAclEntity`，§4.12）中的 `sourceCna == CNA1` 且 `destCna == CNA2`。
-  - CNA 不匹配 → 返回错误码 **1005**（`ACL_CHECK_FAILED`）。
-- 验证通过 → 进入 Step 4。
-
-**Step 4 - 反向 ACL 校验：**
-使用 `(sourceEid=EID2, destEid=EID1, transportType=RCTP)` 构造 `AclKey`，在 TP-ACL HashMap 中查找。
-- 若 `AclData` 对象不存在 → 返回错误码 **1013**（`ACL_NOT_FOUND`，§6.2）。
-- 查找失败（key 不存在）→ 返回错误码 **1005**（`ACL_CHECK_FAILED`）。
-- 查找成功：验证 ACL 表项中的 `sourceCna == CNA2` 且 `destCna == CNA1`。
-  - CNA 不匹配 → 返回错误码 **1005**（`ACL_CHECK_FAILED`）。
-- 验证通过 → 进入 Step 5。
-
-> **传输类型说明：** 当前阶段仅支持 `RCTP`（可靠传输协议 — 可靠不连接），ACL 校验硬编码使用 `transportType=RCTP`。`RMTP`（可靠连接）、`UTP`（不可靠传输协议）和 `CTP`（面向连接传输协议）为预留枚举值，待后续版本 `PathPlanRequest` 增加 `transportType` 字段后启用。参见 §4.12 TransportType 枚举。
-
----
-
-### 9.4 阶段3：路径还原（Step 5 ~ 7）
+### 9.3 阶段2：路径还原（Step 3 ~ 5）
 
 > **数据结构参见：** §4.3 DeviceEntity（含 getForwardingChips() 抽象方法）、§4.4 ForwardingChip（含 getPorts() 抽象方法）、§4.5 PortEntity、§5.1 InternalPathInfo/InternalPathHop、§6.1 PathPlanRequest
 
-**Step 5 - 判断中间节点：**
+**Step 3 - 判断中间节点：**
 检查 `request.interDevices`（§6.1）是否为空：
-- 无中间节点 → 跳转到 Step 6（直连场景）。
+- 无中间节点 → 跳转到 Step 4（直连场景）。
   > **V1 行为说明：** 当前版本 V1 未实现自动寻路算法。`interDevices` 为空时，引擎仅处理直连场景：
-  > - 先执行 Step 6 直连验证：若端口连接关系验证通过 → 返回直连结果（成功）。
+  > - 先执行 Step 4 直连验证：若端口连接关系验证通过 → 返回直连结果（成功）。
   > - 若直连验证失败 → 返回错误码 **1008**（`TOPO_CONNECTION_ERROR`，§6.2），流程终止。引擎不会尝试自动发现多跳路径。
   > - 调用方需自行保证：若源和目的设备非直连，必须在 `interDevices` 中显式指定中间设备及出端口。
-- 有中间节点 → 跳转到 Step 7（多跳场景，必须显式指定中间设备及出端口）。
+- 有中间节点 → 跳转到 Step 5（多跳场景，必须显式指定中间设备及出端口）。
 
-**Step 6 - 直连路径验证（终端步骤）：**
+**Step 4 - 直连路径验证（终端步骤）：**
 验证双向连接关系：
 - `port1.remoteDevice == dev2.deviceName` 且 `port1.remotePort == port2.portName`
 - `port2.remoteDevice == dev1.deviceName` 且 `port2.remotePort == port1.portName`
 
-若验证通过 → 按 `PathPlanResult` 构造返回结果（两跳路径，§6.2），**直接返回成功（码 0）**，不再执行阶段4和阶段5。
+若验证通过 → 按 `PathPlanResult` 构造返回结果（两跳路径，§6.2），**直接返回成功（码 0）**，不再执行阶段3和阶段4。
 
 若验证失败 → 返回错误码 **1008**（`TOPO_CONNECTION_ERROR`，§6.2）。
 
-> **直连短路语义：** Step 6 为终端步骤。直连场景的通信路径由端口物理连接关系保证，不依赖路由表（§4.7）转发，因此**不执行**阶段4（Step 8~12，路由规划）和阶段5（Step 13~15，UDP端口计算与输出构造）。这是设计上的有意行为。
+> **直连短路语义：** Step 4 为终端步骤。直连场景的通信路径由端口物理连接关系保证，不依赖路由表（§4.7）转发，因此**不执行**阶段3（Step 6~8，路由规划）和阶段4（Step 9~10，UDP端口计算与输出构造）。这是设计上的有意行为。
 
-**Step 7 - 多跳路径还原：**
+**Step 5 - 多跳路径还原：**
 使用 `request.interDevices` 和真实拓扑数据，构建完整的 `InternalPathInfo`（§5.1）。
 
-**7.1 拓扑数据校验：**
+**5.1 拓扑数据校验：**
 依次遍历 `interDevices` 的每个 `{deviceName → outPort}` 条目，在 `SuperNode.devices` 中检查：
 - 设备存在性：若 `superNode.devices.get(deviceName)` 返回 null → 返回错误码 **1007**（`TOPO_INCOMPLETE`），流程终止。
 - 端口存在性：若该设备的任何转发芯片的 `ports` 中找不到 `outPort`（通过 `device.getForwardingChips()` 遍历所有芯片，再调用 `chip.getPorts()` 查找端口） → 返回错误码 **1007**（`TOPO_INCOMPLETE`），流程终止。
 
-**7.2 路径构建：**
+**5.2 路径构建：**
 按顺序组装完整的 `InternalPathInfo.hops` 列表：
 
 ```
@@ -2810,53 +2469,47 @@ hops[n+1] = dev2           (inPort=最后一跳 remotePort, outPort=null)
   - **连接校验：** 对每一跳执行 `currentHop.remoteDevice == nextHop.deviceName` 且 `currentHop.remotePort == nextHop.inPort`，保证路径连续。
 - **目的节点（hops[n+1]）：** `outPort=null`，`inPort` 取自前一跳的 `remotePort`。
 
-**7.3 连接关系验证：**
+**5.3 连接关系验证：**
 每一跳的 `remoteDevice` / `remotePort` 必须与下一跳的 `deviceName` / `inPort` 一致。若不一致 → 返回错误码 **1009**（`TOPO_CONNECTION_NOT_FOUND`，§6.2）。
 
-> **实现说明：** 设备查找使用 `superNode.getAllDevices()` 返回的统一视图（合并 npuDevices + swDevices），通过 HashMap O(1) 定位；端口通过 `NpuDevice.findNpuPort()`（NPU 设备，直接使用 `NpuForwardingChip.getNpuPorts()`，无需 instanceof/cast）或遍历转发芯片的 `getPorts()` Map（SW 设备）进行查找（§4.4、§4.5）。端口所属芯片（`chipIndex`）在 Step 10 路由查找时通过遍历设备所有 `ForwardingChip`（通过 `device.getForwardingChips()`）自动覆盖，无需在 Step 7 额外记录。
+> **实现说明：** 设备查找使用 `superNode.getAllDevices()` 返回的统一视图（合并 npuDevices + swDevices），通过 HashMap O(1) 定位；端口通过 `NpuDevice.findNpuPort()`（NPU 设备，直接使用 `NpuForwardingChip.getNpuPorts()`，无需 instanceof/cast）或遍历转发芯片的 `getPorts()` Map（SW 设备）进行查找（§4.4、§4.5）。端口所属芯片（`chipIndex`）在 Step 8 路由查找时通过遍历设备所有 `ForwardingChip`（通过 `device.getForwardingChips()`）自动覆盖，无需在 Step 5 额外记录。
 
 ---
 
-### 9.5 阶段4：路径规划循环（Step 8 ~ 12）
+### 9.4 阶段3：路径规划循环（Step 6 ~ 8）
 
 > **数据结构参见：** §4.7 RoutingTable（含 maskLengths）、§4.8 RoutePrefix、§4.9 RoutingEntry/OutPortInfo、§5.2 RouteSelectionRecord、§8 索引掩码匹配算法
 
-阶段4 的核心结构为一个**二阶段循环**，以 `currentPhase` 状态标识区分前向/反向：
+阶段3 的核心结构为一个**二阶段循环**，以 `currentPhase` 状态标识区分前向/反向：
 
 ```
-前向 (Step 8)          反向 (Step 9)
+前向 (Step 6)          反向 (Step 7)
      │                       │
      ▼                       ▼
 ┌─────────────────────────────────────┐
-│ Step 10: 路径规划循环（中间设备逐一执行） │
+│ Step 8: 路径规划循环（中间设备逐一执行） │
 │   for each intermediate device:     │
 │     1. 遍历该设备所有 ForwardingChip │
 │     2. 对每个芯片做索引掩码匹配 (targetAddr) │
 │     3. 取所有芯片的最优结果               │
 │     4. 验证路由出端口与拓扑连接一致性      │
 │     5. 若 ECMP → 记录 RouteSelectionRecord │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│ Step 12: 方向切换判断                   │
-│   if currentPhase == FORWARD:        │
-│       → Step 9 (切换反向)             │
-│   if currentPhase == REVERSE:        │
-│       → Step 14 (构造输出)            │
+│   循环结束后:                         │
+│     若 FORWARD → 切换反向 (Step 7)    │
+│     若 REVERSE → 进入构造输出 (§9.5) │
 └─────────────────────────────────────┘
 ```
 
-#### 9.5.1 前向阶段（Step 8 → 10 → 11 → 12）
+#### 9.4.1 前向阶段（Step 6 → 8）
 
-**Step 8 - 前向路径规划初始设置：**
+**Step 6 - 前向路径规划初始设置：**
 - 设置当前阶段标识 `currentPhase = FORWARD`
 - 目的设备 = `dev2`，目的端口 = `port2`，目的地址 = `CNA2`（32 bit），源地址 = `CNA1`（32 bit）
-- 进入 Step 10
+- 进入 Step 8
 
-#### 9.5.2 反向阶段（Step 9 → 10 → 11 → 12）
+#### 9.4.2 反向阶段（Step 7 → 8）
 
-**Step 9 - 反向路径规划初始设置：**
+**Step 7 - 反向路径规划初始设置：**
 - 设置当前阶段标识 `currentPhase = REVERSE`
 - **路径反转：** 将当前 `InternalPathInfo.hops` 列表逆序排列（`Collections.reverse()`）
 
@@ -2869,9 +2522,9 @@ hops[n+1] = dev2           (inPort=最后一跳 remotePort, outPort=null)
   | hopIndex | 重新编号（0 ~ hops.size()-1） |
 
 - 目的设备 = `dev1`，目的端口 = `port1`，目的地址 = `CNA1`（32 bit），源地址 = `CNA2`（32 bit）
-- 进入 Step 10
+- 进入 Step 8
 
-#### 9.5.3 Step 10 - 路径规划循环（核心）
+#### 9.4.3 Step 8 - 路径规划循环（核心）
 
 从当前 `InternalPathInfo.hops` 列表中**排除首尾节点**（首 = 当前源设备，尾 = 当前目的设备），对剩余中间设备依次执行路径规划。
 
@@ -2884,7 +2537,7 @@ hops[n+1] = dev2           (inPort=最后一跳 remotePort, outPort=null)
 
 **① 地址确定：**
 - `targetAddr` = 当前阶段的目的地址（前向 = `CNA2`，反向 = `CNA1`），32 bit CNA 地址。
-- `prevHop` = 前一个 hop（已在循环中处理过的前一设备），用于 Step 10 ⑤ 的下一跳验证。
+- `prevHop` = 前一个 hop（已在循环中处理过的前一设备），用于 Step 8 ⑤ 的下一跳验证。
 
 **② 跨芯片路由查找：**
 路由表按芯片独立存储（§4.7），入端口所在的芯片不一定包含到达目的地的路由。因此需**遍历当前设备的所有 `ForwardingChip`**（通过 `device.getForwardingChips()` 抽象方法，§4.3），对每个芯片执行以下步骤：
@@ -2928,18 +2581,18 @@ for each (ForwardingChip chip in device.getForwardingChips().values()):
 
 > **校验意义：** `interDevices` 指定了路径拓扑（哪个设备连接哪个设备），路由表指定了转发决策。两者必须一致——路由表指向的出端口应当连通到路径中的下一跳设备。此校验捕获路由配置错位问题。
 
-**⑤ 结果汇总后进入 Step 11：**
-将最终的 `RoutingEntry` 和当前设备信息传入 Step 11 做出端口判断。
+**⑤ 结果汇总后进入 Step 9：**
+将最终的 `RoutingEntry` 和当前设备信息传入 Step 9 做出端口判断。
 
 > **下一跳关系：** 对于当前处理的中间设备 `currentHop`：
 > - 前向阶段：`currentHop` 的下一个 hop 在路径中索引更大（更靠近目的设备）
 > - 反向阶段：`currentHop` 的下一个 hop 在路径中索引更大（此时更靠近原 dev1，即反转后的目的）
 
-如果当前循环已处理完所有中间设备 → 跳过 Step 11，进入 Step 12。
+如果当前循环已处理完所有中间设备 → 跳过 Step 9，进入 Step 10。
 
-#### 9.5.4 Step 11 - 出端口判断与选路记录
+#### 9.4.4 Step 9 - 出端口判断与选路记录
 
-对 Step 10 返回的 `RoutingEntry.outPortInfos` 做出端口判断：
+对 Step 8 返回的 `RoutingEntry.outPortInfos` 做出端口判断：
 
 | 条件 | 处理 |
 |:-----|:-----|
@@ -2957,16 +2610,16 @@ record.setCandidateOutPorts(candidateList);                // 所有候选 OutPo
 record.setScna(CNA1);                                      // 源 CNA（不变）
 record.setDcna(CNA2);                                      // 目的 CNA（不变）
 record.setDirection(currentPhase == FORWARD ? Direction.FORWARD : Direction.REVERSE);
-// hashInfo 记录三元组标识（SCNA:DCNA），供 Step 13 hash 计算使用
+// hashInfo 记录三元组标识（SCNA:DCNA），供 §9.5 Step 9 hash 计算使用
 record.setHashInfo(CNA1 + ":" + CNA2);
 ```
 
 - `candidateOutPorts`：所有候选 `OutPortInfo` 都加入，其中与 `interDevices` 指定出端口一致的端口标记为 `selected=true`（即路径指定的目标端口），其余为 `false`。
-- 该记录追加到 `RouteSelectionRecord` 列表末尾，供 Step 13 使用。
+- 该记录追加到 `RouteSelectionRecord` 列表末尾，供 §9.5 Step 9 使用。
 
-> **框间多路径选路说明：** 当路径上存在多段 ECMP 时（如 L1SW0→L2SW 和 L2SW→L1SW1 均为多路径），Step 11 仅记录候选出端口列表及路径指定的目标端口（`selected=true`）。hash 算法搜索满足所有 ECMP 段约束的 UDP 端口号的详细流程见 Step 13。
+> **框间多路径选路说明：** 当路径上存在多段 ECMP 时（如 L1SW0→L2SW 和 L2SW→L1SW1 均为多路径），本步骤仅记录候选出端口列表及路径指定的目标端口（`selected=true`）。hash 算法搜索满足所有 ECMP 段约束的 UDP 端口号的详细流程见 §9.5 Step 9。
 
-#### 9.5.5 Step 12 - 方向切换判断
+#### 9.4.5 Step 10 - 方向切换判断
 
 根据当前阶段标识 `currentPhase` 决定流程走向：
 
@@ -2974,22 +2627,22 @@ record.setHashInfo(CNA1 + ":" + CNA2);
 if currentPhase == FORWARD:
     // 前向阶段已完成所有中间设备的路由查找
     // 切换到反向阶段
-    → 跳转到 Step 9（反向路径设置）
+    → 跳转到 Step 7（反向路径设置）
 
 if currentPhase == REVERSE:
     // 反向阶段也已完成
     // 将路径恢复为正向顺序（再次反转）
-    → 执行 path 反转（规则同 Step 9），恢复到正向顺序
-    → 跳转到 Step 14（构造输出）
+    → 执行 path 反转（规则同 Step 7），恢复到正向顺序
+    → 进入构造输出阶段（§9.5，Step 9~10）
 ```
 
 ---
 
-### 9.6 阶段5：构造输出（Step 13 ~ 15）
+### 9.5 阶段4：构造输出（Step 9 ~ 10）
 
 > **数据结构参见：** §5.2 RouteSelectionRecord、§6.2 PathPlanResult/PathInfo/HopInfo
 
-**Step 13 - UDP 端口计算（框间多路径场景）：**
+**Step 9 - UDP 端口计算（框间多路径场景）：**
 
 当 `RouteSelectionRecord` 列表非空时，需要为正向和反向分别计算一个 8 bit 源 UDP 端口号（0~255），使 hash 算法在每段 ECMP 上都选中 `interDevices` 指定的路径。
 
@@ -2997,7 +2650,7 @@ if currentPhase == REVERSE:
 
 > **背景：** 框间多路径场景下（如 NPU0↔L1SW0↔L2SW↔L1SW1↔NPU1），中间设备 L1SW0 和 L2SW 上的路由表可能同时存在多个出端口（ECMP）。同一个源 UDP 端口号必须同时满足所有 ECMP 段的 hash 选路约束，确保整个路径按照 `interDevices` 指定的端口连通。
 
-**13.1 Hash 算法定义：**
+**9.1 Hash 算法定义：**
 
 ```
 选中端口索引 = hash(SCNA, DCNA, srcUdpPort) % candidateOutPorts.size()
@@ -3007,7 +2660,7 @@ if currentPhase == REVERSE:
 - **输出**：整数 hash 值，对候选端口数取模后得到选中的出端口索引
 - **可打桩（stub）**：hash 函数可在测试时注入桩实现，精确控制特定三元组的输出值，绕过多段耦合的搜索复杂度
 
-**13.2 正向路径端口计算（dataUdpSrcPort）：**
+**9.2 正向路径端口计算（dataUdpSrcPort）：**
 
 正向路径的 UDP 源端口对应 `PathPlanResult.dataUdpSrcPort`，计算过程如下：
 
@@ -3029,7 +2682,7 @@ if currentPhase == REVERSE:
 - 条件满足：所有 FORWARD 方向的 ECMP 段都选中了目标端口 → 记录 `dataUdpSrcPort`
 - 无解（0~255 范围内不存在满足所有约束的端口值）→ 返回错误码 **1**（`FAILED`）
 
-**13.3 反向路径端口计算（ackUdpSrcPort）：**
+**9.3 反向路径端口计算（ackUdpSrcPort）：**
 
 反向路径的 UDP 源端口对应 `PathPlanResult.ackUdpSrcPort`，计算过程与正向类似但 SCNA/DCNA 互换：
 
@@ -3048,7 +2701,7 @@ if currentPhase == REVERSE:
         break
 ```
 
-**13.4 正反向关系说明：**
+**9.4 正反向关系说明：**
 
 | 属性 | 正向（dataUdpSrcPort） | 反向（ackUdpSrcPort） |
 |:-----|:----------------------|:----------------------|
@@ -3061,50 +2714,47 @@ if currentPhase == REVERSE:
 - 当路径上仅有一段 ECMP 时，通常存在多个 UDP 端口值满足约束，搜索空间充裕。
 - 当路径上存在多段 ECMP（如 L1SW0 和 L2SW 均存在多路径），同一个 UDP 端口必须同时满足多段约束，搜索空间缩小。由于 hash 为打桩实现，测试时可注入精确映射绕过多段耦合。
 
-**13.5 无 ECMP 场景：**
+**9.5 无 ECMP 场景：**
 
 若 `RouteSelectionRecord` 列表为空（路径上所有设备出端口均唯一），此步跳过，`dataUdpSrcPort` 和 `ackUdpSrcPort` 使用默认值或置空。
 
-**13.6 RouteSelectionRecord 生命周期回顾：**
+**9.6 RouteSelectionRecord 生命周期回顾：**
 
 | 阶段 | 操作 | 记录方向 |
 |:-----|:-----|:---------|
-| 前向 (Step 8→10→11→12) | 正向路径的 ECMP 节点 → 追加记录 | FORWARD |
-| 反向 (Step 9→10→11→12) | 反向路径的 ECMP 节点 → 追加记录 | REVERSE |
-| Step 13 | 按方向分组消费，独立计算 dataUdpSrcPort / ackUdpSrcPort | 两方向 |
+| 前向 (Step 6→8→9→10) | 正向路径的 ECMP 节点 → 追加记录 | FORWARD |
+| 反向 (Step 7→8→9→10) | 反向路径的 ECMP 节点 → 追加记录 | REVERSE |
+| §9.5 Step 9 | 按方向分组消费，独立计算 dataUdpSrcPort / ackUdpSrcPort | 两方向 |
 
-**Step 14 - 填充 PathPlanResult：**
+**Step 10 - 填充 PathPlanResult：**
 填入以下信息到 `PathPlanResult` 对象（§6.2）：
 - `sourceEid` / `destEid`：EID 对信息（来自 Step 1/2）
 - `path`：路径逐跳信息（`PathInfo` → `List<HopInfo>`），由 `InternalPathInfo.hops`（§5.1）转换为外部 `HopInfo`（§6.2.2）
-- `ackUdpSrcPort` / `dataUdpSrcPort`：UDP 端口对信息（若 Step 13 已计算）
+- `ackUdpSrcPort` / `dataUdpSrcPort`：UDP 端口对信息（若 §9.5 Step 9 已计算）
 
-**Step 15 - 返回成功：**
 返回成功（码 **0**），附带完整的 `PathPlanResult` 信息。
 
 ---
 
-### 9.7 错误码与步骤映射
+### 9.6 错误码与步骤映射
 
 | 错误码 | 名称 | 触发步骤 | 说明 |
 |:-------|:-----|:---------|:-----|
-| 0 | SUCCESS | Step 6 / 15 | 成功（直连成功或完整路径规划成功） |
+| 0 | SUCCESS | Step 4 / 10 | 成功（直连成功或完整路径规划成功） |
 | 1003 | SRC_INFO_ERR | Step 1 | 源信息缺失 |
 | 1004 | DST_INFO_ERR | Step 2 | 目的信息缺失 |
-| 1005 | ACL_CHECK_FAILED | Step 3 / 4 | ACL 校验失败（key 不存在或 CNA 不匹配） |
-| 1007 | TOPO_INCOMPLETE | Step 0 / 7 | 拓扑不完整（设备在 SuperNode 中找不到） |
-| 1008 | TOPO_CONNECTION_ERROR | Step 6 | 直连验证失败（端口连接关系不匹配） |
-| 1009 | TOPO_CONNECTION_NOT_FOUND | Step 7 | 多跳路径还原失败（连接关系错误） |
-| 1010 | ROUTE_NOT_REACHABLE | Step 10 | 路由不可达（无路由、无出端口或出端口与拓扑不一致） |
-| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 11 | 多路径（ECMP）且设备不支持自主逐流 |
+| 1007 | TOPO_INCOMPLETE | Step 0 / 5 | 拓扑不完整（设备在 SuperNode 中找不到） |
+| 1008 | TOPO_CONNECTION_ERROR | Step 4 | 直连验证失败（端口连接关系不匹配） |
+| 1009 | TOPO_CONNECTION_NOT_FOUND | Step 5 | 多跳路径还原失败（连接关系错误） |
+| 1010 | ROUTE_NOT_REACHABLE | Step 8 | 路由不可达（无路由、无出端口或出端口与拓扑不一致） |
+| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 9 | 多路径（ECMP）且设备不支持自主逐流 |
 | 1012 | TOPO_NOT_FOUND | Step 0 | 超节点不存在 |
-| 1013 | ACL_NOT_FOUND | Step 3 / 4 | AclData 对象不存在（补充检查） |
 | 3002 | SRC_AND_DST_MUST_BE_NPU | Step 0 | 源和目的必须为 NPU 设备 |
 | 3003 | UPI_MISMATCH | Step 0 | 源和目的端口 UPI 不一致 |
 
 ---
 
-### 9.8 流程数据流总览
+### 9.7 流程数据流总览
 
 ```
 PathPlanRequest (§6.1)
@@ -3118,38 +2768,31 @@ PathPlanRequest (§6.1)
 │   错误码: 3002, 3003, 1003, 1004, 1007, 1012                              │
 └─────────────────────────┬────────────────────────────────────────────────┘
                           │
-┌──────────────────────────────────────────────────────────────────────────┐
-│ 阶段2 (Step 3~4): ACL 双向校验                                            │
-│   AclData.tpAcls → AclKey(EID1, EID2, RCTP) → TpAclEntity               │
-│   验证: sourceCna == CNA1, destCna == CNA2 (正向+反向)                    │
-│   错误码: 1005, 1013                                                      │
-└─────────────────────────┬────────────────────────────────────────────────┘
-                          │
              ┌────────────┴────────────┐
              ▼                         ▼
 ┌─────────────────────────┐  ┌──────────────────────────────────────────────┐
-│ 阶段3: interDevices 为空  │  │ 阶段3: interDevices 非空                       │
-│ Step 6: 直连验证 (终端)   │  │ Step 7: 多跳路径还原 → InternalPathInfo         │
+│ 阶段2: interDevices 为空  │  │ 阶段2: interDevices 非空                       │
+│ Step 4: 直连验证 (终端)   │  │ Step 5: 多跳路径还原 → InternalPathInfo         │
 │ 错误码: 1008              │  │   校验: 设备存在性, 端口存在性, 连接连续性      │
 │ 成功: 直接返回 (码 0)     │  │   错误码: 1007, 1009                           │
 └─────────────────────────┘  └─────────────────────┬────────────────────────┘
                                                     │
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 阶段4 (Step 8→9→10→11→12): 路径规划循环 (前向 + 反向)                      │
-│   Step 8: 前向设置 (target=CNA2, dst=dev2, phase=FORWARD)                  │
-│   Step 9: 反向设置 (反转路径, target=CNA1, dst=dev1, phase=REVERSE)         │
+│ 阶段3 (Step 6→7→8→9→10): 路径规划循环 (前向 + 反向)                       │
+│   Step 6: 前向设置 (target=CNA2, dst=dev2, phase=FORWARD)                  │
+│   Step 7: 反向设置 (反转路径, target=CNA1, dst=dev1, phase=REVERSE)         │
 │                                                                           │
-│   Step 10 (对每个中间设备):                                                 │
+│   Step 8 (对每个中间设备):                                                 │
 │     ┌─────────────────────────────────────────────────────────────────┐  │
 │     │ ① 遍历 device.getForwardingChips() 所有芯片                         │  │
 │     │ ② 对每个芯片: RoutingTableKey → superNodeStore.getRoutingTable   │  │
 │     │ ③ 索引掩码匹配: maskLengths[0..n] → RoutePrefix → O(1) 命中       │  │
 │     │ ④ 跨芯片择优: 取 maskLen 最大的 RoutingEntry                      │  │
 │     │ ⑤ 出端口与下一跳一致性校验                                         │  │
-│     │ ⑥ 结果送入 Step 11                                                │  │
+│     │ ⑥ 结果送入 Step 9                                                │  │
 │     └─────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│   Step 11: 出端口判断                                                     │
+│   Step 9: 出端口判断                                                     │
 │     1个出端口 → 正常进入下一跳                                            │
 │     多个出端口(不支持ECMP) → 1011                                        │
 │     多个出端口(支持ECMP) → 追加 RouteSelectionRecord                     │
@@ -3158,10 +2801,10 @@ PathPlanRequest (§6.1)
 └──────────────────────────────────────────┬───────────────────────────────┘
                                            │
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 阶段5 (Step 13~15): 构造输出                                              │
-│   Step 13: UDP 端口计算 (基于前向+反向 的 RouteSelectionRecord 列表)       │
-│   Step 14: InternalPathInfo → PathPlanResult [§6.2]                     │
-│   Step 15: 返回成功 (码 0)                                               │
+│ 阶段4 (Step 9~10): 构造输出                                              │
+│   Step 9: UDP 端口计算 (基于前向+反向 的 RouteSelectionRecord 列表)       │
+│   Step 10: InternalPathInfo → PathPlanResult [§6.2]                     │
+│   返回成功 (码 0)                                                        │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

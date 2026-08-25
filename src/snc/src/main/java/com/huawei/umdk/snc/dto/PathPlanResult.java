@@ -27,14 +27,12 @@ public class PathPlanResult {
         SUCCESS(0, "success"),
         SRC_INFO_ERR(1003, "src info error"),
         DST_INFO_ERR(1004, "dst info error"),
-        ACL_CHECK_FAILED(1005, "acl check failed"),
         TOPO_INCOMPLETE(1007, "topo incomplete"),
         TOPO_CONNECTION_ERROR(1008, "topo connection error"),
         TOPO_CONNECTION_NOT_FOUND(1009, "topo connection not found"),
         ROUTE_NOT_REACHABLE(1010, "route not reachable"),
         COVERAGE_INCOMPLETE(1011, "coverage incomplete"),
         TOPO_NOT_FOUND(1012, "topo not found"),
-        ACL_NOT_FOUND(1013, "acl not found"),
         SRC_AND_DST_MUST_BE_NPU(3002, "src and dst must be npu"),
         UPI_MISMATCH(3003, "upi mismatch");
         @Getter

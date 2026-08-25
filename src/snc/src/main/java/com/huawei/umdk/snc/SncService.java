@@ -18,18 +18,14 @@ import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.dto.PathPlanRequest;
 import com.huawei.umdk.snc.dto.PathPlanResult;
-import com.huawei.umdk.snc.engine.AclCheckEngine;
 import com.huawei.umdk.snc.engine.PathEngine;
 import com.huawei.umdk.snc.engine.RouteLookupEngine;
-import com.huawei.umdk.snc.entity.AclData;
-import com.huawei.umdk.snc.entity.AclKey;
 import com.huawei.umdk.snc.entity.LinkEvent;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
 import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.entity.SwDevice;
-import com.huawei.umdk.snc.entity.TpAclEntity;
 import com.huawei.umdk.snc.exception.SNCStateException;
 import com.huawei.umdk.snc.route.model.RouteTable;
 import com.huawei.umdk.snc.route.service.RouteConvergeService;
@@ -37,11 +33,9 @@ import com.huawei.umdk.snc.route.service.RouteInstantiationService;
 import com.huawei.umdk.snc.route.service.RouteMspService;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
-import com.huawei.umdk.snc.service.AclService;
 import com.huawei.umdk.snc.service.LinkEventService;
 import com.huawei.umdk.snc.service.PathService;
 import com.huawei.umdk.snc.service.SuperNodeService;
-import com.huawei.umdk.snc.store.AclStore;
 import com.huawei.umdk.snc.store.SuperNodeStore;
 
 public class SncService {
@@ -71,11 +65,7 @@ public class SncService {
 
     private SuperNodeStore superNodeStore;
 
-    private AclStore aclStore;
-
     private SuperNodeService superNodeService;
-
-    private AclService aclService;
 
     private PathService pathService;
 
@@ -84,8 +74,6 @@ public class SncService {
     private RouteConvergeService routeConvergeService;
 
     private volatile boolean superNodeLoaded;
-
-    private volatile boolean aclLoaded;
 
     public static void registerLogCallback(LogCallback logCallback) {
         Logger.registerLogCallback(logCallback);
@@ -101,26 +89,21 @@ public class SncService {
         }
 
         this.superNodeStore = new SuperNodeStore();
-        this.aclStore = new AclStore();
         this.superNodeStore.init();
-        this.aclStore.init();
-        LOG.debug("init: SuperNodeStore and AclStore initialized");
+        LOG.debug("init: SuperNodeStore initialized");
 
         PathEngine pathEngine = new PathEngine();
         RouteLookupEngine routeLookupEngine = new RouteLookupEngine();
-        AclCheckEngine aclCheckEngine = new AclCheckEngine();
 
         this.superNodeService = new SuperNodeService(superNodeStore);
-        this.aclService = new AclService(aclStore);
-        this.pathService = new PathService(superNodeStore, aclStore,
-            pathEngine, routeLookupEngine, aclCheckEngine);
+        this.pathService = new PathService(superNodeStore,
+            pathEngine, routeLookupEngine);
         this.linkEventService = new LinkEventService(superNodeStore);
         this.routeConvergeService = new RouteConvergeService();
-        LOG.debug("init: Service instances created (SuperNodeService, AclService, PathService, "
+        LOG.debug("init: Service instances created (SuperNodeService, PathService, "
             + "LinkEventService, RouteConvergeService)");
 
         this.superNodeLoaded = false;
-        this.aclLoaded = false;
         this.state = State.READY;
 
         LOG.info("init: state=" + state);
@@ -132,17 +115,10 @@ public class SncService {
             superNodeStore.clear();
             LOG.debug("uninit: SuperNodeStore cleared");
         }
-        if (aclStore != null) {
-            aclStore.clear();
-            LOG.debug("uninit: AclStore cleared");
-        }
         this.superNodeLoaded = false;
-        this.aclLoaded = false;
         this.state = State.UNINIT;
         this.superNodeStore = null;
-        this.aclStore = null;
         this.superNodeService = null;
-        this.aclService = null;
         this.pathService = null;
         this.linkEventService = null;
         this.routeConvergeService = null;
@@ -251,46 +227,6 @@ public class SncService {
             + ", chip=" + chipIndex + ", count=" + prefixes.size());
     }
 
-    public void setAclData(AclData aclData) {
-        checkNotUninit();
-        if (aclData == null) {
-            LOG.error("setAclData: error=AclData must not be null");
-            throw new IllegalArgumentException("AclData must not be null");
-        }
-        aclService.importAclData(aclData);
-        aclLoaded = true;
-        updateDataReadyState();
-        LOG.info("setAclData: superNode=" + aclData.getSuperNodeName() + ", state=" + state);
-    }
-
-    public void addAclRules(String superNodeName, Map<AclKey, TpAclEntity> rules) {
-        checkNotUninit();
-        if (superNodeName == null || superNodeName.isEmpty()) {
-            LOG.error("addAclRules: error=superNodeName must not be null or empty");
-            throw new IllegalArgumentException("superNodeName must not be null or empty");
-        }
-        if (rules == null) {
-            LOG.error("addAclRules: error=rules must not be null");
-            throw new IllegalArgumentException("rules must not be null");
-        }
-        aclService.addAclRules(superNodeName, rules);
-        LOG.info("addAclRules: superNode=" + superNodeName + ", count=" + rules.size());
-    }
-
-    public void removeAclRules(String superNodeName, List<AclKey> keys) {
-        checkNotUninit();
-        if (superNodeName == null || superNodeName.isEmpty()) {
-            LOG.error("removeAclRules: error=superNodeName must not be null or empty");
-            throw new IllegalArgumentException("superNodeName must not be null or empty");
-        }
-        if (keys == null) {
-            LOG.error("removeAclRules: error=keys must not be null");
-            throw new IllegalArgumentException("keys must not be null");
-        }
-        aclService.removeAclRules(superNodeName, keys);
-        LOG.info("removeAclRules: superNode=" + superNodeName + ", count=" + keys.size());
-    }
-
     public SuperNode getSuperNode(String name) {
         checkNotUninit();
         if (name == null || name.isEmpty()) {
@@ -312,29 +248,6 @@ public class SncService {
         superNodeLoaded = superNodeService.getSuperNode(name) != null;
         updateDataReadyState();
         LOG.info("removeSuperNode: name=" + name + ", state=" + state);
-    }
-
-    public AclData getAclData(String superNodeName) {
-        checkNotUninit();
-        if (superNodeName == null || superNodeName.isEmpty()) {
-            LOG.error("getAclData: error=superNodeName must not be null or empty");
-            throw new IllegalArgumentException("superNodeName must not be null or empty");
-        }
-        AclData result = aclService.getAclData(superNodeName);
-        LOG.info("getAclData: superNode=" + superNodeName + ", result=" + (result != null ? "found" : "null"));
-        return result;
-    }
-
-    public void removeAclData(String superNodeName) {
-        checkNotUninit();
-        if (superNodeName == null || superNodeName.isEmpty()) {
-            LOG.error("removeAclData: error=superNodeName must not be null or empty");
-            throw new IllegalArgumentException("superNodeName must not be null or empty");
-        }
-        aclService.removeAclData(superNodeName);
-        aclLoaded = aclService.getAclData(superNodeName) != null;
-        updateDataReadyState();
-        LOG.info("removeAclData: superNode=" + superNodeName + ", state=" + state);
     }
 
     public PathPlanResult planPath(PathPlanRequest request) {
@@ -397,7 +310,7 @@ public class SncService {
     }
 
     private void updateDataReadyState() {
-        if (superNodeLoaded && aclLoaded) {
+        if (superNodeLoaded) {
             this.state = State.DATAREADY;
             LOG.info("state=" + state);
         } else if (state == State.DATAREADY) {
