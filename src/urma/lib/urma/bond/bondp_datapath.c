@@ -447,7 +447,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         return URMA_EINVAL;
     }
     uint32_t base_msn = 0;
-    if (bdp_tjetty->is_msn_enabled) {
+    if (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) {
         base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
     }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
@@ -475,7 +475,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                 return ret;
             }
             uint32_t wr_msn = (base_msn + index) % BONDP_MAX_BITMAP_SIZE;
-            bool msn_enable = bdp_tjetty->is_msn_enabled;
+            bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
             encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx);
             if (vwr->next != NULL) {
@@ -521,7 +521,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         return URMA_EINVAL;
     }
     uint32_t base_msn = 0;
-    if (bdp_tjetty->is_msn_enabled) {
+    if (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) {
         base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
     }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
@@ -573,7 +573,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 goto CLEANUP;
             }
             uint32_t wr_msn = (base_msn + i) % BONDP_MAX_BITMAP_SIZE;
-            bool msn_enable = bdp_tjetty->is_msn_enabled;
+            bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
             encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             pwr->user_ctx = wr_entry->wr_id;
             /* Link WRs into a chain */

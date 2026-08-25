@@ -258,8 +258,8 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
         URMA_LOG_ERR("Failed to find connected port.\n");
         return -1;
     }
-    bdp_tjetty->active_count = active_count;
-    bdp_tjetty->p_tjetty_count = active_count;
+    bdp_tjetty->active_count = (uint8_t)active_count;
+    bdp_tjetty->p_tjetty_count = (uint16_t)active_count;
     return 0;
 }
 
@@ -571,10 +571,6 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         errno = ENOMEM;
         return NULL;
     }
-    if (token_value != NULL) {
-        bdp_tjetty->import_token_value = *token_value;
-        bdp_tjetty->import_token_valid = true;
-    }
     atomic_init(&bdp_tjetty->use_cnt.atomic_cnt, 1);
 
     urma_bond_id_info_out_t rvjetty_info = {0};
@@ -585,7 +581,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         }
     }
     if (bondp_rjetty_has_user_info(rjetty)) {
-        bdp_tjetty->skip_import_vjetty = true;
+        bdp_tjetty->mask |= BONDP_TJETTY_FLAG_SKIP_IMPORT_VJETTY;
         if (bondp_fill_bond_id_info_from_rjetty_ext(rjetty, &rvjetty_info) != 0) {
             const bondp_rjetty_ext_priv_t *ext_hdr = bondp_rjetty_get_priv_ext_const(rjetty);
             URMA_LOG_ERR("Invalid rjetty ext, length=%u.\n", ext_hdr->len);
@@ -615,7 +611,9 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_VJETTY;
     }
 
-    bdp_tjetty->is_msn_enabled = rvjetty_info.is_msn_enabled;
+    if (rvjetty_info.is_msn_enabled) {
+        bdp_tjetty->mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
+    }
 
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to init target active indices\n");
@@ -644,7 +642,7 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
 UNIMPORT_PJETTY:
     bondp_unimport_pjetty(bdp_tjetty);
 UNIMPORT_VJETTY:
-    if (!bdp_tjetty->skip_import_vjetty) {
+    if ((bdp_tjetty->mask & BONDP_TJETTY_FLAG_SKIP_IMPORT_VJETTY) == 0) {
         bondp_unimport_vjetty(bdp_tjetty);
     }
 FREE_TJETTY:
@@ -663,7 +661,7 @@ static urma_status_t bondp_unimport_jetty_inner(urma_target_jetty_t *target_jett
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
         ret = URMA_FAIL;
     }
-    if (!bdp_tjetty->skip_import_vjetty) {
+    if ((bdp_tjetty->mask & BONDP_TJETTY_FLAG_SKIP_IMPORT_VJETTY) == 0) {
         if (bondp_unimport_vjetty(bdp_tjetty) != URMA_SUCCESS) {
             ret = URMA_FAIL;
         }
@@ -977,7 +975,9 @@ urma_target_jetty_t *bondp_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, ur
         goto UNIMPORT_VJFR;
     }
 
-    bdp_tjetty->is_msn_enabled = udata_out.is_msn_enabled;
+    if (udata_out.is_msn_enabled) {
+        bdp_tjetty->mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
+    }
     if (init_target_active_indices(bdp_ctx, bdp_tjetty, &udata_out) != 0) {
         URMA_LOG_ERR("Failed to init target active indices\n");
         goto UNIMPORT_VJFR;

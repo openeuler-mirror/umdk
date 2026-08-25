@@ -280,18 +280,20 @@ typedef struct bondp_p_target_jetty {
 #endif
 } bondp_p_target_jetty_t;
 
+typedef enum bondp_tjetty_flag_mask {
+    BONDP_TJETTY_FLAG_SKIP_IMPORT_VJETTY = 0x1,
+    BONDP_TJETTY_FLAG_MSN_ENABLED        = 0x1 << 1,
+    BONDP_TJETTY_FLAG_HC_REGISTERED      = 0x1 << 2
+} bondp_tjetty_flag_mask_t;
+
 typedef struct bondp_target_jetty {
     urma_target_jetty_t v_tjetty;
-    urma_token_t import_token_value;
-    bool import_token_valid;
-    bool skip_import_vjetty;
-    uint32_t p_tjetty_count;
-    uint32_t active_count;
     urma_ref_t use_cnt;
-    bool is_msn_enabled;
-    bool hc_registered;
-    uint32_t hc_node_idx;
     struct ub_list hc_entry;
+    uint16_t p_tjetty_count; /* narrowed from uint32_t, <= URMA_UBAGG_DEV_MAX_NUM^2 */
+    uint16_t hc_node_idx;    /* narrowed from uint32_t, < MAX_NODE_NUM */
+    uint8_t active_count;    /* narrowed from uint32_t, <= URMA_UBAGG_DEV_MAX_NUM */
+    uint8_t mask; // mask value refer to bondp_tjetty_flag_mask_t
     bondp_p_target_jetty_t p_tjettys[];
 } bondp_target_jetty_t;
 
