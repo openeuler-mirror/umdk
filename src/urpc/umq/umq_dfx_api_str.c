@@ -34,7 +34,7 @@ static const char UMQ_DFX_UNDERLINE_120[] =
 
 /* Size-class display names shared across all per-SC DFX rows (file-level to
  * avoid local-variable shadowing across the three emitters below). */
-static const char *umq_dfx_sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
+static const char *umq_dfx_sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
 
 /* Bytes-per-MB divisor for human-readable size strings (e.g. "%lu(%.1fMB)"). */
 #define UMQ_DFX_BYTES_PER_MB (1024.0 * 1024.0)

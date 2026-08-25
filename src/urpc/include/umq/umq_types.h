@@ -15,9 +15,10 @@
 #include <stdlib.h>
 
 /** Maximum number of size_class levels in a qbuf pool.
- * Used throughout umq_types.h, umq_dfx_types.h, and internal headers
- * instead of the magic number 16. */
-#define UMQ_SIZE_CLASS_MAX (16u)
+ * Used throughout umq_types.h, umq_dfx_types.h, and internal headers.
+ * DFX names (umq_dfx_api_str.c): SC[0]=Small, SC[1]=Medium, SC[2]=Large,
+ * SC[3]=Huge, SC[4]=Gigantic. Role macros: SMALL=0, MIDDLE=1, LARGE_MIN=2. */
+#define UMQ_SIZE_CLASS_MAX (5u)
 
 #ifdef __cplusplus
 extern "C" {
