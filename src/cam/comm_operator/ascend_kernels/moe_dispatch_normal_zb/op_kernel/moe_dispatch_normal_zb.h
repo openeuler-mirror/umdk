@@ -248,8 +248,9 @@ __aicore__ inline void MoeDispatchNormalZb<CamTypeFunc>::InputToDstOutput()
     DataCopyPad(putOffsetTensor, putOffsetGT, putOffsetParams, putOffsetCopyPadParams);
     SyncFunc<AscendC::HardEvent::MTE2_S>();
 
-    tpipe_->InitBuffer(topkIdxBuf, sendTokenNum * sizeof(int32_t));     // 4 * bs * k / 48
-    tpipe_->InitBuffer(sendTokenIdxBuf, sendTokenNum * sizeof(int32_t));  // 4 * bs * k / 48
+    uint32_t tokenIdxBufSize = Ceil(sendTokenNum * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;
+    tpipe_->InitBuffer(topkIdxBuf, tokenIdxBufSize);
+    tpipe_->InitBuffer(sendTokenIdxBuf, tokenIdxBufSize);
     topkIdxTensor = topkIdxBuf.Get<int32_t>();
     sendTokenIdxTensor = sendTokenIdxBuf.Get<int32_t>();
     DataCopyExtParams topkIdxCntParams = {1U, static_cast<uint32_t>(sendTokenNum * sizeof(uint32_t)), 0U, 0U, 0U};
