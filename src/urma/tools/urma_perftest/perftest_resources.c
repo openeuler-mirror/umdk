@@ -136,17 +136,22 @@ static int check_dev_cap(perftest_context_t *ctx, perftest_config_t *cfg)
     return 0;
 }
 
+static inline bool priority_supports_tp(urma_device_attr_t *attr, uint8_t p, union urma_tp_type_en tp_type)
+{
+    if (p > URMA_MAX_PRIORITY) {
+        return false;
+    }
+    return (attr->dev_cap.priority_info[p].tp_type.value & tp_type.value) != 0;
+}
+
 static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urma_tp_type_en tp_type)
 {
-    int pri = -1;
-
     for (int i = 0; i <= URMA_MAX_PRIORITY; i++) {
-        if (tp_type.value == dev_attr->dev_cap.priority_info[i].tp_type.value) {
-            pri = i;
-            return pri;
+        if ((dev_attr->dev_cap.priority_info[i].tp_type.value & tp_type.value) != 0) {
+            return i;
         }
     }
-    LOG_ERROR("Failed to get sl resources");
+    LOG_ERROR("Failed to get sl resources for tp_type=0x%x\n", tp_type.value);
     return -1;
 }
 
@@ -215,14 +220,14 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         }
         if (cfg->use_ctp && ctx->urma_ctx->ops->import_jetty_ex != NULL) {
             tp_type.bs.ctp = 1;
-            if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
-                LOG_ERROR("You should set the priority of type CTP\n");
+            if (!priority_supports_tp(&ctx->dev_attr, cfg->priority, tp_type)) {
+                LOG_ERROR("Priority %hhu does not support CTP\n", cfg->priority);
                 goto uninit;
             }
         } else if (ctx->urma_ctx->ops->import_jetty_ex != NULL) {
             tp_type.bs.rtp = 1;
-            if (tp_type.value != ctx->dev_attr.dev_cap.priority_info[cfg->priority].tp_type.value) {
-                LOG_ERROR("You should set the priority of type RTP\n");
+            if (!priority_supports_tp(&ctx->dev_attr, cfg->priority, tp_type)) {
+                LOG_ERROR("Priority %hhu does not support RTP\n", cfg->priority);
                 goto uninit;
             }
         }

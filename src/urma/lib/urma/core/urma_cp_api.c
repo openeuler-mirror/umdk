@@ -1614,6 +1614,10 @@ static int urma_create_jetty_check_dev_cap(urma_context_t *ctx, urma_jetty_cfg_t
                      cap->max_jfs_rsge, jfr_cfg->max_sge, cap->max_jfr_sge);
         return -1;
     }
+    if (jfs_cfg->priority > URMA_MAX_PRIORITY) {
+        URMA_LOG_ERR("jfs priority %u out of range [0, %u].\n", jfs_cfg->priority, URMA_MAX_PRIORITY);
+        return -1;
+    }
     return 0;
 }
 
@@ -2202,6 +2206,10 @@ urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
         return URMA_ENOPERM;
     }
 
+    if (jetty->jetty_cfg.jfs_cfg.priority > URMA_MAX_PRIORITY) {
+        return URMA_ENOPERM;
+    }
+
     urma_ops_t *ops = ctx->ops;
     if (urma_check_ctrlplane_compat(ops->bind_jetty)) {
         return urma_bind_jetty_compat(jetty, tjetty);
@@ -2227,6 +2235,10 @@ urma_status_t urma_bind_jetty_ex(urma_jetty_t *jetty, urma_target_jetty_t *tjett
     uint32_t remote_order_type = tjetty->flag.bs.order_type;
     if (remote_order_type != order_type) {
         URMA_LOG_ERR("Not allowed to bind local jetty=%u, with remote jetty=%u.\n", jetty->jetty_id.id, tjetty->id.id);
+        return URMA_ENOPERM;
+    }
+
+    if (jetty->jetty_cfg.jfs_cfg.priority > URMA_MAX_PRIORITY) {
         return URMA_ENOPERM;
     }
 
@@ -2376,6 +2388,10 @@ urma_status_t urma_bind_jetty_async(urma_notifier_t *notifier, urma_jetty_t *jet
     uint32_t remote_order_type = tjetty->flag.bs.order_type;
     if (remote_order_type != order_type) {
         URMA_LOG_ERR("Not allowed to bind local jetty=%u, with remote jetty=%u.\n", jetty->jetty_id.id, tjetty->id.id);
+        return URMA_ENOPERM;
+    }
+
+    if (jetty->jetty_cfg.jfs_cfg.priority > URMA_MAX_PRIORITY) {
         return URMA_ENOPERM;
     }
 
