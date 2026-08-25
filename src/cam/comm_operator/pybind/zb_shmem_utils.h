@@ -11,6 +11,7 @@
 #define CAM_PYBIND_ZB_SHMEM_UTILS_H_
 
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <ATen/ATen.h>
@@ -52,8 +53,8 @@ inline at::Tensor CreateTensorFromShmem(const std::vector<int64_t> &shape, at::S
     void *devPtr = aclshmem_malloc(bytes);
     if (devPtr == nullptr) {
         throw std::runtime_error(
-            "CreateTensorFromShmem: aclshmem_malloc failed. "
-            "Ensure aclshmem is initialized and local_mem_size has enough free space.");
+            "CreateTensorFromShmem: aclshmem_malloc failed for " + std::to_string(bytes) +
+            " bytes. Ensure aclshmem is initialized and local_mem_size has enough free space.");
     }
 
     // torch_npu from_blob without deleter — caller (ZbBuffer) must aclshmem_free the VA

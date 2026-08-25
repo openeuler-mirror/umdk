@@ -2,34 +2,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
 # Description: Example for ZB normal layout/dispatch/combine via ZbBuffer.
-#   Flow: ZbBuffer.get_dispatch_layout -> dispatch (fused notify+dispatch)
-#         -> (identity / dequant writeback) -> combine
-# Create: 2026-08-01
-# Note:
-# History: 2026-08-01 create normal zb dispatch/combine example file
-#          2026-08-05 switch to ZbBuffer session API (SHMEM owned by Buffer)
 #
-# Prereq:
-#   1) Install CAM run package (ZB kernels) and umdk_cam_op_lib whl with ZbBuffer
-#   2) Install Ascend SHMEM and export SHMEM_HOME_PATH if needed
-#   3) source CANN / CAM set_env
+#   torchrun --nproc_per_node=8 src/cam/examples/moe_dispatch_combine_prefill_zb_sample.py
 #
-# Run (8 cards example):
-#   torchrun --nproc_per_node=8 \
-#     src/cam/examples/moe_dispatch_combine_prefill_zb_sample.py
-#
-# Optional env:
-#   SHMEM_IP_PORT=tcp://127.0.0.1:8666
-#   SHMEM_MEM_SIZE=4294967296
-#   ZB_QUANT_MODE=0|2
-#   ZB_DTYPE=bfloat16|float16   # dtype of x (Buffer follows x.dtype)
-#   ZB_BENCH_ITERS=N   # if >0, time N dispatch+combine rounds (quant dequant is prebuilt)
-#   Empirical shmem memory size ≈ 2 × batch_size × world_size × 7168 × 2
-#
-# Quant / perf note:
-#   Host dequant is done once after the first dispatch and cached as prebuilt_expert_out.
-#   Later rounds (correctness re-run / ZB_BENCH_ITERS) reuse that tensor — combine only
-#   copy_s it into the SHMEM slot. Do NOT put dequant inside a timed combine loop.
+# Env: SHMEM_IP_PORT, SHMEM_MEM_SIZE, ZB_QUANT_MODE, ZB_DTYPE, ZB_EXPERTS_PER_RANK,
+#      ZB_TOPK, ZB_BATCH_SIZE / ZB_BATCH_SIZE_LIST / ZB_BATCH_SIZE_MIN|MAX,
+#      ZB_HIDDEN_SIZE, ZB_RANDOM_TOPK, ZB_BENCH_ITERS
 #
 
 import os
@@ -64,7 +42,6 @@ def allclose_nparray(data_expect, data_check, rtol=1e-4, atol=1e-4, equal_nan=Tr
 
 
 def gen_x(rank, batch_size, hidden_size):
-    # Values > 10 to meet combine precision guidance for dispatch inputs.
     return [rank * batch_size + i + 11 for i in range(batch_size) for _ in range(hidden_size)]
 
 
@@ -74,6 +51,12 @@ def gen_expert_ids(rank, batch_size, topk, moe_expert_num):
         for j in range(topk):
             arr[i * topk + j] = (rank + i + j) % moe_expert_num
     return arr
+
+
+def gen_expert_ids_random(batch_size, topk, moe_expert_num, device):
+    scores = torch.rand((batch_size, moe_expert_num), dtype=torch.float32, device=device)
+    _, topk_idx = torch.topk(scores, topk, dim=-1, largest=True, sorted=False)
+    return topk_idx.to(torch.int32)
 
 
 def gen_scales(batch_size, topk):
@@ -87,6 +70,64 @@ def gen_scales(batch_size, topk):
         for j in range(topk):
             arr[i * topk + j] /= sum_val
     return arr
+
+
+def estimate_zb_shmem_bytes(
+    max_tokens_per_rank: int,
+    ep_world_size: int,
+    topk: int,
+    moe_expert_num: int,
+    hidden: int,
+    use_quant: bool,
+):
+    """Worst-case ZbBuffer SHMEM bytes: rows = max_bs*EP*min(topk, local_experts)."""
+    if ep_world_size <= 0 or moe_expert_num % ep_world_size != 0:
+        raise ValueError("invalid ep_world_size / moe_expert_num")
+    local_experts = moe_expert_num // ep_world_size
+    global_bs = max_tokens_per_rank * ep_world_size
+    rows = global_bs * min(topk, local_experts)
+    combine_bytes = rows * hidden * 2
+    scales_bytes = rows * 4 if use_quant else 0
+    meta_bytes = 2 * 1024 * 1024
+    notify_bytes = ep_world_size * moe_expert_num * 4 + moe_expert_num * 4
+    payload = combine_bytes + scales_bytes + meta_bytes + notify_bytes
+    recommend = payload + 64 * 1024 * 1024
+    return {
+        "local_experts": local_experts,
+        "global_bs": global_bs,
+        "rows": rows,
+        "combine_bytes": combine_bytes,
+        "scales_bytes": scales_bytes,
+        "payload_bytes": payload,
+        "recommend_bytes": recommend,
+    }
+
+
+def _resolve_local_batch_size(rank, world_size, default_bs):
+    """Per-rank token count: LIST > ZB_BATCH_SIZE > random [MIN, MAX]."""
+    list_env = os.environ.get("ZB_BATCH_SIZE_LIST", "").strip()
+    if list_env:
+        parts = [p.strip() for p in list_env.split(",") if p.strip()]
+        assert len(parts) == world_size, (
+            f"ZB_BATCH_SIZE_LIST has {len(parts)} entries but world_size={world_size}: {list_env}"
+        )
+        bs = int(parts[rank])
+        assert bs > 0, f"ZB_BATCH_SIZE_LIST[{rank}] must be > 0, got {bs}"
+        return bs
+    if "ZB_BATCH_SIZE" in os.environ:
+        return int(os.environ["ZB_BATCH_SIZE"])
+    bs_min = int(os.environ.get("ZB_BATCH_SIZE_MIN", "1"))
+    bs_max = int(os.environ.get("ZB_BATCH_SIZE_MAX", str(max(default_bs, 1))))
+    if bs_min > bs_max:
+        raise ValueError(f"ZB_BATCH_SIZE_MIN={bs_min} > ZB_BATCH_SIZE_MAX={bs_max}")
+    rng = random.Random(10007 + rank * 97 + int(os.environ.get("ZB_INPUT_SEED", "0")))
+    return rng.randint(bs_min, bs_max)
+
+
+def _allreduce_max_int(value, device):
+    t = torch.tensor([int(value)], dtype=torch.int32, device=device)
+    dist.all_reduce(t, op=dist.ReduceOp.MAX)
+    return int(t.item())
 
 
 def _dequant_identity(recv_x_i8, scales, data_type):
@@ -128,8 +169,18 @@ def test_base_test(local_rank_id, ep_world_size):
     moe_expert_num = case["moe_expert_num"]
     topk = case["topk"]
     hidden_size = case["hidden_size"]
-    batch_size = case["batch_size"]
+    default_bs = case["batch_size"]
     quant_mode = int(os.environ.get("ZB_QUANT_MODE", str(case["quant_mode"])))
+
+    if "ZB_EXPERTS_PER_RANK" in os.environ:
+        experts_per_rank = int(os.environ["ZB_EXPERTS_PER_RANK"])
+        assert experts_per_rank > 0, "ZB_EXPERTS_PER_RANK must be > 0"
+        moe_expert_num = experts_per_rank * world_size
+    if "ZB_TOPK" in os.environ:
+        topk = int(os.environ["ZB_TOPK"])
+    if "ZB_HIDDEN_SIZE" in os.environ:
+        hidden_size = int(os.environ["ZB_HIDDEN_SIZE"])
+
     dtype_name = os.environ.get("ZB_DTYPE", "bfloat16").lower()
     dtype_map = {
         "bfloat16": torch.bfloat16,
@@ -140,28 +191,73 @@ def test_base_test(local_rank_id, ep_world_size):
     }
     assert dtype_name in dtype_map, f"unsupported ZB_DTYPE={dtype_name}, expect bfloat16|float16"
     data_type = dtype_map[dtype_name]
-    global_bs = batch_size * world_size
     use_quant = quant_mode == 2
+    use_random_topk = int(os.environ.get("ZB_RANDOM_TOPK", "1")) == 1
 
     assert moe_expert_num % world_size == 0, "moe_expert_num must be divisible by ep_world_size"
     assert world_size >= 2, "ep_world_size must be >= 2 for ZB normal ops"
     assert quant_mode in (0, 2), f"unsupported quant_mode={quant_mode}"
+    assert 0 < topk <= 16, f"topk should be in (0, 16], got {topk}"
+    assert topk <= moe_expert_num, f"topk={topk} must be <= moe_expert_num={moe_expert_num}"
+    assert 1024 <= hidden_size <= 7168, f"hidden_size should be in [1024, 7168], got {hidden_size}"
+
+    batch_size = _resolve_local_batch_size(rank, world_size, default_bs)
+    assert batch_size > 0, f"batch_size must be > 0, got {batch_size}"
+    max_bs = _allreduce_max_int(batch_size, device="npu")
+    global_bs = max_bs * world_size
+    shmem_est = estimate_zb_shmem_bytes(
+        max_bs, world_size, topk, moe_expert_num, hidden_size, use_quant
+    )
+
+    if rank == 0:
+        bs_mode = (
+            "list"
+            if os.environ.get("ZB_BATCH_SIZE_LIST", "").strip()
+            else ("uniform" if "ZB_BATCH_SIZE" in os.environ else "random")
+        )
+        print(
+            f"[zb sample] world={world_size} experts_per_rank={moe_expert_num // world_size} "
+            f"moe_expert_num={moe_expert_num} topk={topk} max_bs={max_bs} "
+            f"hidden={hidden_size} quant={quant_mode} dtype={dtype_name} "
+            f"random_topk={use_random_topk} bs_mode={bs_mode}",
+            flush=True,
+        )
+        print(
+            f"[zb sample] shmem estimate: rows={shmem_est['rows']} "
+            f"(=global_bs*min(topk,local_experts)={shmem_est['global_bs']}*"
+            f"min({topk},{shmem_est['local_experts']})) "
+            f"combine={shmem_est['combine_bytes']/1024**3:.4f}GiB "
+            f"recommend={shmem_est['recommend_bytes']/1024**3:.4f}GiB",
+            flush=True,
+        )
+    print(f"[rank {rank}] local_bs={batch_size} max_bs={max_bs} global_bs={global_bs}", flush=True)
 
     x_np = np.array(gen_x(rank, batch_size, hidden_size), dtype=float).reshape(batch_size, hidden_size)
     x = torch.tensor(x_np, dtype=data_type, device="npu")
 
-    expert_ids_np = np.array(gen_expert_ids(rank, batch_size, topk, moe_expert_num), dtype=np.int32).reshape(
-        batch_size, topk
-    )
-    topk_idx = torch.tensor(expert_ids_np, dtype=torch.int32, device="npu")
+    if use_random_topk:
+        torch.manual_seed(10007 + rank * 97 + int(os.environ.get("ZB_INPUT_SEED", "0")))
+        topk_idx = gen_expert_ids_random(batch_size, topk, moe_expert_num, device=x.device)
+    else:
+        expert_ids_np = np.array(gen_expert_ids(rank, batch_size, topk, moe_expert_num), dtype=np.int32).reshape(
+            batch_size, topk
+        )
+        topk_idx = torch.tensor(expert_ids_np, dtype=torch.int32, device="npu")
 
     scales_np = np.array(gen_scales(batch_size, topk), dtype=np.float32).reshape(batch_size, topk)
     topk_weights = torch.tensor(scales_np, dtype=torch.float32, device="npu")
 
     ip_port = os.environ.get("SHMEM_IP_PORT", "tcp://127.0.0.1:8666")
     local_mem_size = int(os.environ.get("SHMEM_MEM_SIZE", str(1024**3)))
+    if local_mem_size < shmem_est["recommend_bytes"]:
+        if rank == 0:
+            print(
+                f"[zb sample] SHMEM_MEM_SIZE={local_mem_size} < recommend "
+                f"{shmem_est['recommend_bytes']}; using recommend",
+                flush=True,
+            )
+        local_mem_size = int(shmem_est["recommend_bytes"])
 
-    # ZbBuffer owns aclshmem_init, meta GVA, named SHMEM slots, and finalize.
     buf = umdk_cam_op_lib.ZbBuffer(
         rank,
         world_size,
@@ -173,18 +269,13 @@ def test_base_test(local_rank_id, ep_world_size):
         global_bs,
     )
     try:
-        # ---- 1) first dispatch: build layout/handle + (quant) prebuilt expert_out ----
         num_tokens_per_expert, send_token_idx = buf.get_dispatch_layout(topk_idx)
         recv_x, scales, handle = buf.dispatch(
             x, topk_idx, send_token_idx, num_tokens_per_expert, quant_mode
         )
         actual_recv = int(recv_x.size(0))
 
-        # Quant: dequant ONCE. Fixed inputs → same recv packing each round, so this
-        # tensor (same dtype as x) can be reused for combine / bench without re-dequant.
-        # Note: expandx and combine_x share SHMEM; each later dispatch overwrites that
-        # block as int8, so combine still copy_s prebuilt_expert_out into the slot —
-        # that copy is cheap vs host dequant and must stay outside the dequant path.
+        # Quant: host dequant once; combine() copies into SHMEM (expandx aliases combine_x).
         prebuilt_expert_out = None
         if use_quant:
             assert recv_x.dtype == torch.int8, f"quant recv_x dtype={recv_x.dtype}"
@@ -196,7 +287,6 @@ def test_base_test(local_rank_id, ep_world_size):
         else:
             expert_out = recv_x
 
-        # ---- 2) correctness (uses prebuilt on quant path) ----
         combine_x = buf.combine(expert_out, topk_weights, topk_idx, handle)
         torch.npu.synchronize()
 
@@ -219,10 +309,8 @@ def test_base_test(local_rank_id, ep_world_size):
                 flush=True,
             )
 
-        # ---- 3) optional perf loop: no dequant inside timed region ----
         bench_iters = int(os.environ.get("ZB_BENCH_ITERS", "0"))
         if bench_iters > 0:
-            # warmup
             for _ in range(min(5, bench_iters)):
                 num_tokens_per_expert, send_token_idx = buf.get_dispatch_layout(topk_idx)
                 recv_x, scales, handle = buf.dispatch(
@@ -239,7 +327,6 @@ def test_base_test(local_rank_id, ep_world_size):
                 recv_x, scales, handle = buf.dispatch(
                     x, topk_idx, send_token_idx, num_tokens_per_expert, quant_mode
                 )
-                # quant: reuse prebuilt_expert_out — do not call _dequant_identity here
                 expert_out = prebuilt_expert_out if use_quant else recv_x
                 _ = buf.combine(expert_out, topk_weights, topk_idx, handle)
             torch.npu.synchronize()
@@ -247,7 +334,7 @@ def test_base_test(local_rank_id, ep_world_size):
             print(
                 f"[rank {rank}] zb buffer bench iters={bench_iters} "
                 f"avg={(elapsed_ms / bench_iters):.3f} ms "
-                f"(layout+dispatch+combine; quant dequant prebuilt)",
+                f"(layout+dispatch+combine; quant host-dequant once)",
                 flush=True,
             )
     finally:
@@ -257,7 +344,6 @@ def test_base_test(local_rank_id, ep_world_size):
 if __name__ == "__main__":
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
-    # shmem init inside ZbBuffer must come after torch.npu.set_device
     torch.npu.set_device(local_rank)
     dist.init_process_group(backend="hccl", rank=local_rank)
     test_base_test(local_rank, world_size)
