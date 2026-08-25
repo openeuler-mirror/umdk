@@ -338,8 +338,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             goto ERROR;
         }
         if (rest_size > max_send_size && (opcode == UMQ_OPC_SEND || opcode == UMQ_OPC_SEND_IMM)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), total data size[%u] exceed max send size[%u]\n",
-                queue->umq_id, rest_size, max_send_size);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, total data size[%u] exceed max send size[%u]\n",
+                queue->umq_id, opcode, rest_size, max_send_size);
             ret = -UMQ_ERR_EINVAL;
             *bad_qbuf = qbuf;
             goto ERROR;
@@ -353,8 +353,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         umq_buf_t *tmp_buf = buffer;
         while (buffer && rest_size > 0) { // try to add up to total_size
             if (sge_num++ >= max_sge_num) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), sge num exceed max sge num[%u]\n",
-                    queue->umq_id, max_sge_num);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, sge num exceed max sge num[%u]\n",
+                    queue->umq_id, opcode, max_sge_num);
                 *bad_qbuf = qbuf;
                 ret = -UMQ_ERR_EINVAL;
                 goto ERROR;
@@ -365,7 +365,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             if (buffer->mempool_without_data == 1) {
                 real_buf = umq_data_to_head(buffer->buf_data);
                 if (real_buf == NULL) {
-                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), get real buf failed\n", queue->umq_id);
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, get real buf failed\n",
+                        queue->umq_id, opcode);
                     ret = -UMQ_ERR_EINVAL;
                     goto ERROR;
                 }
@@ -374,23 +375,24 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             }
 
             if (real_buf->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), ub only supports using pooled memory\n", queue->umq_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, ub only supports using pooled memory\n",
+                    queue->umq_id, opcode);
                 ret = -UMQ_ERR_EFAULT;
                 goto ERROR;
             }
 
             sges_ptr->tseg = tseg_list[real_buf->mempool_id];
             if (sges_ptr->tseg == NULL) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool %u tseg not exist\n",
-                    queue->umq_id, real_buf->mempool_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, mempool %u tseg not exist\n",
+                    queue->umq_id, opcode, real_buf->mempool_id);
                 ret = -UMQ_ERR_EINVAL;
                 goto ERROR;
             }
             sges_ptr++;
 
             if (rest_size < buffer->data_size) { // if cannot add up to total_size, return fail
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), cannot put together tx buffer, rest size"
-                    " is negative\n", queue->umq_id);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, cannot put together tx buffer, rest size"
+                    " is negative\n", queue->umq_id, opcode);
                 *bad_qbuf = qbuf;
                 ret = -UMQ_ERR_EINVAL;
                 goto ERROR;
@@ -401,7 +403,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         }
 
         if (rest_size != 0) { // if cannot add up to total_size, return fail
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), cannot put together enough tx buffer\n", queue->umq_id);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, cannot put together enough tx buffer\n",
+                queue->umq_id, opcode);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_ENOMEM;
             goto ERROR;
@@ -428,10 +431,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         wr_index++;
         if (wr_index == UMQ_BATCH_SIZE && buffer != NULL) {
             // wr count exceed UMQ_BATCH_SIZE
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                               "UMQ(ID:%u), wr count exceeds %d, not supported, first_qbuf=%p, "
-                               "cur_buffer=%p, total_data_size=%u\n",
-                queue->umq_id, UMQ_BATCH_SIZE, (void *)qbuf, (void *)buffer, buffer->total_data_size);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, wr count exceeds %d, not supported, first_qbuf=%p, "
+                               "cur_buffer=%p, total_data_size=%u\n", queue->umq_id, opcode, UMQ_BATCH_SIZE,
+                               (void *)qbuf, (void *)buffer, buffer->total_data_size);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
             goto ERROR;
@@ -502,12 +504,13 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         } else {
             *bad_qbuf = qbuf;
         }
+        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)(*bad_qbuf)->qbuf_ext;
         failed_num = umq_ub_tx_failed_num(g_umq_ub_urma_wr, wr_cnt_limit, *bad_qbuf);
         urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
         uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "local eid: " EID_FMT ", local jetty_id: %u, remote eid: " EID_FMT ", "
-            "remote jetty_id: %u, urma_post_jetty_send_wr failed, status: %d\n",
-            EID_ARGS(*eid), id, EID_ARGS(tjetty->id.eid), tjetty->id.id, (int)status);
+            "remote jetty_id: %u, urma_post_jetty_send_wr failed, opcode %u, status: %d\n",
+            EID_ARGS(*eid), id, EID_ARGS(tjetty->id.eid), tjetty->id.id, buf_pro->opcode, (int)status);
         goto RECOVER_JETTY_NODE;
     }
 
