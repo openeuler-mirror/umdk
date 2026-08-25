@@ -487,7 +487,7 @@ static void hc_destroy_node(bondp_hc_node_t *node)
     bondp_target_jetty_t *next = NULL;
     UB_LIST_FOR_EACH_SAFE (tjetty, next, hc_entry, &node->tjetty_list) {
         ub_list_remove(&tjetty->hc_entry);
-        tjetty->hc_registered = false;
+        tjetty->mask &= ~BONDP_TJETTY_FLAG_HC_REGISTERED;
         tjetty->hc_node_idx = 0;
     }
 
@@ -891,7 +891,7 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
     if (bdp_ctx->hc_ctx == NULL || !rjetty_info->is_health_check_enable) {
         return 0;
     }
-    if (bdp_tjetty->hc_registered) {
+    if (bdp_tjetty->mask & BONDP_TJETTY_FLAG_HC_REGISTERED) {
         return -1;
     }
 
@@ -968,8 +968,8 @@ int bondp_hc_register_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp
     }
 
     if (any_registered) {
-        bdp_tjetty->hc_registered = true;
-        bdp_tjetty->hc_node_idx = node_idx;
+        bdp_tjetty->mask |= BONDP_TJETTY_FLAG_HC_REGISTERED;
+        bdp_tjetty->hc_node_idx = (uint16_t)node_idx;
         ub_list_push_back(&node->tjetty_list, &bdp_tjetty->hc_entry);
     }
     pthread_rwlock_unlock(&node->lock);
@@ -1060,7 +1060,7 @@ static void hc_unregister_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_
 void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *bdp_tjetty)
 {
     if (bdp_ctx == NULL || bdp_ctx->hc_ctx == NULL ||
-        bdp_tjetty == NULL || !bdp_tjetty->hc_registered) {
+        bdp_tjetty == NULL || (bdp_tjetty->mask & BONDP_TJETTY_FLAG_HC_REGISTERED) == 0) {
         return;
     }
 
@@ -1069,7 +1069,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     if (node_idx >= hc_ctx->node_num) {
         URMA_LOG_WARN("Invalid health check node idx, skip tjetty unregister, node_idx=%u, node_num=%u.\n",
                       node_idx, hc_ctx->node_num);
-        bdp_tjetty->hc_registered = false;
+        bdp_tjetty->mask &= ~BONDP_TJETTY_FLAG_HC_REGISTERED;
         bdp_tjetty->hc_node_idx = 0;
         return;
     }
@@ -1078,7 +1078,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
     pthread_rwlock_wrlock(&node->lock);
     ub_list_remove(&bdp_tjetty->hc_entry);
     hc_unregister_tjetty_path(node, bdp_tjetty, bdp_ctx);
-    bdp_tjetty->hc_registered = false;
+    bdp_tjetty->mask &= ~BONDP_TJETTY_FLAG_HC_REGISTERED;
     bdp_tjetty->hc_node_idx = 0;
     pthread_rwlock_unlock(&node->lock);
     URMA_LOG_DEBUG("Health check tjetty unregistered, node_idx=%u.\n", node->node_idx);
@@ -1086,7 +1086,7 @@ void bondp_hc_unregister_tjetty(bondp_context_t *bdp_ctx, bondp_target_jetty_t *
 
 void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty)
 {
-    if (bdp_tjetty == NULL || !bdp_tjetty->hc_registered) {
+    if (bdp_tjetty == NULL || (bdp_tjetty->mask & BONDP_TJETTY_FLAG_HC_REGISTERED) == 0) {
         return;
     }
 
