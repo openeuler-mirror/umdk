@@ -87,6 +87,7 @@ extern "C" {
 #define QBUF_POOL_BATCH_CNT (64)        // max batch count when fetch from global or return to global
 #define QBUF_POOL_TARGET_FETCH_BYTES (4ULL * 1024 * 1024)  // adaptive batch: ~4MB per fetch (batch = this / block_size)
 #define QBUF_POOL_BATCH_CNT_MIN (4)   // min batch count, prevents degenerate single-block fetches for large blocks
+#define QBUF_POOL_BATCH_CNT_DIVISOR (24) // divisor for adaptive batch count: batch = per_sc_block_counts[sc] / this
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
 #define QBUF_POOL_EXPAND_MAX_RATIO (2)
