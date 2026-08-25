@@ -94,19 +94,48 @@ static int tiny_qbuf_base_fetch(uint32_t needed, local_block_pool_t *local_pool,
         return -UMQ_ERR_EINVAL;
     }
 
-    uint32_t fetch_count = 0;
     uint32_t batch_count = qbuf_tls_round_batch(needed, QBUF_POOL_BATCH_CNT);
+    global_block_pool_t *global_pool = &g_tiny_qbuf_pool.block_pool[0];
 
-    while (fetch_count < batch_count) {
-        int32_t ret =
-            fetch_from_global(&g_tiny_qbuf_pool.block_pool[0], local_pool, true, 0, batch_count - fetch_count);
-        if (ret <= 0) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tiny qbuf pool not enough, suggestion: increase tiny qbuf total_size\n");
-            return ret;
-        }
-        fetch_count += (uint32_t)ret;
+    /*
+     * Tiny pool is a fixed-size pool with no expansion slots, no escape path,
+     * and no async-expand. Fetch only from its own global pool.
+     *
+     * Do NOT call the shared fetch_from_global(): it falls through to
+     * fetch_from_expansion_pools / expand_global_pool / umq_disable_scale_cap,
+     * all of which hardcode access to the NORMAL pool's g_qbuf_pool state.
+     * When tiny pool's global pool is exhausted, those paths would steal
+     * expansion-slot buffers (mempool_id 257+) from the normal pool, causing
+     * cross-pool corruption (blk_size_to_sc unmatched on free).
+     *
+     * Correct behavior on exhaustion: return -UMQ_ERR_ENOMEM so the C++ layer
+     * (ubiobuf.cpp) falls back to the normal pool via share_tls_ub_block().
+     */
+    umq_buf_t *local_head_before = QBUF_LIST_FIRST(&local_pool->head_with_data[0]);
+    uint64_t local_cnt_before = local_pool->buf_cnt_with_data[0];
+
+    (void)pthread_spin_lock(&global_pool->global_mutex);
+    uint32_t want = batch_count;
+    if (want > global_pool->buf_cnt_with_data) {
+        want = (uint32_t)global_pool->buf_cnt_with_data;
     }
-    g_thread_tiny_cache.stats.tls_fetch_buf_cnt_with_data += fetch_count;
+    uint32_t got = 0;
+    if (want > 0) {
+        got = allocate_batch(&global_pool->head_with_data, want, &local_pool->head_with_data[0]);
+        global_pool->buf_cnt_with_data -= got;
+        local_pool->buf_cnt_with_data[0] += got;
+    }
+    (void)pthread_spin_unlock(&global_pool->global_mutex);
+
+    if (got < needed) {
+        UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ,
+            "tiny qbuf pool not enough (got=%u, needed=%u), suggestion: increase tiny qbuf total_size\n",
+            got, needed);
+        thread_local_pool_rollback(local_head_before, local_cnt_before, local_pool, global_pool, true, 0);
+        return -UMQ_ERR_ENOMEM;
+    }
+
+    g_thread_tiny_cache.stats.tls_fetch_buf_cnt_with_data += got;
     return UMQ_SUCCESS;
 }
 
