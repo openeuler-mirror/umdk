@@ -2563,7 +2563,18 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
         id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     }
+
+    /* Lock-protected bind_ctx access: umq_ub_unbind_impl sets bind_ctx=NULL
+     * under the same lock before freeing, so we either see a valid bind_ctx
+     * or NULL — never a freed pointer. */
+    remote_imported_tseg_info_t *remote_info = queue->dev_ctx->remote_imported_info;
+    if (remote_info == NULL) {
+        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "remote_imported_info is NULL, skip import\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    (void)util_mutex_lock(remote_info->remote_eid_table_lock);
     if (queue->bind_ctx == NULL) {
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
         UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, the queue has been unbind\n",
             EID_ARGS(*eid), id);
         return -UMQ_ERR_EINVAL;
@@ -2584,18 +2595,21 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         if ((uint8_t *)entry + UB_IMPORT_MEMPOOL_INFO_HDR_SIZE > rx_end) {
             UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool info %u truncated header\n",
                 EID_ARGS(*eid), id, i);
+            (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
             return -UMQ_ERR_EINVAL;
         }
         if (entry->seg_size < sizeof(urma_seg_t) ||
             entry->seg_size > (uint32_t)(rx_end - (uint8_t *)&entry->seg)) {
             UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool info %u bad seg_size %u\n",
                 EID_ARGS(*eid), id, i, entry->seg_size);
+            (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
             return -UMQ_ERR_EINVAL;
         }
 
         if (entry->mempool_id >= UMQ_MAX_TSEG_NUM) {
             UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id %u invalid\n", EID_ARGS(*eid),
                 id, entry->mempool_id);
+            (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
             return -UMQ_ERR_EINVAL;
         }
 
@@ -2611,6 +2625,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         if (new_node == NULL) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc tseg node failed\n",
                 EID_ARGS(*eid), id);
+            (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
             return UMQ_FAIL;
         }
 
@@ -2620,6 +2635,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         if (imported_tseg == NULL) {
             free(new_node);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, import memory failed\n", EID_ARGS(*eid), id);
+            (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
             return UMQ_FAIL;
         }
 
@@ -2633,6 +2649,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
         umq_ub_return_import_result(queue, entry->mempool_id, send_ack);
         entry = (ub_import_mempool_info_t *)((uint8_t *)entry + UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + entry->seg_size);
     }
+    (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
     return UMQ_SUCCESS;
 }
 

@@ -2266,6 +2266,17 @@ int umq_ub_unbind_impl(uint64_t umqh)
     }
 
     urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
+    /* Set bind_ctx to NULL under lock before freeing, so concurrent
+     * umq_ub_data_plan_import_mem sees NULL and bails out instead of
+     * accessing freed tseg_table. */
+    remote_imported_tseg_info_t *remote_info = queue->dev_ctx->remote_imported_info;
+    if (remote_info != NULL) {
+        (void)util_mutex_lock(remote_info->remote_eid_table_lock);
+        queue->bind_ctx = NULL;
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
+    } else {
+        queue->bind_ctx = NULL;
+    }
     (void)umq_ub_remote_tseg_info_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind jetty\n", queue->umq_id,
                   EID_ARGS(tjetty->id.eid), tjetty->id.id);
@@ -2285,10 +2296,8 @@ int umq_ub_unbind_impl(uint64_t umqh)
         umq_modify_ubq_to_err(queue, UMQ_IO_ALL, UB_QUEUE_JETTY_IO);
     }
 
-    free(queue->bind_ctx);
-    queue->bind_ctx = NULL;
-    /* The `flush tx` and `flush rx` directives should be placed after `bind_ctx` is set to null,
-     * preventing requests from being sent under flow control. */
+    free(bind_ctx);
+    /* queue->bind_ctx was already set to NULL above under remote_eid_table_lock. */
     if ((queue->dev_ctx->feature & UMQ_FEATURE_API_PRO) == 0) {
         umq_flush_tx(queue, UMQ_FLUSH_MAX_RETRY_TIMES);
         if ((queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0) {
@@ -3071,6 +3080,21 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
         return -UMQ_ERR_EINVAL;
     }
 
+    remote_imported_tseg_info_t *remote_info = queue->dev_ctx->remote_imported_info;
+    if (remote_info == NULL) {
+        return -UMQ_ERR_EINVAL;
+    }
+
+    /* Lock-protected bind_ctx access: umq_ub_unbind_impl sets bind_ctx=NULL
+     * under the same lock before freeing, so we either see a valid bind_ctx
+     * or NULL — never a freed pointer. */
+    (void)util_mutex_lock(remote_info->remote_eid_table_lock);
+    if (queue->bind_ctx == NULL) {
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info: queue unbind in progress\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     // If a prior import exists for this mempool, the caller's version-based
     // decision (umq_ub_remote_mempool_state_check_impl == UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT) guarantees a
     // version mismatch: drop and unimport it before re-importing, so the
@@ -3078,6 +3102,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     if (umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id) != NULL) {
         umq_ub_tseg_remove(queue->bind_ctx->tseg_table, mempool_id);
     }
+    (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
 
     // Reuse the receive-side import path: build a temporary rx-style buffer that
     // carries one ub_import_mempool_info_t, then import it into bind_ctx->tseg_table.
@@ -3107,12 +3132,18 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     // lookup + write under one wrlock (using the lock-free lookup helper) so a
     // concurrent umq_ub_tseg_remove cannot free the node between lookup and the
     // version write (write-after-free).
+    (void)util_mutex_lock(remote_info->remote_eid_table_lock);
+    if (queue->bind_ctx == NULL) {
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
+        return UMQ_SUCCESS; /* import succeeded but queue was unbound after */
+    }
     (void)util_rwlock_wrlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
     imported_tseg_node_t *node = umq_ub_tseg_node_lookup_locked(queue->bind_ctx->tseg_table, mempool_id);
     if (node != NULL) {
         node->version = version;
     }
     (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
+    (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
     return UMQ_SUCCESS;
 }
 
@@ -3136,6 +3167,21 @@ int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *memp
         return UMQ_REMOTE_MEMPOOL_STATE_ERR;
     }
 
+    remote_imported_tseg_info_t *remote_info = queue->dev_ctx->remote_imported_info;
+    if (remote_info == NULL) {
+        return UMQ_REMOTE_MEMPOOL_STATE_ERR;
+    }
+
+    /* Lock-protected bind_ctx access: umq_ub_unbind_impl sets bind_ctx=NULL
+     * under the same lock before freeing, so we either see a valid bind_ctx
+     * or NULL — never a freed pointer. */
+    (void)util_mutex_lock(remote_info->remote_eid_table_lock);
+    if (queue->bind_ctx == NULL) {
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub check remote mempool state: queue unbind in progress\n");
+        return UMQ_REMOTE_MEMPOOL_STATE_ERR;
+    }
+
     /* Lookup + version read under one rdlock (lock-free helper) so a concurrent
      * umq_ub_tseg_remove cannot free the node between the lookup and the version
      * read (read-after-free). umq_ub_tseg_node_lookup releases its rdlock before
@@ -3144,6 +3190,7 @@ int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *memp
     imported_tseg_node_t *node = umq_ub_tseg_node_lookup_locked(queue->bind_ctx->tseg_table, mempool_id);
     if (node == NULL) {
         (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
+        (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
         return UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT; /* not imported: need import */
     }
     /* Version decision (design §3.5):
@@ -3151,8 +3198,9 @@ int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *memp
      *   larger (grew)    -> 2 unimport & re-import (mempool re-registered)
      *   smaller (rolled) -> 3 also unimport & re-import. */
     int ret = node->version == version ? UMQ_REMOTE_MEMPOOL_STATE_REUSE : UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT;
- 
+
     (void)util_rwlock_unlock(queue->bind_ctx->tseg_table->tseg_hmap_lock);
+    (void)util_mutex_unlock(remote_info->remote_eid_table_lock);
     return ret;
 }
 
