@@ -845,10 +845,12 @@ static int slot_with_data_init(uint32_t sc, qbuf_expansion_pool_slot_t *slot)
         }
     }
 
-    ret = g_qbuf_pool.seg_ops.register_seg_callback(NULL, mempool_id, slot->buffer, slot->total_buf_size);
-    if (ret != UMQ_SUCCESS) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to register expansion pool seg, ret: %d\n", ret);
-        goto FREE_BUFFER;
+    if (g_qbuf_pool.seg_ops.register_seg_callback != NULL) {
+        ret = g_qbuf_pool.seg_ops.register_seg_callback(NULL, mempool_id, slot->buffer, slot->total_buf_size);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to register expansion pool seg, ret: %d\n", ret);
+            goto FREE_BUFFER;
+        }
     }
 
     return UMQ_SUCCESS;
