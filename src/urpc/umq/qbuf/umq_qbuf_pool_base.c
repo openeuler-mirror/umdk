@@ -300,6 +300,11 @@ int umq_qbuf_pool_base_info_get(qbuf_pool_base_t *base, umq_qbuf_pool_stats_t *q
     info->config.tls_qbuf_pool_depth = base->tls_pools.tls_qbuf_pool_depth;
     info->config.tls_expand_qbuf_pool_depth = base->tls_pools.tls_expand_qbuf_pool_depth;
     info->config.batch_count = base->tls_pools.batch_count;
+    /* Tiny pool specific config: block_size/count and TLS depth are the only
+     * meaningful config items for Tiny (no expansion/escape/TLS-expand). */
+    info->config.tiny_pool_block_size = block_size;
+    info->config.tiny_pool_block_count = base->total_block_num;
+    info->config.tls_tiny_pool_depth = base->tls_pools.tls_qbuf_pool_depth;
     info->sc_count = 1;
     {
         umq_qbuf_sc_info_t *sci = &info->sc_info[0];

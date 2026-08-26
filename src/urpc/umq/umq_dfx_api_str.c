@@ -216,6 +216,17 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "                                  Pool Config [%s]\n",
                              umq_qbuf_pool_type_name(info->type));
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
+        /* Tiny pool: single-level, no expansion/escape/TLS-expand. Show only
+         * the 3 meaningful config items instead of misleading zeros. */
+        if (info->type == UMQ_QBUF_POOL_TYPE_TINY) {
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "tiny_pool_block_size",
+                                 cfg->tiny_pool_block_size);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "tiny_pool_block_count",
+                                 cfg->tiny_pool_block_count);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", "tls_tiny_pool_depth",
+                                 (unsigned long)cfg->tls_tiny_pool_depth);
+            continue;
+        }
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", "size_class_count",
                              cfg->size_class_count);
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
