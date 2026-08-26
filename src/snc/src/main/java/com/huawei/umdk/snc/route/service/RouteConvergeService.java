@@ -204,7 +204,7 @@ public class RouteConvergeService {
             if (routingEntry == null) {
                 continue;
             }
-            Map<String, OutPortInfo> outPorts = routingEntry.getMutableOutPortInfos();
+            Map<String, OutPortInfo> outPorts = routingEntry.getOutPortInfos();
             if (outPorts == null) {
                 continue;
             }
@@ -238,7 +238,7 @@ public class RouteConvergeService {
             if (routingEntry == null) {
                 continue;
             }
-            Map<String, OutPortInfo> outPorts = routingEntry.getMutableOutPortInfos();
+            Map<String, OutPortInfo> outPorts = routingEntry.getOutPortInfos();
             if (outPorts == null) {
                 continue;
             }

@@ -8,9 +8,7 @@
  */
 package com.huawei.umdk.snc.entity;
 
-import java.util.Collections;
 import java.util.Map;
-import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,7 +21,6 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 public class NpuDevice extends DeviceEntity {
-    @Getter(AccessLevel.NONE)
     private Map<Integer, NpuForwardingChip> forwardingChips;
     private String osName;
     private String osIp;
@@ -44,25 +41,11 @@ public class NpuDevice extends DeviceEntity {
         this.boardIndex = boardIndex;
     }
 
-    @Override
-    public DeviceType getDeviceType() {
-        return DeviceType.NPU;
-    }
-
-    @Override
-    public Map<Integer, ? extends ForwardingChip> getForwardingChips() {
-        return forwardingChips;
-    }
-
-    public Map<Integer, NpuForwardingChip> getNpuForwardingChips() {
-        return forwardingChips == null ? null : Collections.unmodifiableMap(forwardingChips);
-    }
-
     public NpuPortEntity findNpuPort(String portName) {
         if (forwardingChips != null) {
             for (NpuForwardingChip chip : forwardingChips.values()) {
-                if (chip.getNpuPorts() != null) {
-                    NpuPortEntity port = chip.getNpuPorts().get(portName);
+                if (chip.getPorts() != null) {
+                    NpuPortEntity port = chip.getPorts().get(portName);
                     if (port != null) {
                         return port;
                     }

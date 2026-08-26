@@ -8,7 +8,6 @@
  */
 package com.huawei.umdk.snc.entity;
 
-import java.util.Collections;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -28,8 +27,4 @@ public class LogicPortEntity {
     private String cna;
     private String eid;
     private List<String> ports;
-
-    public List<String> getPorts() {
-        return ports == null ? null : Collections.unmodifiableList(ports);
-    }
 }

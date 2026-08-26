@@ -28,6 +28,7 @@ import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class RouteInstantiationService {
@@ -213,7 +214,7 @@ public class RouteInstantiationService {
     public void makeNpuRoutes(NpuDevice npuDevice, Map<String, RouteTable> routes,
                                Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
         int chassis = extractRackNumber(npuDevice.getRack());
-        Map<Integer, NpuForwardingChip> chips = npuDevice.getNpuForwardingChips();
+        Map<Integer, NpuForwardingChip> chips = npuDevice.getForwardingChips();
         if (chips == null || chips.isEmpty()) {
             throw new IllegalArgumentException(String.format("npu device %s has no forwarding chips",
                 npuDevice.getDeviceName()));
@@ -243,7 +244,7 @@ public class RouteInstantiationService {
 
     private void makeL1SwRoutes(SwDevice swDevice, Map<String, RouteTable> routes,
                                 Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
-        Map<Integer, SwForwardingChip> chips = swDevice.getSwForwardingChips();
+        Map<Integer, SwForwardingChip> chips = swDevice.getForwardingChips();
         if (chips == null || chips.isEmpty()) {
             throw new IllegalArgumentException(String.format("sw device %s has no forwarding chips",
                 swDevice.getDeviceName()));
@@ -264,7 +265,7 @@ public class RouteInstantiationService {
 
     private void makeL2SwRoutes(SwDevice swDevice, Map<String, RouteTable> routes,
                                 Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
-        Map<Integer, SwForwardingChip> chips = swDevice.getSwForwardingChips();
+        Map<Integer, SwForwardingChip> chips = swDevice.getForwardingChips();
         if (chips == null || chips.isEmpty()) {
             throw new IllegalArgumentException(String.format("l2 sw device %s has no forwarding chips",
                 swDevice.getDeviceName()));
@@ -292,7 +293,7 @@ public class RouteInstantiationService {
             String dstAddress = longToIp(prefix.getAddr());
             RoutePrefix routePrefix = new RoutePrefix(dstAddress, prefix.getMaskLen());
 
-            Map<String, OutPortInfo> outPortInfoMap = new HashMap<>();
+            Map<String, OutPortInfo> outPortInfoMap = new LinkedHashMap<>();
             for (NextHopPort nhp : routeEntry.getNhpSet()) {
                 OutPortInfo outPortInfo = new OutPortInfo();
                 outPortInfo.setPortName(nhp.getOutPortName());

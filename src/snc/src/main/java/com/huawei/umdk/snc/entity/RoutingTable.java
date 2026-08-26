@@ -8,7 +8,6 @@
  */
 package com.huawei.umdk.snc.entity;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -29,12 +28,4 @@ public class RoutingTable {
     private Integer chipIndex;
     private Map<RoutePrefix, RoutingEntry> routes;
     private List<Integer> maskLengths;
-
-    public Map<RoutePrefix, RoutingEntry> getRoutes() {
-        return routes == null ? null : Collections.unmodifiableMap(routes);
-    }
-
-    public List<Integer> getMaskLengths() {
-        return maskLengths == null ? null : Collections.unmodifiableList(maskLengths);
-    }
 }
