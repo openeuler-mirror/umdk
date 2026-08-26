@@ -141,6 +141,11 @@ typedef struct umq_qbuf_pool_config {
     uint32_t rx_pool_block_size;        // RX recv pool block size (bytes)
     uint32_t rx_pool_depth;             // RX recv pool total block count (capacity)
     uint64_t rx_pool_free_depth;        // RX recv pool free block count (current depth)
+    /* Tiny pool specific config (only meaningful for UMQ_QBUF_POOL_TYPE_TINY).
+     * Normal/Huge pools leave these zero-filled. */
+    uint32_t tiny_pool_block_size;      // tiny pool block size (bytes, default 1024)
+    uint32_t tiny_pool_block_count;     // tiny pool total block count (default 8192)
+    uint64_t tls_tiny_pool_depth;       // TLS depth cap for tiny pool (default 64)
 } umq_qbuf_pool_config_t;
 
 typedef enum umq_qbuf_pool_type {
