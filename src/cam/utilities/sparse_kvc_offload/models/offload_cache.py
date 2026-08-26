@@ -46,6 +46,11 @@ class OffloadCache(nn.Module):
         self.d2h_stream = torch.npu.Stream(device="npu")
         self.d2h_event = torch.npu.Event(blocking=True, enable_timing=False)
 
+        # offload decode 双流流水: gather(H2D) 走专用流, 与主流 SFA 计算重叠 (仅 eager 生效)
+        self.enable_dual_stream_offload = \
+            self.runner_settings.get("model_config").get("enable_dual_stream_offload", False)
+        self.gather_stream = torch.npu.Stream(device="npu") if self.enable_dual_stream_offload else None
+
         self.pa_max_length = self.runner_settings.get("model_config").get("pa_max_length", 2048)
         # num of blocks of full kv in each batch
         self.cache_len = self.pa_max_length // self.block_size

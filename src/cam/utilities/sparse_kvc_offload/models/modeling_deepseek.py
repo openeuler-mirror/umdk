@@ -23,7 +23,7 @@
 
 """ PyTorch DeepSeek model."""
 import os
-from typing import List, Optional, Tuple, Union, Dict, Iterable, Set
+from typing import List, NamedTuple, Optional, Tuple, Union, Dict, Iterable, Set
 
 import torch
 import torch.nn.functional as F
@@ -671,6 +671,20 @@ class DeepseekV3MoE(nn.Module):
 
 
 # Copied from transformers.models.llama.modeling_llama.LlamaAttention with Llama->DeepseekV3
+class _GatherSfaPipelineInputs(NamedTuple):
+    q_nope: torch.Tensor
+    q_pe: torch.Tensor
+    topk_indices: torch.Tensor
+    full_kv_cache: torch.Tensor
+    full_k_rope: torch.Tensor
+    block_table: torch.Tensor
+    actual_seq_lengths_kv: torch.Tensor
+    actual_seq_qlen: torch.Tensor
+    offload_cache: "OffloadCache"
+    bsz: int
+    q_len: int
+
+
 class DeepseekIndexerAttention(nn.Module):
     def __init__(self, config: DeepseekV3Config, runner_settings: Dict, layer_idx: Optional[int] = None,
                  prefix: Optional[str] = "", **kwargs):
@@ -838,6 +852,9 @@ class DeepseekIndexerAttention(nn.Module):
             self.fake_kr_cache = torch.empty((1, 2, 1, 0), dtype=torch.bfloat16, device="npu")
 
         self.enable_offload = self.runner_settings.get("model_config").get("enable_offload", False)
+        # offload decode 时把 gather(H2D) 与 SFA 计算按 batch 切成双流流水重叠 (仅 eager 生效)
+        self.enable_dual_stream_offload = \
+            self.runner_settings.get("model_config").get("enable_dual_stream_offload", False)
         self.index_topk = self.config.index_topk
         self.last_dim = self.kv_lora_rank + self.qk_rope_head_dim * 2 + 4 * 4 \
             if self.kv_cache_quant_mode == "int8" else self.kv_lora_rank
@@ -1328,6 +1345,16 @@ class DeepseekIndexerAttention(nn.Module):
         q_pe = q_pe.contiguous().view(bsz * q_len, num_heads, -1) # B,S,N,D -> B*S,N,D
         block_table = self.prefill_block_table if is_prefill else self.block_table
 
+        if self._use_dual_stream_offload(is_prefill):
+            # 双流流水: gather(H2D) 走专用流, 与主流 SFA 计算按 batch 切块重叠
+            full_kv_cache = k_nope.squeeze(2)
+            full_k_rope = k_pe.squeeze(2) if not self.kv_cache_quant_mode == "int8" else offload_cache.empty_rope
+            slc_fa_fusion = self._gather_sfa_pipelined(_GatherSfaPipelineInputs(
+                q_nope, q_pe, topk_indices, full_kv_cache, full_k_rope,
+                block_table, actual_seq_lengths_kv, actual_seq_qlen,
+                offload_cache, bsz, q_len))
+            return slc_fa_fusion.transpose(0, 1)
+
         if self.enable_offload and not is_prefill:
             selection_k_rope = offload_cache.selected_key_values[self.layer_idx][1]
             selection_kv_cache = offload_cache.selected_key_values[self.layer_idx][0]
@@ -1411,6 +1438,137 @@ class DeepseekIndexerAttention(nn.Module):
 
         slc_fa_fusion = slc_fa_fusion.transpose(0, 1)
         return slc_fa_fusion
+
+    def _use_dual_stream_offload(self, is_prefill: bool) -> bool:
+        return (
+            self.enable_offload
+            and not is_prefill
+            and self.enable_dual_stream_offload
+            and self.exe_mode == "eager"
+        )
+
+    def _gather_sfa_pipelined(self, inputs: _GatherSfaPipelineInputs):
+        """offload decode 双流流水: 把 gather + SFA 按 batch 切成 2 块, gather(H2D) 走专用流,
+        与主流上的 SFA 计算重叠, 从而把 SFA 藏进 gather 的搬运时间里。
+
+        gather 全部下发到 offload_cache.gather_stream (流内串行), SFA 在主流上算;
+        第 i 块 SFA 用 event 等它对应块的 gather 完成 -> 第 i+1 块 gather 可与第 i 块 SFA 并行。
+        正确性依据: 不同 batch 用的 selection block 区间 / status 行互不重叠, 可安全并发。
+        返回值形状与单块路径一致 (transpose 之前), 便于直接替换。
+
+        仅 eager 模式使用: 依赖 torch.npu.Stream/Event/record_stream 等运行时原语, 无法被图捕获。
+        """
+        n_chunks = 2
+
+        q_nope = inputs.q_nope
+        q_pe = inputs.q_pe
+        topk_indices = inputs.topk_indices
+        full_kv_cache = inputs.full_kv_cache
+        full_k_rope = inputs.full_k_rope
+        block_table = inputs.block_table
+        actual_seq_lengths_kv = inputs.actual_seq_lengths_kv
+        actual_seq_qlen = inputs.actual_seq_qlen
+        offload_cache = inputs.offload_cache
+        bsz = inputs.bsz
+        q_len = inputs.q_len
+
+        selection_k_rope = offload_cache.selected_key_values[self.layer_idx][1]
+        selection_kv_cache = offload_cache.selected_key_values[self.layer_idx][0]
+        selection_kv_block_table = offload_cache.selection_kv_block_table[self.layer_idx]
+        selection_kv_block_status = offload_cache.selection_kv_block_status[self.layer_idx]
+        default_topk_indices = offload_cache.default_topk_indices
+        topk_indices = topk_indices.view(bsz, -1, 1, self.index_topk)
+
+        is_int8 = self.kv_cache_quant_mode == "int8"
+        key_value = selection_kv_cache.unsqueeze(2)
+        main_stream = torch.npu.current_stream()
+        gather_stream = offload_cache.gather_stream
+
+        # 把 bsz 尽量均匀地切成 n_chunks 个连续段 [(b0, b1), ...]
+        base, rem = divmod(bsz, n_chunks)
+        bounds = []
+        start = 0
+        for i in range(n_chunks):
+            size = base + (1 if i < rem else 0)
+            if size == 0:
+                continue
+            bounds.append((start, start + size))
+            start += size
+
+        # gather 读的 Host full_kv 里含 prolog 刚在主流写入的新 token KV,
+        # 让 gather 流先等主流当前已下发的工作完成, 避免读到未写完的数据。
+        prolog_event = torch.npu.Event()
+        prolog_event.record()
+
+        # 阶段1: 在 gather 流上依次发起各块 gather (块内串行, 但与后面主流 SFA 重叠)
+        gather_events = []
+        actual_seqs = []
+        with torch.npu.stream(gather_stream):
+            prolog_event.wait()
+            for (b0, b1) in bounds:
+                actual_seq_c = torch.ops.umdk_cam_op_lib.gather_selection_kv_cache(
+                    selection_k_rope, selection_kv_cache,
+                    selection_kv_block_table[b0 * q_len:b1 * q_len],
+                    selection_kv_block_status[b0:b1],
+                    topk_indices[b0:b1], full_k_rope, full_kv_cache,
+                    block_table[b0:b1], actual_seq_lengths_kv[b0:b1],
+                    actual_seq_qlen[b0:b1], selection_topk_block_size=1)
+                # 该张量在 gather 流分配, 会被主流读取, 标记生命周期防止提前释放
+                actual_seq_c.record_stream(main_stream)
+                e = torch.npu.Event()
+                e.record()
+                gather_events.append(e)
+                actual_seqs.append(actual_seq_c)
+
+        # 阶段2: 在主流上依次算 SFA, 每块等它对应的 gather 完成
+        outs = []
+        for i, (b0, b1) in enumerate(bounds):
+            gather_events[i].wait()  # 主流(当前流)等第 i 块 gather 完成
+            t0, t1 = b0 * q_len, b1 * q_len
+            q_nope_c = q_nope[t0:t1]
+            q_pe_c = q_pe[t0:t1]
+            actual_seq_c = actual_seqs[i]
+            sparse_c = torch.where(
+                default_topk_indices[b0:b1] < actual_seq_c.unsqueeze(1),
+                default_topk_indices[b0:b1], -1)
+
+            slc_fa_input_kwargs = {
+                "query": q_nope_c,
+                "sparse_indices": sparse_c.view(-1, 1, self.index_topk),
+                "scale_value": self.softmax_scale,
+                "actual_seq_lengths_query": torch.arange(1, (t1 - t0) + 1, dtype=torch.int32, device="npu"),
+                "actual_seq_lengths_kv": actual_seq_c,
+                "block_table": selection_kv_block_table[b0 * q_len:b1 * q_len],
+                "sparse_block_size": 1,
+                "layout_query": 'TND',
+                "layout_kv": 'PA_BSND',
+                "sparse_mode": 3,
+                "attention_mode": 2,
+                "key": key_value,
+                "value": key_value,
+            }
+            if is_int8:
+                q_c = torch.cat([q_nope_c, q_pe_c], dim=-1).contiguous()
+                slc_fa_input_kwargs.update({
+                    "query": q_c,
+                    "key_quant_mode": 2,
+                    "value_quant_mode": 2,
+                    "quant_scale_repo_mode": 1,
+                    "tile_size": 128,
+                    "rope_head_dim": 64,
+                    "key_dequant_scale": None,
+                    "value_dequant_scale": None,
+                })
+                out_c = torch_npu.npu_kv_quant_sparse_flash_attention(**slc_fa_input_kwargs)
+            else:
+                slc_fa_input_kwargs.update({
+                    "query_rope": q_pe_c,
+                    "key_rope": selection_k_rope.unsqueeze(2),
+                })
+                out_c, _, _ = torch_npu.npu_sparse_flash_attention(**slc_fa_input_kwargs)
+            outs.append(out_c)
+
+        return torch.cat(outs, dim=0)
 
 
 class DeepseekV3DecoderLayer(nn.Module):

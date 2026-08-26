@@ -15,6 +15,7 @@ model_config:
   prefill_mini_batch_size: 1
   enable_online_split_weight: True # [False, True]
   enable_offload: True
+  enable_dual_stream_offload: False # [False, True] offload decode 时 gather(H2D) 与 SFA 计算双流重叠, 仅 eager 生效
 
 data_config:
   dataset: InfiniteBench
