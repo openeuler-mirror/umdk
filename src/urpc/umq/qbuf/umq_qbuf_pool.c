@@ -3204,9 +3204,6 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         __atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED);
     qbuf_pool_info->config.tls_expand_qbuf_pool_depth = g_qbuf_pool.tls_expand_qbuf_pool_depth;
     qbuf_pool_info->config.tls_qbuf_pool_depth = g_qbuf_pool.tls_qbuf_pool_depth;
-    /* batch_count: legacy uniform batch granularity reported for compatibility.
-     * The actual per-sc batch count is now adaptive via get_batch_count(sc). */
-    qbuf_pool_info->config.batch_count = umq_qbuf_pool_batch_cnt();
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         qbuf_pool_info->config.per_sc_batch_count[sc] = get_batch_count(sc);
     }
