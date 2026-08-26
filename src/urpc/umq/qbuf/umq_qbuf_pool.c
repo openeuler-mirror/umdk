@@ -3206,6 +3206,8 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
     qbuf_pool_info->config.tls_qbuf_pool_depth = g_qbuf_pool.tls_qbuf_pool_depth;
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         qbuf_pool_info->config.per_sc_batch_count[sc] = get_batch_count(sc);
+        qbuf_pool_info->config.per_sc_block_counts[sc] = g_qbuf_pool.per_sc_block_counts[sc];
+        qbuf_pool_info->config.per_sc_tls_qbuf_pool_depth[sc] = g_qbuf_pool.per_sc_tls_qbuf_pool_depth[sc];
     }
     qbuf_pool_info->sc_count = g_qbuf_pool.size_class_count;
     /* Global pool-granularity alloc/free counters (atomic, cross-thread).

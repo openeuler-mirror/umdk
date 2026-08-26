@@ -137,6 +137,8 @@ typedef struct umq_qbuf_pool_config {
     uint64_t tls_qbuf_pool_depth;         // global TLS depth cap (per-SC for normal pool; default ~1.5K)
     uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
     uint32_t per_sc_batch_count[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc batch count (varies by blk_size)
+    uint64_t per_sc_block_counts[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc initial block count (cfg.per_sc_block_counts[sc])
+    uint64_t per_sc_tls_qbuf_pool_depth[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc TLS depth cap (cfg.per_sc_tls_qbuf_pool_depth[sc])
     uint64_t rx_pool_total_size;        // RX recv pool total memory (bytes)
     uint32_t rx_pool_block_size;        // RX recv pool block size (bytes)
     uint32_t rx_pool_depth;             // RX recv pool total block count (capacity)
