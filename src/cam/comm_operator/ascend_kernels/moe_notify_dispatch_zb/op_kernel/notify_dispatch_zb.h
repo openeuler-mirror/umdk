@@ -250,32 +250,35 @@ private:
 
     __aicore__ inline void BuildMaxBs()
     {
-        // Requires recvData
-        pipe_.InitBuffer(localRecvDataBuf_,
-            Ceil(numExperts * sizeof(int32_t), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
+        const uint32_t numExpertsAlign =
+            Ceil(static_cast<uint32_t>(numExperts) * static_cast<uint32_t>(sizeof(int32_t)),
+                static_cast<uint32_t>(Moe::UB_ALIGN_SIZE)) *
+            static_cast<uint32_t>(Moe::UB_ALIGN_SIZE) / static_cast<uint32_t>(sizeof(int32_t));
+        const uint32_t expertsBytesAlign = numExpertsAlign * static_cast<uint32_t>(sizeof(int32_t));
 
-        pipe_.InitBuffer(tmpBuf_, Ceil(numExperts * sizeof(int32_t), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf2_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf3_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf4_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
+        pipe_.InitBuffer(localRecvDataBuf_, expertsBytesAlign);
+        pipe_.InitBuffer(tmpBuf2_, expertsBytesAlign);
+        pipe_.InitBuffer(tmpBuf3_, expertsBytesAlign);
+        pipe_.InitBuffer(tmpBuf4_, expertsBytesAlign);
 
         DataCopyExtParams copyParams = {1U, static_cast<uint32_t>(numExperts * sizeof(int32_t)), 0, 0, 0};
         DataCopyPadExtParams<int32_t> copyPadExtParams{false, 0U, 0U, 0U};
 
         LocalTensor<int32_t> numTokensPerExpertLt = localRecvDataBuf_.Get<int32_t>();
-        LocalTensor<int32_t> maxBsLt = tmpBuf_.Get<int32_t>();
         LocalTensor<float> floatExpTokenCntLt = tmpBuf2_.Get<float>();
         LocalTensor<float> floatExpTokenSumCntLt = tmpBuf3_.Get<float>();
         LocalTensor<float> sharedTmpBuffer = tmpBuf4_.Get<float>();
         int32_t maxBsNum = 0;
         for (uint32_t srcRankId = 0; srcRankId < epWorldSize_; srcRankId++) {
-            DataCopy(numTokensPerExpertLt, recvDataTensor_[numExperts * srcRankId], numExperts);
-            PipeBarrier<PIPE_ALL>();
+            Duplicate(numTokensPerExpertLt, 0, numExpertsAlign);
+            PipeBarrier<PIPE_V>();
+            SyncFunc<AscendC::HardEvent::V_MTE2>();
+            DataCopyPad(numTokensPerExpertLt, recvDataGt_[srcRankId * numExperts], copyParams, copyPadExtParams);
             SyncFunc<AscendC::HardEvent::MTE2_V>();
 
-            Cast(floatExpTokenCntLt, numTokensPerExpertLt, RoundMode::CAST_NONE, numExperts);
+            Cast(floatExpTokenCntLt, numTokensPerExpertLt, RoundMode::CAST_NONE, numExpertsAlign);
             PipeBarrier<PIPE_V>();
-            ReduceSum(floatExpTokenSumCntLt, floatExpTokenCntLt, sharedTmpBuffer, numExperts);
+            ReduceSum(floatExpTokenSumCntLt, floatExpTokenCntLt, sharedTmpBuffer, numExpertsAlign);
             SyncFunc<AscendC::HardEvent::V_S>();
             int32_t curRankBsNum = static_cast<int32_t>(floatExpTokenSumCntLt(0));
             maxBsNum = curRankBsNum > maxBsNum ? curRankBsNum : maxBsNum;
@@ -324,14 +327,17 @@ private:
 
     __aicore__ inline void BuildTotalRecvTokens()
     {
-        // Need recvData; transpose and take this rank's slice
-        pipe_.InitBuffer(localRecvDataBuf_,
-            Ceil(numExperts * sizeof(int32_t), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
+        const uint32_t numExpertsAlign =
+            Ceil(static_cast<uint32_t>(numExperts) * static_cast<uint32_t>(sizeof(int32_t)),
+                static_cast<uint32_t>(Moe::UB_ALIGN_SIZE)) *
+            static_cast<uint32_t>(Moe::UB_ALIGN_SIZE) / static_cast<uint32_t>(sizeof(int32_t));
+        const uint32_t expertsBytesAlign = numExpertsAlign * static_cast<uint32_t>(sizeof(int32_t));
 
+        pipe_.InitBuffer(localRecvDataBuf_, expertsBytesAlign);
         pipe_.InitBuffer(tmpBuf_, Ceil(1 * sizeof(int32_t), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf2_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf3_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
-        pipe_.InitBuffer(tmpBuf4_, Ceil(numExperts * sizeof(float), Moe::UB_ALIGN_SIZE) * Moe::UB_ALIGN_SIZE);
+        pipe_.InitBuffer(tmpBuf2_, expertsBytesAlign);
+        pipe_.InitBuffer(tmpBuf3_, expertsBytesAlign);
+        pipe_.InitBuffer(tmpBuf4_, expertsBytesAlign);
 
         LocalTensor<int32_t> recvTokenLt = localRecvDataBuf_.Get<int32_t>();
         LocalTensor<int32_t> totalCntLt = tmpBuf_.Get<int32_t>();
@@ -340,12 +346,15 @@ private:
         LocalTensor<float> sharedTmpBuffer = tmpBuf4_.Get<float>();
         int32_t sumVal = 0;  // max received-token count among ranks
         for (uint32_t srcRankId = 0; srcRankId < epWorldSize_; srcRankId++) {
+            Duplicate(recvTokenLt, 0, numExpertsAlign);
+            PipeBarrier<PIPE_V>();
+            SyncFunc<AscendC::HardEvent::V_S>();
             ReorderRecvDataOutput(srcRankId, recvTokenLt, false);  // localExpNum * ranks
 
-            SyncFunc<AscendC::HardEvent::MTE2_V>();
-            Cast(floatExpTokenCntLt, recvTokenLt, RoundMode::CAST_NONE, numExperts);
+            SyncFunc<AscendC::HardEvent::S_V>();
+            Cast(floatExpTokenCntLt, recvTokenLt, RoundMode::CAST_NONE, numExpertsAlign);
             PipeBarrier<PIPE_V>();
-            ReduceSum(floatExpTokenSumCntLt, floatExpTokenCntLt, sharedTmpBuffer, numExperts);
+            ReduceSum(floatExpTokenSumCntLt, floatExpTokenCntLt, sharedTmpBuffer, numExpertsAlign);
             SyncFunc<AscendC::HardEvent::V_S>();
             int32_t recvCnt = static_cast<int32_t>(floatExpTokenSumCntLt.GetValue(0));
             PipeBarrier<PIPE_ALL>();
