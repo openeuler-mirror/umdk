@@ -156,7 +156,6 @@ typedef struct qbuf_pool {
 
 static qbuf_pool_t g_qbuf_pool = {0};
 
-static void umq_flush_tls_nodata_to_global(void);
 static __thread local_qbuf_pool_t g_thread_cache = {0};
 static uint8_t g_umq_qbuf_size_pow_small = UMQ_QBUF_SIZE_POW_4K;
 
@@ -210,7 +209,6 @@ typedef struct qbuf_debug_stats {
     uint64_t alloc_nodata_fetch_global;
     uint64_t alloc_nodata_fetch_expansion;
     uint64_t alloc_nodata_fetch_fail;
-    uint64_t alloc_nodata_tls_flush_retry; // retried after tls nodata flush
 
     // pool expand/shrink (sync = caller thread; async = background thread)
     uint64_t expand_with_data_sync;
@@ -221,10 +219,6 @@ typedef struct qbuf_debug_stats {
     // global pool shrink (reclaim buffers to system)
     uint64_t shrink_with_data;
     uint64_t shrink_without_data;
-
-    // TLS nodata flush (return unused nodata bufs to global)
-    uint64_t tls_flush_nodata_count; // flush call count
-    uint64_t tls_flush_nodata_bufs;  // total bufs flushed
 
     // free path
     uint64_t free_with_data;
@@ -373,8 +367,7 @@ static void qbuf_dbg_print_summary(void)
                         g_dbg_stats.alloc_with_data_fetch_expansion + g_dbg_stats.alloc_with_data_escape +
                         g_dbg_stats.alloc_with_data_fetch_fail;
     uint64_t nd_total = g_dbg_stats.alloc_nodata_tls_hit + g_dbg_stats.alloc_nodata_fetch_global +
-                        g_dbg_stats.alloc_nodata_fetch_expansion + g_dbg_stats.alloc_nodata_fetch_fail +
-                        g_dbg_stats.alloc_nodata_tls_flush_retry;
+                        g_dbg_stats.alloc_nodata_fetch_expansion + g_dbg_stats.alloc_nodata_fetch_fail;
 
     UMQ_VLOG_SUMMARY(VLOG_UMQ, "=== ALLOC HIT SUMMARY (after %llu allocs) ===\n",
                    (unsigned long long)__atomic_load_n(&g_dbg_alloc_count, __ATOMIC_RELAXED));
@@ -394,7 +387,7 @@ static void qbuf_dbg_print_summary(void)
 
     UMQ_VLOG_SUMMARY(VLOG_UMQ,
                    "without_data total=%llu: TLS_hit=%llu(%.1f%%) fetch_global=%llu(%.1f%%) "
-                   "fetch_expansion=%llu(%.1f%%) fail=%llu(%.1f%%) tls_flush_retry=%llu(%.1f%%)\n",
+                   "fetch_expansion=%llu(%.1f%%) fail=%llu(%.1f%%)\n",
                    (unsigned long long)nd_total, (unsigned long long)g_dbg_stats.alloc_nodata_tls_hit,
                    nd_total ? 100.0 * g_dbg_stats.alloc_nodata_tls_hit / nd_total : 0,
                    (unsigned long long)g_dbg_stats.alloc_nodata_fetch_global,
@@ -402,9 +395,7 @@ static void qbuf_dbg_print_summary(void)
                    (unsigned long long)g_dbg_stats.alloc_nodata_fetch_expansion,
                    nd_total ? 100.0 * g_dbg_stats.alloc_nodata_fetch_expansion / nd_total : 0,
                    (unsigned long long)g_dbg_stats.alloc_nodata_fetch_fail,
-                   nd_total ? 100.0 * g_dbg_stats.alloc_nodata_fetch_fail / nd_total : 0,
-                   (unsigned long long)g_dbg_stats.alloc_nodata_tls_flush_retry,
-                   nd_total ? 100.0 * g_dbg_stats.alloc_nodata_tls_flush_retry / nd_total : 0);
+                   nd_total ? 100.0 * g_dbg_stats.alloc_nodata_fetch_fail / nd_total : 0);
 
     for (uint32_t i = 0; i < g_qbuf_pool.size_class_count; i++) {
         UMQ_VLOG_SUMMARY(VLOG_UMQ, "  sc=%u blk_size=%u: allocs=%llu bytes=%llu\n", i, g_qbuf_pool.block_sizes[i],
@@ -422,9 +413,6 @@ static void qbuf_dbg_print_summary(void)
                    (unsigned long long)g_dbg_stats.shrink_without_data,
                    (unsigned long long)g_dbg_stats.self_shrink_with_data,
                    (unsigned long long)g_dbg_stats.self_shrink_without_data);
-    UMQ_VLOG_SUMMARY(VLOG_UMQ, "tls_flush_nodata: calls=%llu bufs=%llu\n",
-                   (unsigned long long)g_dbg_stats.tls_flush_nodata_count,
-                   (unsigned long long)g_dbg_stats.tls_flush_nodata_bufs);
     UMQ_VLOG_SUMMARY(VLOG_UMQ, "free: wd=%llu nd=%llu\n", (unsigned long long)g_dbg_stats.free_with_data,
                    (unsigned long long)g_dbg_stats.free_without_data);
     if (g_dbg_stats.alloc_count > 0) {
@@ -1326,7 +1314,6 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_cache(void)
         g_thread_cache.block_pool.capacity_without_data = 0;
         QBUF_LIST_INIT(&g_thread_cache.block_pool.head_without_data);
         g_thread_cache.block_pool.buf_cnt_without_data = 0;
-        (void)pthread_spin_init(&g_thread_cache.block_pool.list_lock, PTHREAD_PROCESS_PRIVATE);
         (void)memset(&g_thread_cache.stats, 0, sizeof(g_thread_cache.stats));
         /* Use kernel TID (gettid via syscall, compatible with all glibc versions)
          * instead of pthread_self() (pthread_t address = ~15-digit number with
@@ -2078,10 +2065,6 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
 
     uint32_t need_batch = (needed + batch_cnt - 1) / batch_cnt * batch_cnt;
 
-    if (!with_data && g_qbuf_pool.block_pool[0].buf_cnt_without_data == 0 &&
-        g_qbuf_pool.exp_pool_without_date.exp_total_block_num == 0) {
-        umq_flush_tls_nodata_to_global();
-    }
     uint32_t fetch_count = 0;
     while (fetch_count < need_batch) {
         UMQ_VLOG_DEBUG(VLOG_UMQ, "FETCH: %s sc=%u need_batch=%u fetched=%u global=%llu exp_total=%llu mpool=%u\n",
@@ -2108,21 +2091,8 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
                         g_dbg_stats.alloc_with_data_fetch_fail += (need_batch - fetch_count);
                 }
                 if (!with_data) {
-                    UMQ_VLOG_DEBUG(VLOG_UMQ, "FETCH_NODATA_FAIL -> flush+retry mpool=0\n");
-                    umq_flush_tls_nodata_to_global();
-                    ret = fetch_from_global(&g_qbuf_pool.block_pool[sc], local_pool, with_data, sc, batch_cnt);
-                    if (ret > 0) {
-                        if (qbuf_debug_on())
-                            g_dbg_stats.alloc_nodata_tls_flush_retry += ret;
-                        fetch_count += (uint32_t)ret;
-                        UMQ_VLOG_DEBUG(VLOG_UMQ, "FETCH_NODATA_RETRY_OK: ret=%d mpool=%u\n", ret,
-                               (ret > 0 && QBUF_LIST_FIRST(local_head)) ? QBUF_LIST_FIRST(local_head)->mempool_id : 0xFFFF);
-                        continue;
-                    }
                     if (qbuf_debug_on())
                         g_dbg_stats.alloc_nodata_fetch_fail += (need_batch - fetch_count);
-                    UMQ_VLOG_DEBUG(VLOG_UMQ, "FETCH_NODATA_RETRY_FAIL mpool=0\n");
-                    goto ROLLBACK;
                 }
             }
             goto ROLLBACK;
@@ -2766,10 +2736,8 @@ void umq_qbuf_free(umq_buf_list_t *list)
     uint64_t _t0 = 0;
     local_block_pool_t *local_pool = get_thread_cache();
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT && QBUF_LIST_FIRST(list)->mempool_without_data == 1) {
-        (void)pthread_spin_lock(&local_pool->list_lock);
         uint32_t cnt = release_batch(list, &local_pool->head_without_data, false);
-        local_pool->buf_cnt_without_data += cnt;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
+        (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
 
         uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
         if (local_pool->buf_cnt_without_data > cap) {
@@ -2847,10 +2815,8 @@ void umq_qbuf_free(umq_buf_list_t *list)
     if (nodata_head != NULL) {
         umq_buf_list_t nodata_list;
         QBUF_LIST_FIRST(&nodata_list) = nodata_head;
-        (void)pthread_spin_lock(&local_pool->list_lock);
         uint32_t cnt = release_batch(&nodata_list, &local_pool->head_without_data, false);
-        local_pool->buf_cnt_without_data += cnt;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
+        (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
         uint32_t cap = g_qbuf_pool.disable_scale_cap ? QBUF_POOL_TLS_MAX : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
         if (local_pool->buf_cnt_without_data > cap) {
             uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
@@ -2869,10 +2835,8 @@ void umq_qbuf_free(umq_buf_list_t *list)
         }
         umq_buf_list_t tmp;
         QBUF_LIST_FIRST(&tmp) = sc_heads[sc];
-        (void)pthread_spin_lock(&local_pool->list_lock);
         uint32_t cnt = release_batch(&tmp, &local_pool->head_with_data[sc], false);
-        local_pool->buf_cnt_with_data[sc] += cnt;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
+        (void)__atomic_fetch_add(&local_pool->buf_cnt_with_data[sc], cnt, __ATOMIC_RELAXED);
         __atomic_add_fetch(&g_qbuf_pool.free_count[sc], cnt, __ATOMIC_RELAXED);
         g_thread_cache.stats.sc_free_cnt[sc] += cnt;
 
@@ -3447,50 +3411,6 @@ bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc)
         (void)sched_yield();
     }
     return false;
-}
-
-static void umq_flush_tls_nodata_to_global(void)
-{
-    if (qbuf_debug_on())
-        g_dbg_stats.tls_flush_nodata_count++;
-    UMQ_VLOG_DEBUG(VLOG_UMQ, "TLS_FLUSH_NODATA: global_nodata=%llu exp_total=%llu mpool=0\n",
-                   (unsigned long long)g_qbuf_pool.block_pool[0].buf_cnt_without_data,
-                   (unsigned long long)g_qbuf_pool.exp_pool_without_date.exp_total_block_num);
-    /* When g_tls_dtors_running is true, TLS nodes in g_tls_register_head may
-     * be dangling (freed memory). Skip traversal to avoid SEGV. */
-    if (g_tls_dtors_running) {
-        return;
-    }
-    (void)pthread_spin_lock(&g_tls_stats_lock);
-    local_qbuf_pool_t *pool_iter = NULL;
-    URPC_LIST_FOR_EACH(pool_iter, tls_node, &g_tls_register_head)
-    {
-        if (!pool_iter->inited) {
-            continue;
-        }
-        (void)pthread_spin_lock(&g_qbuf_pool.block_pool[0].global_mutex);
-        (void)pthread_spin_lock(&pool_iter->block_pool.list_lock);
-        umq_buf_t *detached_head = QBUF_LIST_FIRST(&pool_iter->block_pool.head_without_data);
-        QBUF_LIST_FIRST(&pool_iter->block_pool.head_without_data) = NULL;
-        pool_iter->block_pool.buf_cnt_without_data = 0;
-        (void)pthread_spin_unlock(&pool_iter->block_pool.list_lock);
-        if (detached_head == NULL) {
-            (void)pthread_spin_unlock(&g_qbuf_pool.block_pool[0].global_mutex);
-            continue;
-        }
-        uint64_t return_buf_cnt = return_list_to_pools(detached_head,
-                                                       &g_qbuf_pool.block_pool[0].head_without_data,
-                                                       &g_qbuf_pool.block_pool[0].buf_cnt_without_data, false, 0);
-        /* buf_cnt already zeroed under list_lock */
-        uint64_t cap = __atomic_load_n(&pool_iter->block_pool.capacity_without_data, __ATOMIC_RELAXED);
-        uint64_t cap_sub = (return_buf_cnt > cap) ? cap : return_buf_cnt;
-        (void)__atomic_fetch_sub(&pool_iter->block_pool.capacity_without_data, cap_sub, __ATOMIC_RELAXED);
-        __atomic_fetch_sub(&g_total_local_cap_without_data, cap_sub, __ATOMIC_RELAXED);
-        (void)pthread_spin_unlock(&g_qbuf_pool.block_pool[0].global_mutex);
-        if (qbuf_debug_on())
-            g_dbg_stats.tls_flush_nodata_bufs += return_buf_cnt;
-    }
-    (void)pthread_spin_unlock(&g_tls_stats_lock);
 }
 
 void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth)
