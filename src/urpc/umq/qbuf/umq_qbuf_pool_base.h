@@ -431,6 +431,12 @@ static ALWAYS_INLINE void thread_local_pool_rollback(umq_buf_t *buf_head_old, ui
     }
 
     umq_buf_t *head = QBUF_LIST_FIRST(info.local_head);
+    if (head == NULL) {
+        *info.local_buf_cnt = buf_cnt_old;
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "rollback desync: head=NULL buf_cnt_old=%lu cur=%lu sc=%u\n",
+                           (unsigned long)buf_cnt_old, (unsigned long)*info.local_buf_cnt, sc);
+        return;
+    }
     QBUF_LIST_FIRST(info.local_head) = buf_head_old;
     uint64_t alloc_cnt = ((*info.local_buf_cnt) - buf_cnt_old);
     umq_buf_t *tail = head;
