@@ -162,7 +162,6 @@ typedef struct local_block_pool {
 
     umq_buf_list_t head_without_data;
     uint64_t buf_cnt_without_data;
-    pthread_spinlock_t list_lock;
     uint64_t capacity_without_data;
 } local_block_pool_t;
 
@@ -266,7 +265,6 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
         thread_cache->block_pool.capacity_without_data = 0;
         QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
         thread_cache->block_pool.buf_cnt_without_data = 0;
-        (void)pthread_spin_init(&thread_cache->block_pool.list_lock, PTHREAD_PROCESS_PRIVATE);
         (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
         thread_cache->stats.tid = (uint64_t)pthread_self();
         thread_cache->inited = true;
@@ -545,11 +543,9 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
     }
 
     if (threshold == 0) {
-        (void)pthread_spin_lock(&cache->list_lock);
         umq_buf_t *head = QBUF_LIST_FIRST(info.local_head);
         QBUF_LIST_FIRST(info.local_head) = NULL;
         *info.local_buf_cnt = 0;
-        (void)pthread_spin_unlock(&cache->list_lock);
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
         *tls_return_buf_cnt += return_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
@@ -764,7 +760,6 @@ static ALWAYS_INLINE void buf_init_with_mode(char *data_buffer, char *header_buf
 static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, uint32_t num, umq_buf_list_t *list,
                                                 bool shm)
 {
-    (void)pthread_spin_lock(&local_pool->list_lock);
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_without_data)
@@ -786,7 +781,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
                            (unsigned long)local_pool->buf_cnt_without_data);
         local_pool->buf_cnt_without_data = 0;
         QBUF_LIST_FIRST(list) = NULL;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
         return;
     }
 
@@ -807,7 +801,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
     // set output
     QBUF_LIST_FIRST(list) = input_head;
     local_pool->buf_cnt_without_data -= cnt;
-    (void)pthread_spin_unlock(&local_pool->list_lock);
 }
 
 // umq_qbuf_alloc_data_with_split: sc indexes the with_data arrays. block_size passed in
@@ -816,7 +809,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
                                                          qbuf_alloc_param_t *param, umq_buf_list_t *list,
                                                          uint32_t block_size, uint32_t sc)
 {
-    (void)pthread_spin_lock(&local_pool->list_lock);
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     uint32_t headroom_size_temp = param->headroom_size;
@@ -872,7 +864,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
                           sc, (unsigned long)local_pool->buf_cnt_with_data[sc]);
         local_pool->buf_cnt_with_data[sc] = 0;
         QBUF_LIST_FIRST(list) = NULL;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
         return;
     }
 
@@ -892,14 +883,12 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     // set output
     QBUF_LIST_FIRST(list) = head;
     local_pool->buf_cnt_with_data[sc] -= cnt;
-    (void)pthread_spin_unlock(&local_pool->list_lock);
 }
 
 static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *local_pool, uint32_t request_size,
                                                            qbuf_alloc_param_t *param, umq_buf_list_t *list,
                                                            uint32_t block_size, uint32_t sc)
 {
-    (void)pthread_spin_lock(&local_pool->list_lock);
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
     uint32_t headroom_size_temp = param->headroom_size;
@@ -952,7 +941,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
                           sc, (unsigned long)local_pool->buf_cnt_with_data[sc]);
         local_pool->buf_cnt_with_data[sc] = 0;
         QBUF_LIST_FIRST(list) = NULL;
-        (void)pthread_spin_unlock(&local_pool->list_lock);
         return;
     }
 
@@ -972,7 +960,6 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     // set output
     QBUF_LIST_FIRST(list) = head;
     local_pool->buf_cnt_with_data[sc] -= cnt;
-    (void)pthread_spin_unlock(&local_pool->list_lock);
 }
 
 static ALWAYS_INLINE uint32_t umq_qbuf_base_actual_buf_count(const qbuf_pool_base_t *base, uint32_t request_size,
