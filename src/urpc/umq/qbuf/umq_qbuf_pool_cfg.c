@@ -83,6 +83,24 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
     }
     plan->size_class_count = count;
 
+    // tls_qbuf_pool_depth: 0 = use default; out-of-range values will be clamped to default in umq_qbuf_pool_init
+    if (cfg->buf_pool_cfg.tls_qbuf_pool_depth != 0 &&
+        (cfg->buf_pool_cfg.tls_qbuf_pool_depth < QBUF_POOL_TLS_QBUF_DEPTH_MIN ||
+         cfg->buf_pool_cfg.tls_qbuf_pool_depth > QBUF_POOL_TLS_QBUF_DEPTH_MAX)) {
+        UMQ_VLOG_WARN(VLOG_UMQ, "tls_qbuf_pool_depth %llu out of range [%u, %u], will use default\n",
+                      (unsigned long long)cfg->buf_pool_cfg.tls_qbuf_pool_depth,
+                      QBUF_POOL_TLS_QBUF_DEPTH_MIN, QBUF_POOL_TLS_QBUF_DEPTH_MAX);
+    }
+
+    // tls_expand_qbuf_pool_depth: 0 = use default; out-of-range values will be clamped to default in umq_qbuf_pool_init
+    if (cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth != 0 &&
+        (cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth < QBUF_POOL_TLS_QBUF_DEPTH_MIN ||
+         cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth > QBUF_POOL_TLS_QBUF_DEPTH_MAX)) {
+        UMQ_VLOG_WARN(VLOG_UMQ, "tls_expand_qbuf_pool_depth %llu out of range [%u, %u], will use default\n",
+                      (unsigned long long)cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
+                      QBUF_POOL_TLS_QBUF_DEPTH_MIN, QBUF_POOL_TLS_QBUF_DEPTH_MAX);
+    }
+
     uint64_t normal_io_buf_size = 0;
     for (uint32_t i = 0; i < count; i++) {
         uint64_t blk_cnt = cfg->buf_pool_cfg.per_sc_block_counts[i];

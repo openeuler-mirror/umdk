@@ -1593,6 +1593,12 @@ static bool umq_qbuf_expansion_pool_uninit(void)
     return all_ok;
 }
 
+static bool tls_qbuf_pool_depth_in_range(uint64_t tls_depth)
+{
+    return tls_depth >= QBUF_POOL_TLS_QBUF_DEPTH_MIN
+        && tls_depth <= QBUF_POOL_TLS_QBUF_DEPTH_MAX;
+}
+
 static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_buf_pool_size)
 {
     uint32_t base = umq_buf_size_small();
@@ -1655,13 +1661,31 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
     }
     g_qbuf_pool.expansion_mem_size_max = max_umq_buf_pool_size - g_total_len;
     g_qbuf_pool.seg_ops = cfg->seg_ops;
-    g_qbuf_pool.tls_qbuf_pool_depth = (cfg->tls_qbuf_pool_depth == 0) ?
-                                          (cfg->disable_scale_cap ? QBUF_POOL_TLS_MAX : umq_qbuf_pool_tls_depth()) :
-                                          cfg->tls_qbuf_pool_depth;
-    g_qbuf_pool.tls_expand_qbuf_pool_depth = (cfg->tls_expand_qbuf_pool_depth == 0) ?
-        (g_qbuf_pool.tls_qbuf_pool_depth / 2) : cfg->tls_expand_qbuf_pool_depth;
+    if (cfg->tls_qbuf_pool_depth != 0 && tls_qbuf_pool_depth_in_range(cfg->tls_qbuf_pool_depth)) {
+        g_qbuf_pool.tls_qbuf_pool_depth = cfg->tls_qbuf_pool_depth;
+    } else {
+        if (cfg->tls_qbuf_pool_depth != 0) {
+            UMQ_VLOG_WARN(VLOG_UMQ, "tls_qbuf_pool_depth %llu out of range [%u, %u], will use default\n",
+                (unsigned long long)cfg->tls_qbuf_pool_depth,
+                QBUF_POOL_TLS_QBUF_DEPTH_MIN, QBUF_POOL_TLS_QBUF_DEPTH_MAX);
+        }
+        g_qbuf_pool.tls_qbuf_pool_depth = cfg->disable_scale_cap ? QBUF_POOL_TLS_MAX : umq_qbuf_pool_tls_depth();
+    }
+
+    if (cfg->tls_expand_qbuf_pool_depth != 0 && tls_qbuf_pool_depth_in_range(cfg->tls_expand_qbuf_pool_depth)) {
+        g_qbuf_pool.tls_expand_qbuf_pool_depth = cfg->tls_expand_qbuf_pool_depth;
+    } else {
+        g_qbuf_pool.tls_expand_qbuf_pool_depth = g_qbuf_pool.tls_qbuf_pool_depth / 2;
+        if (cfg->tls_expand_qbuf_pool_depth != 0) {
+            UMQ_VLOG_WARN(VLOG_UMQ, "tls_expand_qbuf_pool_depth %llu out of range [%u, %u], will use default\n",
+                (unsigned long long)cfg->tls_expand_qbuf_pool_depth,
+                QBUF_POOL_TLS_QBUF_DEPTH_MIN, QBUF_POOL_TLS_QBUF_DEPTH_MAX);
+        }
+    }
+
     g_qbuf_pool.expansion_size = exp_size;
-    g_qbuf_pool.expansion_threshold = (cfg->expansion_threshold == 0) ?
+    g_qbuf_pool.expansion_threshold = (cfg->expansion_threshold == 0 ||
+        cfg->expansion_threshold > QBUF_POOL_EXPANSION_THRESHOLD_MAX) ?
         QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD : cfg->expansion_threshold;
     g_qbuf_pool.disable_malloc_escape = cfg->disable_malloc_escape;
 
