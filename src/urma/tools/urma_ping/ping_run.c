@@ -241,17 +241,22 @@ static void urma_log_func(int level, char *message)
     LOG_VVERBOSE("%s", message);
 }
 
+static inline bool priority_supports_tp(urma_device_attr_t *attr, uint8_t p, union urma_tp_type_en tp_type)
+{
+    if (p > URMA_MAX_PRIORITY) {
+        return false;
+    }
+    return (attr->dev_cap.priority_info[p].tp_type.value & tp_type.value) != 0;
+}
+
 static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urma_tp_type_en tp_type)
 {
-    int pri = -1;
-
     for (int i = 0; i <= URMA_MAX_PRIORITY; i++) {
-        if (tp_type.value == dev_attr->dev_cap.priority_info[i].tp_type.value) {
-            pri = i;
-            return pri;
+        if ((dev_attr->dev_cap.priority_info[i].tp_type.value & tp_type.value) != 0) {
+            return i;
         }
     }
-    LOG_ERROR("Failed to get sl resources\n");
+    LOG_ERROR("Failed to get sl resources for tp_type=0x%x\n", tp_type.value);
     return -1;
 }
 
@@ -273,7 +278,7 @@ static int resolve_priority(ping_cfg_t *cfg, urma_context_t *ctx, urma_device_at
         LOG_VERBOSE("Priority auto-selected to %hhu (ctp)\n", cfg->priority);
     } else {
         if (ctx->ops->import_jetty_ex != NULL) {
-            if (tp_type.value != dev_attr->dev_cap.priority_info[cfg->priority].tp_type.value) {
+            if (!priority_supports_tp(dev_attr, cfg->priority, tp_type)) {
                 LOG_ERROR("Priority %hhu is not a valid CTP priority\n", cfg->priority);
                 return -EINVAL;
             }
