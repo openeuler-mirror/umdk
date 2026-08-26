@@ -17,8 +17,9 @@
 
 #define UB_MGMT_JFC_DEPTH               (64)
 #define UB_MGMT_JFS_DEPTH               (8)
-#define UB_MGMT_JFR_DEPTH               (8)
+#define UB_MGMT_JFR_DEPTH               (16)
 #define UB_MGMT_MSG_MAX_SIZE            (4096)
+#define UB_MGMT_RQ_DEPTH                (16)   /* # of pre-posted data RECV WQEs */
 
 typedef struct comm_ub_cfg {
     char     *src_eid;      /* Local mgmt EID. Required. */
