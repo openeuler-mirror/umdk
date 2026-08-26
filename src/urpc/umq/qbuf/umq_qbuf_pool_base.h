@@ -64,6 +64,8 @@ extern "C" {
 #define QBUF_POOL_LARGE_SIZE_CLASS_ID_MIN  (2)
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
+#define QBUF_POOL_EXPANSION_THRESHOLD_MIN (1)
+#define QBUF_POOL_EXPANSION_THRESHOLD_MAX (100)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
 // Lazy SCs now controlled by per_sc_block_counts[sc]==0 (no reserve, expansion pool only)
 
@@ -98,6 +100,9 @@ extern "C" {
 #define QBUF_POOL_TLS_DEPTH_DEFAULT          (1024)
 #define QBUF_POOL_TLS_DEPTH_MIN              (1)
 #define QBUF_POOL_TLS_DEPTH_MAX              (15360)
+// tls_qbuf_pool_depth / tls_expand_qbuf_pool_depth range bounds (0 = use default, handled in umq_qbuf_pool_init)
+#define QBUF_POOL_TLS_QBUF_DEPTH_MIN         (1)
+#define QBUF_POOL_TLS_QBUF_DEPTH_MAX         (64U * 1024U)
 // per_sc_block_counts[] default / range bounds
 #define QBUF_POOL_BLOCK_COUNT_DEFAULT        (1536)
 #define QBUF_POOL_BLOCK_COUNT_MIN            (1)
