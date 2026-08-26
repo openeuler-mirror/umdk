@@ -29,8 +29,6 @@ constexpr int64_t SEND_PER_GROUP = 1;
 constexpr int64_t MIN_EP_WORLD_SIZE = 2;  // ZB needs at least two EP ranks
 constexpr int64_t TOPK_IDX_DIM = 2;       // topk_idx shape: [num_tokens, topk]
 constexpr int LOCAL_RANK_SIZE = 8;
-constexpr int MAX_BATCH_SIZE = 4096;
-constexpr int EXPERT_DATA_SIZE = 1 + MAX_BATCH_SIZE;
 
 #ifdef SHMEM_ENABLED
 inline int32_t SetShmemAttr(int32_t myPe, int32_t nPes, uint64_t localMemSize, const char *ipPort,
@@ -60,7 +58,6 @@ inline void FreeOwnedShmemTensor(at::Tensor &t)
 #ifdef SHMEM_ENABLED
     if (t.defined() && t.numel() > 0) {
         void *ptr = t.data_ptr();
-        // Drop tensor first so storage no longer aliases the SHMEM VA.
         t = at::Tensor();
         if (ptr != nullptr) {
             aclshmem_free(ptr);
@@ -94,13 +91,16 @@ ZbBuffer::ZbBuffer(int64_t rank, int64_t numRanks, int64_t localMemSize, const s
         throw std::runtime_error("ZbBuffer: num_experts must be divisible by num_ranks");
     }
 
+    int32_t curDevice = -1;
+    if (aclrtGetDevice(&curDevice) != ACL_SUCCESS || curDevice < 0) {
+        throw std::runtime_error("ZbBuffer: aclrtGetDevice failed; call torch.npu.set_device before ZbBuffer");
+    }
+    deviceIndex_ = static_cast<int64_t>(curDevice);
+
     InitShmem(localMemSize, ipPort);
-    // Mark initialized before slot alloc so dtor / catch path can finalize SHMEM + meta
-    // if PreallocateLayoutNotifySlots throws (avoids leak flagged by resource scanners).
     initialized_ = true;
     try {
-        c10::Device device(c10::DeviceType::PrivateUse1, static_cast<c10::DeviceIndex>(rank));
-        PreallocateLayoutNotifySlots(device);
+        PreallocateLayoutNotifySlots(NpuDevice());
     } catch (...) {
         FreeSlots();
         FinalizeShmem();
@@ -128,7 +128,6 @@ void ZbBuffer::InitShmem(int64_t localMemSize, const std::string &ipPort)
     }
 
     aclshmemx_init_attr_t attributes{};
-    // Keep uid alive for the duration of init_attr (and as a Buffer member lifetime).
     static thread_local aclshmemx_uniqueid_t tlsUid{};
     tlsUid = {};
     status = SetShmemAttr(static_cast<int32_t>(rank_), static_cast<int32_t>(numRanks_),
@@ -148,9 +147,7 @@ void ZbBuffer::InitShmem(int64_t localMemSize, const std::string &ipPort)
     if (metaPtr_ == nullptr) {
         throw std::runtime_error("ZbBuffer: aclshmem_malloc meta failed");
     }
-    // Zero meta for sync flags.
-    auto metaOpts = torch::TensorOptions().dtype(at::kByte).device(
-        c10::Device(c10::DeviceType::PrivateUse1, static_cast<c10::DeviceIndex>(rank_)));
+    auto metaOpts = torch::TensorOptions().dtype(at::kByte).device(NpuDevice());
     auto metaView = at_npu::native::from_blob(metaPtr_, c10::IntArrayRef({static_cast<int64_t>(META_BYTES)}), metaOpts);
     metaView.zero_();
 #else
@@ -166,35 +163,44 @@ void ZbBuffer::PreallocateLayoutNotifySlots(c10::Device device)
     const int64_t E = numExperts_;
     const int64_t R = numRanks_;
 
-    // layout output / notify input
     numTokensPerExpert_ = CreateTensorFromShmem({E}, at::kInt, device);
     numTokensPerExpert_.zero_();
 
-    // notify SHMEM workspace / output
     recvData_ = CreateTensorFromShmem({R, E}, at::kInt, device);
 }
 
-void ZbBuffer::EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device device)
+void ZbBuffer::EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device device, int64_t topk)
 {
     if (dtype != at::kBFloat16 && dtype != at::kHalf) {
         throw std::runtime_error("ZbBuffer: x dtype must be torch.bfloat16 or torch.float16");
     }
+    if (topk <= 0) {
+        throw std::runtime_error("ZbBuffer: topk must be > 0");
+    }
+    const int64_t localExperts = numExperts_ / numRanks_;
+    const int64_t needSlots = globalBs_ * std::min(localExperts, topk);
     if (combineX_.defined()) {
         if (dtype != dtype_) {
             throw std::runtime_error("ZbBuffer: x dtype does not match Buffer session dtype from first dispatch");
+        }
+        if (needSlots > slotCount_) {
+            throw std::runtime_error(
+                "ZbBuffer: topk/localExperts require more SHMEM slots than first dispatch allocated");
         }
         return;
     }
 
     dtype_ = dtype;
+    slotCount_ = needSlots;
     const int64_t H = hidden_;
-    const int64_t T = globalBs_;
-    // expandx and combine_x share one physical SHMEM block (deepep-style).
+    const int64_t T = slotCount_;
     combineX_ = CreateTensorFromShmem({T, H}, dtype_, device);
     if (useQuant_) {
         auto charOpts = torch::TensorOptions().dtype(at::kChar).device(device);
         expandx_ = at_npu::native::from_blob(combineX_.data_ptr(), c10::IntArrayRef({T, H}), charOpts);
+        expandx_.zero_();
         scales_ = CreateTensorFromShmem({T}, at::kFloat, device);
+        scales_.zero_();
     } else {
         expandx_ = combineX_;
         scales_ = at::empty({1}, at::dtype(at::kFloat).device(device));
@@ -203,7 +209,6 @@ void ZbBuffer::EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device devi
 
 void ZbBuffer::FreeSlots()
 {
-    // expandx_ may alias combineX_; only free owned blocks once.
     if (useQuant_) {
         expandx_ = at::Tensor();
         FreeOwnedShmemTensor(scales_);
@@ -252,12 +257,14 @@ std::tuple<at::Tensor, at::Tensor> ZbBuffer::get_dispatch_layout(const at::Tenso
     numTokensPerExpert_.zero_();
     auto numTokensPerRank = at::zeros({numRanks_}, at::dtype(at::kInt).device(device));
     auto isTokenInRank = at::zeros({numTokensI64, numRanks_}, at::dtype(at::kInt).device(device));
+    constexpr int64_t kLegacyMaxBatch = 4096;
+    const int64_t layoutBatchCap = std::max(numTokensI64, kLegacyMaxBatch);
+    const int64_t expertDataSize = 1 + layoutBatchCap;
     const int64_t notifySendDataSize =
-        numExperts_ * EXPERT_DATA_SIZE + serverNum + MAX_BATCH_SIZE * (1 + 2 * serverNum + numExperts_);
+        numExperts_ * expertDataSize + serverNum + layoutBatchCap * (1 + 2 * serverNum + numExperts_);
     sendTokenIdx_ = at::zeros({numTokensI64, numTopkI64}, at::dtype(at::kInt).device(device));
     auto notifySendData = at::zeros({notifySendDataSize}, at::dtype(at::kInt).device(device));
 
-    // EXEC_NPU_CMD requires non-const lvalue refs — keep scalars as locals.
     EXEC_NPU_CMD(aclnnDispatchLayoutZb, topkIdxInt32, numTokensI64, numRanksI64, numExpertsI64, numTopkI64,
         localRanksizeI64, numTokensPerRank, numTokensPerExpert_, isTokenInRank, notifySendData, sendTokenIdx_);
 
@@ -278,9 +285,9 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> ZbBuffer::dispatch(const at::Tens
     if (numTokensPerExpert_.defined() && device != numTokensPerExpert_.device()) {
         throw std::runtime_error("ZbBuffer: x device must match Buffer layout/notify slot device");
     }
-    EnsureDispatchCombineSlots(x.scalar_type(), device);
-    int64_t numLocalExperts = numExperts_ / numRanks_;
     int64_t topkNum = topkIdx.size(1);
+    EnsureDispatchCombineSlots(x.scalar_type(), device, topkNum);
+    int64_t numLocalExperts = numExperts_ / numRanks_;
     int64_t localRankSize = numRanks_;
     int64_t localRankId = rank_ % localRankSize;
     int64_t sendCount = SEND_PER_GROUP * numExperts_;
@@ -292,13 +299,12 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> ZbBuffer::dispatch(const at::Tens
     int64_t tpRankId = TP_RANK_ID;
     int64_t quantModeLocal = quantMode;
 
-    // Prefer cached layout send idx when caller passes the same tensor; always refresh cache.
     sendTokenIdx_ = sendTokenIdx;
 
     auto totalRecvTokens = at::empty({1}, at::dtype(at::kInt).device(device));
     auto maxBs = at::empty({1}, at::dtype(at::kInt).device(device));
     auto recvTokensPerExpert = at::empty({numLocalExperts}, at::dtype(at::kLong).device(device));
-    putOffset_ = at::empty({numExperts_, numRanks_}, at::dtype(at::kInt).device(device));
+    putOffset_ = at::zeros({numExperts_, numRanks_}, at::dtype(at::kInt).device(device));
 
     uint64_t commMetaPtrU64 = reinterpret_cast<uint64_t>(metaPtr_);
     EXEC_NPU_CMD(aclnnNotifyDispatchZb, numTokensPerExpert, sendCount, epWorldSize, epRankId, localRankSize,
@@ -310,7 +316,6 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> ZbBuffer::dispatch(const at::Tens
     EXEC_NPU_CMD(aclnnMoeDispatchNormalZb, x, topkIdx, sendTokenIdx, putOffset_, epWorldSize, epRankId, tpWorldSize,
         tpRankId, moeExpertNum, quantModeLocal, globalBs, commMetaPtrU64, recvX, recvXScales);
 
-    // Slice to actual received tokens (deepep-style). .item() syncs the stream.
     int64_t actualRecv = static_cast<int64_t>(totalRecvTokens.item<int>());
     if (actualRecv <= 0) {
         actualRecv = 1;
@@ -339,7 +344,6 @@ at::Tensor ZbBuffer::combine(const at::Tensor &expertOut, const at::Tensor &topk
         throw std::runtime_error("ZbBuffer: expert_out dtype must match combine slot (bf16/fp16)");
     }
 
-    // Publish expert output into the symmetric combine slot when needed.
     at::Tensor shmemX = combineX_;
     if (expertOut.data_ptr() != combineX_.data_ptr()) {
         shmemX.slice(0, 0, expertOut.size(0)).copy_(expertOut);

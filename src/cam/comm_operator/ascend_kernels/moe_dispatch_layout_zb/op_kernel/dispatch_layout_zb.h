@@ -121,8 +121,11 @@ public:
         LocalTensor<T> expertLocal = numTokensPerExpertBuf_.AllocTensor<T>();
         LocalTensor<T> isTokenLocal = isTokenInRankBuf_.AllocTensor<T>();
         LocalTensor<T> seenLocal = seenRankBuf_.AllocTensor<T>();
+        // GM len = numExperts_ (aligned len would clobber next core).
+        const uint32_t numExpertsAlignElems =
+            numTokensPerExpert32AlignIntLen_ / static_cast<uint32_t>(sizeof(T));
         Duplicate<T>(rankLocal, 0, numRanks_);
-        Duplicate<T>(expertLocal, 0, numExperts_);
+        Duplicate<T>(expertLocal, 0, numExpertsAlignElems);
         Duplicate<T>(isTokenLocal, 0, roundTokens * numRanks_);
         SyncFunc<AscendC::HardEvent::V_S>();
         for (uint32_t i = 0; i < roundTokens; ++i) {
@@ -140,12 +143,11 @@ public:
                 }
             }
         }
-        // Write isTokenInRank and atomic-add accumulated counts to GM
         const DataCopyExtParams isTokenParams{1U, roundTokens * numRanks_ * static_cast<uint32_t>(sizeof(T)), 0U, 0U,
             0U};
         DataCopyPad(isTokenInRankGM_[roundStart * numRanks_], isTokenLocal, isTokenParams);
         AscendC::SetAtomicAdd<T>();
-        const DataCopyExtParams tempExpertParams{1U, numTokensPerExpert32AlignIntLen_, 0U, 0U, 0U};
+        const DataCopyExtParams tempExpertParams{1U, numExperts_ * static_cast<uint32_t>(sizeof(T)), 0U, 0U, 0U};
         for (uint32_t i = coreIdx_ + 1; i < aivNum_; ++i) {
             DataCopyPad(tempExpertGM_[i * numExperts_], expertLocal, tempExpertParams);
         }
@@ -157,7 +159,6 @@ public:
         PipeBarrier<PIPE_MTE3>();
     }
 
-    // Phase 2 per-round: compute sendTokenIdx from accumulated numTokensPerExpert
     __aicore__ inline void CalcSendTokenIdxInRound(uint32_t roundStart, uint32_t roundTokens)
     {
         uint32_t topkLen = Ceil(roundTokens * numTopk_ * sizeof(int32_t), UB_32_ALIGN) * UB_32_ALIGN;
@@ -171,7 +172,7 @@ public:
         const DataCopyPadExtParams<int32_t> topkPadParams{false, 0U, 0U, 0U};
         DataCopyPad(topkIdxLocal, topkIdxGM_[roundStart * numTopk_], topkCopyParams, topkPadParams);
         LocalTensor<T> expertLocal = numTokensPerExpertBuf_.AllocTensor<T>();
-        const DataCopyExtParams expertCopyParams{1U, numTokensPerExpert32AlignIntLen_, 0U, 0U, 0U};
+        const DataCopyExtParams expertCopyParams{1U, numExperts_ * static_cast<uint32_t>(sizeof(T)), 0U, 0U, 0U};
         const DataCopyPadExtParams<T> expertPadParams{false, 0U, 0U, 0U};
         DataCopyPad(expertLocal, tempExpertGM_[coreIdx_ * numExperts_], expertCopyParams, expertPadParams);
         SyncFunc<AscendC::HardEvent::MTE2_S>();

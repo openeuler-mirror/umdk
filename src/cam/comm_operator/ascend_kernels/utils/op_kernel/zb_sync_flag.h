@@ -368,9 +368,9 @@ public:
 
     /// All-to-all barrier across the communication domain using shmem flags.
     ///
-    /// Uses ZbSyncFlag's internal magic for flag uniqueness and magic % 2
-    /// for pingpong buffer selection. Barrier area is located after the flag
-    /// pingpong buffers.
+    /// Uses ZbSyncFlag's internal magic for flag uniqueness and
+    /// (magic + barrierSeq) & 1 for pingpong buffer selection. Barrier area is
+    /// located after the flag pingpong buffers.
     ///
     /// Flow: SyncAll → Write flags to all ranks → Wait all ranks → SyncAll
     ///
@@ -393,8 +393,9 @@ public:
         const int64_t barrierFlag = MakeFlagValue(magic_, ++barrierSeq_);
         LocalTensor<int64_t> ubFlag = tBuf_.GetWithOffset<int64_t>(FLAG_ELEM_NUM, 0);
 
-        // Select pingpong buffer for barrier: magic % 2
-        uint64_t bufIdx = static_cast<uint64_t>(static_cast<uint32_t>(magic_) & 1U);
+        // Select pingpong buffer for barrier: (magic + barrierSeq) & 1
+        uint64_t bufIdx =
+            static_cast<uint64_t>((static_cast<uint32_t>(magic_) + static_cast<uint32_t>(barrierSeq_)) & 1U);
         uint64_t barrierBufOffset = barrierBaseOffset_ + bufIdx * barrierBufSize_;
 
         // Step 2a: Write — signal all assigned remote ranks
