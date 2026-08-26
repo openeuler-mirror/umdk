@@ -258,6 +258,18 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->per_sc_batch_count[sc]);
         }
+        for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
+            char name[UMQ_DFX_LABEL_BUF_SIZE];
+            snprintf(name, sizeof(name), "block_counts[sc%u]", sc);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", name,
+                                 (unsigned long)cfg->per_sc_block_counts[sc]);
+        }
+        for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
+            char name[UMQ_DFX_LABEL_BUF_SIZE];
+            snprintf(name, sizeof(name), "tls_depth[sc%u]", sc);
+            UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", name,
+                                 (unsigned long)cfg->per_sc_tls_qbuf_pool_depth[sc]);
+        }
     }
 
     /* Pool Config [RX_pool]: RX pool config fields are carried on the Small pool's
