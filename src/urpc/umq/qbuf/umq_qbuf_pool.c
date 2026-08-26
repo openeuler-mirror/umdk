@@ -198,6 +198,25 @@ static volatile uint64_t g_total_local_cap_without_data = 0;
 
 static volatile uint64_t g_escape_buf_cnt[UMQ_QBUF_SIZE_CLASS_MAX] = {0};
 
+/* Escape buf address registry: tracks every live escape buf's
+ * [buf_data, buf_data + blk_size) range so escape_data_to_head() can locate
+ * the owning umq_buf_t from any in-buf pointer (block start OR +k offset).
+ * Per-SC 64-bucket hash table with per-SC mutex. */
+#define ESCAPE_REGISTRY_HASH_BUCKETS 64
+
+typedef struct escape_buf_node {
+    umq_buf_t              *qbuf;
+    char                   *buf_data;
+    uint32_t                blk_size;
+    struct escape_buf_node *next;
+} escape_buf_node_t;
+
+static escape_buf_node_t *g_escape_registry[UMQ_QBUF_SIZE_CLASS_MAX][ESCAPE_REGISTRY_HASH_BUCKETS];
+static pthread_mutex_t   g_escape_registry_lock[UMQ_QBUF_SIZE_CLASS_MAX];
+
+static int  escape_registry_init(void);
+static void escape_registry_uninit(void);
+
 static inline bool any_escape_buf_exists(void)
 {
     uint32_t sc_count = g_qbuf_pool.size_class_count;
@@ -2031,6 +2050,11 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
         g_escape_buf_cnt[i] = 0;
     }
+    if (escape_registry_init() != 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "escape_registry_init failed\n");
+        g_qbuf_pool.inited = false;
+        return -UMQ_ERR_ENOMEM;
+    }
 #ifdef UMQ_QBUF_DEBUG
     if (getenv("UMQ_QBUF_DEBUG") != NULL)
         umq_qbuf_set_debug(1);
@@ -2116,6 +2140,8 @@ void umq_qbuf_pool_uninit(void)
         __atomic_store_n(&g_total_local_cap_with_data_cnt[sc], 0, __ATOMIC_RELAXED);
     }
     __atomic_store_n(&g_total_local_cap_without_data, 0, __ATOMIC_RELAXED);
+
+    escape_registry_uninit();
 }
 
 static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, local_block_pool_t *local_pool,
@@ -2596,6 +2622,131 @@ uint32_t umq_qbuf_expansion_slot_dist(umq_expansion_slot_info_t *infos, uint32_t
     return n;
 }
 
+/* Golden ratio fractional multiplier for 64-bit hashing (2^64 / φ rounded).
+ * Standard multiplicative hash constant. */
+#define ESCAPE_HASH_GOLDEN_RATIO 0x9E3779B97F4A7C15ULL
+
+/* Bit-mix hash on the 4K-page number — spreads across buckets regardless
+ * of buf_data's alignment class (4K/64K/...). */
+static inline uint32_t escape_buf_hash(const void *buf_data)
+{
+    uintptr_t v = (uintptr_t)buf_data >> 12;
+    v ^= v >> 21;
+    v *= ESCAPE_HASH_GOLDEN_RATIO;
+    v ^= v >> 33;
+    return (uint32_t)(v & (ESCAPE_REGISTRY_HASH_BUCKETS - 1));
+}
+
+static int escape_registry_init(void)
+{
+    int rc;
+    for (uint32_t sc = 0; sc < UMQ_QBUF_SIZE_CLASS_MAX; sc++) {
+        for (uint32_t b = 0; b < ESCAPE_REGISTRY_HASH_BUCKETS; b++) {
+            g_escape_registry[sc][b] = NULL;
+        }
+        rc = pthread_mutex_init(&g_escape_registry_lock[sc], NULL);
+        if (rc != 0) {
+            for (uint32_t j = 0; j < sc; j++) {
+                (void)pthread_mutex_destroy(&g_escape_registry_lock[j]);
+            }
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_init: mutex_init sc=%u failed, rc=%d\n", sc, rc);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void escape_registry_uninit(void)
+{
+    for (uint32_t sc = 0; sc < UMQ_QBUF_SIZE_CLASS_MAX; sc++) {
+        (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+        for (uint32_t b = 0; b < ESCAPE_REGISTRY_HASH_BUCKETS; b++) {
+            escape_buf_node_t *n = g_escape_registry[sc][b];
+            while (n != NULL) {
+                escape_buf_node_t *next = n->next;
+                free(n);
+                n = next;
+            }
+            g_escape_registry[sc][b] = NULL;
+        }
+        (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+        (void)pthread_mutex_destroy(&g_escape_registry_lock[sc]);
+    }
+}
+
+static void escape_registry_insert(umq_buf_t *qbuf, char *buf_data, uint32_t blk_size, uint32_t sc)
+{
+    escape_buf_node_t *node = (escape_buf_node_t *)malloc(sizeof(escape_buf_node_t));
+    if (node == NULL) {
+        /* Best-effort: buf still findable at k=0 via the legacy alignment
+         * fallback; +k lookup will silently miss this buf. */
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_insert: node malloc failed, buf=%p\n", (void *)qbuf);
+        return;
+    }
+    node->qbuf = qbuf;
+    node->buf_data = buf_data;
+    node->blk_size = blk_size;
+    uint32_t bucket = escape_buf_hash(buf_data);
+    (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+    node->next = g_escape_registry[sc][bucket];
+    g_escape_registry[sc][bucket] = node;
+    (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+}
+
+/* Caller must NOT have freed qbuf->buf_data yet (used for hash bucket). */
+static void escape_registry_remove(umq_buf_t *qbuf, uint32_t sc)
+{
+    if (sc >= UMQ_QBUF_SIZE_CLASS_MAX) {
+        return;
+    }
+    uint32_t bucket = escape_buf_hash(qbuf->buf_data);
+    (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+    escape_buf_node_t **pp = &g_escape_registry[sc][bucket];
+    while (*pp != NULL) {
+        if ((*pp)->qbuf == qbuf) {
+            escape_buf_node_t *victim = *pp;
+            *pp = victim->next;
+            (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+            free(victim);
+            return;
+        }
+        pp = &(*pp)->next;
+    }
+    (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_remove: qbuf=%p not found in sc=%u\n", (void *)qbuf, sc);
+}
+
+/* Find the umq_buf_t head owning `data` (any in-buf offset). Safe with
+ * non-pool pointers — never dereferences a candidate address, only compares
+ * against stored [buf_data, buf_data + blk_size) ranges. */
+static umq_buf_t *escape_registry_lookup(void *data)
+{
+    if (!any_escape_buf_exists()) {
+        return NULL;
+    }
+    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
+        if (blk_size == 0) {
+            continue;
+        }
+        uintptr_t candidate_data = (uintptr_t)data & ~((uintptr_t)blk_size - 1);
+        uint32_t bucket = escape_buf_hash((const void *)candidate_data);
+        (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+        escape_buf_node_t *n = g_escape_registry[sc][bucket];
+        while (n != NULL) {
+            if (n->buf_data == (char *)candidate_data &&
+                (char *)data >= n->buf_data && (char *)data < n->buf_data + n->blk_size) {
+                umq_buf_t *result = n->qbuf;
+                (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+                return result;
+            }
+            n = n->next;
+        }
+        (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+    }
+    return NULL;
+}
+
 static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc)
 {
     uint32_t blk_size = g_qbuf_pool.block_sizes[sc];
@@ -2619,6 +2770,7 @@ static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc
 
     QBUF_LIST_FIRST(list) = qbuf;
     (void)__atomic_add_fetch(&g_escape_buf_cnt[sc], 1, __ATOMIC_RELAXED);
+    escape_registry_insert(qbuf, buf_data, blk_size, sc);
     if (qbuf_debug_on()) {
         g_dbg_stats.alloc_with_data_escape++;
     }
@@ -2825,6 +2977,7 @@ void umq_qbuf_free(umq_buf_list_t *list)
     if (QBUF_LIST_FIRST(list)->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX && !g_qbuf_pool.disable_malloc_escape) {
         umq_buf_t *esc_buf = QBUF_LIST_FIRST(list);
         uint32_t esc_sc = blk_size_to_sc(esc_buf->data_size);
+        escape_registry_remove(esc_buf, esc_sc);
         free(esc_buf->buf_data);
         if (esc_sc < UMQ_QBUF_SIZE_CLASS_MAX) {
             (void)__atomic_sub_fetch(&g_escape_buf_cnt[esc_sc], 1, __ATOMIC_RELAXED);
@@ -2999,29 +3152,7 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
 
 static inline umq_buf_t *escape_data_to_head(void *data)
 {
-    /* Escape-pool blocks are only allocated when any escape buf exists. Without this guard
-     * the speculative dereference of (data + block_size) below would read out-of-bounds for
-     * pointers that belong to other pools (e.g. rx / tiny), which allocate their data buffers
-     * independently and do not place a umq_buf_t header right after each data block. */
-    if (!any_escape_buf_exists()) {
-        return NULL;
-    }
-    /* Escape bufs are allocated via memalign(blk_size, blk_size + sizeof(umq_buf_t)),
-     * so buf_data is always blk_size-aligned. Skip any size_class where data is not
-     * aligned to block_sizes[i] — the candidate address would be invalid and
-     * dereferencing candidate->buf_data would SEGV (observed with large block_sizes
-     * where data + block_sizes[i] falls outside any mapped region). */
-    for (uint32_t i = 0; i < g_qbuf_pool.size_class_count; i++) {
-        uint32_t blk_size = g_qbuf_pool.block_sizes[i];
-        if (((uintptr_t)data & (blk_size - 1)) != 0) {
-            continue;
-        }
-        umq_buf_t *candidate = (umq_buf_t *)((char *)data + blk_size);
-        if (candidate->buf_data == (char *)data && candidate->mempool_id == QBUF_POOL_MEMPOOL_ID_MAX) {
-            return candidate;
-        }
-    }
-    return NULL;
+    return escape_registry_lookup(data);
 }
 
 static ALWAYS_INLINE umq_buf_t *umq_qbuf_data_to_head_escape(void *data)
