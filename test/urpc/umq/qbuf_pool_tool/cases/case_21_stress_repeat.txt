@@ -72,6 +72,7 @@ stress_repeat
     thread_7 free all
   join
   snapshot 100
+  iterations 200
 end
 
 # Final status — after Ctrl-C, verify:

@@ -105,6 +105,7 @@ int main(int argc, char **argv)
 
     char line[1024];
     int exit_code = 0;
+    bool expect_fail_next = false; /* set by `expect_fail` marker for next cmd */
     BlockState state = LINE_MODE;
     int repeat_count = 0;
     bool stress_repeat = false; /* tracks which kind of repeat block is active */
@@ -160,6 +161,14 @@ int main(int argc, char **argv)
                     raw_block.clear();
                     continue;
                 }
+                /* `expect_fail` marks the next line as expected-to-fail: if
+                 * its command returns non-zero, it counts as success (exit_code
+                 * unchanged); if it unexpectedly succeeds, exit_code=1. This lets
+                 * negative-verification cases (init rejected, etc.) run to 0. */
+                if (toks.size() == 1 && toks[0] == "expect_fail") {
+                    expect_fail_next = true;
+                    break;
+                }
                 int r = DispatchLineCommand(toks);
                 if (r == 1) {
                     /* quit/exit requested */
@@ -168,8 +177,15 @@ int main(int argc, char **argv)
                     return exit_code;
                 }
                 if (r != 0) {
+                    if (!expect_fail_next) {
+                        exit_code = 1;
+                    }
+                } else if (expect_fail_next) {
+                    /* expected to fail but succeeded */
+                    fprintf(stderr, "ERROR: command unexpectedly succeeded (expected fail)\n");
                     exit_code = 1;
                 }
+                expect_fail_next = false;
                 break;
             }
 

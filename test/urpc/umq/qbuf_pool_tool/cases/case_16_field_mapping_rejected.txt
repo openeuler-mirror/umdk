@@ -19,13 +19,13 @@
 # Stage 1: 旧名 expSz 被工具拒绝
 # Expect stderr: ERROR: init unknown key 'expSz'
 # (parsing 失败, 不走到 umq_qbuf_pool_init, g_buf_addr 仍为 nullptr)
+expect_fail
 init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M expSz=64M threads=1
 
-# Stage 2: poolMaxSz=7G 越界, 被生产代码 6GB 硬上限拒绝
-# Expect stderr: ERROR: umq_qbuf_pool_init failed ret=-22
-# (Stage 1 失败未污染 g_buf_addr, 本 init 会重新 memalign + 走到
-#  umq_qbuf_pool_init 检查 poolMaxSz, 在 6GB 上限处被拒)
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M poolMaxSz=7G threads=1
+# Stage 2: 非法 block_size 被生产代码拒绝 (4K*2^n 校验)
+# umq_qbuf_pool.c:1653 检查 explicit_block_sizes[i] 必须是 4K*2^n,
+# 5000 不满足, 返回 -UMQ_ERR_EINVAL, DoInit 接到非0 ret 打印失败。
+expect_fail
+init count=2 blockSizes=4K,5000 mode=split scaleCap=on totalSz=200M threads=1
 
-# 脚本结束, Cleanup 看到 g_inited=false 直接返回 (无 leak 检查、无
-# worker 需 join)。退出码=1 (两个 init 都失败), 符合预期。
+# 脚本结束, 两个负向 init 均按预期被拒(expect_fail标记), rc=0。
