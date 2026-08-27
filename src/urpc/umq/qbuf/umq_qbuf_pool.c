@@ -2200,11 +2200,11 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
         uint64_t cur_cap = local_pool->capacity_with_data[sc];
         if (actual_cnt > cur_cap) {
             uint64_t delta = actual_cnt - cur_cap;
-            // Clamp by per-thread budget
-            if (cur_cap + delta > g_qbuf_pool.tls_expand_qbuf_pool_depth) {
-                delta = (cur_cap >= g_qbuf_pool.tls_expand_qbuf_pool_depth) ?
-                             0 :
-                            (g_qbuf_pool.tls_expand_qbuf_pool_depth - cur_cap);
+            // Clamp by per-thread budget: with_data per-thread cap = global cap / 2.
+            // tls_expand_qbuf_pool_depth is reserved for without_data only.
+            uint64_t per_thread_cap = g_qbuf_pool.per_sc_tls_qbuf_pool_depth[sc] / 2;
+            if (cur_cap + delta > per_thread_cap) {
+                delta = (cur_cap >= per_thread_cap) ? 0 : (per_thread_cap - cur_cap);
             }
             // Clamp by global budget
             uint64_t g_total = __atomic_load_n(&g_total_local_cap_with_data_cnt[sc], __ATOMIC_RELAXED);
