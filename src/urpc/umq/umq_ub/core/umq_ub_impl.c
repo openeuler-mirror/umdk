@@ -3127,7 +3127,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     import_buf.buf_data = (char *)buf;
     import_buf.data_size = (uint32_t)sizeof(buf);
 
-    int ret = umq_ub_data_plan_import_mem(umqh_tp, &import_buf, 0, false);
+    int ret = umq_ub_data_plan_import_mem(umqh_tp, &import_buf, 0, UMQ_UB_ACK_IMPORT_TYPE_NO_ACK);
     if (ret != UMQ_SUCCESS) {
         return ret;
     }
