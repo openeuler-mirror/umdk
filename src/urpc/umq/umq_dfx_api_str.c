@@ -31,6 +31,11 @@ static const char UMQ_DFX_EQUALS_120[] =
 static const char UMQ_DFX_UNDERLINE_120[] =
     "--------------------------------------------------------------------------------"
     "----------------------------------------"; /* 80 + 40 = 120 */
+
+/* Size-class display names shared across all per-SC DFX rows (file-level to
+ * avoid local-variable shadowing across the three emitters below). */
+static const char *umq_dfx_sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
+
 #define UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN 20
 #define UMQ_DFX_LABEL_BUF_SIZE 32
 
@@ -107,9 +112,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                  * TotalSize counts each block's umq_buf_t header (128B) on top of data. */
                 uint64_t sc_total_size = (uint64_t)sci->init_block_count * (sci->blk_size + info->umq_buf_t_size);
                 uint64_t sc_free_size = (uint64_t)sci->buf_cnt_with_data * sci->blk_size;
-                static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
-                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ?
-                                       sc_names[sc] : "sc?";
+                const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ?
+                                       umq_dfx_sc_names[sc] : "sc?";
                 char ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
                 (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
                                (double)sc_total_size / (1024.0 * 1024.0));
@@ -257,7 +261,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "Type", "free_blk", "blk_size", "exp_total_blk", "exp_total_exp", "exp_total_shrink",
                          "alloc_cnt", "free_cnt", "outstanding");
     /* Normal pool: per-SC with_data rows + RX + without-data */
-    static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
         if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
@@ -265,7 +268,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         }
         for (uint32_t sc = 0; sc < info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
             const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
-            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-10lu %-10u %-14lu %-14lu %-14lu %-11lu %-11lu %-11ld\n",
                                  sc_name,
@@ -333,10 +336,9 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "SyncExpCnt", "AsyncExpCnt", "AccShrinkCnt");
     /* WithData: per-SC breakdown for multi-level pools (Small/Medium/...). */
     if (small_info != NULL && small_info->sc_count > 1) {
-        static const char *sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
         for (uint32_t sc = 0; sc < small_info->sc_count; sc++) {
             const umq_qbuf_sc_info_t *sci = &small_info->sc_info[sc];
-            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
             uint64_t exp_mem_size = sci->exp_total_block_num * sci->blk_size;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-15u %-17lu %-15lu %-17lu %-17lu %-17lu %-17lu %-17lu\n",
@@ -476,7 +478,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     /* per-SC total rows (total-Small/total-Medium/...) for multi-level pools */
     if (small_info != NULL && small_info->sc_count > 1) {
         for (uint32_t sc = 0; sc < small_info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
-            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
             char total_sc_label[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(total_sc_label, sizeof(total_sc_label), "total-%s", sc_name);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
@@ -499,7 +501,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             /* Multi-level pool: split per-SC into Small/Medium rows.
              * All columns show per-SC values (fetch/return/alloc/free are per-sc). */
             for (uint32_t sc = 0; sc < s->sc_count; sc++) {
-                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+                const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
                 UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                      "%-13s %-16lu %-13lu %-13lu %-13lu %-13lu %-13lu %-13lu %-14lu %-14lu\n",
                                      sc_name, s->tid,
