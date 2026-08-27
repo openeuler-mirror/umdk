@@ -238,36 +238,22 @@ void test_umq_uninit(test_umq_ctx_t *ctx)
 void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN])
 {
     memset(priority_list, 0, sizeof(priority_list));
-    const char *tp_type_start = strstr(input_str, "tp_type");
+    const char *tp_type_start = strstr(input_str, "tp_type  :");
     if (tp_type_start == NULL) {
         TEST_LOG_ERROR("错误：未找到tp_type行\n");
         return;
     }
 
-    while (*tp_type_start != '\0' && !(*tp_type_start == 'R' || *tp_type_start == 'C')) {
-        tp_type_start++;
-    }
+    const char *colon = strchr(tp_type_start, ':');
+    const char *p = colon + 1;
 
-    char buffer[TP_TYPE_LEN];
-    int idx = 0;
-    while (*tp_type_start != '\0' && idx < MAX_PRIORITY_NUM) {
-        while (*tp_type_start != '\0' && isspace((unsigned char)*tp_type_start)) {
-            tp_type_start++;
+    for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
+        if (strncmp(p, "  RTP", 5) == 0) {
+            strcpy(priority_list[i], "RTP");
+        } else {
+            strcpy(priority_list[i], "CTP");
         }
-        if (*tp_type_start == '\0')
-            break;
-        strncpy(buffer, tp_type_start, 3);
-        buffer[3] = '\0';
-
-        if (strcmp(buffer, "RTP") == 0 || strcmp(buffer, "CTP") == 0) {
-            strcpy(priority_list[idx], buffer);
-            idx++;
-        }
-        tp_type_start += 3;
-    }
-
-    for (int i = idx; i < MAX_PRIORITY_NUM; i++) {
-        strcpy(priority_list[i], "");
+        p += 5;
     }
 
 }
