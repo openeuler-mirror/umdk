@@ -71,6 +71,16 @@
 #define QBUF_BLOCK_FLAG_BIT_UB        (2)
 #define QBUF_BLOCK_FLAG_BIT_TINY     (3)
 #define QBUF_BLOCK_FLAG_BIT_ESCAPE   (4)
+// IOBuf Block raw-dump word indices (data treated as uint64_t[4], 32 bytes):
+//   word 0 = offset 0-7  (nshared + flags + abi_check)
+//   word 1 = offset 8-15 (size + cap)
+//   word 2 = offset 16-23 (portal_next/data_meta)
+//   word 3 = offset 24-31 (data ptr)
+#define QBUF_BLOCK_RAW_WORD_HDR          (0)
+#define QBUF_BLOCK_RAW_WORD_SIZE_CAP     (1)
+#define QBUF_BLOCK_RAW_WORD_META         (2)
+#define QBUF_BLOCK_RAW_WORD_DATA_PTR     (3)
+#define QBUF_BLOCK_RAW_WORD_COUNT        (4)
 
 typedef struct qbuf_expansion_pool_slot {
     urpc_list_t node;    // linkage in exp_pool.slot_list
@@ -593,9 +603,10 @@ void qbuf_log_non_pool_pointer(const char *caller, void *data)
             data, flags,
             (flags >> QBUF_BLOCK_FLAG_BIT_UB) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_TINY) & 1,
             (flags >> QBUF_BLOCK_FLAG_BIT_ESCAPE) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_USER_DATA) & 1,
-            (unsigned long long)raw[0], (unsigned long long)raw[1],
-            // NOLINTNEXTLINE(G.CNS.02) — array index, not a magic number
-            (unsigned long long)raw[2], (unsigned long long)raw[3]);
+            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_HDR],
+            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_SIZE_CAP],
+            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_META],
+            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_DATA_PTR]);
     }
 
     /* Dump call stack. Build has -rdynamic (CMakeLists.txt:19) so
