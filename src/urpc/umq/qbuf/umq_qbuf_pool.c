@@ -3253,12 +3253,17 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
          * causing use-after-free (SEGV on unmapped slot memory). */
         (void)pthread_spin_lock(&e->expansion_pool_lock);
         sci->exp_expansion_count = e->expansion_count;
-        sci->exp_total_block_num = e->exp_total_block_num;
+        /* exp_total_block_num should be the total capacity (expansion_count *
+         * expansion_block_count), NOT e->exp_total_block_num which tracks
+         * free blocks (decremented on alloc, incremented on free, making it
+         * always equal to exp_free_blk). Use the capacity formula so
+         * TotalBlk != FreeBlk when blocks are in use. */
+        sci->exp_total_block_num = (uint64_t)e->expansion_count * e->expansion_block_count;
         sci->exp_total_expansion_count = e->total_expansion_count;
         sci->exp_total_shrink_count = e->total_shrink_count;
         sci->exp_sync_expansion_count = e->sync_expansion_count;
         sci->exp_async_expansion_count = e->async_expansion_count;
-        sci->global_total = g_qbuf_pool.per_sc_block_counts[sc] + e->exp_total_block_num;
+        sci->global_total = g_qbuf_pool.per_sc_block_counts[sc] + sci->exp_total_block_num;
         /* count expansion slots and free blocks for this sc */
         uint32_t slot_cnt = 0;
         uint64_t exp_free = 0;
@@ -3322,15 +3327,20 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
             qbuf_expansion_pool_t *e = &g_qbuf_pool.exp_pool_with_data[sc];
             exp_count += e->expansion_count;
+            /* exp_free_blocks: sum of free blocks across all exp slots for this sc.
+             * e->exp_total_block_num tracks free blocks (decremented on alloc,
+             * incremented on free), so it IS the free count. */
             exp_free_blocks += e->exp_total_block_num;
-            /* Fix P1-5: use exp_total_block_num (currently alive blocks) instead of
-             * expansion_count * expansion_block_count (cumulative allocated).
-             * After shrink, the latter overstates alive blocks. */
-            exp_total_blocks += e->exp_total_block_num;
+            /* exp_total_blocks: total CAPACITY = expansion_count * expansion_block_count.
+             * Previously used e->exp_total_block_num (free count), which made
+             * TotalBlk always equal FreeBlk. Use capacity formula so TotalBlk
+             * reflects total reserved blocks regardless of alloc/free state. */
+            uint64_t sc_exp_capacity = (uint64_t)e->expansion_count * e->expansion_block_count;
+            exp_total_blocks += sc_exp_capacity;
             if (mode == UMQ_BUF_SPLIT) {
-                exp_total_mem += e->exp_total_block_num * (g_qbuf_pool.block_sizes[sc] + umq_buf_t_size);
+                exp_total_mem += sc_exp_capacity * (g_qbuf_pool.block_sizes[sc] + umq_buf_t_size);
             } else {
-                exp_total_mem += e->exp_total_block_num * g_qbuf_pool.block_sizes[sc];
+                exp_total_mem += sc_exp_capacity * g_qbuf_pool.block_sizes[sc];
             }
             exp_total_expansion += e->total_expansion_count;
             exp_total_shrink += e->total_shrink_count;
