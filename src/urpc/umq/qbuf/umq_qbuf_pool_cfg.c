@@ -192,7 +192,7 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
 
     if (!cfg->buf_pool_cfg.disable_scale_cap && cfg->buf_pool_cfg.umq_buf_pool_max_size > QBUF_POOL_MEM_SIZE_MAX) {
         UMQ_VLOG_ERR(VLOG_UMQ, "the maximum value of expansion mem size max %llu exceed %llu\n",
-                      cfg->buf_pool_cfg.umq_buf_pool_max_size, QBUF_POOL_MEM_SIZE_MAX);
+                     cfg->buf_pool_cfg.umq_buf_pool_max_size, QBUF_POOL_MEM_SIZE_MAX);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -201,9 +201,10 @@ int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *pla
                                          cfg->buf_pool_cfg.umq_buf_pool_max_size;
     uint64_t total_initial_size = plan->tiny_io_buf_size + plan->rx_io_buf_size + plan->normal_io_buf_size;
     if (max_umq_buf_pool_size < total_initial_size) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "max buf pool size %llu is too small for total initial %llu (tiny %llu + rx %llu + normal %llu)\n",
-                      max_umq_buf_pool_size, total_initial_size,
-                      plan->tiny_io_buf_size, plan->rx_io_buf_size, plan->normal_io_buf_size);
+        UMQ_VLOG_ERR(VLOG_UMQ,
+                     "max buf pool size %llu is too small for total initial %llu (tiny %llu + rx %llu + normal %llu)\n",
+                     max_umq_buf_pool_size, total_initial_size,
+                     plan->tiny_io_buf_size, plan->rx_io_buf_size, plan->normal_io_buf_size);
         return -UMQ_ERR_EINVAL;
     }
 
