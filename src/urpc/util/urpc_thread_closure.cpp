@@ -33,10 +33,15 @@ static void set_tls_dtors_running(void)
 }
 
 /* Register the atexit handler exactly once (constructor runs at process start,
- * before any threads are created). atexit() itself is thread-safe per POSIX. */
+ * before any threads are created). atexit() itself is thread-safe per POSIX.
+ *
+ * G.FUU.04 豁免: atexit 是本 TLS 析构退出安全机制的最合适方案 -- 需满足
+ * "进程退出时自动触发 + 先于 __call_tls_dtors 执行 + 不依赖应用主动调用",
+ * atexit 是唯一同时满足这三点的机制(替代方案 __cxa_atexit/g_ubsocket_exiting
+ * 等均无法保证时序或需外部调用)。详见 set_tls_dtors_running 上方注释。 */
 __attribute__((constructor)) static void register_tls_dtors_handler(void)
 {
-    (void)atexit(set_tls_dtors_running);
+    (void)atexit(set_tls_dtors_running); /* NOLINT(G.FUU.04) */
 }
 
 class urpc_thread_closure {
