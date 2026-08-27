@@ -1813,7 +1813,7 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
             }
         }
     } else if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) && cnt > 0) {
-        umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+        umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
         jetty_pool_node_t *node = jetty_node_list->node_list[tp_handle_idx];
         uint32_t tx_after = __atomic_sub_fetch(&node->tx_outstanding, cnt, __ATOMIC_ACQ_REL);
         if (tx_after != 0) {
@@ -1927,7 +1927,7 @@ static void umq_ub_process_cr_err_for_jetty_pool(ub_queue_t *queue, urma_cr_t *c
         return;
     }
 
-    umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+    umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
     if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) &&
         ((option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0 && jetty_node_list != NULL &&
         tp_handle_idx < jetty_node_list->list_len)) {
@@ -1983,7 +1983,7 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
 
     urma_jfc_t *jfs_jfc = queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL];
     if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
-        umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+        umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
         if (jetty_node_list->bitmap != NULL && tp_handle_idx < jetty_node_list->list_len &&
             urpc_bitmap_is_set(jetty_node_list->bitmap, tp_handle_idx)) {
             jfs_jfc = jetty_node_list->node_list[tp_handle_idx]->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL];
@@ -2135,7 +2135,7 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
     urma_jfc_t *jfs_jfc = queue->jfs_jfc[UB_QUEUE_JETTY_IO];
     jetty_pool_node_t *polling_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
     if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
-        umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+        umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
         if (jetty_node_list->bitmap != NULL && tp_handle_idx < jetty_node_list->list_len &&
             urpc_bitmap_is_set(jetty_node_list->bitmap, tp_handle_idx)) {
             polling_node = jetty_node_list->node_list[tp_handle_idx];
@@ -2246,7 +2246,7 @@ static int umq_ub_poll_tx_round_robin(ub_queue_t *queue, umq_buf_t **buf, uint32
         return 0;
     }
 
-    umq_ub_jetty_node_list_t *jetty_node_list = queue->jetty_node_list;
+    umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
     if (jetty_node_list == NULL || jetty_node_list->bitmap == NULL) {
         return 0;
     }
