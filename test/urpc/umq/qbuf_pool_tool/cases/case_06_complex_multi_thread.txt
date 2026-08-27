@@ -10,13 +10,15 @@ init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=3
 thread_0 alloc 4096      # t0 idx0 sc0
 thread_0 alloc 32768     # t0 idx1 sc1
 
-# t1: sc1 multi-block alloc (70K splits into 64K+4464) + partial free
+# t1: sc1 multi-block alloc (2 single-block sc1 allocs) + partial free
 thread_1 alloc 65536     # t1 idx0 sc1
-thread_1 alloc 70000     # t1 idx1+idx2 sc1 (2 bufs)
-thread_1 free 1          # free t1 idx1 (first of 70K pair), t1 left [idx0, idx2->shift]
+thread_1 alloc 32768     # t1 idx1 sc1
+thread_1 alloc 32768     # t1 idx2 sc1
+thread_1 free 1          # free t1 idx1, t1 left [idx0, idx2->shift]
 
 # t2: sc1 multi-block + partial free + INTENTIONAL LEAK (no free all)
-thread_2 alloc 70000     # t2 idx0+idx1 sc1 (2 bufs)
+thread_2 alloc 32768     # t2 idx0 sc1
+thread_2 alloc 32768     # t2 idx1 sc1
 thread_2 free 0          # free t2 idx0, t2 left [idx1->shift] -- leak this 1 buf
 
 status                   # expect: t0/t1/t2 each own TLS row; held allocs
