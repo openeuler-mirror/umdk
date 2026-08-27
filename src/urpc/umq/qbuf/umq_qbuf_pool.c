@@ -1574,9 +1574,37 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
     return UMQ_SUCCESS;
 }
 
+/* When disable_scale_cap is true, the expansion pool never allocates slots, but
+ * its slot_list and locks must still be initialized so that traversals (e.g.
+ * umq_qbuf_data_to_head_escape) encounter a valid empty list instead of
+ * zero-filled memory (slot_list.next==NULL → URPC_LIST_FOR_EACH dereferences
+ * NULL → SEGV). This does only the list/lock init, skipping block-count
+ * computation that would divide by g_qbuf_pool.block_sizes[sc] — those fields
+ * stay zero and are never read because no slots are ever allocated. */
+static void umq_qbuf_exp_pool_minimal_init(qbuf_expansion_pool_t *exp_pool)
+{
+    urpc_list_init(&exp_pool->slot_list);
+    urpc_list_init(&exp_pool->shrink_task_list.head);
+    (void)pthread_spin_init(&exp_pool->expansion_pool_lock, PTHREAD_PROCESS_PRIVATE);
+    (void)pthread_spin_init(&exp_pool->shrink_task_list.lock, PTHREAD_PROCESS_PRIVATE);
+    exp_pool->inited = false;
+}
+
+/* Counterpart to umq_qbuf_exp_pool_minimal_init: destroy only the locks.
+ * No slots exist, so no slot cleanup or async-wait is needed. */
+static void umq_qbuf_exp_pool_minimal_uninit(qbuf_expansion_pool_t *exp_pool)
+{
+    (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
+    (void)pthread_spin_destroy(&exp_pool->shrink_task_list.lock);
+}
+
 static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
 {
     if (cfg->disable_scale_cap) {
+        for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+            umq_qbuf_exp_pool_minimal_init(&g_qbuf_pool.exp_pool_with_data[sc]);
+        }
+        umq_qbuf_exp_pool_minimal_init(&g_qbuf_pool.exp_pool_without_date);
         return UMQ_SUCCESS;
     }
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
@@ -1603,6 +1631,10 @@ static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
 static bool umq_qbuf_expansion_pool_uninit(void)
 {
     if (g_qbuf_pool.disable_scale_cap) {
+        for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+            umq_qbuf_exp_pool_minimal_uninit(&g_qbuf_pool.exp_pool_with_data[sc]);
+        }
+        umq_qbuf_exp_pool_minimal_uninit(&g_qbuf_pool.exp_pool_without_date);
         return true;
     }
     bool all_ok = true;
