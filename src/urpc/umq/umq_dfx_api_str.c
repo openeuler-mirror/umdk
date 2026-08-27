@@ -145,6 +145,14 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
              * the other type rows that add TotalBlk * umq_buf_t_size to the data bytes. */
             const umq_qbuf_pool_config_t *cfg = &info->config;
             uint64_t rx_total_size = cfg->rx_pool_total_size;
+            uint32_t rx_data_size, rx_buf_size;
+            if (info->mode == UMQ_BUF_SPLIT) {
+                rx_data_size = cfg->rx_pool_block_size;
+                rx_buf_size = cfg->rx_pool_block_size + info->umq_buf_t_size;
+            } else {
+                rx_data_size = cfg->rx_pool_block_size - info->umq_buf_t_size;
+                rx_buf_size = cfg->rx_pool_block_size;
+            }
             char rx_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(rx_ts_buf, sizeof(rx_ts_buf), "%lu(%.1fMB)", rx_total_size,
                            (double)rx_total_size / (UMQ_DFX_BYTES_PER_MB));
@@ -152,8 +160,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                                  "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
                                  "RX_pool", mode_str, rx_ts_buf,
                                  (unsigned long)cfg->rx_pool_depth,
-                                 cfg->rx_pool_block_size, info->headroom_size, info->data_size,
-                                 info->buf_size, info->umq_buf_t_size,
+                                 cfg->rx_pool_block_size, info->headroom_size, rx_data_size,
+                                 rx_buf_size, info->umq_buf_t_size,
                                  (unsigned long)cfg->rx_pool_free_depth,
                                  (uint64_t)cfg->rx_pool_free_depth * cfg->rx_pool_block_size);
             grand_total_size += rx_total_size;
