@@ -61,13 +61,13 @@ TEST(UrmaBondTest, WrBufferAllocGetRelease)
     ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     jfsEntry = jfs_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, jfsEntry);
-    EXPECT_EQ(1U, jfsEntry->wr_id);
+    EXPECT_EQ(idx_to_wr_id(0, 1), jfsEntry->wr_id);
     EXPECT_EQ(WR_BUF_ENTRY_JFS, jfsEntry->entry_type);
     EXPECT_TRUE(jfsEntry == jfs_wr_buf_get(&buf, jfsEntry->wr_id));
 
     jfrEntry = jfr_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, jfrEntry);
-    EXPECT_EQ(2U, jfrEntry->wr_id);
+    EXPECT_EQ(idx_to_wr_id(1, 1), jfrEntry->wr_id);
     EXPECT_EQ(WR_BUF_ENTRY_JFR, jfrEntry->entry_type);
     EXPECT_TRUE(jfrEntry == jfr_wr_buf_get(&buf, jfrEntry->wr_id));
 
@@ -158,8 +158,8 @@ TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfs)
     EXPECT_EQ(2U, jfs_wr_buf_alloc_batch(&buf, entries, 3));
     ASSERT_NE(nullptr, entries[0]);
     ASSERT_NE(nullptr, entries[1]);
-    EXPECT_EQ(1U, entries[0]->wr_id);
-    EXPECT_EQ(2U, entries[1]->wr_id);
+    EXPECT_EQ(idx_to_wr_id(0, 1), entries[0]->wr_id);
+    EXPECT_EQ(idx_to_wr_id(1, 1), entries[1]->wr_id);
     EXPECT_EQ(0U, jfs_wr_buf_alloc_batch(&buf, entries, 1));
 
     jfs_wr_buf_release_batch(&buf, entries, 2);
