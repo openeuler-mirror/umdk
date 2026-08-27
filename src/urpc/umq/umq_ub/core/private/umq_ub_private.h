@@ -532,6 +532,7 @@ typedef struct ub_queue_cfg {
     jfr_ctx_t *jfr_ctx[UB_QUEUE_JETTY_NUM];
     umq_ub_jetty_node_list_t *jetty_node_list;  // main+share queue owns it; Logic UMQ borrows via share_rq's cfg
     umq_buf_t *addr_list;                       // msg_id->buf map; lazily alloc; Logic UMQ borrows via share_rq's cfg
+    wait_ack_import_t wait_ack_import;          // lazily init; Logic UMQ does not use it
     urma_order_type_t order_type;
     urma_transport_mode_t tp_mode;
     urma_tp_type_t tp_type;
@@ -582,7 +583,6 @@ typedef struct ub_queue {
     uint32_t umq_id;
     uint32_t remote_umq_id;
     uint32_t remote_rx_buf_size;
-    wait_ack_import_t wait_ack_import;
 
     bool tx_flush_done;               // tx recv flush err done
     bool rx_flush_done;               // rx buf ctx all report
@@ -839,6 +839,12 @@ static inline umq_ub_jetty_node_list_t *umq_ub_queue_jetty_node_list_get(ub_queu
 static inline umq_buf_t *umq_ub_queue_addr_list_get(ub_queue_t *queue)
 {
     return umq_ub_queue_cfg_get(queue)->addr_list;
+}
+
+// wait_ack_import is lazily init'd on import-mem; Logic UMQ does not use it.
+static inline wait_ack_import_t *umq_ub_queue_wait_ack_import_get(ub_queue_t *queue)
+{
+    return &umq_ub_queue_cfg_get(queue)->wait_ack_import;
 }
 
 // for exclusive acquisition of umq, it needs to be put back after use

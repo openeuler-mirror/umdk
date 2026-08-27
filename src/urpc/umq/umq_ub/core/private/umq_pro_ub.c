@@ -1550,7 +1550,7 @@ int umq_ub_poll_rx(uint64_t umqh, umq_buf_t **buf, uint32_t buf_count, umq_io_op
         qbuf_cnt += (uint32_t)fc_qbuf_cnt;
     }
 
-    if (queue->wait_ack_import.wait_ack_idx > 0) {
+    if (qcfg->wait_ack_import.wait_ack_idx > 0) {
         umq_ub_ack_import_tseg(queue);
     }
 
