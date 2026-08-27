@@ -65,7 +65,7 @@ urma_status_t bondp_unimport_jfr(urma_target_jetty_t *target_jfr);
 
 /* Convert a bond port id (chip_id/die_id/port_idx, port_idx 0~8 or UINT8_MAX
  * for the primary EID) into the matrix active index used to address p_ctxs[]
- * and the connected[][] matrix. Defined in bondp_api.c, shared by the create
+ * and the connected[][] matrix. Defined in bondp_cp_jetty.c, shared by the create
  * and user_ctl paths so they interpret port config identically. */
 int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_port_id_t port_id,
                                          uint32_t *active_index);
