@@ -41,7 +41,8 @@ static void set_tls_dtors_running(void)
  * 等均无法保证时序或需外部调用)。详见 set_tls_dtors_running 上方注释。 */
 __attribute__((constructor)) static void register_tls_dtors_handler(void)
 {
-    (void)atexit(set_tls_dtors_running); /* NOLINT(G.FUU.04) */
+    // NOLINTNEXTLINE(G.FUU.04)
+    (void)atexit(set_tls_dtors_running);
 }
 
 class urpc_thread_closure {
