@@ -410,7 +410,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
          * previous SEND/WRITE WRs that share g_umq_ub_urma_wr[] entries. */
         urma_wr_ptr->rw.target_hint = 0;
         urma_wr_ptr->rw.notify_data = 0;
-        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, g_umq_ub_sges[wr_index], sge_num, &src_sge[wr_index], &dst_sge[wr_index]);
+        ret = umq_ub_fill_wr(queue, tmp_buf, urma_wr_ptr, g_umq_ub_sges[wr_index], sge_num,
+                             &src_sge[wr_index], &dst_sge[wr_index]);
         if (ret != UMQ_SUCCESS) {
             *bad_qbuf = qbuf;
             goto ERROR;
@@ -426,7 +427,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         wr_index++;
         if (wr_index == UMQ_BATCH_SIZE && buffer != NULL) {
             // wr count exceed UMQ_BATCH_SIZE
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), wr count exceeds %d, not supported, first_qbuf=%p, cur_buffer=%p, total_data_size=%u\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                               "UMQ(ID:%u), wr count exceeds %d, not supported, first_qbuf=%p, "
+                               "cur_buffer=%p, total_data_size=%u\n",
                 queue->umq_id, UMQ_BATCH_SIZE, (void *)qbuf, (void *)buffer, buffer->total_data_size);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
