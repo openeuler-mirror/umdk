@@ -1,0 +1,10 @@
+# case 5: multi-thread (threads=2) — verify per-thread TLS isolation
+# allocs on different workers go to different TLS; global pool shared
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=2
+thread_0 alloc 4096
+thread_1 alloc 65536
+thread_0 alloc 70000
+status
+thread_0 free all
+thread_1 free all
+status

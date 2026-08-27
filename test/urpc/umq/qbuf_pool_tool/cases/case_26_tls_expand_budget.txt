@@ -1,0 +1,35 @@
+# case 26: tlsExpandBudget — per-thread TLS bytes cap independent of global cap
+#
+# Verifies: tlsExpandBudget sets cfg.tls_expand_mem_budget (per-thread cap),
+#   independent from tlsBudget (cfg.tls_pool_mem_budget, global cap).
+#   Default (0): production takes 7/8 of tlsBudget (umq_qbuf_pool.c:1214-1216).
+#   Custom: tlsExpandBudget=1M caps each thread's TLS to 1M regardless of
+#   tlsBudget being larger.
+#
+#   TLS fetch truncation: local_total_bytes + delta > tlsExpandBudget →
+#   delta truncated (umq_qbuf_pool.c:1666-1669).
+#
+# This case sets tlsBudget=96M (default global cap) but tlsExpandBudget=1M,
+# so each thread's TLS is capped at 1M instead of the default 84M (7/8 * 96M).
+# After alloc, info 段5 Per-Thread TLS: each thread CurCap ≤ 1M.
+init count=1 blockSizes=4K mode=split scaleCap=on totalSz=200M tlsBudget=96M tlsExpandBudget=1M threads=2
+
+# Verify init: info 段2 should show tls_expand_mem_budget=1048576
+info
+
+# Each thread allocs sc0 bufs — TLS fetch capped at 1M per thread
+# (vs default 84M per thread = 7/8 * 96M)
+parallel
+  thread_0 alloc 4096 100
+  thread_1 alloc 4096 100
+join
+
+# info 段5 Per-Thread TLS: each thread CurCap ≤ 1M (vs 84M default)
+# info 段7 Per-Thread Per-SC TLS: each thread sc0 tls_cap_cnt <= 256 (1M/4K=256)
+info
+
+parallel
+  thread_0 free all
+  thread_1 free all
+join
+status
