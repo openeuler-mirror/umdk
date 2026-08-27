@@ -10,6 +10,12 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/dfx)
 include_directories(${CMAKE_CURRENT_LIST_DIR})
 include(${CMAKE_SOURCE_DIR}/urpc/umq/dfx/CMakeLists.txt)
 
+# UMQ_QBUF_DEBUG: qbuf debug instrumentation. Compiled in unconditionally
+# (runtime on/off via g_qbuf_debug_enabled); the code's call sites assume the
+# qbuf_dbg_record_* helpers always exist, so the macro must be defined.
+# Matches ubscomm src/hcom/umq/CMakeLists.txt.
+add_compile_definitions(UMQ_QBUF_DEBUG)
+
 add_subdirectory(qbuf)
 add_subdirectory(umq_ub)
 
