@@ -8,7 +8,6 @@
  */
 package com.huawei.umdk.snc.entity;
 
-import java.util.Collections;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -31,10 +30,6 @@ public class RouteSelectionRecord {
     private String dcna;
     private String hashInfo;
     private Direction direction;
-
-    public List<CandidateOutPort> getCandidateOutPorts() {
-        return candidateOutPorts == null ? null : Collections.unmodifiableList(candidateOutPorts);
-    }
 
     @Getter
     @Setter

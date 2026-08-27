@@ -8,7 +8,6 @@
  */
 package com.huawei.umdk.snc.entity;
 
-import java.util.Collections;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -30,8 +29,4 @@ public class InternalPathInfo {
     private String sourceCna;
     private String destCna;
     private int hopCount;
-
-    public List<InternalPathHop> getHops() {
-        return hops == null ? null : Collections.unmodifiableList(hops);
-    }
 }
