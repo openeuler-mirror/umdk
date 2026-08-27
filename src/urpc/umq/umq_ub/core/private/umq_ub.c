@@ -20,6 +20,7 @@
 
 #define DEFAULT_RNR_RETRY 6      // Retry 6 times
 #define DEFAULT_ERR_TIMEOUT 2
+#define UB_IMPORT_HDR_U32_COUNT 5  // u32 count of ub_import_mempool_info_t fixed header (20B)
 
 static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node);
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
@@ -277,8 +278,8 @@ uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint3
     /* Zero the compiler-inserted 4-byte padding between the 20B header and the
      * 8B-aligned seg (offset 20..24) so no stack garbage is carried over the
      * wire — the wire ub_mempool_info_t reserves the same 4 bytes explicitly. */
-    (void)memset((uint8_t *)out + 5 * sizeof(uint32_t), 0,
-                 UB_IMPORT_MEMPOOL_INFO_HDR_SIZE - 5 * sizeof(uint32_t));
+    (void)memset((uint8_t *)out + UB_IMPORT_HDR_U32_COUNT * sizeof(uint32_t), 0,
+                 UB_IMPORT_MEMPOOL_INFO_HDR_SIZE - UB_IMPORT_HDR_U32_COUNT * sizeof(uint32_t));
     out->seg_size = seg_size;
     out->mempool_id = mempool_id;
     out->mempool_token_value = token_value;
@@ -731,7 +732,8 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
                   "remote pid: %u, remote namespace: %s, bind jetty success\n",
                   queue->umq_id, queue->remote_umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
                   ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, info->dev_info->bind_namespace);
-    umq_ub_fc_msg_retry_list_t *retry_list = (queue->flow_control != NULL) ? queue->flow_control->fc_msg_retry_list : NULL;
+    umq_ub_fc_msg_retry_list_t *retry_list =
+        (queue->flow_control != NULL) ? queue->flow_control->fc_msg_retry_list : NULL;
     if (retry_list != NULL && retry_list->inited && !urpc_list_is_empty(&retry_list->no_jetty_list)) {
         umq_ub_fc_msg_retry_notify(retry_list);
     }
@@ -2645,7 +2647,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
 
         /* Forward the peer's seg blob verbatim to urma_import_seg. */
         urma_target_seg_t *imported_tseg = import_mem(queue->dev_ctx->urma_ctx, &entry->seg,
-                                                     entry->seg_size, entry->mempool_token_value);
+                                                      entry->seg_size, entry->mempool_token_value);
         if (imported_tseg == NULL) {
             free(new_node);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, import memory failed\n", EID_ARGS(*eid), id);
