@@ -29,7 +29,7 @@
 #include "bondp_types.h"
 #include "urma_ubagg.h"
 
-#include "bondp_api.h"
+#include "bondp_cp_jetty.h"
 
 typedef struct bondp_create_vjetty_udata {
     urma_jetty_id_t slave_id[URMA_UBAGG_DEV_MAX_NUM];
