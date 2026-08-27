@@ -8,7 +8,10 @@
  */
 package com.huawei.umdk.snc.entity;
 
+import java.util.Collections;
 import java.util.Map;
+import com.alibaba.fastjson2.annotation.JSONField;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +24,7 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 public class SwForwardingChip extends ForwardingChip {
+    @Getter(AccessLevel.NONE)
     private Map<String, SwPortEntity> ports;
 
     public SwForwardingChip(Integer chipIndex) {
@@ -30,5 +34,16 @@ public class SwForwardingChip extends ForwardingChip {
     public SwForwardingChip(Integer chipIndex, Map<String, SwPortEntity> ports) {
         super(chipIndex);
         this.ports = ports;
+    }
+
+    @Override
+    @JSONField(serialize = false)
+    public Map<String, ? extends PortEntity> getPorts() {
+        return ports == null ? null : Collections.unmodifiableMap(ports);
+    }
+
+    @JSONField(serialize = false)
+    public Map<String, SwPortEntity> getSwPorts() {
+        return ports == null ? null : Collections.unmodifiableMap(ports);
     }
 }

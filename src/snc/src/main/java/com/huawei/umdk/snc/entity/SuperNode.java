@@ -8,9 +8,9 @@
  */
 package com.huawei.umdk.snc.entity;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
 import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -35,6 +35,24 @@ public class SuperNode {
      * 合并 NPU 与 SW 设备为统一视图（只读派生属性，不参与 JSON 序列化）。
      */
     @JSONField(serialize = false)
+    public Map<String, NpuDevice> getNpuDevices() {
+        return npuDevices == null ? null : Collections.unmodifiableMap(npuDevices);
+    }
+
+    @JSONField(serialize = false)
+    public Map<String, SwDevice> getSwDevices() {
+        return swDevices == null ? null : Collections.unmodifiableMap(swDevices);
+    }
+
+    public Map<String, NpuDevice> getMutableNpuDevices() {
+        return npuDevices;
+    }
+
+    public Map<String, SwDevice> getMutableSwDevices() {
+        return swDevices;
+    }
+
+    @JSONField(serialize = false)
     public Map<String, DeviceEntity> getAllDevices() {
         Map<String, DeviceEntity> all = new HashMap<>();
         if (npuDevices != null) {
@@ -43,6 +61,17 @@ public class SuperNode {
         if (swDevices != null) {
             all.putAll(swDevices);
         }
-        return all;
+        return all.isEmpty() ? Collections.emptyMap() : Collections.unmodifiableMap(all);
+    }
+
+    public Map<String, DeviceEntity> getMutableAllDevices() {
+        Map<String, DeviceEntity> all = new HashMap<>();
+        if (npuDevices != null) {
+            all.putAll(npuDevices);
+        }
+        if (swDevices != null) {
+            all.putAll(swDevices);
+        }
+        return all.isEmpty() ? new HashMap<>() : all;
     }
 }

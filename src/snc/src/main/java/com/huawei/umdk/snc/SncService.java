@@ -4,7 +4,7 @@
  * Description: SNC (Supernode Network Controller) service
  * Create: 2026-07-07
  * Note:
- * History: 2026-07-07  Create File; 2026-07-16 key=value log format
+ * History: 2026-07-07  Create File; 2026-07-16 key=value log format; 2026-08-27 add planPathsCoverage
  */
 package com.huawei.umdk.snc;
 
@@ -15,9 +15,13 @@ import java.util.Map;
 
 import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
+import com.huawei.umdk.snc.config.HashTuple;
 import com.huawei.umdk.snc.config.SNCConfig;
+import com.huawei.umdk.snc.dto.CoveragePathsRequest;
+import com.huawei.umdk.snc.dto.CoveragePathsResult;
 import com.huawei.umdk.snc.dto.PathPlanRequest;
 import com.huawei.umdk.snc.dto.PathPlanResult;
+import com.huawei.umdk.snc.engine.CoveragePlanEngine;
 import com.huawei.umdk.snc.engine.PathEngine;
 import com.huawei.umdk.snc.engine.RouteLookupEngine;
 import com.huawei.umdk.snc.entity.LinkEvent;
@@ -95,9 +99,16 @@ public class SncService {
         PathEngine pathEngine = new PathEngine();
         RouteLookupEngine routeLookupEngine = new RouteLookupEngine();
 
+        CoveragePlanEngine coveragePlanEngine = new CoveragePlanEngine(
+            superNodeStore,
+            config != null ? config.getHashFunc() : 1,
+            config != null ? config.getFixedDataUdpPort() : 0,
+            config != null ? config.getFixedAckUdpPort() : 0,
+            config != null ? config.getHashTuple() : HashTuple.TWO);
+
         this.superNodeService = new SuperNodeService(superNodeStore);
         this.pathService = new PathService(superNodeStore,
-            pathEngine, routeLookupEngine);
+            pathEngine, routeLookupEngine, coveragePlanEngine);
         this.linkEventService = new LinkEventService(superNodeStore);
         this.routeConvergeService = new RouteConvergeService();
         LOG.debug("init: Service instances created (SuperNodeService, PathService, "
@@ -282,6 +293,18 @@ public class SncService {
         PathPlanResult result = pathService.planPath(request);
         LOG.info("planPath: src=" + request.getSrcDevice() + ", dst=" + request.getDestDevice()
             + ", status=" + result.getStatus());
+        return result;
+    }
+
+    public CoveragePathsResult planPathsCoverage(CoveragePathsRequest request) {
+        if (state != State.DATAREADY) {
+            throw new SNCStateException("SNC is not in DATAREADY state, current state: " + state);
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("CoveragePathsRequest must not be null");
+        }
+        CoveragePathsResult result = pathService.planPathsCoverage(request);
+        LOG.info("planPathsCoverage: status=" + result.getStatus());
         return result;
     }
 

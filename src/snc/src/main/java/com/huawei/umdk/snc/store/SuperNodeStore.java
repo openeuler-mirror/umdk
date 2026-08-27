@@ -109,10 +109,10 @@ public class SuperNodeStore {
                 "SuperNode not found: " + superNodeName + ". Call setSuperNode() first.");
         }
         LOG.info("addNpuDevice: superNode=" + superNodeName + ", device=" + device.getDeviceName());
-        if (superNode.getNpuDevices() == null) {
+        if (superNode.getMutableNpuDevices() == null) {
             superNode.setNpuDevices(new ConcurrentHashMap<>());
         }
-        superNode.getNpuDevices().put(device.getDeviceName(), device);
+        superNode.getMutableNpuDevices().put(device.getDeviceName(), device);
         indexRoutingTable(superNodeName, device);
     }
 
@@ -124,10 +124,10 @@ public class SuperNodeStore {
                 "SuperNode not found: " + superNodeName + ". Call setSuperNode() first.");
         }
         LOG.info("addSwDevice: superNode=" + superNodeName + ", device=" + device.getDeviceName());
-        if (superNode.getSwDevices() == null) {
+        if (superNode.getMutableSwDevices() == null) {
             superNode.setSwDevices(new ConcurrentHashMap<>());
         }
-        superNode.getSwDevices().put(device.getDeviceName(), device);
+        superNode.getMutableSwDevices().put(device.getDeviceName(), device);
         indexRoutingTable(superNodeName, device);
     }
 
@@ -136,11 +136,11 @@ public class SuperNodeStore {
         if (superNodeMap != null) {
             SuperNode superNode = superNodeMap.get(superNodeName);
             if (superNode != null) {
-                if (superNode.getNpuDevices() != null) {
-                    superNode.getNpuDevices().remove(deviceName);
+                if (superNode.getMutableNpuDevices() != null) {
+                    superNode.getMutableNpuDevices().remove(deviceName);
                 }
-                if (superNode.getSwDevices() != null) {
-                    superNode.getSwDevices().remove(deviceName);
+                if (superNode.getMutableSwDevices() != null) {
+                    superNode.getMutableSwDevices().remove(deviceName);
                 }
             } else {
                 LOG.warn("removeDevice: superNode=" + superNodeName + ", warning=SuperNode not found, action=skip device removal");

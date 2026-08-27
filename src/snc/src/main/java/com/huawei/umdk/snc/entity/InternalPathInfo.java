@@ -8,7 +8,9 @@
  */
 package com.huawei.umdk.snc.entity;
 
+import java.util.Collections;
 import java.util.List;
+import com.alibaba.fastjson2.annotation.JSONField;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,4 +31,9 @@ public class InternalPathInfo {
     private String sourceCna;
     private String destCna;
     private int hopCount;
+
+    @JSONField(serialize = false)
+    public List<InternalPathHop> getHops() {
+        return hops == null ? null : Collections.unmodifiableList(hops);
+    }
 }
