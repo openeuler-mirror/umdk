@@ -1,0 +1,31 @@
+# case 16: 字段映射负向验证 (预期失败, 退出码=1)
+# 本用例验证两条保护性约束, 两个 init 都会失败, 脚本退出码非0,
+# 属预期行为 —— 用例的"通过"语义是"两个 init 都按预期被拒绝"。
+#
+# Stage 1: 旧参数名 expSz= 已被工具弃用 (改名为 expSlotSz 避免歧义)
+#   工具 utils.cpp 的 SplitKv 解析 + core.cpp DoInit 的 if-else 分支
+#   不再识别 "expSz" key, 落到 else 分支打印 "unknown key" 后 return -1,
+#   整个 DoInit 在 parsing 阶段失败, 不走到 memalign/umq_qbuf_pool_init。
+#
+# Stage 2: poolMaxSz=7G 越界, 走生产代码 6GB 硬上限校验
+#   umq_qbuf_pool.c:1356 检查 cfg.umq_buf_pool_max_size > 6GB
+#   (QBUF_POOL_MEM_SIZE_MAX) 时返回 -UMQ_ERR_EINVAL,
+#   DoInit 接到非0 ret, 打印 "umq_qbuf_pool_init failed ret=-22"
+#   (UMQ_ERR_EINVAL=22) 然后 free g_buf_addr、return -1。
+#   这是工具正确映射 poolMaxSz → cfg.umq_buf_pool_max_size 的反向证明:
+#   若映射错误 (例如仍映射到 expansion_size), 生产代码不会触发
+#   6GB 上限校验, init 会静默通过 —— 那就是修改前的 bug 行为。
+
+# Stage 1: 旧名 expSz 被工具拒绝
+# Expect stderr: ERROR: init unknown key 'expSz'
+# (parsing 失败, 不走到 umq_qbuf_pool_init, g_buf_addr 仍为 nullptr)
+expect_fail
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M expSz=64M threads=1
+
+# Stage 2: 非法 block_size 被生产代码拒绝 (4K*2^n 校验)
+# umq_qbuf_pool.c:1653 检查 explicit_block_sizes[i] 必须是 4K*2^n,
+# 5000 不满足, 返回 -UMQ_ERR_EINVAL, DoInit 接到非0 ret 打印失败。
+expect_fail
+init count=2 blockSizes=4K,5000 mode=split scaleCap=on totalSz=200M threads=1
+
+# 脚本结束, 两个负向 init 均按预期被拒(expect_fail标记), rc=0。

@@ -1,0 +1,84 @@
+# case 21: stress_repeat — infinite long-running stability test
+#
+# stress_repeat runs INFINITELY until:
+#   - SIGINT/SIGTERM (Ctrl-C) — graceful exit after current iter
+#   - alloc/free failure — exits with code 1
+#   - second Ctrl-C — force kill (re-installs default handler)
+#
+# Demonstrates the stress_repeat directive (vs the regular `repeat`):
+#   - Per-iter actions NOT recorded in g_actions (memory bounded)
+#   - Per-buf printf suppressed (output bounded)
+#   - Worker::alloc_ops cleared at iter boundary when alloced.empty()
+#     (bounded even with `free <idx>` patterns)
+#   - snapshot 100 directive prints one-line progress every 100 iters
+#     to stdout (not stored in any vector — output goes to stdout only)
+#   - StressCounters bumped in DrainWorkerResult: total allocs/frees/errors
+#     displayed via `status` stress summary section
+#
+# To run: start the tool, let it loop for a while, then Ctrl-C to stop.
+# After Ctrl-C, the loop breaks after the current iter, prints final
+# summary, and the parser continues with the next line (`status`).
+#
+# Verifies:
+#   - 8 workers concurrent alloc + free infinitely
+#   - g_actions size stays at 1 (just `init`) — verify with `status`
+#   - stress summary shows allocs=frees, errors=0
+#   - snapshot lines printed every 100 iters
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Bootstrap TLS cache (serial) — each worker needs at least one prior
+# alloc so its TLS has fetch bytes; subsequent stress iterations exercise
+# self_shrink (returning excess TLS to global).
+thread_0 alloc 4096 50
+thread_0 free all
+thread_1 alloc 4096 50
+thread_1 free all
+thread_2 alloc 4096 50
+thread_2 free all
+thread_3 alloc 4096 50
+thread_3 free all
+thread_4 alloc 4096 50
+thread_4 free all
+thread_5 alloc 4096 50
+thread_5 free all
+thread_6 alloc 4096 50
+thread_6 free all
+thread_7 alloc 4096 50
+thread_7 free all
+
+# Stress loop: INFINITE. Ctrl-C to stop.
+# Memory should stay bounded — g_actions size = 1 (init only),
+# Worker::alloc_ops cleared at each iter boundary, alloced bounded
+# by within-iter state.
+stress_repeat
+  parallel
+    thread_0 alloc 4096 10
+    thread_1 alloc 4096 10
+    thread_2 alloc 4096 10
+    thread_3 alloc 4096 10
+    thread_4 alloc 4096 10
+    thread_5 alloc 4096 10
+    thread_6 alloc 4096 10
+    thread_7 alloc 4096 10
+  join
+  parallel
+    thread_0 free all
+    thread_1 free all
+    thread_2 free all
+    thread_3 free all
+    thread_4 free all
+    thread_5 free all
+    thread_6 free all
+    thread_7 free all
+  join
+  snapshot 100
+  iterations 200
+end
+
+# Final status — after Ctrl-C, verify:
+#   - stress summary section at top: state=interrupted, allocs=frees, errors=0
+#   - actions (1): just `init` (no per-iter actions recorded)
+#   - held allocs: (none — all freed)
+#   - pool state: per-sc global/alloced/exp sane; per-thread TLS rows
+#     show stable fetch bytes (self_shrink returned excess to global)
+status

@@ -256,6 +256,22 @@ int umq_log_config_set(umq_log_config_t *config);
 int umq_log_config_get(umq_log_config_t *config);
 
 /**
+ * Thread safety function
+ * Set the process exiting flag. Dispatched to every enabled transport backend
+ * via the umq_tp_exiting_set callback; UB backend post/poll entries then skip
+ * resources that may already be released during teardown, avoiding exit-time UAF.
+ * @param[in] exiting: true means the process is exiting
+ */
+void umq_exiting_set(bool exiting);
+
+/**
+ * Thread safety function
+ * Query the process exiting flag from enabled transport backends.
+ * Return true if any backend reports the process is exiting
+ */
+bool umq_exiting_get(void);
+
+/**
  * Add dev for umq, only support ub
  * @param[in] trans_info: transport info;
  * Return: 0 on success, other value on error
@@ -297,6 +313,79 @@ int umq_mempool_state_get(uint64_t umqh, uint32_t mempool_id, umq_mempool_state_
  * Return: 0 on success, other value on error
  */
 int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
+
+/**
+ * Get mempool info: serialize the local mempool import descriptor into an opaque
+ * blob so it can be sent to the peer and imported there (used by the UBSocket
+ * bigdata READ path).
+ * @param[in]  umqh: umq handle
+ * @param[in]  mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+ * @param[out] mempool_info: caller-allocated buffer (>= UMQ_MEMPOOL_INFO_MAX_SIZE)
+ * @param[in]  mempool_info_size: buffer capacity
+ * @param[out] mempool_info_len: actual byte length written (set on success)
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_get(uint64_t umqh, uint32_t mempool_id, uint8_t *mempool_info, uint32_t mempool_info_size,
+                         uint32_t *mempool_info_len);
+
+/**
+ * Set mempool info: import a peer mempool from the opaque blob received in a
+ * control message (used by the UBSocket bigdata READ path). umq parses
+ * mempool_id/version/seg internally; the caller does not inspect fields. The
+ * carried version is recorded on the imported entry so the next state_check can
+ * decide reuse vs unimport+reimport (design §3.5).
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_info: opaque blob received over the wire (umq parses it internally)
+ * @param[in] mempool_info_len: byte length of the blob
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_set(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
+
+/*
+ * Return values of umq_remote_mempool_state_check. Exposed here (next to the
+ * function) so callers match against umq's own constants rather than
+ * re-defining a parallel set. A version change — whether the peer's mempool
+ * grew (re-registered) or rolled back (rewind) — is treated uniformly as
+ * NEED_REIMPORT: umq unimports the stale entry and re-imports. Rollback is
+ * NOT a protocol error and never returns a distinct value.
+ */
+#define UMQ_REMOTE_MEMPOOL_STATE_ERR          (-1)
+#define UMQ_REMOTE_MEMPOOL_STATE_REUSE        0
+#define UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT  1
+#define UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT 2
+
+/**
+ * Check remote mempool import state vs the version carried in the opaque blob.
+ * umq parses mempool_id/version from the blob internally; the caller does not
+ * inspect fields.
+ * @param[in] umqh: umq handle
+ * @param[in] mempool_info: opaque blob received over the wire (umq parses it internally)
+ * @param[in] mempool_info_len: byte length of the blob
+ * Return: UMQ_REMOTE_MEMPOOL_STATE_REUSE (0) cached version matches, no import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_NEED_IMPORT (1) not imported, first import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_NEED_REIMPORT (2) imported but version changed
+ *         (grew or rolled back) — unimport & re-import;
+ *         UMQ_REMOTE_MEMPOOL_STATE_ERR (-1) error
+ */
+int umq_remote_mempool_state_check(uint64_t umqh, const uint8_t *mempool_info, uint32_t mempool_info_len);
+
+/**
+ * Extract the remote mempool addressing fields from the opaque blob, so the
+ * caller can build a READ/WRITE work-request's remote_sge. umq parses the blob
+ * internally; the caller never inspects the struct layout. addr/length of the
+ * remote sge are the caller's own concern (they come from the offer's UbsSeg,
+ * not from this blob), so only the three blob-borne fields are returned here.
+ * @param[in]  umqh: umq handle (selects the transport; the parse itself is stateless)
+ * @param[in]  mempool_info: opaque blob received over the wire
+ * @param[in]  mempool_info_len: byte length of the blob
+ * @param[out] out_mempool_id: set to the blob's mempool_id (NULL allowed to skip)
+ * @param[out] out_token_id: set to the blob's token_id (NULL allowed to skip)
+ * @param[out] out_token_value: set to the blob's token_value (NULL allowed to skip)
+ * Return: 0 on success, other value on error
+ */
+int umq_mempool_info_get_remote_fields(uint64_t umqh, const uint8_t *mempool_info,
+                                       uint32_t mempool_info_len, uint32_t *out_mempool_id,
+                                       uint32_t *out_token_id, uint32_t *out_token_value);
 
 /**
  * Get device information.

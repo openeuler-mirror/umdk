@@ -1,0 +1,42 @@
+# case 9: concurrent free race (C2)
+# 8 workers first fill their TLS (alloc sc0 in serial), then simultaneously
+# free all in one parallel block. All hit block_pool[0].global_mutex via
+# return_to_global (or TLS self_shrink path). Verifies:
+#   - No double-return (global rises by exactly the freed count)
+#   - No lost-return (no buf leaks in TLS)
+#   - Conservation holds during concurrent free
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Stage 1 (serial): each worker allocs 200 sc0 bufs — fills TLS via batch
+# prefetch (5 batches x 64 = 320 per worker). Note: serial stage, NOT
+# parallel, to isolate the free race.
+thread_0 alloc 4096 200
+thread_1 alloc 4096 200
+thread_2 alloc 4096 200
+thread_3 alloc 4096 200
+thread_4 alloc 4096 200
+thread_5 alloc 4096 200
+thread_6 alloc 4096 200
+thread_7 alloc 4096 200
+
+status
+# Expect: alloced sc0 = 1600 (8x200); each worker TLS row shows fetch bytes
+
+# Stage 2 (parallel): all 8 workers free all simultaneously.
+# free all returns to TLS first (not global) unless actual > cap; the
+# self_shrink path on next alloc triggers return_to_global. Here we just
+# verify the free path doesn't race — alloced drops to 0 across all workers.
+parallel
+  thread_0 free all
+  thread_1 free all
+  thread_2 free all
+  thread_3 free all
+  thread_4 free all
+  thread_5 free all
+  thread_6 free all
+  thread_7 free all
+join
+
+status
+# Expect: alloced sc0 = 0; TLS rows still hold fetch bytes (free all
+# returns to TLS not global); global unchanged from after Stage 1

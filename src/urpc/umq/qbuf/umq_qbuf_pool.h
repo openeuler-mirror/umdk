@@ -74,7 +74,10 @@ umq_buf_t *umq_qbuf_data_to_head(void *data);
 
 umq_buf_t *umq_qbuf_expansion_data_to_head(void *data);
 
-void umq_qbuf_config_get(qbuf_pool_cfg_t *cfg);
+/* Diagnostic: log details (pointer, pool regions, call stack) when a pointer
+ * passed to umq_data_to_head does not belong to any normal/tiny/expansion pool.
+ * Rate-limited to the first QBUF_NON_POOL_PTR_LOG_LIMIT occurrences per process. */
+void qbuf_log_non_pool_pointer(const char *caller, void *data);
 
 uint32_t umq_qbuf_headroom_get(void);
 umq_buf_mode_t umq_qbuf_mode_get(void);
@@ -82,6 +85,26 @@ umq_buf_mode_t umq_qbuf_mode_get(void);
 int umq_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth);
+
+ /* per-slot details: output block distribution of each active expansion slot by mempool_id */
+typedef struct umq_expansion_slot_info {
+    uint16_t mempool_id;  /* slot_id + QBUF_POOL_EXP_SLOT_ID_MIN */
+    uint16_t size_class; /* size_class served by this slot; UMQ_QBUF_SIZE_CLASS_MAX means without_data */
+    uint32_t slot_id;     /* raw slot id */
+    uint64_t total_block_cnt;
+    uint64_t free_block_cnt;
+    uint64_t in_use_cnt;  /* total > free ? total - free : 0, number of blocks fetched out and not yet returned */
+} umq_expansion_slot_info_t;
+
+/*
+ * Traverse all active expansion slots (with_data for each size_class + without_data),
+ * fill infos[] in linked list order.
+ * cap is the capacity, returns the actual number filled (truncated if exceeds cap).
+ * Returns 0 if not initialized or disable_scale_cap is enabled.
+ * Holds exp_pool_with_data[sc].expansion_pool_lock during traversal, consistent with
+ * fetch_from_expansion_pools.
+ */
+uint32_t umq_qbuf_expansion_slot_dist(umq_expansion_slot_info_t *infos, uint32_t cap);
 
 #ifdef __cplusplus
 }

@@ -269,6 +269,54 @@ typedef struct umq_ops {
     int (*umq_tp_mempool_state_refresh)(uint64_t umqh_tp, uint32_t mempool_id);
 
     /**
+     * Get mempool info: serialize the local mempool import descriptor into an
+     * opaque blob for the peer.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
+     * @param[in] mempool_info_size: capacity of mempool_info buffer
+     * @param[out] mempool_info: caller-allocated buffer (>= UMQ_MEMPOOL_INFO_MAX_SIZE)
+     * @param[out] mempool_info_len: actual byte length written (set on success)
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_info_get)(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+        uint32_t mempool_info_size, uint32_t *mempool_info_len);
+
+    /**
+     * Set mempool info: import a peer mempool from the opaque blob received in
+     * a control message. umq parses mempool_id/version internally.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_info: opaque blob received over the wire
+     * @param[in] mempool_info_len: byte length of the blob
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_info_set)(uint64_t umqh_tp, const uint8_t *mempool_info, uint32_t mempool_info_len);
+
+    /**
+     * Check remote mempool import state vs the version carried in the opaque
+     * blob. umq parses mempool_id/version internally.
+     * @param[in] umqh_tp: umq tp handle
+     * @param[in] mempool_info: opaque blob received over the wire
+     * @param[in] mempool_info_len: byte length of the blob
+     * Return: 0 no import needed; 1 need import; 2 need unimport & re-import (version grew);
+     *         3 protocol error (version rollback), caller sends READ_ABORT; -1 error
+     */
+    int (*umq_tp_remote_mempool_state_check)(uint64_t umqh_tp, const uint8_t *mempool_info,
+        uint32_t mempool_info_len);
+
+    /**
+     * Extract the remote mempool addressing fields (mempool_id, token_id,
+     * token_value) from the opaque blob. Pure parse, no umq state needed.
+     * @param[in] mempool_info: opaque blob received over the wire
+     * @param[in] mempool_info_len: byte length of the blob
+     * @param[out] out_mempool_id: blob's mempool_id (NULL to skip)
+     * @param[out] out_token_id: blob's token_id (NULL to skip)
+     * @param[out] out_token_value: blob's token_value (NULL to skip)
+     * Return: 0 on success, other value on error
+     */
+    int (*umq_tp_mempool_info_get_remote_fields)(const uint8_t *mempool_info, uint32_t mempool_info_len,
+        uint32_t *out_mempool_id, uint32_t *out_token_id, uint32_t *out_token_value);
+
+    /**
      * Get device information.
      * @param[in] dev_name: device name
      * @param[in] umq_trans_mode: umq trans mode
@@ -330,6 +378,19 @@ typedef struct umq_ops {
      * Return 0 on success, error code on failure
      */
     int (*umq_tp_transport_pool_resource_destroy)(uint64_t umqh_tp, uint32_t tp_handle_idx);
+
+    /**
+     * Set the process exiting flag. Once true, backend post/poll paths skip
+     * resources that may already be released during teardown (exit-time UAF guard).
+     * @param[in] exiting: true means the process is exiting
+     */
+    void (*umq_tp_exiting_set)(bool exiting);
+
+    /**
+     * Query the process exiting flag.
+     * Return true if the process is exiting
+     */
+    bool (*umq_tp_exiting_get)(void);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);
