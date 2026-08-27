@@ -3301,6 +3301,12 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         }
         qbuf_pool_info->available_mem.split.block_num_without_data = total_buf_cnt_without_data;
         qbuf_pool_info->available_mem.split.size_without_data = total_buf_cnt_without_data * umq_buf_t_size;
+        /* Total capacity of without-data pool: fixed at init (QBUF_POOL_INITIAL_NODATA_BUF_CNT),
+         * never changes at runtime. Use this for DFX TotalBlk/TotalSize instead of
+         * block_num_without_data (which is the free count, decremented on alloc). */
+        qbuf_pool_info->available_mem.split.total_block_num_without_data = QBUF_POOL_INITIAL_NODATA_BUF_CNT;
+        qbuf_pool_info->available_mem.split.total_size_without_data =
+            (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * umq_buf_t_size;
     } else {
         qbuf_pool_info->data_size = block_size - umq_buf_t_size;
         qbuf_pool_info->buf_size = block_size;
