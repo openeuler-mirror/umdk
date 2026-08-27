@@ -1,4 +1,4 @@
-# case 14: poolMaxSz 字段正向映射 + 6G 硬上限边界
+# case 27: poolMaxSz 字段正向映射 + 6G 硬上限边界
 # 验证工具修复后 init poolMaxSz= 参数被正确解析、传给
 # cfg.umq_buf_pool_max_size, 并被 umq_qbuf_pool_init 接受。
 #

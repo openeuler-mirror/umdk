@@ -1,4 +1,4 @@
-# case 16: 3-SC [4K, 64K, 1M] with lazy 1M — basic alloc/free
+# case 29: 3-SC [4K, 64K, 1M] with lazy 1M — basic alloc/free
 # Verifies: 1M SC starts empty (blockCounts[2]=0 → lazy), expansion triggered on first 1M alloc,
 #           alloc from all 3 SCs works, free works.
 # blockCounts=24000,1500,0 — sc2 (1M) has 0 initial blocks (lazy SC).
