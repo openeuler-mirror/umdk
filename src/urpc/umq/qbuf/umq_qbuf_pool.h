@@ -96,14 +96,14 @@ typedef struct umq_expansion_slot_info {
     uint64_t in_use_cnt;  /* total > free ? total - free : 0, number of blocks fetched out and not yet returned */
 } umq_expansion_slot_info_t;
 
- /* 
+/*
  * Traverse all active expansion slots (with_data for each size_class + without_data),
  * fill infos[] in linked list order.
  * cap is the capacity, returns the actual number filled (truncated if exceeds cap).
  * Returns 0 if not initialized or disable_scale_cap is enabled.
  * Holds exp_pool_with_data[sc].expansion_pool_lock during traversal, consistent with
- * fetch_from_expansion_pools. 
- * */
+ * fetch_from_expansion_pools.
+ */
 uint32_t umq_qbuf_expansion_slot_dist(umq_expansion_slot_info_t *infos, uint32_t cap);
 
 #ifdef __cplusplus

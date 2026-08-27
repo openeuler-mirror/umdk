@@ -59,8 +59,9 @@ static inline umq_pool_type_t umq_pool_type_get(uint32_t mempool_id)
 
 static inline void umq_invalid_handle_buf_free(umq_buf_list_t *head, umq_pool_type_t type)
 {
-    if (QBUF_LIST_FIRST(head) == NULL)
+    if (QBUF_LIST_FIRST(head) == NULL) {
         return;
+    }
 
     if (type == UMQ_POOL_TYPE_TINY) {
         umq_tiny_qbuf_free(head);
