@@ -1,4 +1,4 @@
-# case 17: without_data alloc path (request_size=0)
+# case 30: without_data alloc path (request_size=0)
 #
 # Verifies the without_data mempool path — a separate buf pool that borrows
 # only the umq_buf_t header (descriptor) without a data region. Distinct
@@ -13,7 +13,7 @@
 # head_without_data_count = total_blk_num * UMQ_EMPTY_HEADER_COEFFICIENT).
 # This makes alloc 0 N hit the global without_data pool directly (no
 # expansion trigger needed). Note: scaleCap=off also disables with_data
-# expansion, but case_17 only tests without_data so it's fine.
+# expansion, but case_30 only tests without_data so it's fine.
 #
 # Verifies:
 #   - DoAlloc accepts size=0 (previously rejected as "invalid")

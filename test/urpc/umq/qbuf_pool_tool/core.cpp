@@ -1717,6 +1717,10 @@ int ExecuteBlockLines(const std::vector<std::vector<std::string>> &block)
              * Skip here as a no-op. */
             continue;
         }
+        if (cmd == "iterations") {
+            /* Iteration cap — pre-scanned by DoStressRepeatBlock. Skip. */
+            continue;
+        }
         if (cmd == "parallel") {
             /* Collect until matching 'join'. Repeat iteration may contain
              * multiple parallel sub-blocks (e.g. alloc block + free block);
@@ -1952,13 +1956,22 @@ int DoStressRepeatBlock(const std::vector<std::vector<std::string>> &block)
     if (ValidateRepeatBlock(block) != 0) {
         return -1;
     }
-    /* Pre-scan for `snapshot N` directive. */
+    /* Pre-scan for `snapshot N` and optional `iterations N` directives.
+     * `iterations N` caps the otherwise-infinite loop to N iters so the
+     * case can run to success without a signal — absent, runs forever. */
     int snapshot_interval = 0;
+    uint64_t iter_limit = 0;
     for (const auto &toks : block) {
         if (toks.size() == 2 && toks[0] == "snapshot") {
             snapshot_interval = (int)strtol(toks[1].c_str(), nullptr, 10);
             if (snapshot_interval <= 0) {
                 fprintf(stderr, "ERROR: snapshot interval must be > 0\n");
+                return -1;
+            }
+        } else if (toks.size() == 2 && toks[0] == "iterations") {
+            iter_limit = (uint64_t)strtoull(toks[1].c_str(), nullptr, 10);
+            if (iter_limit == 0) {
+                fprintf(stderr, "ERROR: iterations must be > 0\n");
                 return -1;
             }
         }
@@ -1973,6 +1986,11 @@ int DoStressRepeatBlock(const std::vector<std::vector<std::string>> &block)
     SignalGuard sig_guard;
     StressModeGuard mode_guard;
     for (uint64_t i = 0;; ++i) {
+        if (iter_limit != 0 && i >= iter_limit) {
+            printf("[stress] reached iterations limit %lu, exiting gracefully\n",
+                   (unsigned long)iter_limit);
+            break;
+        }
         if (g_stop_requested) {
             g_stress.interrupted = true;
             printf("[stress] interrupted by signal at iter %lu (waiting for current "

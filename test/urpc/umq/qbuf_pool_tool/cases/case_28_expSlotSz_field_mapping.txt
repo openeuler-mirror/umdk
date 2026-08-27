@@ -1,4 +1,4 @@
-# case 15: expSlotSz 字段正向映射 + 旧名 expSz 被拒
+# case 28: expSlotSz 字段正向映射 + 旧名 expSz 被拒
 # 验证工具修复后 init expSlotSz= 参数被正确解析、传给
 # cfg.expansion_size, 并被 umq_qbuf_pool_init 接受。
 #

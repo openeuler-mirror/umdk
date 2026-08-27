@@ -57,6 +57,7 @@ stress_repeat
     thread_7 free all
   join
   snapshot 10000
+  iterations 200
 end
 
 status
