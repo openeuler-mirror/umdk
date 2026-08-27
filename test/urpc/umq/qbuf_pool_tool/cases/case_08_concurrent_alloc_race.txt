@@ -1,0 +1,54 @@
+# case 8: concurrent alloc race (C1)
+# 8 workers simultaneously alloc the same sc (4K->sc0) at the same time.
+# All hit block_pool[0].global_mutex contention via fetch_from_global.
+# Verifies:
+#   - No double-alloc (buf_count_with_data stays correct)
+#   - No lost-alloc (every worker got its requested num bufs)
+#   - Conservation: global + sum(tls) + alloced == init total
+#   - Per-thread TLS rows in status all show independent fetch bytes
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Stage 1: concurrent alloc — 8 workers x 50 bufs sc0 = 400 bufs total
+parallel
+  thread_0 alloc 4096 50
+  thread_1 alloc 4096 50
+  thread_2 alloc 4096 50
+  thread_3 alloc 4096 50
+  thread_4 alloc 4096 50
+  thread_5 alloc 4096 50
+  thread_6 alloc 4096 50
+  thread_7 alloc 4096 50
+join
+
+# Expect: alloced sc0 = 400 across all workers; global dropped by 400
+# (plus any batch prefetch surplus that landed in TLS)
+status
+
+# Stage 2: same race but sc1 (64K)
+parallel
+  thread_0 alloc 65536 5
+  thread_1 alloc 65536 5
+  thread_2 alloc 65536 5
+  thread_3 alloc 65536 5
+  thread_4 alloc 65536 5
+  thread_5 alloc 65536 5
+  thread_6 alloc 65536 5
+  thread_7 alloc 65536 5
+join
+
+# Expect: alloced sc1 = 40 across all workers
+status
+
+# Cleanup: each worker frees its own bufs (parallel block, no alloc+free mix)
+parallel
+  thread_0 free all
+  thread_1 free all
+  thread_2 free all
+  thread_3 free all
+  thread_4 free all
+  thread_5 free all
+  thread_6 free all
+  thread_7 free all
+join
+
+status

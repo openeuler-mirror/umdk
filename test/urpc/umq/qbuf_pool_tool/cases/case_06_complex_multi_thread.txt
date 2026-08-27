@@ -1,0 +1,35 @@
+# case 6: complex multi-thread (threads=3) — mixed sc alloc, interleaved
+# free idx/all, per-thread leak. Verifies:
+#  - per-thread TLS isolation (t0/t1/t2 different tid, separate fetch bytes)
+#  - conservation per sc (global + tls + alloced constant throughout)
+#  - held-allocs per-worker with [tK] prefix
+#  - leak NOTE on exit (thread 2 leaves bufs unfreed)
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=3
+
+# t0: alloc across both sc (4K->sc0, 32K->sc1) on one thread
+thread_0 alloc 4096      # t0 idx0 sc0
+thread_0 alloc 32768     # t0 idx1 sc1
+
+# t1: sc1 multi-block alloc (70K splits into 64K+4464) + partial free
+thread_1 alloc 65536     # t1 idx0 sc1
+thread_1 alloc 70000     # t1 idx1+idx2 sc1 (2 bufs)
+thread_1 free 1          # free t1 idx1 (first of 70K pair), t1 left [idx0, idx2->shift]
+
+# t2: sc1 multi-block + partial free + INTENTIONAL LEAK (no free all)
+thread_2 alloc 70000     # t2 idx0+idx1 sc1 (2 bufs)
+thread_2 free 0          # free t2 idx0, t2 left [idx1->shift] -- leak this 1 buf
+
+status                   # expect: t0/t1/t2 each own TLS row; held allocs
+                         #   t0=[2][4] t1=[3][5](after shift) t2=[6](1 buf);
+                         #   conservation: global+tls+alloced per sc constant
+
+# t0 fully released
+thread_0 free all        # t0 freed 2 bufs
+# t1 fully released (remaining idx0 + shifted idx1)
+thread_1 free all        # t1 freed 2 bufs
+# t2 NOT released -- leak scenario
+
+status                   # expect: t2 alloced>0 (1 buf sc1), t0/t1 alloced=0,
+                         #   t2 TLS still holds fetch bytes; global unchanged
+# on exit: NOTE: thread 2 has 1 bufs unfreed
+info

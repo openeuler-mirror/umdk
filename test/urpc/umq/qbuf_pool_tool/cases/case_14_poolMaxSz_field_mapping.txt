@@ -1,0 +1,34 @@
+# case 14: poolMaxSz 字段正向映射 + 6G 硬上限边界
+# 验证工具修复后 init poolMaxSz= 参数被正确解析、传给
+# cfg.umq_buf_pool_max_size, 并被 umq_qbuf_pool_init 接受。
+#
+# 生产语义对照:
+#   cfg.umq_buf_pool_max_size  →  g_qbuf_pool.expansion_mem_size_max
+#                                = umq_buf_pool_max_size - g_total_len
+#   默认值: 0 → 2GB (QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE)
+#   硬上限: 6GB (QBUF_POOL_MEM_SIZE_MAX, umq_qbuf_pool.c:1356)
+#
+# 工具陷阱(不修): 工具 DoInit 直接 memalign 自持 buffer, 不调用
+# umq_qbuf_buf_alloc, 所以 g_total_len=0, 导致
+# expansion_mem_size_max = poolMaxSz - 0 = poolMaxSz。
+# 生产路径下应为 poolMaxSz - totalSz (减初始池大小)。
+# 本用例仅验证字段映射, 不涉及 expansion 触发, 故该差异不影响观察。
+#
+# 退出码: 0 (所有命令成功)
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M poolMaxSz=6G threads=1
+# Expect stdout:
+#   pool inited ok (threads=1 count=2 mode=split
+#                  scaleCap=on totalSz=209715200 poolMaxSz=6442450944 expSlotSz=0
+#                  blockSizes=4096,65536 blockCounts=auto tlsDepths=default ...)
+#                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 6G 边界值被接受, ==6G 通过
+
+# info 段2 Pool Config [Small] 应显示:
+#   expansion_mem_size_max = 6442450944 (= 6G, 因 g_total_len=0)
+#   expansion_size        = 33554432    (= 32M, expSlotSz=0 时取默认)
+#   exp_total_mem_pool_size = 0        (无 expansion 触发)
+info
+
+# alloc + free 验证 init 成功路径下池可用
+thread_0 alloc 4096 100
+thread_0 free all
+status

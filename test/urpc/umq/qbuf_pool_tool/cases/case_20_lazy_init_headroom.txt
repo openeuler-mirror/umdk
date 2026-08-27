@@ -1,0 +1,7 @@
+# case 20: lazy 1M alloc with headroom=512
+# Format: alloc <size> [num] [headroom]
+# blockCounts=24000,1500,0 — sc2 (1M) is lazy (0 initial blocks).
+init count=3 blockSizes=4K,64K,1M mode=split scaleCap=on totalSz=200M blockCounts=24000,1500,0 threads=1
+thread_0 alloc 524288 1 512
+info
+thread_0 free all

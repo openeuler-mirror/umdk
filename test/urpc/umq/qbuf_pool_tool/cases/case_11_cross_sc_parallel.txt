@@ -1,0 +1,61 @@
+# case 11: cross-sc parallel (C7)
+# Different workers concurrently allocate from different size_class sc's.
+# Because each sc has its own block_pool[sc].global_mutex (per-sc spinlock
+# granularity), there is no contention between sc0 and sc1 fetches —
+# the lock isn't shared. Verifies:
+#   - Per-sc spinlock isolation (different sc's don't serialize)
+#   - Per-sc conservation: global_sc0 + tls_sc0 + alloced_sc0 = init_sc0
+#     and the same for sc1 (each sc is independent)
+#   - Multi-level size_class routing: alloc 4K->sc0, alloc 64K->sc1,
+#     alloc 70000->sc1 (multi-block: 64K + 6472 = 2 bufs sc1)
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Stage 1: sc0 (4K) and sc1 (64K) in parallel. Workers 0-3 alloc sc0,
+# workers 4-7 alloc sc1. Different spinlocks => no contention expected.
+parallel
+  thread_0 alloc 4096 50
+  thread_1 alloc 4096 50
+  thread_2 alloc 4096 50
+  thread_3 alloc 4096 50
+  thread_4 alloc 65536 5
+  thread_5 alloc 65536 5
+  thread_6 alloc 65536 5
+  thread_7 alloc 65536 5
+join
+
+# Expect:
+#   sc0: alloced=200 (4x50), global_sc0 -= 200+TLS prefetch surplus
+#   sc1: alloced=20 (4x5), global_sc1 -= 20+TLS prefetch surplus
+#   TLS rows: t0..t3 show sc0 bytes; t4..t7 show sc1 bytes
+status
+
+# Stage 2: multi-block sc1 (70K -> 64K + 6472 padding = 2 sc1 bufs).
+# Cross-sc with sc0 (4K) to verify multi-block alloc doesn't break under
+# concurrent sc0 fetch from other workers.
+parallel
+  thread_0 alloc 70000 5
+  thread_1 alloc 70000 5
+  thread_2 alloc 70000 5
+  thread_3 alloc 70000 5
+  thread_4 alloc 4096 50
+  thread_5 alloc 4096 50
+  thread_6 alloc 4096 50
+  thread_7 alloc 4096 50
+join
+
+# Expect: sc1 alloced += 40 (4x5x2 multi-block); sc0 alloced += 200 (4x50)
+status
+
+# Cleanup — all sc's freed in parallel (free doesn't care about sc routing)
+parallel
+  thread_0 free all
+  thread_1 free all
+  thread_2 free all
+  thread_3 free all
+  thread_4 free all
+  thread_5 free all
+  thread_6 free all
+  thread_7 free all
+join
+
+status

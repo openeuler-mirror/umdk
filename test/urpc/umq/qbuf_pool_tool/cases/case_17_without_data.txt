@@ -1,0 +1,70 @@
+# case 17: without_data alloc path (request_size=0)
+#
+# Verifies the without_data mempool path — a separate buf pool that borrows
+# only the umq_buf_t header (descriptor) without a data region. Distinct
+# from with_data bufs (which carry data_size > 0 and route to a size_class).
+#
+# Trigger: umq_normal_qbuf_alloc(0, num, ...) routes to without_data path
+# (umq_qbuf_pool.c:1942). buf->mempool_without_data=1 marks these bufs so
+# the tool can distinguish them from with_data bufs.
+#
+# Config: scaleCap=off (disable_scale_cap=true) so init_split_mode_layout
+# pre-allocates the without_data pool (umq_qbuf_pool.c:1283-1299:
+# head_without_data_count = total_blk_num * UMQ_EMPTY_HEADER_COEFFICIENT).
+# This makes alloc 0 N hit the global without_data pool directly (no
+# expansion trigger needed). Note: scaleCap=off also disables with_data
+# expansion, but case_17 only tests without_data so it's fine.
+#
+# Verifies:
+#   - DoAlloc accepts size=0 (previously rejected as "invalid")
+#   - umq_normal_qbuf_alloc(0, num, ...) routes to without_data path
+#   - buf[i] output shows "sc=- ... [nodata]" tag (no sc concept)
+#   - DFX Per-Thread TLS Pool Stats (WithoutData) section counters grow:
+#       CurBuf / AccFetchCnt / AccFetchBuf / AccAllocCnt / AccFreeCnt
+#   - free all returns to TLS not global (consistent with FAQ Q1 for with_data)
+#   - status alloced column does NOT count without_data bufs (separate row
+#     "without_data: N bufs (not counted in per-sc with_data)")
+#   - held allocs shows "alloc 0 -> nodata, N/M bufs held"
+#   - multi-thread without_data isolation (per-thread TLS WithoutData stats)
+init count=2 blockSizes=4K,64K mode=split scaleCap=off totalSz=200M threads=2
+
+# Verify init pre-allocated without_data pool:
+# info Per-SizeClass State hdr_free column (sc0) should be non-zero
+# (head_without_data_count = total_blk_num * UMQ_EMPTY_HEADER_COEFFICIENT)
+info
+
+# Stage 1: single-thread alloc 0 5 (without_data)
+# Expect:
+#   5 lines of "[t0] buf[i]: sc=- ptr=(nil) ... [nodata]"
+#   status actions: "[t0] alloc 0 -> nodata, 5 bufs"
+#   status held allocs: "[t0][N] alloc 0 -> nodata, 5/5 bufs held"
+#   status pool state: alloced sc0=0, "without_data: 5 bufs" line
+#   status per-thread TLS: t0 WithoutData CurBuf>0 (from DFX WithoutData section)
+thread_0 alloc 0 5
+status
+
+# Stage 2: free all — returns to TLS not global (same as with_data FAQ Q1)
+# Expect:
+#   status alloced sc0=0, "without_data: 0 bufs" (alloced cleared)
+#   DFX WithoutData: CurBuf=5 (returned to TLS), AccFreeCnt=5
+#   DFX WithoutData: global hdr_free unchanged (actual==cap, no return_to_global)
+thread_0 free all
+status
+
+# Stage 3: multi-thread concurrent without_data
+# Expect per-thread TLS isolation:
+#   t0 WithoutData row: AccAllocCnt grew by 10
+#   t1 WithoutData row: AccAllocCnt=10 (fresh fetch)
+parallel
+  thread_0 alloc 0 10
+  thread_1 alloc 0 10
+join
+status
+
+# Stage 4: multi-thread free all
+# Expect: alloced=0, WithoutData CurBuf>0 (in TLS), AccFreeCnt grew
+parallel
+  thread_0 free all
+  thread_1 free all
+join
+status

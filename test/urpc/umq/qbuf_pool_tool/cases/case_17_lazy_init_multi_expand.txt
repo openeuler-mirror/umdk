@@ -1,0 +1,13 @@
+# case 17: lazy 1M — multiple expansion rounds
+# Alloc 4 x 1M bufs with expansion_size=2M (2 blocks per expansion).
+# Should trigger 2 expansion rounds.
+# blockCounts=24000,1500,0 — sc2 (1M) is lazy (0 initial blocks).
+init count=3 blockSizes=4K,64K,1M mode=split scaleCap=on totalSz=200M expSlotSz=2M blockCounts=24000,1500,0 threads=1
+info
+thread_0 alloc 1048576
+thread_0 alloc 1048576
+thread_0 alloc 1048576
+thread_0 alloc 1048576
+info
+thread_0 free all
+info
