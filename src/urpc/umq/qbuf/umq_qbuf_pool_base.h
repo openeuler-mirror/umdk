@@ -12,6 +12,8 @@
 
 #include <pthread.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include "qbuf_list.h"
 #include "umq_dfx_types.h"
@@ -267,7 +269,7 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
         QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
         thread_cache->block_pool.buf_cnt_without_data = 0;
         (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
-        thread_cache->stats.tid = (uint64_t)pthread_self();
+        thread_cache->stats.tid = (uint64_t)syscall(SYS_gettid);
         thread_cache->inited = true;
         /* Register thread-exit closure so pools->closure (set by qbuf_pool_base_init's
          * callers, e.g. release_tiny_thread_cache) runs when this thread exits,
