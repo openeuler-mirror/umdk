@@ -812,7 +812,8 @@ static void umq_ub_extend_imm_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_b
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
     switch (imm.bs_ext.extend_type) {
         case IMM_TYPE_EXTEND_MEM_IMPORT:
-            if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0, false) != UMQ_SUCCESS) {
+            if (umq_ub_data_plan_import_mem((uint64_t)(uintptr_t)real_queue, rx_buf, 0,
+                UMQ_UB_ACK_IMPORT_TYPE_ACK_DELAY) != UMQ_SUCCESS) {
                 *qbuf_status = UMQ_IMPORT_TSEG_FAILED;
                 break;
             }
