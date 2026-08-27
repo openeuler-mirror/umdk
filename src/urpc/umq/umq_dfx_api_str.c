@@ -192,15 +192,18 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
      * from the with-data blocks (not counted in any sc's init_block_count), so
      * their header space IS added to grand_total. */
     if (small_info != NULL && small_info->mode == UMQ_BUF_SPLIT) {
-        uint64_t nodata_total_size =
-            (uint64_t)small_info->available_mem.split.block_num_without_data * small_info->umq_buf_t_size;
+        /* TotalSize/TotalBlk should reflect total capacity (fixed at init), not
+         * the current free count (block_num_without_data decreases on alloc).
+         * Use total_block_num_without_data / total_size_without_data. */
+        uint64_t nodata_total_size = small_info->available_mem.split.total_size_without_data;
+        uint64_t nodata_total_blk = small_info->available_mem.split.total_block_num_without_data;
         char nodata_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
         (void)snprintf(nodata_ts_buf, sizeof(nodata_ts_buf), "%lu(%.1fMB)", nodata_total_size,
                        (double)nodata_total_size / (UMQ_DFX_BYTES_PER_MB));
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                              "%-13s %-6s %-21s %-8lu %-8s %-8s %-8s %-8s %-11u %-11s %-11s\n",
                              "without-data", "-", nodata_ts_buf,
-                             (unsigned long)small_info->available_mem.split.block_num_without_data,
+                             (unsigned long)nodata_total_blk,
                              "-", "-", "-", "-", small_info->umq_buf_t_size, "-", "-");
         grand_total_size += nodata_total_size;
     }

@@ -226,6 +226,8 @@ typedef struct umq_qbuf_pool_info {
             uint64_t size_with_data;         // available buf size in data area
             uint64_t block_num_without_data; // number of available buf in non-data area
             uint64_t size_without_data;      // available buf size in non-data area
+            uint64_t total_block_num_without_data; // total capacity of without-data pool (fixed at init, never changes)
+            uint64_t total_size_without_data;      // total size of without-data pool (total_block_num_without_data * umq_buf_t_size)
         } split;
         struct {
             uint64_t block_num_with_data;
