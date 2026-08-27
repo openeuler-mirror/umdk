@@ -1,0 +1,31 @@
+# case 19: concurrent cross-SC alloc including lazy 1M
+# 8 workers: 0-3 alloc 4K, 4-5 alloc 64K, 6-7 alloc 1M
+# Verifies per-sc expansion isolation.
+# blockCounts=24000,1500,0 — sc2 (1M) is lazy (0 initial blocks).
+init count=3 blockSizes=4K,64K,1M mode=split scaleCap=on totalSz=200M expSlotSz=4M blockCounts=24000,1500,0 threads=8
+
+parallel
+  thread_0 alloc 4096 20
+  thread_1 alloc 4096 20
+  thread_2 alloc 4096 20
+  thread_3 alloc 4096 20
+  thread_4 alloc 65536 5
+  thread_5 alloc 65536 5
+  thread_6 alloc 1048576 2
+  thread_7 alloc 1048576 2
+join
+
+status
+
+parallel
+  thread_0 free all
+  thread_1 free all
+  thread_2 free all
+  thread_3 free all
+  thread_4 free all
+  thread_5 free all
+  thread_6 free all
+  thread_7 free all
+join
+
+status

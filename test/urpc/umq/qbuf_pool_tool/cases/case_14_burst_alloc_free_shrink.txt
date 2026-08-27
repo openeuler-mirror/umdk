@@ -1,0 +1,34 @@
+# burst_alloc_free_shrink: burst alloc 10000 sc1 bufs + free all
+# Verifies the high-water mark cap fix: TLS cap stays low, expansion pool shrinks.
+# Before fix: TLS sc1 bytes = 62MB (inflated), expansion_count = 15 (not shrunk)
+# After fix: TLS sc1 bytes < 10MB, expansion_count <= 2 (most shrunk)
+#
+# Note: qbuf_pool_tool enforces alloc num<=1000 per call, so the 10000-buf burst
+# is split into 10 batches of 1000 each. Total = 10000 bufs (655360000 bytes).
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+
+# Burst alloc 10000 sc1 bufs (65536 bytes each = 655360000 total) in 10 batches
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+thread_0 alloc 65536 1000
+info
+
+# Free all — triggers free-path self_shrink + return_to_global → expansion slots shrink
+thread_0 free all
+
+# Multiple status calls to allow async shrink threads to complete
+status
+status
+status
+status
+status
+
+# Final info to verify expansion pool shrunk
+info

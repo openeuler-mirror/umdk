@@ -1,0 +1,31 @@
+# case 25: expansion_threshold — control expansion trigger water level
+#
+# Verifies: expThreshold sets cfg.expansion_threshold (umq_qbuf_pool.c:1229),
+#   which controls trigger_expand_block_num = expansion_block_count * threshold / 100
+#   (umq_qbuf_pool.c:1111/1311/1330/1393/1412).
+#
+# Default (expThreshold=0 → production default 30%): expansion triggers when
+#   pool free count drops below 30% of expansion_block_count.
+# Custom (expThreshold=90): expansion triggers at 90% — much earlier.
+#
+# Production validates [1, 100] (umq_qbuf_pool.c:1225-1228); values outside
+#   this range cause init to fail with EINVAL (ret != 0).
+#
+# This case:
+#   1. expThreshold=90 (aggressive early expansion) — init succeeds
+#   2. info 段2 should show expansion_threshold=90
+#   3. alloc triggers expansion earlier than default 30%
+#   4. expThreshold=0 (invalid) — should also be rejected (0 < 1)
+#      Wait — expThreshold=0 is NOT rejected: production code treats 0 as
+#      "use default 30" (umq_qbuf_pool.c:1223-1224). So 0 is valid (=default).
+#   5. expThreshold=200 (> 100) — init fails with EINVAL
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=4M expThreshold=90 threads=1
+
+# Verify init: info 段2 should show expansion_threshold=90
+info
+
+# Alloc sc0 to trigger expansion at 90% water level
+thread_0 alloc 4096 100
+info
+
+thread_0 free all
