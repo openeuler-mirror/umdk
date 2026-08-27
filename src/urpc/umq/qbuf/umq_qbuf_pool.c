@@ -16,13 +16,13 @@
 #include <time.h>
 #include <execinfo.h>
 
-#include "umq_errno.h"
-#include "umq_qbuf_pool.h"
 #include "umq_dfx_api.h"
+#include "umq_errno.h"
+#include "umq_huge_qbuf_pool.h"
 #include "umq_rx_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
-#include "umq_huge_qbuf_pool.h"
 #include "umq_vlog.h"
+#include "umq_qbuf_pool.h"
 #ifndef UMQ_QBUF_DEBUG
 #undef UMQ_VLOG_DEBUG
 #define UMQ_VLOG_DEBUG(__type, __format, ...) ((void)0)
@@ -123,7 +123,6 @@ typedef struct expansion_qbuf_pool {
     uint64_t sub_slot_blk_count;
     uint64_t sub_slot_count;
     uint64_t sub_slot_data_buf_size;
-
 } qbuf_expansion_pool_t;
 
 // FLAT qbuf_pool_t (no base substruct): the test includes this file directly and accesses
@@ -489,20 +488,20 @@ static void qbuf_dbg_print_summary(void)
     // latency histogram
     if (g_dbg_stats.alloc_count > 0) {
         (void)fprintf(stderr, "[UMQ TIMING] alloc latency histogram (count=%llu):\n",
-                (unsigned long long)g_dbg_stats.alloc_count);
+            (unsigned long long)g_dbg_stats.alloc_count);
         for (int b = 0; b < QBUF_LAT_BUCKETS; b++) {
             (void)fprintf(stderr, "  %-12s: %8llu (%5.1f%%)\n", qbuf_lat_labels[b],
-                    (unsigned long long)g_dbg_stats.alloc_lat[b],
-                    QBUF_POOL_PERCENT_SCALE * g_dbg_stats.alloc_lat[b] / g_dbg_stats.alloc_count);
+                (unsigned long long)g_dbg_stats.alloc_lat[b],
+                QBUF_POOL_PERCENT_SCALE * g_dbg_stats.alloc_lat[b] / g_dbg_stats.alloc_count);
         }
     }
     if (g_dbg_stats.free_count > 0) {
         (void)fprintf(stderr, "[UMQ TIMING] free latency histogram (count=%llu):\n",
-                (unsigned long long)g_dbg_stats.free_count);
+            (unsigned long long)g_dbg_stats.free_count);
         for (int b = 0; b < QBUF_LAT_BUCKETS; b++) {
             (void)fprintf(stderr, "  %-12s: %8llu (%5.1f%%)\n", qbuf_lat_labels[b],
-                    (unsigned long long)g_dbg_stats.free_lat[b],
-                    QBUF_POOL_PERCENT_SCALE * g_dbg_stats.free_lat[b] / g_dbg_stats.free_count);
+                (unsigned long long)g_dbg_stats.free_lat[b],
+                QBUF_POOL_PERCENT_SCALE * g_dbg_stats.free_lat[b] / g_dbg_stats.free_count);
         }
     }
     // ===== END QBUF DEBUG STATS =====
@@ -595,6 +594,7 @@ void qbuf_log_non_pool_pointer(const char *caller, void *data)
             (flags >> QBUF_BLOCK_FLAG_BIT_UB) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_TINY) & 1,
             (flags >> QBUF_BLOCK_FLAG_BIT_ESCAPE) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_USER_DATA) & 1,
             (unsigned long long)raw[0], (unsigned long long)raw[1],
+            // NOLINTNEXTLINE(G.CNS.02) — array index, not a magic number
             (unsigned long long)raw[2], (unsigned long long)raw[3]);
     }
 
