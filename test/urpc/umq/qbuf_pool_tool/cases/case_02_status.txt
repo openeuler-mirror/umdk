@@ -4,7 +4,7 @@ init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
 status
 thread_0 alloc 4096
 thread_0 alloc 65536
-thread_0 alloc 70000
+thread_0 alloc 32768
 status
 thread_0 free all
 status

@@ -9,7 +9,7 @@
 #
 # Compare with default (escape=on): same pool exhaustion would silently create
 # escape bufs (malloc'd, tracked in escape_buf_cnt, visible in 段9).
-init count=1 blockSizes=4K mode=split scaleCap=on totalSz=4M escape=off threads=1
+init count=1 blockSizes=4K mode=split scaleCap=on totalSz=200M escape=off threads=1
 
 # Verify init: info 段2 should show disable_malloc_escape=1
 info

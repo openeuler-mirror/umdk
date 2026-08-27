@@ -3,7 +3,8 @@
 init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
 thread_0 alloc 4096     # t0 alloced=[0] sc0
 thread_0 alloc 65536    # t0 alloced=[0,1] sc1
-thread_0 alloc 70000    # t0 alloced=[0,1,2,3] sc1 x2
+thread_0 alloc 32768    # t0 alloced=[0,1,2] sc1 x2 (two single-block sc1 allocs)
+thread_0 alloc 32768    # t0 alloced=[0,1,2,3] sc1 x3
 status                 # expect alloced sc0=1, sc1=3
 thread_0 free 1         # free idx1 (first sc1), t0 alloced=[0,2,3]
 status                 # expect alloced sc0=1, sc1=2
