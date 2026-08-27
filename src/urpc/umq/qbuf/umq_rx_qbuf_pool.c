@@ -16,8 +16,8 @@
 
 #include "umq_errno.h"
 #include "umq_qbuf_pool.h"
-#include "umq_rx_qbuf_pool.h"
 #include "umq_vlog.h"
+#include "umq_rx_qbuf_pool.h"
 
 static global_block_pool_t g_rx_pool = {0};
 static void *g_rx_buffer_addr = NULL;
@@ -236,7 +236,7 @@ int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)
     }
 
     int ret = ops->register_seg_callback(ctx, UMQ_RX_QBUF_MEMPOOL_ID,
-                                          g_rx_buffer_addr, g_rx_total_len);
+                                         g_rx_buffer_addr, g_rx_total_len);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "rx qbuf register seg failed, status: %d\n", ret);
     }
