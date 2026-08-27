@@ -83,7 +83,7 @@ extern "C" {
 
 #define QBUF_POOL_TLS_MAX (2048)        // max count of thread local buffer storage
 #define QBUF_POOL_BATCH_CNT (64)        // max batch count when fetch from global or return to global
-#define QBUF_POOL_TARGET_FETCH_BYTES (4ULL * 1024 * 1024)  // adaptive batch: each fetch moves ~4MB (batch = this / block_size)
+#define QBUF_POOL_TARGET_FETCH_BYTES (4ULL * 1024 * 1024)  // adaptive batch: ~4MB per fetch (batch = this / block_size)
 #define QBUF_POOL_BATCH_CNT_MIN (4)   // min batch count, prevents degenerate single-block fetches for large blocks
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
@@ -107,7 +107,8 @@ extern "C" {
 #define QBUF_POOL_BLOCK_COUNT_DEFAULT        (1536)
 #define QBUF_POOL_BLOCK_COUNT_MIN            (1)
 #define QBUF_POOL_BLOCK_COUNT_MAX            (30720)
-// explicit_block_sizes[i>=1] default / range bounds (i==0 must equal small_block_size, validated in init_size_class_config)
+// explicit_block_sizes[i>=1] default / range bounds (i==0 must equal small_block_size,
+// validated in init_size_class_config)
 #define QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT  (64 * 1024)
 #define QBUF_POOL_MIDDLE_BLOCK_SIZE_MIN      (8 * 1024)
 #define QBUF_POOL_MIDDLE_BLOCK_SIZE_MAX      (1024 * 1024)
@@ -381,7 +382,10 @@ int expand_global_pool(bool with_data, uint32_t sc);
 // 用于umq_normal_qbuf_alloc区分_lc=1(fetch_global) vs _lc=2(fetch_expansion)
 extern __thread bool g_dbg_expansion_happened;
 extern int g_qbuf_debug_enabled;
-static inline bool qbuf_debug_on(void) { return __builtin_expect(__atomic_load_n(&g_qbuf_debug_enabled, __ATOMIC_RELAXED), 0) != 0; }
+static inline bool qbuf_debug_on(void)
+{
+    return __builtin_expect(__atomic_load_n(&g_qbuf_debug_enabled, __ATOMIC_RELAXED), 0) != 0;
+}
 #endif
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, umq_buf_list_t *local_head,
@@ -489,7 +493,8 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 
     { // fetch from expansion pools (pre-allocated overflow slots)
-        uint32_t _exp_cnt = fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
+        uint32_t _exp_cnt = fetch_from_expansion_pools(with_data, sc, batch_count - count,
+                                                       info.local_head, info.local_buf_cnt);
         count += _exp_cnt;
 #ifdef UMQ_QBUF_DEBUG
         // 统计expansion pool路径: 从预分配的expansion slot中取到buf

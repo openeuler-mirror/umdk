@@ -36,6 +36,9 @@ static const char UMQ_DFX_UNDERLINE_120[] =
  * avoid local-variable shadowing across the three emitters below). */
 static const char *umq_dfx_sc_names[] = {"Small", "Medium", "Big", "Huge", "Gigantic"};
 
+/* Bytes-per-MB divisor for human-readable size strings (e.g. "%lu(%.1fMB)"). */
+#define UMQ_DFX_BYTES_PER_MB (1024.0 * 1024.0)
+
 #define UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN 20
 #define UMQ_DFX_LABEL_BUF_SIZE 32
 
@@ -116,7 +119,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                                        umq_dfx_sc_names[sc] : "sc?";
                 char ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
                 (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
-                               (double)sc_total_size / (1024.0 * 1024.0));
+                               (double)sc_total_size / (UMQ_DFX_BYTES_PER_MB));
                 UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                      "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
                                      sc_name, mode_str, ts_buf,
@@ -132,7 +135,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             uint64_t rx_total_size = cfg->rx_pool_total_size;
             char rx_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(rx_ts_buf, sizeof(rx_ts_buf), "%lu(%.1fMB)", rx_total_size,
-                           (double)rx_total_size / (1024.0 * 1024.0));
+                           (double)rx_total_size / (UMQ_DFX_BYTES_PER_MB));
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
                                  "RX_pool", mode_str, rx_ts_buf,
@@ -151,7 +154,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             uint64_t free_size = (uint64_t)info->available_mem.split.block_num_with_data * sci0->blk_size;
             char tiny_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
             (void)snprintf(tiny_ts_buf, sizeof(tiny_ts_buf), "%lu(%.1fMB)", init_total_size,
-                           (double)init_total_size / (1024.0 * 1024.0));
+                           (double)init_total_size / (UMQ_DFX_BYTES_PER_MB));
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-6s %-21s %-8lu %-8u %-8u %-8u %-8u %-11u %-11lu %-11lu\n",
                                  umq_qbuf_pool_type_name(info->type), mode_str, tiny_ts_buf,
@@ -172,7 +175,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             (uint64_t)small_info->available_mem.split.block_num_without_data * small_info->umq_buf_t_size;
         char nodata_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
         (void)snprintf(nodata_ts_buf, sizeof(nodata_ts_buf), "%lu(%.1fMB)", nodata_total_size,
-                       (double)nodata_total_size / (1024.0 * 1024.0));
+                       (double)nodata_total_size / (UMQ_DFX_BYTES_PER_MB));
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                              "%-13s %-6s %-21s %-8lu %-8s %-8s %-8s %-8s %-11u %-11s %-11s\n",
                              "without-data", "-", nodata_ts_buf,
@@ -183,7 +186,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     /* Total row: sum of every row's TotalSize, with a human-readable MB suffix. */
     char total_ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
     (void)snprintf(total_ts_buf, sizeof(total_ts_buf), "%lu(%.1fMB)", grand_total_size,
-                   (double)grand_total_size / (1024.0 * 1024.0));
+                   (double)grand_total_size / (UMQ_DFX_BYTES_PER_MB));
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                          "%-13s %-6s %-21s\n", "Total", "-", total_ts_buf);
 
@@ -204,7 +207,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              cfg->size_class_count);
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
             char name[UMQ_DFX_LABEL_BUF_SIZE];
-            snprintf(name, sizeof(name), "blk_size[%u]", sc);
+            (void)snprintf(name, sizeof(name), "blk_size[%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->explicit_block_sizes[sc]);
         }
@@ -227,7 +230,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              info->exp_slot_used_count);
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
             char name[UMQ_DFX_LABEL_BUF_SIZE];
-            snprintf(name, sizeof(name), "batch_count[sc%u]", sc);
+            (void)snprintf(name, sizeof(name), "batch_count[sc%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12u\n", name,
                                  cfg->per_sc_batch_count[sc]);
         }
