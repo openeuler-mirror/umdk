@@ -19,7 +19,7 @@
 #      Wait — expThreshold=0 is NOT rejected: production code treats 0 as
 #      "use default 30" (umq_qbuf_pool.c:1223-1224). So 0 is valid (=default).
 #   5. expThreshold=200 (> 100) — init fails with EINVAL
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=4M expThreshold=90 threads=1
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M expThreshold=90 threads=1
 
 # Verify init: info 段2 should show expansion_threshold=90
 info
