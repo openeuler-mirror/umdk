@@ -1685,12 +1685,14 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         }
     }
 
-    if (queue->wait_ack_import.wait_ack_pool_id != NULL) {
-        free(queue->wait_ack_import.wait_ack_pool_id);
-    }
-    if (queue->wait_ack_import.lock != NULL) {
-        (void)util_rwlock_destroy(queue->wait_ack_import.lock);
-        queue->wait_ack_import.lock = NULL;
+    if (!is_umq_ub_logic_queue(queue->create_flag)) {
+        if (qcfg->wait_ack_import.wait_ack_pool_id != NULL) {
+            free(qcfg->wait_ack_import.wait_ack_pool_id);
+        }
+        if (qcfg->wait_ack_import.lock != NULL) {
+            (void)util_rwlock_destroy(qcfg->wait_ack_import.lock);
+            qcfg->wait_ack_import.lock = NULL;
+        }
     }
     (void)pthread_spin_destroy(&queue->get_jetty_node_lock);
 
