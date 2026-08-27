@@ -157,7 +157,7 @@ typedef enum umq_qbuf_pool_type {
 typedef struct umq_local_qbuf_pool_stats {
     umq_qbuf_pool_type_t type;                // qbuf pool type
     uint64_t tid;                             // thread ID
-    uint64_t capacity_with_data;              // with-data local pool capacity in COUNT (sum of per-SC high-water mark caps)
+    uint64_t capacity_with_data;              // with-data local pool capacity (sum of per-SC high-water mark caps)
     uint64_t buf_cnt_with_data;               // number of with-data buffers in the local memory pool
     uint64_t capacity_without_data;           // capacity of without-data buffer in the local memory pool
     uint64_t buf_cnt_without_data;            // number of without-data buffer in the local memory pool
