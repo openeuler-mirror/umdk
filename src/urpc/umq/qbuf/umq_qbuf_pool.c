@@ -3202,3 +3202,14 @@ static void umq_flush_tls_nodata_to_global(void)
     }
     (void)pthread_spin_unlock(&g_tls_stats_lock);
 }
+
+void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth)
+{
+    if (g_qbuf_pool.tls_qbuf_pool_depth > pjfr_depth) {
+        g_qbuf_pool.tls_expand_qbuf_pool_depth =
+            (g_qbuf_pool.tls_qbuf_pool_depth - pjfr_depth) >> 1;
+    } else {
+        g_qbuf_pool.tls_expand_qbuf_pool_depth =
+            umq_qbuf_pool_expand_max(g_qbuf_pool.tls_qbuf_pool_depth);
+    }
+}
