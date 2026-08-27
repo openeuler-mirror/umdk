@@ -29,10 +29,13 @@
 #define UMQ_VLOG_SUMMARY(__type, __format, ...) ((void)0)
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #else
-#define UMQ_VLOG_DEBUG_ORIG(__type, __format, ...) UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __type, __format, ##__VA_ARGS__)
+#define UMQ_VLOG_DEBUG_ORIG(__type, __format, ...) \
+    UTIL_VLOG(umq_get_log_ctx(), UTIL_VLOG_LEVEL_DEBUG, __type, __format, ##__VA_ARGS__)
 #undef UMQ_VLOG_DEBUG
-#define UMQ_VLOG_DEBUG(__type, __format, ...) do { if (qbuf_debug_on()) UMQ_VLOG_DEBUG_ORIG(__type, __format, ##__VA_ARGS__); } while(0)
-#define UMQ_VLOG_SUMMARY(__type, __format, ...) do { if (qbuf_debug_on()) UMQ_VLOG_INFO(__type, __format, ##__VA_ARGS__); } while(0)
+#define UMQ_VLOG_DEBUG(__type, __format, ...) \
+    do { if (qbuf_debug_on()) UMQ_VLOG_DEBUG_ORIG(__type, __format, ##__VA_ARGS__); } while (0)
+#define UMQ_VLOG_SUMMARY(__type, __format, ...) \
+    do { if (qbuf_debug_on()) UMQ_VLOG_INFO(__type, __format, ##__VA_ARGS__); } while (0)
 #endif
 #include "urpc_list.h"
 #include "urpc_thread_closure.h"
@@ -265,16 +268,38 @@ static inline uint64_t qbuf_mono_ns(void)
 
 // Map nanosecond latency to histogram bucket index.
 // Buckets: [0,100ns) [100ns,1us) [1us,10us) [10us,100us) [100us,1ms) [1ms,10ms) [10ms,+inf)
+#define QBUF_LAT_BUCKET_UNDER_100NS    0
+#define QBUF_LAT_BUCKET_100NS_TO_1US   1
+#define QBUF_LAT_BUCKET_1US_TO_5US     2
+#define QBUF_LAT_BUCKET_5US_TO_10US    3
+#define QBUF_LAT_BUCKET_10US_TO_100US  4
+#define QBUF_LAT_BUCKET_100US_TO_1MS   5
+#define QBUF_LAT_BUCKET_1MS_TO_10MS    6
+#define QBUF_LAT_BUCKET_OVER_10MS      7
 static inline int qbuf_lat_bucket(uint64_t ns)
 {
-    if (ns < 100ULL)          return 0;  // <100ns
-    if (ns < 1000ULL)         return 1;  // 100ns-1us
-    if (ns < 5000ULL)         return 2;  // 1-5us
-    if (ns < 10000ULL)        return 3;  // 5-10us
-    if (ns < 100000ULL)       return 4;  // 10us-100us
-    if (ns < 1000000ULL)      return 5;  // 100us-1ms
-    if (ns < 10000000ULL)     return 6;  // 1ms-10ms
-    return 7;                             // >10ms
+    if (ns < 100ULL) {
+        return QBUF_LAT_BUCKET_UNDER_100NS;
+    }
+    if (ns < 1000ULL) {
+        return QBUF_LAT_BUCKET_100NS_TO_1US;
+    }
+    if (ns < 5000ULL) {
+        return QBUF_LAT_BUCKET_1US_TO_5US;
+    }
+    if (ns < 10000ULL) {
+        return QBUF_LAT_BUCKET_5US_TO_10US;
+    }
+    if (ns < 100000ULL) {
+        return QBUF_LAT_BUCKET_10US_TO_100US;
+    }
+    if (ns < 1000000ULL) {
+        return QBUF_LAT_BUCKET_100US_TO_1MS;
+    }
+    if (ns < 10000000ULL) {
+        return QBUF_LAT_BUCKET_1MS_TO_10MS;
+    }
+    return QBUF_LAT_BUCKET_OVER_10MS;
 }
 
 static const char *qbuf_lat_labels[QBUF_LAT_BUCKETS] = {
@@ -514,9 +539,7 @@ void qbuf_log_non_pool_pointer(const char *caller, void *data)
         }
     }
 
-    /* Dump RX pool and tiny pool ranges (extern from their respective modules) */
-    extern void *umq_rx_io_buf_addr(void);
-    extern uint64_t umq_rx_io_buf_size(void);
+    /* Dump RX pool and tiny pool ranges (declared in umq_rx_qbuf_pool.h) */
     UMQ_VLOG_ERR(VLOG_UMQ, "  rx_pool=[%p, %p) tiny_pool_inited=%d\n",
         (void *)umq_rx_io_buf_addr(),
         (void *)((char *)umq_rx_io_buf_addr() + umq_rx_io_buf_size()),

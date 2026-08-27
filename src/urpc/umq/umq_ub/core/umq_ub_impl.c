@@ -48,7 +48,12 @@
 #define UMQ_UB_WAIT_QUEUE_IDLE_TIMEOUT_US 1000
 #define UMQ_UB_WAIT_QUEUE_IDLE_RETRY_CNT 8
 
-#define UMQ_ALIGN_64K(__size) (((__size) + 65535) & ~65535)
+#define UMQ_UB_ALIGN_64K_MASK 65535
+
+static inline uint32_t umq_align_64k(uint32_t size)
+{
+    return (size + UMQ_UB_ALIGN_64K_MASK) & ~UMQ_UB_ALIGN_64K_MASK;
+}
 
 static umq_ub_ctx_t *g_ub_ctx = NULL;
 static uint32_t g_ub_ctx_count = 0;
@@ -1014,10 +1019,10 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
         }
 
         if (queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id >=
-            UMQ_ALIGN_64K(queue->dev_ctx->dev_attr.dev_cap.max_jetty)) {
+            umq_align_64k(queue->dev_ctx->dev_attr.dev_cap.max_jetty)) {
             UMQ_VLOG_ERR(VLOG_UMQ, "jetty id %u exceed max jetty %u\n",
                          queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]->jetty_id.id,
-                         UMQ_ALIGN_64K(queue->dev_ctx->dev_attr.dev_cap.max_jetty));
+                         umq_align_64k(queue->dev_ctx->dev_attr.dev_cap.max_jetty));
             goto DELETE_FC_JETTY;
         }
     }
@@ -1430,9 +1435,9 @@ uint64_t umq_ub_create_impl(uint8_t *ctx, umq_create_option_t *option)
             goto DELETE_JFS_JFC;
         }
 
-        if (queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id >= UMQ_ALIGN_64K(queue->dev_ctx->dev_attr.dev_cap.max_jetty)) {
+        if (queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id >= umq_align_64k(queue->dev_ctx->dev_attr.dev_cap.max_jetty)) {
             UMQ_VLOG_ERR(VLOG_UMQ, "jetty id %u exceed max jetty %u\n", queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id,
-                         UMQ_ALIGN_64K(queue->dev_ctx->dev_attr.dev_cap.max_jetty));
+                         umq_align_64k(queue->dev_ctx->dev_attr.dev_cap.max_jetty));
             goto DELETE_JETTY;
         }
     }
