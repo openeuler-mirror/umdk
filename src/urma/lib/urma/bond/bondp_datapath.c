@@ -372,14 +372,14 @@ static urma_status_t schedule_send_wr(const urma_jfs_wr_t *wr, bondp_comp_t *bdp
  * try_failback() skip send_lock entirely. A health-check recovery that becomes
  * visible right after this check is picked up by the next post.
  */
-static void failback_resend_wr(bondp_comp_t *bdp_comp, uint64_t resend_wr_id)
+static void failback_resend_wr(bondp_comp_t *bdp_comp, jfs_wr_entry_t *resend_wr_entry,
+                               uint32_t *moved_mask)
 {
-    jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
-    if (resend_wr_entry == NULL ||
-        resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+    if (resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
         resend_wr_entry->bdp_comp != bdp_comp) {
         return;
     }
+    const uint64_t resend_wr_id = resend_wr_entry->wr_id;
 
     uint32_t old_send_idx = resend_wr_entry->send_idx;
     uint32_t old_target_idx = resend_wr_entry->target_idx;
@@ -409,6 +409,44 @@ static void failback_resend_wr(bondp_comp_t *bdp_comp, uint64_t resend_wr_id)
                      target_vjetty_id, old_send_idx, old_target_idx, new_send_idx, new_target_idx);
         return;
     }
+    /* Record the local port the WR migrated off: its pjetty still holds the
+     * stale (non-retracted) copy of the WR. */
+    *moved_mask |= 1U << old_send_idx;
+}
+
+/*
+ * active_backup only: a failback resend does not retract the original WR
+ * already posted on the vacated backup pjetty, so its jfs still holds the
+ * stale copies until they complete. If the restored primary fails again
+ * before that, the failover resends would double the backup jfs occupancy
+ * and overflow it. Invalidate the vacated backup and rebuild its pjetty on
+ * the worker (delay 0: the device itself is healthy) to flush the stale
+ * copies. The task is flagged backup_rebuild so the mark-done step silently
+ * republishes valid=true (no rebuild_done / hc_valid round trip and no INFO
+ * logs). Balance mode is unchanged.
+ */
+static void failback_rebuild_vacated_pjetty(bondp_comp_t *bdp_comp, uint32_t moved_mask)
+{
+    for (uint32_t idx = 0; idx < URMA_UBAGG_DEV_MAX_NUM; ++idx) {
+        if ((moved_mask & (1U << idx)) == 0) {
+            continue;
+        }
+        atomic_store(&bdp_comp->valid[idx], false);
+        int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, idx, 0, true);
+        if (ret != 0 && ret != -EEXIST) {
+            /* Keep the path valid on scheduling failure; the overflow risk
+             * then falls back to the pre-change behavior. -EEXIST means a
+             * rebuild task is already in flight and will republish the path
+             * when it completes. */
+            atomic_store(&bdp_comp->valid[idx], true);
+            URMA_LOG_WARN("Failed to add backup rebuild task after failback, vjetty_id=%u, "
+                          "pjetty_idx=%u, ret=%d\n",
+                          bdp_comp->v_jetty.jetty_id.id, idx, ret);
+            continue;
+        }
+        URMA_LOG_DEBUG("Failback vacated backup path, schedule pjetty rebuild, vjetty_id=%u, "
+                       "local_idx=%u\n", bdp_comp->v_jetty.jetty_id.id, idx);
+    }
 }
 
 static void try_failback(bondp_comp_t *bdp_comp)
@@ -424,8 +462,17 @@ static void try_failback(bondp_comp_t *bdp_comp)
         return;
     }
 
+    uint32_t moved_mask = 0;
     for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; ++i) {
-        failback_resend_wr(bdp_comp, (uint64_t)i + 1);
+        jfs_wr_entry_t *wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, i);
+        if (wr_entry->entry_type != WR_BUF_ENTRY_JFS) {
+            continue;
+        }
+        failback_resend_wr(bdp_comp, wr_entry, &moved_mask);
+    }
+
+    if (bdp_comp->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_ACTIVE_BACKUP) {
+        failback_rebuild_vacated_pjetty(bdp_comp, moved_mask);
     }
     pthread_spin_unlock(&bdp_comp->send_lock);
 }
@@ -1290,17 +1337,25 @@ static void resend_matched_jfs_wrs(bondp_comp_t *bdp_comp, uint64_t base_wr_id,
                                    uint32_t old_send_idx, uint32_t old_target_idx,
                                    int new_send_idx, int new_target_idx, const char *reason)
 {
-    for (int i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
-        const uint64_t resend_wr_id = (base_wr_id + i - 1) % bdp_comp->send_wr_buf.max_wr_num + 1;
-        jfs_wr_entry_t *resend_wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, resend_wr_id);
-        if (resend_wr_entry == NULL ||
-            resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+    /*
+     * Scan rotationally starting from the failover-triggering WR's slot: the CQE
+     * that triggers failover is flushed first, so its WR is the oldest in-flight
+     * one on this path and must be resent first. Slot order beyond that is only
+     * a best-effort approximation of submission order (LIFO free list reuse).
+     */
+    uint32_t max_wr_num = bdp_comp->send_wr_buf.max_wr_num;
+    uint32_t base_idx = __wr_id_to_idx(base_wr_id, max_wr_num);
+    for (uint32_t i = 0; i < max_wr_num; i++) {
+        uint32_t idx = (base_idx + i) % max_wr_num;
+        jfs_wr_entry_t *resend_wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, idx);
+        if (resend_wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
             resend_wr_entry->bdp_comp != bdp_comp ||
             resend_wr_entry->send_idx != old_send_idx ||
             resend_wr_entry->target_idx != old_target_idx) {
             continue;
         }
 
+        const uint64_t resend_wr_id = resend_wr_entry->wr_id;
         atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
         if (bondp_resend_jfs_wr(bdp_comp, resend_wr_entry, new_send_idx, new_target_idx) != 0) {
             URMA_LOG_ERR("Failed to resend %s jfs wr, wr_id=%lu\n", reason, resend_wr_id);
@@ -1601,7 +1656,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             atomic_store(&skip_p_tjetty->valid, false);
         }
         if (is_need_rebuild_jetty(cr) && comp_ctx->enable_failback) {
-            int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx);
+            int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx,
+                                        BONDP_FB_REBUILD_DELAY_MS, false);
             if (ret != 0 && ret != -EEXIST) {
                 URMA_LOG_WARN("Failed to add failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d\n",
                               bdp_comp->v_jetty.jetty_id.id, send_idx, ret);
@@ -1655,6 +1711,14 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
                       EID_ARGS(wr_entry->target_vjetty->v_tjetty.id.eid));
         urma_ubagg_switch_inc();
 
+        /*
+         * NOTE: aggregation-device failover does NOT guarantee strict WR
+         * ordering. Only the failover-triggering WR is resent first; the
+         * other in-flight WRs are resent in slot order, which does not
+         * track submission order (LIFO free-list slot reuse). The peer may
+         * therefore execute SEND/WRITE/atomic operations out of submission
+         * order after a path switch.
+         */
         resend_matched_jfs_wrs(bdp_comp, wr_entry->wr_id, send_idx, target_idx,
                                new_send_idx, new_target_idx, "failover");
         (void)pthread_spin_unlock(&bdp_comp->send_lock);

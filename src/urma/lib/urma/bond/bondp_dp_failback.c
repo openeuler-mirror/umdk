@@ -39,6 +39,10 @@ typedef struct bondp_fb_task {
     uint32_t request_id;
     uint32_t vjetty_id;
     uint32_t pjetty_idx;
+    /* True when rebuilding a healthy backup vacated by failback (to purge
+     * stale in-flight copies from its jfs), as opposed to rebuilding a failed
+     * pjetty that must wait for health probes before republishing. */
+    bool backup_rebuild;
 } bondp_fb_task_t;
 
 struct bondp_fb_ctx {
@@ -83,8 +87,6 @@ uint32_t bondp_fb_switch_path(bondp_comp_t *bdp_comp)
 
 #define BONDP_FB_TASK_HASH_BASIS    0x9d4f21U
 #define BONDP_FB_TASK_TABLE_SIZE    1024U
-/* Delay (ms) before rebuilding a failed-back pjetty on the bond worker. */
-#define BONDP_FB_REBUILD_DELAY_MS   2000U
 /* Delay (ms) before publishing the rebuild_done flag after a rebuild; the
  * worker enforces a minimum of one tick. */
 #define BONDP_FB_MARK_DONE_DELAY_MS 0U
@@ -276,7 +278,7 @@ static int bondp_update_pjetty_id_mapping(
     return 0;
 }
 
-static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx)
+static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx, bool backup_rebuild)
 {
     int ret;
 
@@ -354,6 +356,7 @@ typedef struct bondp_fb_mark_done_arg {
     bondp_fb_task_t *fb_task;
     bondp_comp_t *bdp_jetty;
     uint32_t pjetty_idx;
+    bool backup_rebuild;
 } bondp_fb_mark_done_arg_t;
 
 static void bondp_mark_rebuild_done_async(bondp_worker_task_reason_t reason, void *arg)
@@ -366,7 +369,18 @@ static void bondp_mark_rebuild_done_async(bondp_worker_task_reason_t reason, voi
 
     if (reason == BONDP_WORKER_TASK_EXECUTED && arg_typed->bdp_jetty != NULL &&
         arg_typed->pjetty_idx < URMA_UBAGG_DEV_MAX_NUM) {
-        atomic_store(&arg_typed->bdp_jetty->rebuild_done[arg_typed->pjetty_idx], true);
+        if (arg_typed->backup_rebuild) {
+            /* Republish the vacated backup path directly, skipping the
+             * rebuild_done -> hc_valid -> failback round trip (and its INFO
+             * logs) so the backup rebuild stays invisible. The link itself
+             * never failed, only the pjetty was replaced. */
+            atomic_store(&arg_typed->bdp_jetty->valid[arg_typed->pjetty_idx], true);
+            URMA_LOG_DEBUG("Backup path republished after failback rebuild, vjetty_id=%u, "
+                           "local_idx=%u\n",
+                           arg_typed->bdp_jetty->v_jetty.jetty_id.id, arg_typed->pjetty_idx);
+        } else {
+            atomic_store(&arg_typed->bdp_jetty->rebuild_done[arg_typed->pjetty_idx], true);
+        }
     }
 
     if (arg_typed->fb_ctx != NULL) {
@@ -408,24 +422,25 @@ static void bondp_rebuild_pjetty_async(bondp_worker_task_reason_t reason, void *
         goto del_task;
     }
 
-    int ret = bondp_rebuild_pjetty(bdp_jetty, (int)fb_task->pjetty_idx);
+    int ret = bondp_rebuild_pjetty(bdp_jetty, (int)fb_task->pjetty_idx, fb_task->backup_rebuild);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to rebuild failback pjetty, vjetty_id=%u, pjetty_idx=%u.\n",
                      fb_task->vjetty_id, fb_task->pjetty_idx);
-        goto del_task;
+        goto restore_and_del;
     }
 
     bondp_fb_mark_done_arg_t *mark_arg = calloc(1, sizeof(*mark_arg));
     if (mark_arg == NULL) {
         URMA_LOG_ERR("Failed to alloc mark-done arg, vjetty_id=%u, pjetty_idx=%u, flag stays unset.\n",
                      fb_task->vjetty_id, fb_task->pjetty_idx);
-        goto del_task;
+        goto restore_and_del;
     }
     mark_arg->fb_ctx = fb_ctx;
     mark_arg->key = arg_typed->key;
     mark_arg->fb_task = fb_task;
     mark_arg->bdp_jetty = bdp_jetty;
     mark_arg->pjetty_idx = fb_task->pjetty_idx;
+    mark_arg->backup_rebuild = fb_task->backup_rebuild;
 
     uint64_t mark_done_task_id = 0;
     ret = bondp_worker_schedule(BONDP_FB_MARK_DONE_DELAY_MS, bondp_mark_rebuild_done_async,
@@ -434,7 +449,7 @@ static void bondp_rebuild_pjetty_async(bondp_worker_task_reason_t reason, void *
         URMA_LOG_ERR("Failed to schedule mark-done task, vjetty_id=%u, pjetty_idx=%u, ret=%d\n",
                      fb_task->vjetty_id, fb_task->pjetty_idx, ret);
         free(mark_arg);
-        goto del_task;
+        goto restore_and_del;
     }
     fb_task_set_worker_task_id(fb_ctx, fb_task, mark_done_task_id);
 
@@ -442,6 +457,15 @@ static void bondp_rebuild_pjetty_async(bondp_worker_task_reason_t reason, void *
     free(arg_typed);
     return;
 
+restore_and_del:
+    /* A backup rebuild that cannot complete must not leave the vacated path
+     * invalidated forever: re-publish it, falling back to the pre-change
+     * overflow risk. */
+    if (fb_task->backup_rebuild && fb_task->pjetty_idx < URMA_UBAGG_DEV_MAX_NUM) {
+        atomic_store(&bdp_jetty->valid[fb_task->pjetty_idx], true);
+        URMA_LOG_DEBUG("Backup path republished after failed rebuild, vjetty_id=%u, "
+                       "local_idx=%u\n", fb_task->vjetty_id, fb_task->pjetty_idx);
+    }
 del_task:
     (void)fb_task_del(fb_ctx, &arg_typed->key);
     fb_task_put(fb_task);
@@ -450,7 +474,8 @@ free_arg:
     return;
 }
 
-int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx)
+int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pjetty_idx,
+                      uint32_t delay_ms, bool backup_rebuild)
 {
     if (bond_ctx == NULL || bond_ctx->fb_ctx == NULL) {
         return -EINVAL;
@@ -466,6 +491,7 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
     fb_task->request_id = next_request_id(fb_ctx);
     fb_task->vjetty_id = vjetty_id;
     fb_task->pjetty_idx = pjetty_idx;
+    fb_task->backup_rebuild = backup_rebuild;
     atomic_init(&fb_task->use_cnt.atomic_cnt, 1);
 
     bondp_fb_task_key_t key = {
@@ -493,8 +519,7 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
     }
 
     ub_hmap_insert(&fb_ctx->task_map, &fb_task->hmap_node, hash);
-    ret = bondp_worker_schedule(BONDP_FB_REBUILD_DELAY_MS, bondp_rebuild_pjetty_async, async_arg,
-                                &fb_task->worker_task_id);
+    ret = bondp_worker_schedule(delay_ms, bondp_rebuild_pjetty_async, async_arg, &fb_task->worker_task_id);
     if (ret != 0) {
         ub_hmap_remove(&fb_ctx->task_map, &fb_task->hmap_node);
         URMA_LOG_ERR("Failed to schedule failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d.\n",
