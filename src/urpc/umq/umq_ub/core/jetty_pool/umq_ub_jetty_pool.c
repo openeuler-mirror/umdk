@@ -51,6 +51,9 @@ typedef struct jetty_pool {
     uint32_t cache_size;            // Thread-local cache size (default 16)
     uint32_t notify_threshold;      // Notify via eventfd when active_count >= threshold (default 16)
     uint32_t return_batch_size;     // Batch size for returning from cache to active_q (default 1)
+
+    // Baseline established by the first main+share_transport umq; all such umqs must match it.
+    baseline_umq_cfg_t baseline;
 } jetty_pool_t;
 
 static __thread thread_local_jetty_cache_t g_thread_jetty_cache = {0};
@@ -422,15 +425,6 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
     return UMQ_SUCCESS;
 }
 
-static inline uint32_t get_borrow_limit(uint32_t total_jetty_num, uint32_t remaining_jetty_num)
-{
-    uint32_t borrow_limit = 0;
-    if (total_jetty_num != 0) {
-        borrow_limit = UMQ_JETTY_NODE_BORROW_LIMIT_RATIO * remaining_jetty_num / total_jetty_num;
-    }
-    return borrow_limit > UMQ_JETTY_NODE_MIN_BORROW_LIMIT ? borrow_limit : UMQ_JETTY_NODE_MIN_BORROW_LIMIT;
-}
-
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
 {
     if (!g_jetty_pool_inited) {
@@ -479,8 +473,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
                 continue;
             }
 
-            node->borrow_count = 0;
-            node->borrow_limit = get_borrow_limit(pool->node_count, pool->active_count);
+            node->borrow_limit = pool->baseline.tx_depth;
             (void)__atomic_add_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
             (void)__atomic_add_fetch(&pool->acc_alloc_count, 1, __ATOMIC_RELAXED);
             umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE, start_timestamp);
@@ -496,7 +489,7 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     return NULL;
 }
 
-int umq_ub_jetty_node_free(jetty_pool_node_t *node)
+int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
 {
     if (!g_jetty_pool_inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "jetty pool not initialized\n");
@@ -515,6 +508,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
     (void)__atomic_add_fetch(&pool->acc_free_count, 1, __ATOMIC_RELAXED);
     if (node->is_jetty_err) {
         (void)pthread_spin_lock(&pool->lock);
+        pool->active_count++;
         recycle_node_to_relay_q(pool, node);
         (void)pthread_spin_unlock(&pool->lock);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
@@ -567,7 +561,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
         uint64_t value = (uint64_t)pool->active_count;
         (void)pthread_spin_unlock(&pool->lock);
 
-        if ((value % pool->notify_threshold) < cnt) {
+        if (should_report_event && (value % pool->notify_threshold) < cnt) {
             if (eventfd_write(pool->event_fd, value) != 0) {
                 UMQ_VLOG_WARN(VLOG_UMQ, "eventfd_write failed, errno: %d\n", errno);
             }
@@ -576,7 +570,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node)
     }
 
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
-    return UMQ_SUCCESS;
+    return 1;
 }
 
 int umq_ub_jetty_pool_get_eventfd(void)
@@ -670,6 +664,41 @@ void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node)
         return; // was already true
     }
     (void)__atomic_add_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
+}
+
+int umq_ub_jetty_pool_align_tx(uint32_t queue_tx_depth, uint32_t queue_tx_buf_size)
+{
+    if (!g_jetty_pool_inited) {
+        // pool not ready; caller proceeds with its own values (no enforcement)
+        return UMQ_SUCCESS;
+    }
+
+    (void)pthread_spin_lock(&g_jetty_pool.lock);
+    if (!g_jetty_pool.baseline.inited) {
+        // First main+share_transport umq establishes the baseline.
+        g_jetty_pool.baseline.tx_depth = queue_tx_depth;
+        g_jetty_pool.baseline.tx_buf_size = queue_tx_buf_size;
+        g_jetty_pool.baseline.inited = true;
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
+        return UMQ_SUCCESS;
+    }
+    uint32_t base_depth = g_jetty_pool.baseline.tx_depth;
+    uint32_t base_buf_size = g_jetty_pool.baseline.tx_buf_size;
+    (void)pthread_spin_unlock(&g_jetty_pool.lock);
+
+    // Every subsequent main+share_transport umq must match the baseline, regardless of whether the user
+    // explicitly configured the values: jetty pool nodes are shared, so tx_depth/tx_buf_size must be uniform.
+    if (queue_tx_depth != base_depth) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tx_depth %u != jetty pool baseline %u, all main+share_transport umq must share "
+            "the same tx_depth\n", queue_tx_depth, base_depth);
+        return -UMQ_ERR_EINVAL;
+    }
+    if (queue_tx_buf_size != base_buf_size) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "tx_buf_size %u != jetty pool baseline %u, all main+share_transport umq must share "
+            "the same tx_buf_size\n", queue_tx_buf_size, base_buf_size);
+        return -UMQ_ERR_EINVAL;
+    }
+    return UMQ_SUCCESS;
 }
 
 int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats)

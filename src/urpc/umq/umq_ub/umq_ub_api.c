@@ -66,9 +66,9 @@ static void umq_tp_ub_uninit(uint8_t *ctx)
     umq_ub_ctx_uninit_impl(ctx);
 }
 
-static uint64_t umq_tp_ub_create(uint8_t *ctx, umq_create_option_t *option)
+static uint64_t umq_tp_ub_create(uint64_t umqh __attribute__((unused)), uint8_t *ctx, umq_create_option_t *option)
 {
-    return umq_ub_create_impl(ctx, option);
+    return umq_ub_create_impl(umqh, ctx, option);
 }
 
 static int umq_tp_ub_destroy(uint64_t umqh_tp)
