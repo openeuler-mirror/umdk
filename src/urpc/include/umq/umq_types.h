@@ -391,6 +391,11 @@ typedef enum umq_state {
     QUEUE_STATE_MAX
 } umq_state_t;
 
+typedef enum umq_buf_ref_id_type {
+    UMQ_BUF_REF_ID_TYPE_UMQ_ID,
+    UMQ_BUF_REF_ID_TYPE_TP_HANDEL,
+} umq_buf_buf_ref_id_type_t;
+
 /**
  * layout: | umq_buf_t | headroom | data |  unuse |
  * buf_size = sizeof(umq_buf_t) + headroom_size + data_size +  sizeof(unuse)
@@ -419,9 +424,11 @@ struct umq_buf {
     uint32_t mempool_id : 11;          // indicate which memory pool it is allocated from
     uint32_t token_value;              // token_value for reference operation
 
-    uint64_t status : 32;      // umq_buf_status_t
-    uint64_t io_direction : 2; // 0: no direction; 1: tx qbuf; 2: rx qbuf
-    uint64_t rsvd3 : 30;
+    uint64_t status : 32;                 // umq_buf_status_t
+    uint64_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
+    uint64_t rsvd3 : 11;
+    uint64_t buf_ref_id_type : 1;          // 0: enable umq_id, invalid to user, 1: enable tphandel
+    uint64_t buf_ref_id : 18;              // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
 
     uint64_t rsvd4;
 
@@ -694,6 +701,7 @@ typedef struct umq_io_option {
     umq_io_direction_t io_direction;
     uint32_t tp_handle_idx;
     uint64_t tag_timestamp;
+    uint32_t tp_handle_free_num;
 } umq_io_option_t;
 
 #define UMQ_TP_CREATE_FLAG_USED_PORTS (1) // enable arg used ports when create transport pool resource

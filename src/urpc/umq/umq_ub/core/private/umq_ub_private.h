@@ -229,6 +229,7 @@ typedef struct ub_flow_control {
     volatile bool is_credit_applying;
     volatile uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
                                               // the link if the rsp does not return within the timeout
+    volatile uint64_t fc_eagain_start_us; // timestamp(us) of the first continuous EAGAIN on credit req send;
     volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     umq_ub_fc_msg_retry_list_t *fc_msg_retry_list;
     uint8_t local_req_seq;
@@ -292,6 +293,7 @@ typedef struct umq_ub_ctx {
     urma_target_jetty_t *tjetty;
     umq_trans_info_t trans_info;
     volatile uint64_t *umq_ctx_table;
+    volatile uint32_t *umq_ctx_ref_cnt_table;
     volatile uint64_t *rx_consumed_jetty_table;
 } umq_ub_ctx_t;
 
@@ -463,8 +465,8 @@ typedef struct jetty_pool_node {
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
     urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
     urma_jfce_t *jfs_jfce;
-    volatile uint32_t tx_outstanding;
     volatile uint64_t umq_ref;          // owner umq_id (hi 32) + ref_cnt (lo 32), single atomic access
+    volatile uint32_t tx_outstanding;
     volatile uint32_t state;            // Track node state (atomic CAS operations)
     volatile uint32_t borrow_count;     // WRs posted in current borrow cycle (atomic — concurrent post)
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
@@ -497,7 +499,7 @@ typedef struct ub_queue {
     urma_order_type_t order_type;
     urma_transport_mode_t tp_mode;
     urma_tp_type_t tp_type;
-    ub_flow_control_t flow_control;
+    ub_flow_control_t *flow_control;
     char name[UMQ_NAME_MAX_LEN];
     uint32_t rx_buf_size;
     uint32_t tx_buf_size;
@@ -656,7 +658,8 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
 
 int umq_ub_fill_fc_rx_buf(ub_queue_t *queue);
 int umq_ub_fill_fc_rx_buf_batch(ub_queue_t *queue, uint8_t rqe_post_factor);
-int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx);
+int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, uint32_t tp_handle_idx,
+                      umq_io_option_t *option);
 
 int umq_ub_wait_rx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
 int umq_ub_wait_tx_interrupt(ub_queue_t *queue, int time_out, urma_jfc_t *jfc[]);
@@ -731,14 +734,24 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
         return NULL;
     }
 
-    return (ub_queue_t *)(uintptr_t)__atomic_exchange_n(
-        &queue->dev_ctx->umq_ctx_table[umq_id], 0, __ATOMIC_ACQ_REL);
+    uint32_t old_ref_cnt = __atomic_load_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], __ATOMIC_ACQUIRE);
+    do {
+        if (old_ref_cnt == 0) {
+            return NULL;
+        }
+    } while (__atomic_compare_exchange_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
+        false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
+
+    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_table[umq_id];
 }
 
 static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
 {
-    __atomic_store_n(&queue->dev_ctx->umq_ctx_table[umq_id],
-        (uint64_t)(uintptr_t)queue, __ATOMIC_RELEASE);
+    if (umq_id >= UMQ_ID_ALLOC_SIZE) {
+        return;
+    }
+
+    (void)__atomic_fetch_sub(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], 1, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
