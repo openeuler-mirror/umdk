@@ -171,15 +171,29 @@ ge::graphStatus GatherSelectionKvCacheCustomTiling::GetAttrsAndShapes()
         OPS_LOG_E(context_->GetNodeName(), "selection cache block num is too small."), return ge::GRAPH_FAILED);
 
     tilingData_.set_fullKvBlockSize(fullCacheShape.GetDim(DIM_IDX_1));
+    OPS_ERR_IF(fullCacheShape.GetDim(DIM_IDX_1) != selCacheShape.GetDim(DIM_IDX_1),
+        OPS_LOG_E(context_->GetNodeName(),
+            "full_kv_cache dim1:%ld should equal selection_kv_cache block_size:%ld.",
+            fullCacheShape.GetDim(DIM_IDX_1), selCacheShape.GetDim(DIM_IDX_1)),
+        return ge::GRAPH_FAILED);
     OPS_ERR_IF(fullCacheShape.GetDim(DIM_IDX_2) != selCacheShape.GetDim(DIM_IDX_2),
         OPS_LOG_E(context_->GetNodeName(), "selection/full KV cache last dim mismatch."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(tilingData_.get_kvCacheDim() > MAX_KV_CACHE_DIM,
         OPS_LOG_E(context_->GetNodeName(), "kvCacheDim exceeds %ld.", MAX_KV_CACHE_DIM), return ge::GRAPH_FAILED);
 
-    if (selRopeShape.GetDimNum() == DIM_NUM_1) {
-        OPS_ERR_IF(selRopeShape.GetDim(DIM_IDX_0) != 0 || fullRopeShape.GetDimNum() != DIM_NUM_1 ||
-                       fullRopeShape.GetDim(DIM_IDX_0) != 0,
-            OPS_LOG_E(context_->GetNodeName(), "quantized rope inputs must both be empty 1D tensors."),
+    // Peek dtype early: int8 Offload packs rope into kv_cache, so both rope tensors must be empty [0].
+    // Shape-only ifQuant detection would wrongly accept int8 + 3D rope as non-quant.
+    auto selRopeDescEarly = context_->GetInputDesc(SEL_K_ROPE_IDX);
+    auto fullRopeDescEarly = context_->GetInputDesc(FULL_K_ROPE_IDX);
+    OPS_ERR_IF(selRopeDescEarly == nullptr || fullRopeDescEarly == nullptr,
+        OPS_LOG_E(context_->GetNodeName(), "rope dtype desc is nullptr."), return ge::GRAPH_FAILED);
+    const bool isInt8 =
+        selRopeDescEarly->GetDataType() == ge::DT_INT8 || fullRopeDescEarly->GetDataType() == ge::DT_INT8;
+    if (isInt8 || selRopeShape.GetDimNum() == DIM_NUM_1) {
+        OPS_ERR_IF(selRopeShape.GetDimNum() != DIM_NUM_1 || selRopeShape.GetDim(DIM_IDX_0) != 0 ||
+                       fullRopeShape.GetDimNum() != DIM_NUM_1 || fullRopeShape.GetDim(DIM_IDX_0) != 0,
+            OPS_LOG_E(context_->GetNodeName(),
+                "int8/quant requires selection_k_rope and full_k_rope empty tensors with shape [0]."),
             return ge::GRAPH_FAILED);
         tilingData_.set_ifQuant(1);
         tilingData_.set_kRopeDim(0);
@@ -224,6 +238,9 @@ ge::graphStatus GatherSelectionKvCacheCustomTiling::CheckDtypes()
     OPS_ERR_IF(!IsCacheDtype(cacheDtype_) || selRopeDesc->GetDataType() != cacheDtype_ ||
                    fullCacheDesc->GetDataType() != cacheDtype_ || fullRopeDesc->GetDataType() != cacheDtype_,
         OPS_LOG_E(context_->GetNodeName(), "all cache/rope tensors must use the same supported dtype."),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(cacheDtype_ == ge::DT_INT8 && tilingData_.get_ifQuant() != 1,
+        OPS_LOG_E(context_->GetNodeName(), "int8 dtype requires quantized empty rope inputs (ifQuant=1)."),
         return ge::GRAPH_FAILED);
 
     constexpr int32_t intInputs[] = {SEL_KV_BLOCK_TABLE_IDX, SEL_KV_BLOCK_STATUS_IDX, SEL_TOPK_INDICES_IDX,
