@@ -263,20 +263,41 @@ uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
     char buf[PRIORITY_BUF_LEN];
     char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN] = {0};
     exec_cmd(buf, PRIORITY_BUF_LEN, "urma_admin show --whole -d %s", ctx->ctx->device_name);
-    parse_priority_sl_tp_type_map(buf, priority_list);
-    for (uint8_t i = 0; i < MAX_PRIORITY_NUM; i++) {
-        if (ctx->tp_type == UMQ_TP_TYPE_RTP) {
-            if (strncmp(priority_list[i], "RTP", 3) == 0) {
-                return i;
-            }
-        } else if (ctx->tp_type == UMQ_TP_TYPE_CTP) {
-            if (strncmp(priority_list[i], "CTP", 3) == 0) {
-                return i;
-            }
-        }
-    }
-    return 0;
 
+    const char *tp_type_start = strstr(buf, "tp_type");
+    if (tp_type_start == NULL) {
+        return 0;
+    }
+    const char *p = NULL;
+    const char *target = NULL;
+
+    if (ctx->tp_type == UMQ_TP_TYPE_RTP) {
+        p = strchr(tp_type_start, ':') + 1;
+        target = "  RTP";
+    } else if (ctx->tp_type == UMQ_TP_TYPE_CTP) {
+        const char *line_end = strchr(tp_type_start, '\n');
+        p = line_end + 12;
+        target = "  CTP";
+    } else if (ctx->tp_type == UMQ_TP_TYPE_UTP) {
+        const char *line_end = strchr(tp_type_start, '\n');
+        line_end = strchr(line_end + 1, '\n');
+        p = line_end + 12;
+        target = "  UTP";
+    } else {
+        return 0;
+    }
+    
+    for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
+        if (*p == '\n' || *p == '\0') {
+            break;
+        }
+        if (strncmp(p, target, 5) == 0) {
+            return i;
+        }
+        p += 5;
+    }
+
+    return 0;
 }
 
 int print_route_list(umqh_ops_t *umqh_ops, const umq_route_key_t *route_key, umq_route_list_t *route_list)
