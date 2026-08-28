@@ -21,7 +21,7 @@
 #include "urma_provider.h"
 #include "urma_types.h"
 
-#include "bondp_api.h"
+#include "bondp_cp_jetty.h"
 #include "bondp_context_table.h"
 #include "bondp_cp_seg.h"
 #include "bondp_cp_tjetty.h"
