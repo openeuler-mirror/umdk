@@ -693,7 +693,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
     for (uint32_t i = 0; i < cfg->trans_info_num; i++) {
         umq_trans_info_t *info = &cfg->trans_info[i];
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
-            UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %d not UB, skip it\n", info->trans_mode);
+            UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %u not UB, skip it\n", info->trans_mode);
             continue;
         }
 
@@ -1044,7 +1044,7 @@ static int umq_ub_create_flow_control_resource(ub_queue_t *queue, ub_queue_t *sh
 
     /* if step A after umq_ub_idle_checker_init, step A fails,
      * umq_ub_idle_checker_uninit can not be called, need to lock checker, setting checker->umq to NULL,
-     * umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit free resoures */
+     * umq_ub_idle_queue_check or umq_ub_monitor_slots_uninit free resources */
     if ((queue->create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0) {
         if (umq_ub_idle_checker_init(queue) != UMQ_SUCCESS) {
             goto DELETE_FC_JETTY;
@@ -1185,7 +1185,7 @@ static int umq_ub_create_jetty_node(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, um
         };
         jetty_node->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] = umq_create_jetty(queue, dev_ctx, &create_fc_jetty_config);
         if (jetty_node->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
-            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "umq_create_jetty for flow flowcontrol jetty failed, errno: %d\n", errno);
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "umq_create_jetty for flowcontrol jetty failed, errno: %d\n", errno);
             goto DELETE_FC_JFS_JFC;
         }
     }
@@ -1311,7 +1311,7 @@ int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_ha
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (!is_umq_ub_main_queue(queue->create_flag) || !is_umq_ub_share_transport(queue->create_flag)) {
         UMQ_VLOG_ERR(VLOG_UMQ,
-                     "transport resources can be destroy only if both main umq and share transport are available\n");
+                     "transport resources can be destroyed only if both main umq and share transport are available\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1808,7 +1808,7 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
             return -UMQ_ERR_EINVAL;
         }
         if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u not exist\n", option->tp_handle_idx);
             umq_trace_end_record(UMQ_TRACE_TYPE_WAIT, umq_trace_timestamp_get());
             return -UMQ_ERR_EINVAL;
         }
@@ -1882,11 +1882,11 @@ int umq_ub_interrupt_fd_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *optio
         }
 
         if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u not exist\n", option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
         if (jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
                                option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
@@ -1999,11 +1999,11 @@ int umq_ub_interrupt_fd_list_get_impl(uint64_t umqh_tp, umq_interrupt_option_t *
         }
 
         if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u does not exist\n", option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
         if (jetty_node_list->node_list[option->tp_handle_idx]->jfs_jfce == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u jfs_jfce is NULL (polling mode has no jfce)\n",
                                option->tp_handle_idx);
             return UMQ_INVALID_FD;
         }
@@ -2074,7 +2074,7 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             }
 
             if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handel_idx %u not exist\n", option->tp_handle_idx);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u does not exist\n", option->tp_handle_idx);
                 umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
                 return -UMQ_ERR_EINVAL;
             }
@@ -2709,7 +2709,7 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     }
 
     if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "trans init mode: %d not UB\n", info->trans_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans init mode: %u not UB\n", info->trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 

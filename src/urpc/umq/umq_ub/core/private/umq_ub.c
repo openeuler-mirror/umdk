@@ -87,29 +87,29 @@ umq_tp_type_t umq_tp_type_convert(urma_tp_type_t tp_type)
 int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     if (info->version_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), verion_info not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), version_info does not exist\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     umq_ub_bind_dev_info_t *dev_info = (umq_ub_bind_dev_info_t *)(uintptr_t)info->dev_info;
     if (dev_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), dev_info not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), dev_info does not exist\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info->queue_info;
     if (queue_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), queue_info not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), queue_info does not exist\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->flow_control != NULL && info->fc_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), fc_info not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), fc_info does not exist\n", queue->umq_id);
         return -UMQ_ERR_EINVAL;
     }
 
     if (dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB && dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), trans mode %d is not UB\n", queue->umq_id, dev_info->umq_trans_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), trans mode %u is not UB\n", queue->umq_id, dev_info->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1169,7 +1169,7 @@ int umq_ub_get_urma_dev(umq_dev_assign_t *dev_info, urma_device_t **urma_dev, um
         ret = umq_find_ub_dev_by_ip_addr(dev_info, &out);
     } else {
         ret = -UMQ_ERR_EINVAL;
-        UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %d not supported\n", dev_info->assign_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %u not supported\n", dev_info->assign_mode);
     }
 
     if (ret != UMQ_SUCCESS) {
@@ -1686,7 +1686,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
     }
     if (option->create_flag & UMQ_CREATE_FLAG_QUEUE_MODE) {
         if (option->mode < 0 || option->mode >= UMQ_MODE_MAX) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "queue mode[%d] is invalid\n", option->mode);
+            UMQ_VLOG_ERR(VLOG_UMQ, "queue mode[%u] is invalid\n", option->mode);
             return -UMQ_ERR_EINVAL;
         }
         qcfg->mode = option->mode;
@@ -1694,7 +1694,7 @@ int check_and_set_param(umq_ub_ctx_t *dev_ctx, umq_create_option_t *option, ub_q
 
     if (option->create_flag & UMQ_CREATE_FLAG_TP_MODE) {
         if (option->tp_mode > UMQ_TM_RM) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "tp_mode[%d] is invalid\n", option->tp_mode);
+            UMQ_VLOG_ERR(VLOG_UMQ, "tp_mode[%u] is invalid\n", option->tp_mode);
             return -UMQ_ERR_EINVAL;
         }
         qcfg->tp_mode = umq_tp_mode_convert_to_urma(option->tp_mode);
@@ -2405,7 +2405,7 @@ static ALWAYS_INLINE uint32_t umq_ub_get_read_pre_allocate_max_total_size(
         return temp_size - sizeof(umq_buf_t) * buf_num - umq_qbuf_headroom_get();
     }
 
-    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", buf_mode);
+    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buf mode: %u is invalid\n", buf_mode);
     return UINT32_MAX;
 }
 
@@ -2508,13 +2508,13 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
     if (ack_type == UMQ_UB_ACK_IMPORT_TYPE_ACK_IMM) {
         if (umq_ub_import_mem_done(queue, mempool_id) != UMQ_SUCCESS) {
             // send import mem done failed not cause the data plane to be unavailable
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed",
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, send import mem done imm failed\n",
                 EID_ARGS(*eid), id);
         }
         return;
     }
     if (!umq_ub_wait_ack_lock_ensure(queue)) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, create wait ack lock failed",
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, create wait ack lock failed\n",
             EID_ARGS(*eid), id);
         return;
     }
@@ -2524,7 +2524,7 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
             queue->wait_ack_import.wait_ack_pool_id = (uint16_t *)(uintptr_t)calloc(UMQ_MAX_TSEG_NUM, sizeof(uint16_t));
             if (queue->wait_ack_import.wait_ack_pool_id == NULL) {
                 (void)util_rwlock_unlock(queue->wait_ack_import.lock);
-                UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc wait ack pool id failed",
+                UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, calloc wait ack pool id failed\n",
                     EID_ARGS(*eid), id);
                 return;
             }
@@ -2533,7 +2533,7 @@ static ALWAYS_INLINE void umq_ub_return_import_result(ub_queue_t *queue, uint16_
         (void)util_rwlock_unlock(queue->wait_ack_import.lock);
     } else {
         (void)util_rwlock_unlock(queue->wait_ack_import.lock);
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wait ack import table is full",
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, wait ack import table is full\n",
             EID_ARGS(*eid), id);
     }
 }
@@ -2573,7 +2573,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
     }
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     if (queue == NULL) {
-        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "umq has been destroy\n");
+        UMQ_LIMIT_VLOG_INFO(VLOG_UMQ, "umq has been destroyed\n");
         return -UMQ_ERR_EINVAL;
     }
 

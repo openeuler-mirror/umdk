@@ -54,7 +54,7 @@ int qbuf_pool_base_init(qbuf_pool_base_t *base, const qbuf_pool_cfg_t *cfg, uint
         blk_num = cfg->total_size / base->block_size;
         base->header_buffer = NULL;
     } else {
-        UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", cfg->mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %u is invalid\n", cfg->mode);
         umq_qbuf_block_pool_uninit(&base->block_pool[0]);
         return -UMQ_ERR_EINVAL;
     }
