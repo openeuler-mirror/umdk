@@ -391,8 +391,11 @@ urma_status_t bondp_unregister_seg(urma_target_seg_t *target_seg)
 {
     int ret = URMA_SUCCESS;
     bondp_tseg_t *bdp_seg = CONTAINER_OF_FIELD(target_seg, bondp_tseg_t, v_tseg);
+    bool expected = false;
 
-    atomic_store(&bdp_seg->deleting, true);
+    if (!atomic_compare_exchange_strong(&bdp_seg->deleting, &expected, true)) {
+        return URMA_EAGAIN;
+    }
     unsigned long use_cnt = atomic_load(&bdp_seg->use_cnt.atomic_cnt);
     if (use_cnt > 1) {
         /* In-flight WRs still reference this seg; caller must stop posting and retry. */

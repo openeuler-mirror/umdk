@@ -3087,13 +3087,12 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
         if (type == URMA_TRANSPORT_UB && token_id != NULL) {
             atomic_fetch_sub(&token_id->ref.atomic_cnt, 1);
         }
+        if (free_token_id == true) {
+            (void)urma_free_token_id(token_id);
+        }
     } else {
         URMA_LOG_ERR("[DRV_ERR]Unregister seg fail, dev_name=%s, eid_idx=%u, tid=%u, ret=%d.\n",
             urma_ctx->dev->name, urma_ctx->eid_index, token_id->token_id, ret);
-    }
-
-    if (free_token_id == true) {
-        (void)urma_free_token_id(token_id);
     }
 
     return ret;
