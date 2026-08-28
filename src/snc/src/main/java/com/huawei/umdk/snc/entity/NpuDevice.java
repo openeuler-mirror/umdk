@@ -9,6 +9,8 @@
 package com.huawei.umdk.snc.entity;
 
 import java.util.Map;
+import com.alibaba.fastjson2.annotation.JSONField;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +23,7 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 public class NpuDevice extends DeviceEntity {
+    @Getter(AccessLevel.NONE)
     private Map<Integer, NpuForwardingChip> forwardingChips;
     private String osName;
     private String osIp;
@@ -41,11 +44,22 @@ public class NpuDevice extends DeviceEntity {
         this.boardIndex = boardIndex;
     }
 
+    @Override
+    public DeviceType getDeviceType() {
+        return DeviceType.NPU;
+    }
+
+    @JSONField(serialize = false)
+    @Override
+    public Map<Integer, NpuForwardingChip> getForwardingChips() {
+        return forwardingChips;
+    }
+
     public NpuPortEntity findNpuPort(String portName) {
         if (forwardingChips != null) {
             for (NpuForwardingChip chip : forwardingChips.values()) {
-                if (chip.getPorts() != null) {
-                    NpuPortEntity port = chip.getPorts().get(portName);
+                if (chip.getNpuPorts() != null) {
+                    NpuPortEntity port = chip.getNpuPorts().get(portName);
                     if (port != null) {
                         return port;
                     }

@@ -115,15 +115,11 @@ public class PathEngine {
                 }
                 if (port == null) {
                     port = findPortByConnection(device);
-                    if (port == null) {
-                        LOG.error("resolveMultiHopPath: error=Port not found, port=" + interPortName
-                            + ", device=" + devName);
-                        throw new SuperNodeNotFoundException(
-                            "Port not found: " + interPortName + " in " + devName); // NOPMD
-                    }
                 }
-                hop.setInPort(null);
-                hop.setOutPort(port.getPortName());
+                if (port != null) {
+                    hop.setInPort(port.getPortName());
+                    hop.setOutPort(port.getPortName());
+                }
             }
 
             if (port != null) {
@@ -178,13 +174,17 @@ public class PathEngine {
             reversedHop.setDeviceName(original.getDeviceName());
             reversedHop.setDeviceType(original.getDeviceType());
             reversedHop.setInPort(original.getOutPort());
-            reversedHop.setOutPort(original.getInPort());
             reversedHop.setCna(original.getCna());
             reversedHop.setEid(original.getEid());
             reversedHop.setRemoteDevice(original.getRemoteDevice());
             reversedHop.setRemotePort(original.getRemotePort());
             reversedHop.setRack(original.getRack());
             reversedHop.setHopIndex(reversed.size());
+            if (i > 0 && i < hops.size() - 1) {
+                reversedHop.setOutPort(hops.get(i - 1).getRemotePort());
+            } else {
+                reversedHop.setOutPort(original.getInPort());
+            }
             reversed.add(reversedHop);
         }
         return reversed;

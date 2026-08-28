@@ -11,6 +11,7 @@ package com.huawei.umdk.snc.service;
 import java.util.List;
 
 import com.huawei.umdk.snc.log.Logger;
+import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
@@ -37,8 +38,7 @@ public class SuperNodeService {
             LOG.error("importSuperNode: error=SuperNode name must not be null or empty");
             throw new IllegalArgumentException("SuperNode name must not be null or empty");
         }
-        if ((superNode.getNpuDevices() == null || superNode.getNpuDevices().isEmpty())
-            && (superNode.getSwDevices() == null || superNode.getSwDevices().isEmpty())) {
+        if (superNode.getAllDevices() == null || superNode.getAllDevices().isEmpty()) {
             LOG.error("importSuperNode: error=SuperNode devices must not be null or empty, name=%s", superNode.getName());
             throw new IllegalArgumentException("SuperNode devices must not be null or empty");
         }
@@ -64,8 +64,6 @@ public class SuperNodeService {
                 LOG.error("addNpuDevices: error=device in list must not be null");
                 throw new IllegalArgumentException("device in list must not be null");
             }
-        }
-        for (NpuDevice device : devices) {
             LOG.debug("addNpuDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
             store.addNpuDevice(superNodeName, device);
         }
@@ -86,8 +84,6 @@ public class SuperNodeService {
                 LOG.error("addSwDevices: error=device in list must not be null");
                 throw new IllegalArgumentException("device in list must not be null");
             }
-        }
-        for (SwDevice device : devices) {
             LOG.debug("addSwDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
             store.addSwDevice(superNodeName, device);
         }
@@ -108,8 +104,6 @@ public class SuperNodeService {
                 LOG.error("removeDevices: error=deviceName in list must not be null or empty");
                 throw new IllegalArgumentException("deviceName in list must not be null or empty");
             }
-        }
-        for (String deviceName : deviceNames) {
             LOG.debug("removeDevices: device=%s, superNode=%s", deviceName, superNodeName);
             store.removeDevice(superNodeName, deviceName);
         }
@@ -140,8 +134,6 @@ public class SuperNodeService {
                 LOG.error("addRoutingEntries: error=entry or entry.prefix in list must not be null");
                 throw new IllegalArgumentException("entry or entry.prefix in list must not be null");
             }
-        }
-        for (RoutingEntry entry : entries) {
             LOG.debug("addRoutingEntries: prefix=%s, superNode=%s, device=%s, chip=%d",
                 entry.getPrefix(), superNodeName, deviceName, chipIndex);
             store.addRoutingEntry(superNodeName, deviceName, chipIndex, entry.getPrefix(), entry);
@@ -173,8 +165,6 @@ public class SuperNodeService {
                 LOG.error("removeRoutingEntries: error=prefix in list must not be null");
                 throw new IllegalArgumentException("prefix in list must not be null");
             }
-        }
-        for (RoutePrefix prefix : prefixes) {
             LOG.debug("removeRoutingEntries: prefix=%s, superNode=%s, device=%s, chip=%d",
                 prefix, superNodeName, deviceName, chipIndex);
             store.removeRoutingEntry(superNodeName, deviceName, chipIndex, prefix);
