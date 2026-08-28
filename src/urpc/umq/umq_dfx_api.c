@@ -128,7 +128,7 @@ int umq_flow_control_stats_to_str(const umq_flow_control_stats_t *flow_control_s
 int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
     if (qbuf_pool_stats == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool stats stats parameter invalid\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool stats parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -340,7 +340,7 @@ int umq_stats_trace_start(umq_trace_cfg_t *cfg)
 
     int ret = umq_thread_init();
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umq thread init failde, ret %d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq thread init failed, ret %d\n", ret);
         return ret;
     }
     return umq_trace_start(cfg);
@@ -364,7 +364,7 @@ int umq_stats_perf_stop(void)
 int umq_stats_perf_to_str(umq_perf_stats_t *umq_perf_stats, char *buf, int max_buf_len)
 {
     if (umq_perf_stats == NULL || buf == NULL || max_buf_len <= 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "parameters invalid");
+        UMQ_VLOG_ERR(VLOG_UMQ, "parameters invalid\n");
         return -UMQ_ERR_EINVAL;
     }
     static char perf_record_type_name[UMQ_PERF_RECORD_TYPE_MAX][UMQ_DFX_PERF_REC_NAME_MAX_LEN] = {

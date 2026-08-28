@@ -95,7 +95,7 @@ static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uin
     do {
         sum = before + count;
         if (URPC_UNLIKELY(sum > UINT16_MAX)) {
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "counter type %d exceed UINT16_MAX, current %d, new add %d, capacity %d\n",
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "counter type %d exceed UINT16_MAX, current %hu, new add %hu, capacity %hu\n",
                                 type, before, count, pool->capacity);
 
             *success = false;
@@ -105,7 +105,7 @@ static ALWAYS_INLINE uint16_t counter_inc_atomic_u16(ub_credit_pool_t *pool, uin
         }
 
         if (type == CREDIT_POOL_IDLE && URPC_UNLIKELY(sum > pool->capacity)) {
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "exceed capacity, current win %d, new add %d, capacity %d\n",
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "exceed capacity, current win %hu, new add %hu, capacity %hu\n",
                 before, count, pool->capacity);
         }
         after = (uint16_t)sum;
@@ -185,13 +185,13 @@ static ALWAYS_INLINE uint16_t counter_inc_non_atomic_u16(ub_credit_pool_t *pool,
     uint32_t sum = pool->stats_u16[type] + count;
 
     if (URPC_UNLIKELY(sum > UINT16_MAX)) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "type %d exceed UINT16_MAX, current %d, new add %d, capacity %d\n",
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "type %u exceed UINT16_MAX, current %hu, new add %hu, capacity %hu\n",
                             type, before, count, pool->capacity);
         return before;
     }
 
     if (type == CREDIT_POOL_IDLE && (URPC_UNLIKELY(sum > pool->capacity))) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "type %d exceed capacity, current %d, new add %d, capacity %d\n",
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "type %u exceed capacity, current %hu, new add %hu, capacity %hu\n",
                             type, before, count, pool->capacity);
     }
     pool->stats_u16[type] = (uint16_t)sum;
@@ -216,8 +216,8 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_con
 {
     uint32_t win_sum = fc->remote_rx_window + new_win;
     if (URPC_UNLIKELY(win_sum > UINT16_MAX)) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed UINT16_MAX, current win %d, new win %d, "
-            "remote rx depth %d\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed UINT16_MAX, current win %hu, new win %hu, "
+            "remote rx depth %hu\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
         if (!is_return_rollback) {
             fc->total_remote_rx_received_error += new_win;
         }
@@ -225,8 +225,8 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_non_atomic(struct ub_flow_con
     }
 
     if (URPC_UNLIKELY(win_sum > fc->remote_rx_depth)) {
-        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed rx depth, current win %d, new win %d, "
-            "remote rx depth %d\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
+        UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed rx depth, current win %hu, new win %hu, "
+            "remote rx depth %hu\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
     }
     if (is_return_rollback) {
         fc->remote_rx_window = (uint16_t)win_sum;
@@ -351,15 +351,15 @@ static ALWAYS_INLINE uint16_t remote_rx_window_inc_atomic(struct ub_flow_control
     do {
         win_sum = before + new_win;
         if (URPC_UNLIKELY(win_sum > UINT16_MAX)) {
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed UINT16_MAX, current win %d, new win %d, "
-                "remote rx depth %d\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed UINT16_MAX, current win %hu, new win %hu, "
+                "remote rx depth %hu\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
             ret = before;
             break;
         }
 
         if (URPC_UNLIKELY(win_sum > fc->remote_rx_depth)) {
-            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed rx depth, current win %d, new win %d, "
-                "remote rx depth %d\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "receive remote win exceed rx depth, current win %hu, new win %hu, "
+                "remote rx depth %hu\n", fc->remote_rx_window, new_win, fc->remote_rx_depth);
         }
 
         after = (uint16_t)win_sum;
@@ -1327,7 +1327,7 @@ void umq_ub_credit_clean_up(ub_queue_t *queue)
     uint64_t unconsumed = allocated_credit - consumed_credit;
     if (unconsumed > UINT16_MAX) {
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "UMQ(ID: %u), unconsumed credit exceed UINT16_MAX, "
-            "unconsumed credit %lu, capacity %d\n", queue->umq_id, unconsumed, credit->capacity);
+            "unconsumed credit %lu, capacity %u\n", queue->umq_id, unconsumed, credit->capacity);
         return;
     }
     (void)credit->ops.available_credit_return(credit, actual_return_credit + unconsumed);

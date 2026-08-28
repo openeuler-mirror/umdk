@@ -207,7 +207,7 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
     }
 
     if (cfg->mode != UMQ_BUF_SPLIT && cfg->mode != UMQ_BUF_COMBINE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool mode: %d is invalid\n", cfg->mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool mode: %u is invalid\n", cfg->mode);
         return -UMQ_ERR_EINVAL;
     }
 
