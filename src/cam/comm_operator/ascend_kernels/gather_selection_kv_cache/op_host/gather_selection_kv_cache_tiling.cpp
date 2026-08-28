@@ -374,28 +374,26 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetFullKvBlkTable()
         (dimsN != CONST2),
         OPS_LOG_E(context_->GetNodeName(), "full_kv_block_table dim:%lu should be 2.", dimsN),
         return ge::GRAPH_FAILED);
-    OPS_ERR_IF(
-        (topKLayout_ == DataLayout::BSND && fulKvBlkTInShape.GetDim(0) != batchSize_),
-        OPS_LOG_E(context_->GetNodeName(),
-            "full_kv_block_table dim0:%ld should be batchSize:%ld.", fulKvBlkTInShape.GetDim(0), batchSize_),
-        return ge::GRAPH_FAILED);
+
+    if (topKLayout_ == DataLayout::BSND) {
+        OPS_ERR_IF(
+            (fulKvBlkTInShape.GetDim(0) != batchSize_),
+            OPS_LOG_E(context_->GetNodeName(),
+                "full_kv_block_table dim0:%ld should be batchSize:%ld.",
+                fulKvBlkTInShape.GetDim(0), batchSize_),
+            return ge::GRAPH_FAILED);
+    } else {
+        OPS_ERR_IF(
+            (fulKvBlkTInShape.GetDim(0) != t_),
+            OPS_LOG_E(context_->GetNodeName(),
+                "full_kv_block_table dim0:%ld should be t_:%ld for TND layout.",
+                fulKvBlkTInShape.GetDim(0), t_),
+            return ge::GRAPH_FAILED);
+        batchSize_ = t_;
+        seq_ = 1;
+    }
 
     tilingData_.set_fullMaxBlockNum(fulKvBlkTInShape.GetDim(1));
-    if (topKLayout_ == DataLayout::TND) {
-        batchSize_ = fulKvBlkTInShape.GetDim(0);
-        OPS_ERR_IF(
-            (t_ % batchSize_ != 0),
-            OPS_LOG_E(context_->GetNodeName(),
-                "TND format t_:%ld must be multiple of batchSize_:%ld", t_, batchSize_),
-            return ge::GRAPH_FAILED);
-        OPS_ERR_IF(
-            (batchSize_ == 0),
-            OPS_LOG_E(context_->GetNodeName(),
-                "batchSize_:%ld must not be 0", batchSize_),
-            return ge::GRAPH_FAILED);
-            
-        seq_ = t_ / batchSize_;
-    }
 
     OPS_ERR_IF(
         (seq_ >= MAX_Q_SEQ_LEN), OPS_LOG_E(context_->GetNodeName(),
