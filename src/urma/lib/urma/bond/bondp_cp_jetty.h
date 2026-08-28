@@ -8,8 +8,8 @@
  * History: 2025-02-05   Create File
  */
 
-#ifndef BONDP_API_H
-#define BONDP_API_H
+#ifndef BONDP_CP_JETTY_H
+#define BONDP_CP_JETTY_H
 
 #include "urma_types.h"
 
@@ -51,4 +51,4 @@ urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
 #ifdef __cplusplus
 }
 #endif
-#endif // BONDP_API_H
+#endif // BONDP_CP_JETTY_H
