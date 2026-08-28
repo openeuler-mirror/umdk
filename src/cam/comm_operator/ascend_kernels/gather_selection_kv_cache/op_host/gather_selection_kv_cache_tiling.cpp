@@ -94,7 +94,7 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetInputAttrs()
 
 ge::graphStatus GatherSelectionKvCacheTiling::GetSelKvCacheShape()
 {
-    // selection_k_rope: [s_block_num, s_block_size, k_rope]
+    // selection_k_rope: [s_block_num, s_block_size, k_rope] or int8 empty [0]
     auto selKRopeIn = context_->GetInputShape(SEL_K_ROPE_IDX);
     OPS_ERR_IF(selKRopeIn == nullptr, OPS_LOG_E(context_->GetNodeName(), "get selKRopeIn nullptr."),
         return ge::GRAPH_FAILED);
@@ -102,8 +102,13 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetSelKvCacheShape()
     size_t dimsNSelKRope = selKRopeShape.GetDimNum();
     int64_t ifQuant = 0;
 
+    auto selKRopeDesc = context_->GetInputDesc(SEL_K_ROPE_IDX);
+    OPS_ERR_IF(selKRopeDesc == nullptr, OPS_LOG_E(context_->GetNodeName(), "get selKRopeDesc nullptr."),
+        return ge::GRAPH_FAILED);
+    selKRopeDtype_ = selKRopeDesc->GetDataType();
+
     OPS_ERR_IF(
-        (dimsNSelKRope != CONST3 && dimsNSelKRope != 1),
+        (dimsNSelKRope != CONST3 && dimsNSelKRope != CONST1),
         OPS_LOG_E(context_->GetNodeName(), "selection_k_rope dim:%lu should be 3 or 1.", dimsNSelKRope),
         return ge::GRAPH_FAILED);
 
@@ -119,8 +124,16 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetSelKvCacheShape()
         return ge::GRAPH_FAILED);
     tilingData_.set_selKvBlockNum(selKvCacheShape.GetDim(0));
     tilingData_.set_selKvBlockSize(selKvCacheShape.GetDim(1));
-    
-    if (dimsNSelKRope == CONST3) {
+
+    if (selKRopeDtype_ == ge::DT_INT8) {
+        OPS_ERR_IF(
+            (dimsNSelKRope != CONST1 || selKRopeShape.GetDim(0) != 0),
+            OPS_LOG_E(context_->GetNodeName(),
+                "int8 requires selection_k_rope empty tensor with shape [0], but got dim:%lu dim0:%ld.",
+                dimsNSelKRope, selKRopeShape.GetDim(0)),
+            return ge::GRAPH_FAILED);
+        ifQuant = 1;
+    } else if (dimsNSelKRope == CONST3) {
         // selKvCacheShape selKRopeShape 前两维相同
         OPS_ERR_IF(
             (selKvCacheShape.GetDim(0) != selKRopeShape.GetDim(0) ||
@@ -482,19 +495,15 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetShapeAttrsInfo()
 
 ge::graphStatus GatherSelectionKvCacheTiling::GetInputDtypeInfo()
 {
-    auto selKRopeDesc = context_->GetInputDesc(SEL_K_ROPE_IDX);
-    OPS_ERR_IF(selKRopeDesc == nullptr, OPS_LOG_E(context_->GetNodeName(), "get selKRopeDesc nullptr."),
-        return ge::GRAPH_FAILED);
-    selKRopeDtype_ = selKRopeDesc->GetDataType();
-    OPS_ERR_IF(
-        (selKRopeDtype_ != ge::DT_FLOAT16 && selKRopeDtype_ != ge::DT_BF16 && selKRopeDtype_ != ge::DT_INT8),
-        OPS_LOG_E(context_->GetNodeName(), "selKRopeDtype_ is not supported."),
-        return ge::GRAPH_FAILED);
-
     auto selKvCacheDesc = context_->GetInputDesc(SEL_KV_CACHE_IDX);
     OPS_ERR_IF(selKvCacheDesc == nullptr, OPS_LOG_E(context_->GetNodeName(), "get selKvCacheDesc nullptr."),
         return ge::GRAPH_FAILED);
     ge::DataType selKvCacheDtype = selKvCacheDesc->GetDataType();
+
+    OPS_ERR_IF(
+        (selKRopeDtype_ != ge::DT_FLOAT16 && selKRopeDtype_ != ge::DT_BF16 && selKRopeDtype_ != ge::DT_INT8),
+        OPS_LOG_E(context_->GetNodeName(), "selKRopeDtype_ is not supported."),
+        return ge::GRAPH_FAILED);
 
     auto selKvBTDesc = context_->GetInputDesc(SEL_KV_BLOCK_TABLE_IDX);
     OPS_ERR_IF(selKvBTDesc == nullptr, OPS_LOG_E(context_->GetNodeName(), "get selKvBTDesc nullptr."),
@@ -539,6 +548,12 @@ ge::graphStatus GatherSelectionKvCacheTiling::GetInputDtypeInfo()
     OPS_ERR_IF(
         (selKvCacheDtype != selKRopeDtype_ || fKRopeDtype != selKRopeDtype_ || fKvCacheDtype != selKRopeDtype_),
         OPS_LOG_E(context_->GetNodeName(), "kv cache dtype is not supported."),
+        return ge::GRAPH_FAILED);
+
+    OPS_ERR_IF(
+        (selKRopeDtype_ == ge::DT_INT8 && tilingData_.get_ifQuant() != 1),
+        OPS_LOG_E(context_->GetNodeName(),
+            "int8 dtype requires empty selection_k_rope/full_k_rope tensors with shape [0]."),
         return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(
