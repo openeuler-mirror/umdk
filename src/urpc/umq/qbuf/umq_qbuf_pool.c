@@ -212,7 +212,7 @@ typedef struct escape_buf_node {
 } escape_buf_node_t;
 
 static escape_buf_node_t *g_escape_registry[UMQ_QBUF_SIZE_CLASS_MAX][ESCAPE_REGISTRY_HASH_BUCKETS];
-static pthread_mutex_t   g_escape_registry_lock[UMQ_QBUF_SIZE_CLASS_MAX];
+static util_external_mutex_lock *g_escape_registry_lock[UMQ_QBUF_SIZE_CLASS_MAX];
 
 static int  escape_registry_init(void);
 static void escape_registry_uninit(void);
@@ -2639,17 +2639,16 @@ static inline uint32_t escape_buf_hash(const void *buf_data)
 
 static int escape_registry_init(void)
 {
-    int rc;
     for (uint32_t sc = 0; sc < UMQ_QBUF_SIZE_CLASS_MAX; sc++) {
         for (uint32_t b = 0; b < ESCAPE_REGISTRY_HASH_BUCKETS; b++) {
             g_escape_registry[sc][b] = NULL;
         }
-        rc = pthread_mutex_init(&g_escape_registry_lock[sc], NULL);
-        if (rc != 0) {
+        g_escape_registry_lock[sc] = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
+        if (g_escape_registry_lock[sc] == NULL) {
             for (uint32_t j = 0; j < sc; j++) {
-                (void)pthread_mutex_destroy(&g_escape_registry_lock[j]);
+                (void)util_mutex_lock_destroy(g_escape_registry_lock[j]);
             }
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_init: mutex_init sc=%u failed, rc=%d\n", sc, rc);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_init: mutex_create sc=%u failed\n", sc);
             return -1;
         }
     }
@@ -2659,7 +2658,7 @@ static int escape_registry_init(void)
 static void escape_registry_uninit(void)
 {
     for (uint32_t sc = 0; sc < UMQ_QBUF_SIZE_CLASS_MAX; sc++) {
-        (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+        (void)util_mutex_lock(g_escape_registry_lock[sc]);
         for (uint32_t b = 0; b < ESCAPE_REGISTRY_HASH_BUCKETS; b++) {
             escape_buf_node_t *n = g_escape_registry[sc][b];
             while (n != NULL) {
@@ -2669,28 +2668,27 @@ static void escape_registry_uninit(void)
             }
             g_escape_registry[sc][b] = NULL;
         }
-        (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
-        (void)pthread_mutex_destroy(&g_escape_registry_lock[sc]);
+        (void)util_mutex_unlock(g_escape_registry_lock[sc]);
+        (void)util_mutex_lock_destroy(g_escape_registry_lock[sc]);
     }
 }
 
-static void escape_registry_insert(umq_buf_t *qbuf, char *buf_data, uint32_t blk_size, uint32_t sc)
+static int escape_registry_insert(umq_buf_t *qbuf, char *buf_data, uint32_t blk_size, uint32_t sc)
 {
     escape_buf_node_t *node = (escape_buf_node_t *)malloc(sizeof(escape_buf_node_t));
     if (node == NULL) {
-        /* Best-effort: buf still findable at k=0 via the legacy alignment
-         * fallback; +k lookup will silently miss this buf. */
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_insert: node malloc failed, buf=%p\n", (void *)qbuf);
-        return;
+        return -UMQ_ERR_ENOMEM;
     }
     node->qbuf = qbuf;
     node->buf_data = buf_data;
     node->blk_size = blk_size;
     uint32_t bucket = escape_buf_hash(buf_data);
-    (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+    (void)util_mutex_lock(g_escape_registry_lock[sc]);
     node->next = g_escape_registry[sc][bucket];
     g_escape_registry[sc][bucket] = node;
-    (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+    (void)util_mutex_unlock(g_escape_registry_lock[sc]);
+    return UMQ_SUCCESS;
 }
 
 /* Caller must NOT have freed qbuf->buf_data yet (used for hash bucket). */
@@ -2700,19 +2698,19 @@ static void escape_registry_remove(umq_buf_t *qbuf, uint32_t sc)
         return;
     }
     uint32_t bucket = escape_buf_hash(qbuf->buf_data);
-    (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+    (void)util_mutex_lock(g_escape_registry_lock[sc]);
     escape_buf_node_t **pp = &g_escape_registry[sc][bucket];
     while (*pp != NULL) {
         if ((*pp)->qbuf == qbuf) {
             escape_buf_node_t *victim = *pp;
             *pp = victim->next;
-            (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+            (void)util_mutex_unlock(g_escape_registry_lock[sc]);
             free(victim);
             return;
         }
         pp = &(*pp)->next;
     }
-    (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+    (void)util_mutex_unlock(g_escape_registry_lock[sc]);
     UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "escape_registry_remove: qbuf=%p not found in sc=%u\n", (void *)qbuf, sc);
 }
 
@@ -2731,18 +2729,18 @@ static umq_buf_t *escape_registry_lookup(void *data)
         }
         uintptr_t candidate_data = (uintptr_t)data & ~((uintptr_t)blk_size - 1);
         uint32_t bucket = escape_buf_hash((const void *)candidate_data);
-        (void)pthread_mutex_lock(&g_escape_registry_lock[sc]);
+        (void)util_mutex_lock(g_escape_registry_lock[sc]);
         escape_buf_node_t *n = g_escape_registry[sc][bucket];
         while (n != NULL) {
             if (n->buf_data == (char *)candidate_data &&
                 (char *)data >= n->buf_data && (char *)data < n->buf_data + n->blk_size) {
                 umq_buf_t *result = n->qbuf;
-                (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+                (void)util_mutex_unlock(g_escape_registry_lock[sc]);
                 return result;
             }
             n = n->next;
         }
-        (void)pthread_mutex_unlock(&g_escape_registry_lock[sc]);
+        (void)util_mutex_unlock(g_escape_registry_lock[sc]);
     }
     return NULL;
 }
@@ -2770,7 +2768,13 @@ static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc
 
     QBUF_LIST_FIRST(list) = qbuf;
     (void)__atomic_add_fetch(&g_escape_buf_cnt[sc], 1, __ATOMIC_RELAXED);
-    escape_registry_insert(qbuf, buf_data, blk_size, sc);
+    int reg_ret = escape_registry_insert(qbuf, buf_data, blk_size, sc);
+    if (reg_ret != UMQ_SUCCESS) {
+        QBUF_LIST_FIRST(list) = NULL;
+        (void)__atomic_sub_fetch(&g_escape_buf_cnt[sc], 1, __ATOMIC_RELAXED);
+        free(buf_data);
+        return reg_ret;
+    }
     if (qbuf_debug_on()) {
         g_dbg_stats.alloc_with_data_escape++;
     }
