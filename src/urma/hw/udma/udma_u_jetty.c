@@ -724,7 +724,7 @@ urma_status_t udma_u_bind_jetty_ex(urma_jetty_t *jetty,
 	}
 
 	if (udma_jetty->sq.tjetty == udma_tjetty) {
-		UDMA_LOG_INFO("reentry bind JETTY in exp, jetty_id = %u, tjetty_id = %u.\n",
+		UDMA_LOG_WARN("reentry bind JETTY in exp, jetty_id = %u, tjetty_id = %u.\n",
 			      jetty->jetty_id.id, tjetty->id.id);
 		return URMA_SUCCESS;
 	}
