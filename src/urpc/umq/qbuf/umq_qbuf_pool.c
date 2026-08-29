@@ -1281,7 +1281,7 @@ uint64_t umq_io_buf_size(void)
 int umq_buf_size_pow_small_set(umq_buf_block_size_t block_size)
 {
     if (block_size < BLOCK_SIZE_4K || block_size >= BLOCK_SIZE_MAX) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "block size %d is invalid\n", block_size);
+        UMQ_VLOG_ERR(VLOG_UMQ, "block size %u is invalid\n", block_size);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -2020,7 +2020,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     } else if (cfg->mode == UMQ_BUF_COMBINE) {
         init_combine_mode_layout(cfg, count);
     } else {
-        UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %d is invalid\n", cfg->mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "buf mode: %u is invalid\n", cfg->mode);
         ret = -UMQ_ERR_EINVAL;
         goto EXPANSION_POOL_UNINIT;
     }

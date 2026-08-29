@@ -335,7 +335,7 @@ static int umq_dev_assign_validate(umq_dev_assign_t *dev_info)
         case UMQ_DEV_ASSIGN_MODE_DUMMY:
             return UMQ_SUCCESS;
         default:
-            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %d is not supported\n", dev_info->assign_mode);
+            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %u is not supported\n", dev_info->assign_mode);
             return -UMQ_ERR_EINVAL;
     }
 }

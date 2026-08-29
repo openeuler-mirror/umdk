@@ -780,7 +780,7 @@ static void process_rx_mem_import_done(umq_ub_imm_t imm, ub_queue_t *queue, ub_q
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
     if (imm.mem_import.mempool_id >= UMQ_MAX_TSEG_NUM) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id exceed maxinum\n",
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool id exceeds maximum\n",
                            EID_ARGS(*eid), id);
         *qbuf_status = UMQ_MEMPOOL_UPDATE_FAILED;
         return;
