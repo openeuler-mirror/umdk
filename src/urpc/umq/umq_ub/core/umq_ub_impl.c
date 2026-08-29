@@ -735,6 +735,7 @@ uint8_t *umq_ub_ctx_init_impl(umq_init_cfg_t *cfg)
         .tls_qbuf_pool_depth = cfg->buf_pool_cfg.tls_qbuf_pool_depth,
         .tls_expand_qbuf_pool_depth = cfg->buf_pool_cfg.tls_expand_qbuf_pool_depth,
         .disable_malloc_escape = cfg->buf_pool_cfg.disable_malloc_escape,
+        .shrink_decay_ms = cfg->buf_pool_cfg.shrink_decay_ms,
         .size_class_count = buf_pool_plan.size_class_count,
         .expansion_size = cfg->buf_pool_cfg.expansion_size,
         .expansion_threshold = cfg->buf_pool_cfg.expansion_threshold,

@@ -144,6 +144,7 @@ typedef struct qbuf_pool_cfg {
 
     bool disable_scale_cap;
     bool disable_malloc_escape;
+    uint32_t shrink_decay_ms;
 } qbuf_pool_cfg_t;
 
 typedef struct qbuf_alloc_param {
