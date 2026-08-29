@@ -474,8 +474,9 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
         count = allocate_batch(info.global_head, batch_count, info.local_head);
         *info.global_buf_cnt -= count;
         *info.local_buf_cnt += count;
+        uint64_t global_cnt_after = *info.global_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
-        async_expand_global_pool(with_data, sc, *info.global_buf_cnt);
+        async_expand_global_pool(with_data, sc, global_cnt_after);
         return count;
     }
 
@@ -492,6 +493,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
         *info.local_buf_cnt += take;
         count += take;
     }
+    uint64_t global_cnt_snapshot = *info.global_buf_cnt;
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 
     { // fetch from expansion pools (pre-allocated overflow slots)
@@ -531,7 +533,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
 
         count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
     }
-    async_expand_global_pool(with_data, sc, *info.global_buf_cnt);
+    async_expand_global_pool(with_data, sc, global_cnt_snapshot);
     return count;
 
 ROLLBACK:
