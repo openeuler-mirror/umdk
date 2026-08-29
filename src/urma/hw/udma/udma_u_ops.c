@@ -27,6 +27,7 @@
 
 #define LIBDTU_FILE "/usr/lib64/libdtu.so"
 static void *g_dtu_va = NULL;
+static uint32_t g_dtu_va_refcount = 0;
 static pthread_mutex_t g_sq_reserved_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t g_sq_reserved_refcount = 0;
 static void *g_sq_reserved_va = NULL;
@@ -255,12 +256,8 @@ err_mmap_dlsym:
 
 static void udma_close_dtu_provider(struct udma_u_context *udma_ctx)
 {
-	if (udma_ctx->dtu_munmap_fun_ptr) {
-		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size);
-		udma_ctx->dtu_munmap_fun_ptr = NULL;
-	}
+	udma_ctx->dtu_munmap_fun_ptr = NULL;
 	udma_ctx->dtu_mmap_fun_ptr = NULL;
-	udma_ctx->dtu_enable = false;
 	dlclose(udma_ctx->dtu_provider_handle);
 }
 
@@ -304,9 +301,10 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	udma_u_init_context(udma_ctx, &resp);
 	if (udma_ctx->dtu_enable) {
 		if (udma_open_dtu_provider(udma_ctx)) {
-			if (udma_ctx->dtu_mmap_fun_ptr(udma_ctx->dtu_va_base, udma_ctx->dtu_va_size, &g_dtu_va)) {
-				udma_ctx->dtu_mmap_fun_ptr = NULL;
+			if (udma_ctx->dtu_mmap_fun_ptr(udma_ctx->dtu_va_base,
+			    udma_ctx->dtu_va_size, &g_dtu_va, &g_dtu_va_refcount)) {
 				udma_close_dtu_provider(udma_ctx);
+				udma_ctx->dtu_enable = false;
 				UDMA_LOG_WARN("Could not mmap dtu, continuing with the normal process.\n");
 			}
 		} else {
@@ -330,8 +328,10 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 err_reserved_sq:
 	udma_u_free_db(&udma_ctx->urma_ctx, &udma_ctx->db);
 err_alloc_db:
-	if (udma_ctx->dtu_enable)
+	if (udma_ctx->dtu_enable) {
+		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size, &g_dtu_va_refcount);
 		udma_close_dtu_provider(udma_ctx);
+	}
 	(void)urma_cmd_delete_context(&udma_ctx->urma_ctx);
 err_create_ctx:
 	(void)pthread_mutex_destroy(&udma_ctx->hugepage_lock);
@@ -351,9 +351,10 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	udma_u_destroy_jt_table(udma_ctx);
 	udma_u_free_reserved_sq();
 	udma_u_free_db(ctx, &udma_ctx->db);
-	if (udma_ctx->dtu_enable)
+	if (udma_ctx->dtu_enable) {
+		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size, &g_dtu_va_refcount);
 		udma_close_dtu_provider(udma_ctx);
-
+	}
 	udma_u_destroy_hugepage(udma_ctx);
 
 	if (urma_cmd_delete_context(&udma_ctx->urma_ctx)) {
