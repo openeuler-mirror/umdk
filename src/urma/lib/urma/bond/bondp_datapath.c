@@ -1451,11 +1451,21 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         } else {
             atomic_store(&bdp_comp->rebuild_done[send_idx], true);
         }
+
+        if (!comp_ctx->enable_failover) {
+            URMA_LOG_INFO("Path fail: wr_id=%lu, "
+                          "vjetty_id=%u, tjetty_id=%u, path=[%u, %u], cr_status=%d\n",
+                          wr_id, bdp_comp->v_jetty.jetty_id.id,
+                          wr_entry->target_vjetty->v_tjetty.id.id,
+                          send_idx, target_idx, cr->status);
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            goto CONVERT_CR;
+        }
+
         /* choose the failover route(0 or 1) through send_idx and target_idx */
         int new_send_idx = send_idx;
         int new_target_idx = target_idx;
-        if (!comp_ctx->enable_failover ||
-            schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
+        if (schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
                           &new_send_idx, &new_target_idx,
                           wr_entry->wr.flag.bs.has_drv_ext ? &wr_entry->info : NULL) != 0) {
             /*
