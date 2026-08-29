@@ -2555,6 +2555,21 @@ uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, 
                 count += got;
                 request -= got;
                 exp_pool->exp_total_block_num -= got;
+                /* Maintain partial_slot_count on the alloc path (previously
+                 * missing, causing uint32_t underflow when free path's
+                 * fetch_sub had no matching fetch_add). Two transitions:
+                 *   full->partial   (old_free == total, new in (0, total))  → +1
+                 *   partial->empty  (old in (0, total), new_free == 0)     → -1
+                 * Symmetric with return_batch_to_expansion_pool (free path). */
+                uint64_t old_free = slot->free_block_cnt + got;
+                uint64_t new_free = slot->free_block_cnt;
+                bool was_partial = (old_free > 0 && old_free < slot->total_block_cnt);
+                bool is_partial = (new_free > 0 && new_free < slot->total_block_cnt);
+                if (!was_partial && is_partial) {
+                    __atomic_fetch_add(&exp_pool->partial_slot_count, 1, __ATOMIC_RELAXED);
+                } else if (was_partial && !is_partial) {
+                    __atomic_fetch_sub(&exp_pool->partial_slot_count, 1, __ATOMIC_RELAXED);
+                }
             }
             if (got < take_cnt) {
                 /* free_block_cnt disagreed with the real free list length
