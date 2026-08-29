@@ -380,4 +380,6 @@ const urma_provider_ops_t g_udma_provider_ops = {
 	.query_device = udma_u_query_device,
 	.create_context = udma_u_create_context,
 	.delete_context = udma_u_delete_context,
+	.register_log_func = udma_u_register_log_func,
+	.unregister_log_func = udma_u_unregister_log_func,
 };
