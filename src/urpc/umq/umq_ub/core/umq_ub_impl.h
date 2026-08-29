@@ -33,11 +33,14 @@ int umq_ub_state_set_impl(uint64_t umqh_tp, umq_state_t state);
 umq_state_t umq_ub_state_get_impl(uint64_t umqh_tp);
 
 int32_t umq_ub_register_memory_impl(void *buf, uint64_t size);
+int32_t umq_ub_register_rx_memory_impl(void);
 int32_t umq_ub_register_tiny_memory_impl(void);
 void umq_ub_unregister_memory_impl(void);
 
 int umq_ub_log_config_set_impl(umq_log_config_t *config);
 int umq_ub_log_config_reset_impl(void);
+void umq_ub_exiting_set_impl(bool exiting);
+bool umq_ub_exiting_get_impl(void);
 int32_t umq_ub_huge_qbuf_pool_init(umq_init_cfg_t *cfg);
 void umq_ub_huge_qbuf_pool_uninit(void);
 
@@ -81,6 +84,15 @@ int umq_ub_get_route_list_impl(const umq_route_key_t *route_key, umq_route_list_
 
 int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mempool_state_t *mempool_state);
 int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id);
+int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t *mempool_info,
+    uint32_t mempool_info_size, uint32_t *mempool_info_len);
+int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, uint32_t mempool_info_len);
+int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *mempool_info,
+    uint32_t mempool_info_len);
+/* Extract mempool_id/token_id/token_value from the opaque blob. Pure parse,
+ * no umq state; umqh_tp unused (kept for tp_ops dispatch symmetry). */
+int umq_ub_mempool_info_get_remote_fields_impl(const uint8_t *mempool_info, uint32_t mempool_info_len,
+    uint32_t *out_mempool_id, uint32_t *out_token_id, uint32_t *out_token_value);
 int umq_ub_dev_info_get_impl(char *dev_name, umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);
 umq_dev_info_t *umq_ub_dev_info_list_get_impl(umq_trans_mode_t umq_trans_mode, int *dev_num);
 void umq_ub_dev_info_list_free_impl(umq_trans_mode_t umq_trans_mode, umq_dev_info_t *umq_dev_info);

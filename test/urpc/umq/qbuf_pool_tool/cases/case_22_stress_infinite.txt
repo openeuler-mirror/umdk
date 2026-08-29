@@ -1,0 +1,63 @@
+# case 22: stress_repeat infinite — RSS stability verification
+#
+# Long-running stress test. Runs INFINITELY — Ctrl-C to stop.
+# Use this to verify memory stays bounded over extended uptime:
+#
+#   # Terminal 1: run the tool
+#   MALLOC_ARENA_MAX=2 ./build_qbuf_tool/qbuf_pool_tool cases/case_22_stress_infinite.txt &
+#
+#   # Terminal 2: monitor RSS over time (should stay flat)
+#   while true; do
+#       ps -o rss= -p $(pgrep qbuf_pool_tool) | awk '{print strftime("%H:%M:%S"), $1"KB"}'
+#       sleep 60
+#   done
+#
+# Expected: RSS stays at ~204MB (= 200MB pool + 4MB tool overhead) regardless
+# of how long the loop runs. If RSS grows, see USAGE.md Q9 for debugging.
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Bootstrap
+thread_0 alloc 4096 50
+thread_0 free all
+thread_1 alloc 4096 50
+thread_1 free all
+thread_2 alloc 4096 50
+thread_2 free all
+thread_3 alloc 4096 50
+thread_3 free all
+thread_4 alloc 4096 50
+thread_4 free all
+thread_5 alloc 4096 50
+thread_5 free all
+thread_6 alloc 4096 50
+thread_6 free all
+thread_7 alloc 4096 50
+thread_7 free all
+
+# Infinite stress — Ctrl-C to stop. snapshot every 10000 iters (~10s).
+stress_repeat
+  parallel
+    thread_0 alloc 4096 10
+    thread_1 alloc 4096 10
+    thread_2 alloc 4096 10
+    thread_3 alloc 4096 10
+    thread_4 alloc 4096 10
+    thread_5 alloc 4096 10
+    thread_6 alloc 4096 10
+    thread_7 alloc 4096 10
+  join
+  parallel
+    thread_0 free all
+    thread_1 free all
+    thread_2 free all
+    thread_3 free all
+    thread_4 free all
+    thread_5 free all
+    thread_6 free all
+    thread_7 free all
+  join
+  snapshot 10000
+  iterations 200
+end
+
+status

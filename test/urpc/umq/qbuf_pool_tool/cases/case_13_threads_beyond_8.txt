@@ -1,0 +1,69 @@
+# case 13: threads beyond 8 (limit removed)
+# 16 worker concurrent alloc — proves the previous `threads <= 8` cap in
+# DoInit has been removed. Before the fix this script would fail at init
+# with "ERROR: threads must be <= 8 (got 16)". Now init succeeds and the
+# same invariants as case_08 must hold, just scaled to 16 workers.
+#
+# Verifies:
+#   - init accepts threads=16 (no rejection — old code returned -1 here)
+#   - All 16 workers get their requested bufs (no lost-alloc under heavier
+#     spinlock contention than the 8-worker case)
+#   - Conservation: global + sum(tls) + alloced == init total per sc
+#   - status per-thread TLS section lists 16 distinct tids
+#   - cross-sc: half workers on sc0 (4K), half on sc1 (64K) — exercises
+#     both per-sc spinlocks concurrently
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=16
+
+# Stage 1: 16 workers concurrent alloc — even-indexed on sc0 (4K x 30),
+# odd-indexed on sc1 (64K x 3). Different sc => different spinlock, but
+# same-sc workers (8 each) still race on block_pool[sc].global_mutex.
+parallel
+  thread_0  alloc 4096 30
+  thread_1  alloc 65536 3
+  thread_2  alloc 4096 30
+  thread_3  alloc 65536 3
+  thread_4  alloc 4096 30
+  thread_5  alloc 65536 3
+  thread_6  alloc 4096 30
+  thread_7  alloc 65536 3
+  thread_8  alloc 4096 30
+  thread_9  alloc 65536 3
+  thread_10 alloc 4096 30
+  thread_11 alloc 65536 3
+  thread_12 alloc 4096 30
+  thread_13 alloc 65536 3
+  thread_14 alloc 4096 30
+  thread_15 alloc 65536 3
+join
+
+# Expect:
+#   sc0: alloced = 240 (8 x 30) across t0,t2,t4,t6,t8,t10,t12,t14
+#   sc1: alloced = 24  (8 x 3)  across t1,t3,t5,t7,t9,t11,t13,t15
+#   per-thread TLS: 16 distinct tid rows, each with sc0 or sc1 bytes
+status
+
+# Stage 2: same 16 workers free all simultaneously — proves the return
+# path (return_to_global / TLS-update) doesn't race under 16-way free
+# contention either, and alloced drops to 0 across all workers.
+parallel
+  thread_0  free all
+  thread_1  free all
+  thread_2  free all
+  thread_3  free all
+  thread_4  free all
+  thread_5  free all
+  thread_6  free all
+  thread_7  free all
+  thread_8  free all
+  thread_9  free all
+  thread_10 free all
+  thread_11 free all
+  thread_12 free all
+  thread_13 free all
+  thread_14 free all
+  thread_15 free all
+join
+
+# Expect: alloced = 0 for both sc; TLS rows still hold fetch bytes
+# (free all returns to TLS not global, see Q1). Conservation holds.
+status

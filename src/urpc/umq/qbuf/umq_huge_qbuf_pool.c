@@ -211,7 +211,7 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
-    if (cfg->type < 0 || cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
+    if (cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool type: %d is invalid\n", cfg->type);
         return -UMQ_ERR_EINVAL;
     }
@@ -421,6 +421,9 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return;
     }
+    if (list == NULL || QBUF_LIST_FIRST(list) == NULL) {
+        return;
+    }
 
     huge_qbuf_pool_size_type_t type = umq_huge_qbuf_get_type_by_mempool_id(QBUF_LIST_FIRST(list)->mempool_id);
     huge_pool_t *pool = &g_huge_pool_ctx.pool[type];
@@ -506,7 +509,6 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
      * If it is not initialized, no statistics are returned, yet the operation itself returns successfully
      */
     if (!g_huge_pool_ctx.inited) {
-        UMQ_VLOG_DEBUG(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return UMQ_SUCCESS;
     }
 

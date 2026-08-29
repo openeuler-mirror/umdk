@@ -1,0 +1,30 @@
+# case 24: escape disabled — pool exhaustion returns ENOMEM, no malloc fallback
+#
+# Verifies: escape=off → cfg.disable_malloc_escape=true →
+#   - umq_qbuf_escape_alloc returns EINVAL immediately (umq_qbuf_pool.c:2034)
+#   - umq_normal_qbuf_alloc skips internal escape branches (:2143/:2182)
+#   - alloc beyond pool capacity FAILS (ret != 0) instead of falling back to
+#     malloc escape
+#   - info 段2 disable_malloc_escape=1, 段9 escape_buf_cnt=0
+#
+# Compare with default (escape=on): same pool exhaustion would silently create
+# escape bufs (malloc'd, tracked in escape_buf_cnt, visible in 段9).
+init count=1 blockSizes=4K mode=split scaleCap=on totalSz=200M escape=off threads=1
+
+# Verify init: info 段2 should show disable_malloc_escape=1
+info
+
+# Alloc within pool capacity — succeeds (no escape needed)
+# 4M pool / (4K block + sizeof(umq_buf_t)) ≈ 500+ bufs; 100 well within range
+thread_0 alloc 4096 100
+status
+
+# Alloc beyond pool capacity — fails (no escape fallback)
+# 700 bufs exceeds pool; umq_normal_qbuf_alloc returns error
+thread_0 alloc 4096 700
+status
+
+# Verify escape_buf_cnt=0 (escape disabled, no escape bufs created)
+info
+
+thread_0 free all

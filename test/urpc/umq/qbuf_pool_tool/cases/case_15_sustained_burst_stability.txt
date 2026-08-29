@@ -1,0 +1,20 @@
+# sustained_burst_stability: 1000 iterations of burst alloc + free all
+# Verifies memory bounded under sustained burst load (high-water mark fix).
+# Before fix: expansion memory grows monotonically (each burst leaves residual).
+# After fix: expansion memory stabilizes (cap doesn't inflate, slots shrink).
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+
+# Bootstrap TLS cache
+thread_0 alloc 65536 100
+thread_0 free all
+
+# 1000 iterations: alloc 1000 sc1 bufs + free all
+# (tool limits alloc num to <= 1000 per call)
+repeat 1000
+  thread_0 alloc 65536 1000
+  thread_0 free all
+end
+
+# Final status and info to verify memory bounded
+status
+info

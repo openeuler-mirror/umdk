@@ -1,0 +1,8 @@
+# case 3: leak scenario — alloc without free, verify pool tracks unfreed bufs per thread
+# status should show alloced > 0; tool does NOT auto-free on exit, prints NOTE per thread
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+thread_0 alloc 4096
+thread_0 alloc 65536
+thread_0 alloc 32768
+status
+# intentionally no 'thread_0 free all' — observe alloced column stays > 0

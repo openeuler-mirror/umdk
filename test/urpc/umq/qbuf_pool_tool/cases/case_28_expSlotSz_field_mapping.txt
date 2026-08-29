@@ -1,0 +1,38 @@
+# case 28: expSlotSz 字段正向映射 + 旧名 expSz 被拒
+# 验证工具修复后 init expSlotSz= 参数被正确解析、传给
+# cfg.expansion_size, 并被 umq_qbuf_pool_init 接受。
+#
+# 生产语义对照:
+#   cfg.expansion_size  →  g_qbuf_pool.expansion_size
+#                          (per-slot 目标内存, 非 cap)
+#                          →  exp_pool.expansion_block_count
+#                              = expansion_size / blk_size (per sc)
+#   默认值: 0 → 32MB (QBUF_POOL_DEFAULT_EXPANSION_SIZE)
+#   无硬上限 (仅弱校验 block_sizes[count-1] <= expansion_size,
+#            见 umq_qbuf_pool.c:1173)
+#
+# 关键区别(与 poolMaxSz):
+#   expSlotSz 是 per-slot 目标, 不参与 cap 检查;
+#   poolMaxSz 才是总内存 ceiling, 经派生 expansion_mem_size_max
+#   用 CAS 限制 exp_total_mem_pool_size。
+#   设 expSlotSz > poolMaxSz 会让 init 静默通过、运行时 expansion
+#   必败 (见 umq_qbuf_pool.c:425 try_inc_atomic_exp_mem_size)。
+#
+# 退出码: 0 (所有命令成功)
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M expSlotSz=64M threads=1
+# Expect stdout:
+#   pool inited ok (threads=1 count=2 mode=split
+#                  scaleCap=on totalSz=209715200 poolMaxSz=0 expSlotSz=67108864
+#                  blockSizes=4096,65536 blockCounts=auto tlsDepths=default ...)
+#                                                              ^^^^^^^^^^^^^ 64M 生效
+
+# info 段2 Pool Config [Small] 应显示:
+#   expansion_size         = 67108864  (= 64M, 由 expSlotSz=64M 设定)
+#   expansion_mem_size_max = 2147483648 (= 2G, poolMaxSz=0 走默认)
+#   exp_total_mem_pool_size = 0        (无 expansion 触发)
+info
+
+# alloc + free 验证 init 成功路径下池可用
+thread_0 alloc 4096 100
+thread_0 free all
+status

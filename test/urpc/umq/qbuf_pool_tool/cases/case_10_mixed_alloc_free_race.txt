@@ -1,0 +1,63 @@
+# case 10: mixed alloc+free churn (C3 + C8 stress)
+# Each repeat iteration runs TWO parallel blocks: alloc block (all 8 workers
+# alloc sc0) followed by free block (all 8 workers free all). This is the
+# closest approximation of "concurrent alloc while free" achievable under
+# the rule "no same-worker alloc+free mix in one parallel block".
+# Verifies:
+#   - alloc-block race on fetch_from_global spinlock (8 threads concurrent)
+#   - free-block race on return_to_global / TLS-update paths
+#   - Conservation churn: alloced stays 0 at iteration boundaries
+#     (alloc N then free all each iter)
+#   - TLS self_shrink under repeated alloc/free cycles (fetch budget grows,
+#     later iterations trigger self_shrink return-to-global)
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+
+# Bootstrap: each worker needs at least one prior alloc so its TLS has
+# fetch bytes; subsequent repeat iterations will exercise self_shrink
+# (returning excess TLS to global). Done serially to isolate bootstrap
+# from the race.
+thread_0 alloc 4096 50
+thread_0 free all
+thread_1 alloc 4096 50
+thread_1 free all
+thread_2 alloc 4096 50
+thread_2 free all
+thread_3 alloc 4096 50
+thread_3 free all
+thread_4 alloc 4096 50
+thread_4 free all
+thread_5 alloc 4096 50
+thread_5 free all
+thread_6 alloc 4096 50
+thread_6 free all
+thread_7 alloc 4096 50
+thread_7 free all
+
+# 500 iterations of: alloc 10 sc0 (race) -> free all (race). Each iter
+# returns alloced back to 0; tests long-running conservation under churn.
+repeat 500
+  parallel
+    thread_0 alloc 4096 10
+    thread_1 alloc 4096 10
+    thread_2 alloc 4096 10
+    thread_3 alloc 4096 10
+    thread_4 alloc 4096 10
+    thread_5 alloc 4096 10
+    thread_6 alloc 4096 10
+    thread_7 alloc 4096 10
+  join
+  parallel
+    thread_0 free all
+    thread_1 free all
+    thread_2 free all
+    thread_3 free all
+    thread_4 free all
+    thread_5 free all
+    thread_6 free all
+    thread_7 free all
+  join
+end
+
+# Expect: alloced sc0 = 0 (every iteration balanced); TLS rows show
+# stable fetch bytes (self_shrink returned excess to global each iter)
+status

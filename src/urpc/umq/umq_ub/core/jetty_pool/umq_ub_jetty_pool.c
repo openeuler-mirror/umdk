@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "perf.h"
+#include "umq_dfx_types.h"
 #include "umq_vlog.h"
 #include "umq_errno.h"
 #include "urpc_thread_closure.h"
@@ -57,11 +58,12 @@ typedef struct jetty_pool {
     baseline_umq_cfg_t baseline;
 } jetty_pool_t;
 
+static __thread thread_local_jetty_cache_t g_thread_jetty_cache = {0};
 static jetty_pool_t g_jetty_pool;
 static bool g_jetty_pool_inited = false;
-static util_thread_key_t *g_umq_ub_jetty_pool_key;
 
 // Forward declarations
+static void release_thread_cache(uint64_t id);
 static void umq_ub_jetty_fire_avail_callbacks(void);
 
 static ALWAYS_INLINE void recycle_node_to_free_q(jetty_pool_t *pool, jetty_pool_node_t *node)
@@ -81,63 +83,76 @@ static ALWAYS_INLINE void recycle_node_to_relay_q(jetty_pool_t *pool, jetty_pool
 
 static ALWAYS_INLINE thread_local_jetty_cache_t *get_thread_jetty_cache(void)
 {
-    if (!g_jetty_pool_inited) {
-        return NULL;
+    /* During TLS destruction the registry list may hold dangling nodes;
+     * never re-init (which would push_back into the poisoned list). */
+    if (!g_thread_jetty_cache.inited && !g_tls_dtors_running) {
+        urpc_list_init(&g_thread_jetty_cache.cache_list);
+        urpc_list_init(&g_thread_jetty_cache.registry_node);
+        g_thread_jetty_cache.cached_count = 0;
+        g_thread_jetty_cache.inited = true;
+        (void)umq_thread_closure_register(UMQ_TRANS_MODE_UB, THREAD_CLOSURE_JETTY_POOL, 0, release_thread_cache);
+        (void)pthread_spin_lock(&g_jetty_pool.lock);
+        urpc_list_push_back(&g_jetty_pool.thread_cache_list, &g_thread_jetty_cache.registry_node);
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
     }
-
-    thread_local_jetty_cache_t *tls_cache =
-        (thread_local_jetty_cache_t *)util_thread_getspecific(g_umq_ub_jetty_pool_key);
-    if (tls_cache != NULL) {
-        return tls_cache;
-    }
-
-    tls_cache = (thread_local_jetty_cache_t *)calloc(1, sizeof(thread_local_jetty_cache_t));
-    if (tls_cache == NULL) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "calloc for jetty pool tls cache failed\n");
-        return NULL;
-    }
-
-    if (util_thread_setspecific(g_umq_ub_jetty_pool_key, (const void *)tls_cache) != 0) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "jetty pool tls cache setspecific failed\n");
-        free(tls_cache);
-        return NULL;
-    }
-
-    urpc_list_init(&tls_cache->cache_list);
-    urpc_list_init(&tls_cache->registry_node);
-    tls_cache->cached_count = 0;
-    tls_cache->inited = true;
-    (void)pthread_spin_lock(&g_jetty_pool.lock);
-    urpc_list_push_back(&g_jetty_pool.thread_cache_list, &tls_cache->registry_node);
-    (void)pthread_spin_unlock(&g_jetty_pool.lock);
-
-    return tls_cache;
+    return &g_thread_jetty_cache;
 }
 
 // Release all thread cache to global pool. should be called when thread exits
-static ALWAYS_INLINE void release_jetty_pool_thread_cache(void *data)
+static ALWAYS_INLINE void release_thread_cache(uint64_t id)
 {
-    thread_local_jetty_cache_t *tls_cache = (thread_local_jetty_cache_t *)data;
-    if (tls_cache == NULL) {
+    (void)id;
+    if (!g_thread_jetty_cache.inited) {
         return;
     }
 
-    (void)util_thread_setspecific(g_umq_ub_jetty_pool_key, NULL);
-
-    if (!g_jetty_pool_inited) {
-        while (!urpc_list_is_empty(&tls_cache->cache_list)) {
-            jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(&tls_cache->cache_list);
+    /* TLS-destruction fast path: during exit() glibc runs __call_tls_dtors()
+     * which destroys our urpc_thread_closure and calls us. Other threads'
+     * registry nodes in g_jetty_pool.thread_cache_list may be dangling, so
+     * skip urpc_list_remove(registry_node). The cache_list holds nodes we
+     * malloc'd ourselves — free them directly (no global lock needed; these
+     * nodes are thread-private until pushed back to active_q). Leaking the
+     * registry node is acceptable since the list itself is about to die with
+     * the process. */
+    if (g_tls_dtors_running) {
+        while (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
+            jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(
+                &g_thread_jetty_cache.cache_list);
             free(cached);
         }
-        free(tls_cache);
+        g_thread_jetty_cache.cached_count = 0;
+        g_thread_jetty_cache.inited = false;
+        return;
+    }
+
+    if (!g_jetty_pool_inited) {
+        /* Pool already uninitialized; lock may be destroyed, so remove
+         * registry_node without locking. This is safe because uninit()
+         * will not touch thread_cache_list after it returns, and each
+         * thread only removes its own node. Failing to remove leaves a
+         * dangling pointer in the list that causes SIGSEGV when other
+         * threads traverse or modify the list. */
+        if (urpc_list_is_in_list(&g_thread_jetty_cache.registry_node)) {
+            urpc_list_remove(&g_thread_jetty_cache.registry_node);
+        }
+        while (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
+            jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(
+                &g_thread_jetty_cache.cache_list);
+            free(cached);
+        }
+        g_thread_jetty_cache.cached_count = 0;
+        g_thread_jetty_cache.inited = false;
         return;
     }
 
     (void)pthread_spin_lock(&g_jetty_pool.lock);
-    urpc_list_remove(&tls_cache->registry_node);
-    if (!urpc_list_is_empty(&tls_cache->cache_list)) {
-        while (!urpc_list_is_empty(&tls_cache->cache_list)) {
-            jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(&tls_cache->cache_list);
+    if (urpc_list_is_in_list(&g_thread_jetty_cache.registry_node)) {
+        urpc_list_remove(&g_thread_jetty_cache.registry_node);
+    }
+    if (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
+        while (!urpc_list_is_empty(&g_thread_jetty_cache.cache_list)) {
+            jetty_pool_node_t *cached = (jetty_pool_node_t *)urpc_list_pop_front(
+                &g_thread_jetty_cache.cache_list);
             cached->in_global_pool = true;
             if (__atomic_load_n(&cached->state, __ATOMIC_ACQUIRE) == JETTY_POOL_NODE_ERR) {
                 recycle_node_to_free_q(&g_jetty_pool, cached);
@@ -146,11 +161,11 @@ static ALWAYS_INLINE void release_jetty_pool_thread_cache(void *data)
                 g_jetty_pool.active_count++;
             }
         }
-        tls_cache->cached_count = 0;
+        g_thread_jetty_cache.cached_count = 0;
     }
     (void)pthread_spin_unlock(&g_jetty_pool.lock);
 
-    free(tls_cache);
+    g_thread_jetty_cache.inited = false;
 }
 
 static int umq_ub_jetty_node_list_init(umq_ub_jetty_node_list_t *jetty_node_list, uint32_t node_cnt)
@@ -194,22 +209,6 @@ FREE_BITMAP:
     return ret;
 }
 
-static void umq_ub_jetty_node_list_uninit(umq_ub_jetty_node_list_t *jetty_node_list)
-{
-    if (jetty_node_list->node_list != NULL) {
-        jetty_node_list->list_len = 0;
-        free(jetty_node_list->node_list);
-        jetty_node_list->node_list = NULL;
-    }
-
-    if (jetty_node_list->bitmap != NULL) {
-        urpc_bitmap_free(jetty_node_list->bitmap);
-        jetty_node_list->bitmap = NULL;
-    }
-    (void)util_mutex_lock_destroy(jetty_node_list->lock);
-    jetty_node_list->lock = NULL;
-}
-
 int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
 {
     if (g_jetty_pool_inited) {
@@ -242,32 +241,37 @@ int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
         goto CLOSE_FD;
     }
 
-    g_umq_ub_jetty_pool_key = util_thread_key_create(release_jetty_pool_thread_cache);
-    if (g_umq_ub_jetty_pool_key == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "umq ub jetty pool key create failed\n");
-        goto JETTY_NODE_LIST_UNINIT;
-    }
-
+    (void)pthread_spin_init(&g_jetty_pool.lock, PTHREAD_PROCESS_PRIVATE);
     g_jetty_pool.avail_cb_lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
     if (g_jetty_pool.avail_cb_lock == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "create avail_cb_lock failed\n");
-        goto DELETE_KEY;
+        goto DESTROY_LOCK;
     }
-    (void)pthread_spin_init(&g_jetty_pool.lock, PTHREAD_PROCESS_PRIVATE);
-    g_jetty_pool.baseline = (baseline_umq_cfg_t){0};
     g_jetty_pool_inited = true;
     return UMQ_SUCCESS;
 
-DELETE_KEY:
-    (void)util_thread_key_delete(g_umq_ub_jetty_pool_key);
-    g_umq_ub_jetty_pool_key = NULL;
-
-JETTY_NODE_LIST_UNINIT:
-    umq_ub_jetty_node_list_uninit(&g_jetty_pool.jetty_node_list);
+DESTROY_LOCK:
+    (void)pthread_spin_destroy(&g_jetty_pool.lock);
 
 CLOSE_FD:
     (void)close(g_jetty_pool.event_fd);
     return ret;
+}
+
+static void umq_ub_jetty_node_list_uninit(umq_ub_jetty_node_list_t *jetty_node_list)
+{
+    if (jetty_node_list->node_list != NULL) {
+        jetty_node_list->list_len = 0;
+        free(jetty_node_list->node_list);
+        jetty_node_list->node_list = NULL;
+    }
+
+    if (jetty_node_list->bitmap != NULL) {
+        urpc_bitmap_free(jetty_node_list->bitmap);
+        jetty_node_list->bitmap = NULL;
+    }
+    (void)util_mutex_lock_destroy(jetty_node_list->lock);
+    jetty_node_list->lock = NULL;
 }
 
 void umq_ub_jetty_pool_uninit(void)
@@ -276,14 +280,7 @@ void umq_ub_jetty_pool_uninit(void)
         return;
     }
 
-    release_jetty_pool_thread_cache(get_thread_jetty_cache());
-
     g_jetty_pool_inited = false;
-
-    if (g_umq_ub_jetty_pool_key != NULL) {
-        (void)util_thread_key_delete(g_umq_ub_jetty_pool_key);
-        g_umq_ub_jetty_pool_key = NULL;
-    }
 
     umq_ub_jetty_node_list_uninit(&g_jetty_pool.jetty_node_list);
     thread_local_jetty_cache_t *cache = NULL;
@@ -316,7 +313,6 @@ void umq_ub_jetty_pool_uninit(void)
     }
 
     (void)close(g_jetty_pool.event_fd);
-    g_jetty_pool.event_fd = -1;
     (void)pthread_spin_destroy(&g_jetty_pool.lock);
     if (g_jetty_pool.avail_cb_lock != NULL) {
         (void)util_mutex_lock_destroy(g_jetty_pool.avail_cb_lock);
@@ -442,9 +438,6 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
     jetty_pool_t *pool = &g_jetty_pool;
 
     thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
-    if (cache == NULL) {
-        return NULL;
-    }
 
     while (pool->active_count > 0) {
         // 1. Batch fetch from active_q to fill thread-local cache.
@@ -506,10 +499,8 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
 
 int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
 {
-    thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
-    if (!g_jetty_pool_inited || cache == NULL) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "jetty pool not initialized, tls_cache %s NULL\n",
-                           cache == NULL ? "is" : "is not");
+    if (!g_jetty_pool_inited) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "jetty pool not initialized\n");
         return -UMQ_ERR_EINVAL;
     }
 
@@ -537,7 +528,26 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
         (void)pthread_spin_unlock(&pool->lock);
     }
 
-    urpc_list_push_back(&cache->cache_list, &node->node);
+    /* TLS 析构后（glibc 2.32: TLS dtors 先于 atexit handler），thread-local jetty
+     * cache 可能未初始化（inited=false, cache_list.next=NULL）或已析构。此时若走
+     * get_thread_jetty_cache() + urpc_list_push_back 路径，会因 cache_list.next 始终
+     * 为 NULL 导致后续 URPC_LIST_FOR_EACH 解引用 NULL->in_global_pool 而 SIGSEGV。
+     * 退出路径下 jetty 资源由 urma/OS 回收，node 本身为 calloc 所得，直接 free 安全。
+     * 与 release_thread_cache 的 g_tls_dtors_running 快速路径保持一致。 */
+    if (g_tls_dtors_running) {
+        /* TLS 析构先于 ubsocket_uninit（g_ubsocket_exiting 仍为 false）。此时 worker
+         * 线程的 poll 回调链可能在 free(node) 后继续调 HandleTxCompletion→SendSimpleCtrl
+         * →umq_post→umq_ub_post_tx 读已 free 的 node（heap-use-after-free）。同步置退出
+         * 标志使 umq_ub_post_tx/poll 守卫生效，跳过对已 free node 的访问。 */
+        g_ubsocket_exiting = true;
+        __sync_synchronize();
+        free(node);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
+        return UMQ_SUCCESS;
+    }
+
+    thread_local_jetty_cache_t *cache = get_thread_jetty_cache();
+    urpc_list_push_front(&cache->cache_list, &node->node);
     cache->cached_count++;
 
     // Check if cache exceeds limit, batch return excess to active_q
@@ -557,7 +567,7 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
             }
         }
 
-        uint32_t cnt = urpc_list_move_n(&cache->cache_list, &pool->active_q, to_mark);
+        uint32_t cnt = urpc_list_move_n_front(&cache->cache_list, &pool->active_q, to_mark);
         pool->active_count += cnt;
         cache->cached_count -= cnt;
         uint64_t value = (uint64_t)pool->active_count;

@@ -1,0 +1,29 @@
+# case 7: TLS fetch + return logic
+# Tests the core TLS cache lifecycle:
+#   1) fetch_from_global: alloc triggers batch prefetch (batch_count=64 for sc0)
+#   2) free -> TLS: free all returns bufs to TLS (TLS buf_cnt rises to fetch count)
+#   3) self_shrink -> return_to_global: next alloc triggers thread_cache_self_shrink
+#      (remaining/4 >= 64 threshold), returning excess TLS bufs to global pool
+#
+# Note: alloc num=300 prints 300 buf#<orig_idx> lines; focus on the 3 status snapshots.
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+
+# stage 1: fetch — alloc 300 sc0 bufs. fetch_from_global pulls 5 batches of 64
+# (320 bufs) into TLS; alloc consumes 300, TLS retains 20.
+thread_0 alloc 4096 300
+status  # expect: TLS sc0 buf=20, cap=320 (fetch cap=320); global sc0 -= 320
+
+# stage 2: free all — 300 bufs return to TLS (NOT global). TLS buf rises to 240
+# (cap clamps to 240 after free; production code self-shrink behavior).
+# return_to_global only fires when actual_bytes > cap_bytes (umq_qbuf_pool.c:1750);
+# here actual==cap so no return. Global stays unchanged. The real return-to-global
+# happens at stage 3 via self_shrink (alloc path), not here.
+thread_0 free all
+status  # expect: TLS sc0 buf=240, cap=240 (clamped); global unchanged
+
+# stage 3: alloc 1 — triggers thread_cache_self_shrink: TLS shrinks, returns
+# excess bufs to global. TLS buf drops, global rises.
+thread_0 alloc 4096 1
+status  # expect: TLS sc0 buf=239, cap=240; global rises slightly
+
+thread_0 free all
