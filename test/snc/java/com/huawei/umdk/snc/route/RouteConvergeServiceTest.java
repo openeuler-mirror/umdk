@@ -240,7 +240,7 @@ class RouteConvergeServiceTest {
         // 给 L1SW 的 PREFIX_NPU0 再加一个出端口 L1SW_DOWN_TO_NPU1，使 down NPU0 后仍可达
         RoutingEntry l1Entry = routeMap.get(RouteInstantiationService.buildRouteTableKey(L1_SW, SW_CHIP))
             .get(PREFIX_NPU0);
-        l1Entry.getMutableOutPortInfos().put(L1SW_DOWN_TO_NPU1,
+        l1Entry.getOutPortInfos().put(L1SW_DOWN_TO_NPU1,
             new OutPortInfo(L1SW_DOWN_TO_NPU1, null, null, null, null, 0));
         l1Entry.refreshReachable();
 
@@ -574,7 +574,7 @@ class RouteConvergeServiceTest {
         Map<String, RoutingEntry> routes = routeMap.get(RouteInstantiationService.buildRouteTableKey(device, chip));
         RoutingEntry entry = routes.get(prefix);
         assertNotNull(entry, "routing entry not found for prefix " + prefix);
-        OutPortInfo outPort = entry.getMutableOutPortInfos().get(portName);
+        OutPortInfo outPort = entry.getOutPortInfos().get(portName);
         assertNotNull(outPort, "out port not found: " + portName);
         if (converged) {
             assertTrue(outPort.isConverged(),
