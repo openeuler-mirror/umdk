@@ -301,6 +301,7 @@ typedef struct umq_buf_pool_cfg {
     umq_tiny_buf_block_size_t tiny_pool_block_size;
     uint32_t tiny_pool_block_count;
     uint64_t tls_tiny_pool_depth;
+    uint32_t shrink_decay_ms;
 } umq_buf_pool_cfg_t;
 
 typedef struct umq_tp_pool_cfg {
