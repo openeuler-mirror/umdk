@@ -1,7 +1,7 @@
 """Versioned external dependency configuration for URMA Bazel builds."""
 
 LIBUMMU_REMOTE = "https://gitcode.com/openeuler/libummu.git"
-LIBUMMU_COMMIT = "70de020f776d8def0d8a8941cc7cbc5928d66c10"
+LIBUMMU_COMMIT = "58408c62e710b4ecd0565da98c462bdbd697d9b4"
 LIBUMMU_VERSION = "1.0.5"
 LIBUMMU_ABI_VERSION = "1"
 
