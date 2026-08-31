@@ -2283,8 +2283,8 @@ int umq_ub_unbind_impl(uint64_t umqh)
         queue->bind_ctx = NULL;
     }
     (void)umq_ub_remote_tseg_info_release(queue->dev_ctx->remote_imported_info, bind_ctx);
-    UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind jetty\n", queue->umq_id,
-                  EID_ARGS(tjetty->id.eid), tjetty->id.id);
+    UMQ_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind jetty\n", queue->umq_id,
+        EID_ARGS(tjetty->id.eid), tjetty->id.id);
     if (qcfg->tp_mode == URMA_TM_RC) {
         start_timestamp = umq_perf_get_start_timestamp();
         (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
@@ -3346,8 +3346,16 @@ int umq_ub_info_get_impl(uint64_t umqh_tp, umq_info_t *umq_info)
 
     if (queue->bind_ctx != NULL && queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO] != NULL) {
         umq_info->ub.remote_io_jetty_id = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id;
+        (void)memcpy(&umq_info->ub.remote_eid, &queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid, sizeof(umq_eid_t));
+        umq_info->ub.remote_pid = queue->bind_ctx->remote_pid;
+        umq_info->ub.remote_umq_id = queue->remote_umq_id;
+        (void)snprintf(umq_info->ub.remote_namespace, UMQ_NAMESPACE_SIZE, "%s", queue->bind_ctx->remote_namespace);
     } else {
         umq_info->ub.remote_io_jetty_id = 0;
+        (void)memset(&umq_info->ub.remote_eid, 0, sizeof(umq_eid_t));
+        umq_info->ub.remote_pid = 0;
+        umq_info->ub.remote_umq_id = 0;
+        umq_info->ub.remote_namespace[0] = '\0';
     }
 
     if (queue->bind_ctx != NULL && queue->bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL] != NULL) {
