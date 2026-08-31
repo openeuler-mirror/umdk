@@ -1494,9 +1494,9 @@ int umq_bondp_port_id_set(umq_used_ports_t *used_ports, bondp_port_id_t *used_po
             }
         }
 
-        used_port[i].chip_id = used_ports->port[i].bs.chip_id;
-        used_port[i].die_id = used_ports->port[i].bs.die_id;
-        used_port[i].port_idx = used_ports->port[i].bs.port_idx;
+        used_port[i].bs.chip_id = used_ports->port[i].bs.chip_id;
+        used_port[i].bs.die_id = used_ports->port[i].bs.die_id;
+        used_port[i].bs.port_idx = used_ports->port[i].bs.port_idx;
     }
     return UMQ_SUCCESS;
 }

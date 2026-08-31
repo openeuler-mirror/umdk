@@ -322,12 +322,11 @@ typedef struct umq_init_cfg {
 
 typedef union umq_port_id {
     struct {
-        uint32_t chip_id : 8;
-        uint32_t die_id : 8;
-        uint32_t port_idx : 8;
-        uint32_t reserved : 8;
+        uint16_t chip_id : 4;
+        uint16_t die_id : 4;
+        uint16_t port_idx : 8;
     } bs;
-    uint32_t value;
+    uint16_t value;
 } umq_port_id_t;
 
 // port[0] is primary port, others as backup

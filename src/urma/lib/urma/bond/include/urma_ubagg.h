@@ -133,12 +133,11 @@ typedef struct bondp_get_jfce_fd_list_out {
 
 typedef union bondp_port_id {
     struct {
-        uint8_t chip_id;
-        uint8_t die_id;
-        uint8_t port_idx; // portEID：0~8；primaryEID: UINT8_MAX
-        uint8_t reserved;
-    };
-    uint64_t value;
+        uint16_t chip_id  : 4;
+        uint16_t die_id   : 4;
+        uint16_t port_idx : 8; /* portEID: 0~8; primaryEID: UINT8_MAX. */
+    } bs;
+    uint16_t value;
 } bondp_port_id_t;
 
 // BONDP_USER_CTL_SET_BONDING_PORT
