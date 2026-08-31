@@ -45,7 +45,7 @@ fused_deep_moe(
 | **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
 |----------|----------|--------------|--------------|----------|
 |x|Tensor|必选|形状:(batch_size, token_length), 支持bf16, float16类型|本卡dispatch阶段待处理的token|
-|expert_ids|Tensor|必选|形状:(batch_size, topk)， 数据类型为int32, 取值范围[-1, num_experts)，-1用于占位使用，一个token不允许重复发给同一个专家|每个token的目标专家ID信息|
+|expert_ids|Tensor|必选|形状:(batch_size, topk)， 数据类型为int32，取值范围[-INF, num_experts)，负数代表不发送，超过num_experts会引发异常，一个token不允许重复发给同一个专家|每个token的目标专家ID信息|
 |gmm1_weight|Tensor[]|必选|耦合模式下，只有一个Tensor, 形状:(localExpertNum, token_length, gmm1_hidden_size); 分离模式下，包含localExpertNum个Tensor, 每个Tensor形状：（token_length, gmm1_hidden_size），数据类型支持fp8_e4m3,fp8_e5m2,fp4_e2m1|GMM1的权重矩阵列表，支持耦合模式和分离模式|
 |gmm1_weight_scale|Tensor[]|必选|耦合模式下，只有一个Tensor, 形状:(localExpertNum, token_length/32/2, gmm1_hidden_size, 2); 分离模式下，包含localExpertNum个Tensor, 每个Tensor形状：（token_length/32/2, gmm1_hidden_size, 2），数据类型为fp8_e8m0|GMM1的权重矩阵量化时使用的缩放系数列表，支持耦合模式和分离模式|
 |gmm2_weight|Tensor[]|必选|耦合模式下，只有一个Tensor, 形状:(localExpertNum, gmm1_hidden_size/2, token_length); 分离模式下，包含localExpertNum个Tensor, 每个Tensor形状：（gmm1_hidden_size/2, token_length），数据类型支持fp8_e4m3,fp8_e5m2,fp4_e2m1|GMM2的权重矩阵列表，支持耦合模式和分离模式|
