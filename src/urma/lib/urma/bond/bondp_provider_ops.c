@@ -670,6 +670,7 @@ static int bondp_validate_ctx_cfg(const bondp_set_ctx_cfg_in_t *cfg)
         cfg->health_check_interval_ms > max_health_check_interval_ms ||
         cfg->health_check_batch_node_num == 0 ||
         cfg->health_check_batch_node_num > MAX_NODE_NUM ||
+        cfg->rnr_retry_max == 0 ||
         cfg->rnr_retry_jitter_ratio > max_jitter_ratio) {
         return -EINVAL;
     }
