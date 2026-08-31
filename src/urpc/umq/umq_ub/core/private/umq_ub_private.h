@@ -60,7 +60,6 @@ extern "C" {
 #define UMQ_UB_FLOW_CONTORL_JETTY_DEPTH 2
 
 #define UMQ_UB_DEV_STR_LENGTH 64
-#define UMQ_UB_NAMESPACE_SIZE 256
 #define UMQ_UB_NAMESPACE_PATH "/proc/self/ns/net"
 
 #define UMQ_UB_ENABLE_SHARE_FC_JFR (true)

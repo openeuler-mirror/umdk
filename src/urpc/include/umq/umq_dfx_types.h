@@ -252,17 +252,23 @@ typedef struct umq_qbuf_pool_stats {
     umq_qbuf_pool_alloc_stats_t alloc_stats;
 } umq_qbuf_pool_stats_t;
 
+#define UMQ_NAMESPACE_SIZE 256
+
 typedef struct umq_info {
     umq_trans_mode_t trans_mode; // transmission mode of the queue
     union {
         struct {
-            uint32_t umq_id;                  // the ID of the UMQ
-            umq_eid_t eid;                    // the EID used by the UMQ
             char dev_name[UMQ_DEV_NAME_SIZE]; // the UDMA device name corresponding to the EID
-            uint32_t local_io_jetty_id;       // the I/O jetty ID within the UMQ
-            uint32_t local_fc_jetty_id;       // the flow control jetty ID within the UMQ
-            uint32_t remote_io_jetty_id;      // the I/O jetty ID of the peer UMQ that is bound to the local UMQ
+            char remote_namespace[UMQ_NAMESPACE_SIZE]; // the remote namespace
+            umq_eid_t eid; // the EID used by the UMQ
+            umq_eid_t remote_eid; // the remote EID
+            uint32_t umq_id; // the ID of the UMQ
+            uint32_t local_io_jetty_id; // the I/O jetty ID within the UMQ
+            uint32_t local_fc_jetty_id; // the flow control jetty ID within the UMQ
+            uint32_t remote_io_jetty_id; // the I/O jetty ID of the peer UMQ that is bound to the local UMQ
             uint32_t remote_fc_jetty_id; // the flow control jetty ID of the peer UMQ that is bound to the local UMQ
+            uint32_t remote_umq_id; // the remote umq ID
+            uint32_t remote_pid; // the remote pid
         } ub;
     };
 } umq_info_t;
