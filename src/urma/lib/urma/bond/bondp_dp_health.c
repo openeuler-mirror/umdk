@@ -41,6 +41,12 @@ typedef struct bondp_probe_res {
     urma_jfc_t *jfc;
     urma_jfr_t *jfr;
     urma_target_seg_t *seg;
+    /* No lock needed for the jetty pointer: while the probe task is alive it
+     * is only written by the single worker thread (rebuild). The start paths
+     * (hc_create_probe_jettys / hc_destroy_probe_jettys) and uninit
+     * (hc_destroy_probe_resource) are serialized against the worker by
+     * ctx->mutex plus bondp_worker_cancel's wait-for-task-completion
+     * semantics, and against each other by ctx->mutex. */
     urma_jetty_t *jetty;
     /* Number of probe WRs posted but not yet completed. Only touched on the
      * single worker thread, so a plain counter is safe. Used to stop posting
@@ -152,6 +158,7 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
     }
     res->jetty = NULL;
     res->inflight = 0; /* The old SQ is gone; its outstanding WRs are flushed. */
+
     for (uint32_t i = 0; i < hc_ctx->node_num; ++i) {
         bondp_hc_node_t *node = &hc_ctx->nodes[i];
 
@@ -162,6 +169,13 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
         pthread_rwlock_unlock(&node->lock);
     }
 
+    /* Don't recreate if uninit raced in; destroy thread will see NULL and skip. */
+    if (atomic_load(&hc_ctx->stopping)) {
+        return;
+    }
+    /* res->jetty is NULL here and rebuild runs only on the worker thread, so
+     * no other writer can race: uninit cancels (waits for) this task before
+     * destroying, and the start paths are serialized by ctx->mutex. */
     res->jetty = hc_create_probe_jetty(p_ctx, res->jfc, res->jfr, local_idx, hc_ctx->priority);
     if (res->jetty == NULL) {
         URMA_LOG_ERR("Failed to rebuild health probe jetty, local_idx=%d.\n", local_idx);
@@ -709,11 +723,10 @@ static void hc_destroy_probe_jettys(bondp_hc_ctx_t *hc_ctx)
 {
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         bondp_probe_res_t *res = &hc_ctx->probes[i];
-        if (res->jetty == NULL) {
-            continue;
+        if (res->jetty != NULL) {
+            urma_delete_jetty(res->jetty);
+            res->jetty = NULL;
         }
-        urma_delete_jetty(res->jetty);
-        res->jetty = NULL;
         res->inflight = 0;
     }
 }
@@ -835,12 +848,19 @@ ERR_DESTROY_PROBES:
 
 void bondp_hc_uninit(bondp_context_t *bdp_ctx)
 {
-    if (bdp_ctx == NULL || bdp_ctx->hc_ctx == NULL) {
+    if (bdp_ctx == NULL) {
         return;
     }
 
-    bondp_hc_ctx_t *hc_ctx = bdp_ctx->hc_ctx;
-    bdp_ctx->hc_ctx = NULL;
+    /* Atomically detach hc_ctx: exactly one uninit caller wins the exchange
+     * and owns the teardown. A concurrent or duplicate uninit (e.g.
+     * bondp_delete_context racing bondp_set_bonding_mode, or the
+     * bondp_init_ctx_features error rollback) gets NULL and returns instead
+     * of tearing the same resources down twice (double free). */
+    bondp_hc_ctx_t *hc_ctx = atomic_exchange(&bdp_ctx->hc_ctx, NULL);
+    if (hc_ctx == NULL) {
+        return;
+    }
 
     /* Signal the probe task to stop running/rescheduling before cancelling it.
      * bondp_worker_cancel may invoke a concurrent hc_probe_fn(EXECUTED) to

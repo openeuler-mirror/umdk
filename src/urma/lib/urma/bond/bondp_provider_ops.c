@@ -508,7 +508,13 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
     uint32_t eid_index = ctx->eid_index;
 
     (void)strcpy(dev_name, ctx->dev->name);
+    /* Serialize the feature teardown with bondp_set_bonding_mode (which
+     * holds ctx->mutex across its reconfig) and with bondp_create_jetty's
+     * bondp_hc_start: the hc/fb teardown must not interleave with a
+     * concurrent start or a second teardown. */
+    (void)pthread_mutex_lock(&ctx->mutex);
     bondp_uninit_ctx_features(bdp_ctx);
+    (void)pthread_mutex_unlock(&ctx->mutex);
     if (bondp_delete_pcontext(bdp_ctx) != 0) {
         URMA_LOG_ERR("Failed to delete pcontext\n");
         ret = URMA_FAIL;

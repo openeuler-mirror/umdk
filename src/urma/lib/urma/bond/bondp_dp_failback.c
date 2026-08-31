@@ -566,10 +566,16 @@ int bondp_fb_init(bondp_context_t *bond_ctx)
 
 void bondp_fb_uninit(bondp_context_t *bond_ctx)
 {
-    if (bond_ctx == NULL || bond_ctx->fb_ctx == NULL) {
+    if (bond_ctx == NULL) {
         return;
     }
 
-    fb_task_table_destroy(bond_ctx->fb_ctx);
-    bond_ctx->fb_ctx = NULL;
+    /* Atomically detach fb_ctx so a concurrent or duplicate uninit cannot
+     * destroy the same task table twice. */
+    bondp_fb_ctx_t *fb_ctx = atomic_exchange(&bond_ctx->fb_ctx, NULL);
+    if (fb_ctx == NULL) {
+        return;
+    }
+
+    fb_task_table_destroy(fb_ctx);
 }

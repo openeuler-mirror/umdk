@@ -138,8 +138,16 @@ typedef struct bondp_context {
     /* used to restore the local_id in CR. */
     bondp_hash_table_t p_vjetty_id_table;
     int real_async_fd; /* vcontex async_fd */
-    bondp_hc_ctx_t *hc_ctx;
-    bondp_fb_ctx_t *fb_ctx;
+    /* Atomic so uninit can atomically detach them (atomic_exchange): exactly
+     * one uninit caller wins the exchange and owns the teardown, making
+     * bondp_hc_uninit/bondp_fb_uninit idempotent even if invoked twice. */
+#ifndef __cplusplus
+    _Atomic(bondp_hc_ctx_t *) hc_ctx;
+    _Atomic(bondp_fb_ctx_t *) fb_ctx;
+#else
+    std::atomic<bondp_hc_ctx_t *> hc_ctx;
+    std::atomic<bondp_fb_ctx_t *> fb_ctx;
+#endif
     pthread_rwlock_t seg_cache_lock;
     struct ub_hmap seg_cache_map;
     unsigned long seg_cache_insert_cnt;
