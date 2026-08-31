@@ -4,8 +4,8 @@
  * Description: SNC (Supernode Network Controller) service
  * Create: 2026-07-13
  */
-#ifndef URMA_PING_H
-#define URMA_PING_H
+#ifndef SNC_PING_H
+#define SNC_PING_H
 
 #include <stdio.h>
 #include <stdint.h>
@@ -22,7 +22,7 @@ extern "C"{
 typedef struct {
     int devId;
     char eid[IP_LEN];
-} UrmaPingEntity;
+} SncPingEntity;
 
 typedef struct {
     uint32_t txPkt;
@@ -31,13 +31,13 @@ typedef struct {
     uint32_t maxRTT;
     uint32_t avgRTT;
     uint32_t state;
-} UrmaPingResult;
+} SncPingResult;
 
-int UrmaPingInit(UrmaPingEntity* entities, int count);
+int SncPingInit(SncPingEntity* entities, int count);
 
-int UrmaPingOne(int clientDevId, const char* clientEid, const char* serverEid, UrmaPingResult* result);
+int SncPingOne(int clientDevId, const char* clientEid, const char* serverEid, SncPingResult* result);
 
-int UrmaPingDeinit(UrmaPingEntity* entities, int count);
+int SncPingDeinit(SncPingEntity* entities, int count);
 
 #ifdef __cplusplus
 }
