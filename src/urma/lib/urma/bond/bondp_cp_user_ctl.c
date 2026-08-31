@@ -290,7 +290,7 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM] = {0};
     uint32_t enabled_count = 0;
     for (uint32_t i = 0; i < port_in->port_count; ++i) {
-        uint8_t port_idx = port_in->port_ids[i].port_idx;
+        uint8_t port_idx = port_in->port_ids[i].bs.port_idx;
         if (port_idx != UINT8_MAX &&
             (port_idx < URMA_ACTIVE_PORT_MIN || port_idx > URMA_ACTIVE_PORT_MAX)) {
             URMA_LOG_ERR("Invalid bonding port_idx=%u at index=%u.\n", port_idx, i);
@@ -298,7 +298,7 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
         }
         uint32_t active_index = 0;
         if (convert_bond_port_id_to_active_index(bdp_ctx, port_in->port_ids[i], &active_index) != 0) {
-            URMA_LOG_ERR("Invalid bonding port_id at index=%u, value=0x%lx.\n",
+            URMA_LOG_ERR("Invalid bonding port_id at index=%u, value=0x%x.\n",
                          i, port_in->port_ids[i].value);
             return -EINVAL;
         }
@@ -322,7 +322,7 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
 
     bdp_ctx->port_cfg.chip_id_count = port_in->port_count;
     for (uint32_t i = 0; i < port_in->port_count; ++i) {
-        bdp_ctx->port_cfg.chip_id[i] = port_in->port_ids[i].chip_id;
+        bdp_ctx->port_cfg.chip_id[i] = port_in->port_ids[i].bs.chip_id;
     }
 
     bdp_ctx->port_cfg.enabled_count = enabled_count;
@@ -331,7 +331,7 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
     bdp_ctx->port_cfg_enable = true;
     for (uint32_t i = 0; i < port_in->port_count; ++i) {
         URMA_LOG_INFO("Bonding port[%u]: chip_id=%u, port_id=%u.\n",
-                      i, bdp_ctx->port_cfg.chip_id[i], port_in->port_ids[i].port_idx);
+                      i, bdp_ctx->port_cfg.chip_id[i], port_in->port_ids[i].bs.port_idx);
     }
     for (uint32_t i = 0; i < enabled_count; ++i) {
         URMA_LOG_INFO("Bonding enabled[%u]: enabled_index=%u.\n", i, enabled_indices[i]);
