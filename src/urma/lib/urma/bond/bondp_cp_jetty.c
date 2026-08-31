@@ -403,9 +403,9 @@ static int bondp_check_port_chip_id_order(const bondp_context_t *bdp_ctx,
     }
 
     for (uint32_t i = 0; i < port_count; ++i) {
-        if (port_ids[i].chip_id != bdp_ctx->port_cfg.chip_id[i]) {
+        if (port_ids[i].bs.chip_id != bdp_ctx->port_cfg.chip_id[i]) {
             URMA_LOG_ERR("chip_id mismatch at index=%u, caller=%u, user_ctl=%u.\n",
-                         i, port_ids[i].chip_id, bdp_ctx->port_cfg.chip_id[i]);
+                         i, port_ids[i].bs.chip_id, bdp_ctx->port_cfg.chip_id[i]);
             return -1;
         }
     }
@@ -543,27 +543,27 @@ static inline int get_matrix_port_p_idx(int primary_idx, int port_idx)
 int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_port_id_t port_id,
                                          uint32_t *active_index)
 {
-    if (port_id.chip_id == 0 || port_id.chip_id > CHIP_NUM) {
-        URMA_LOG_ERR("Invalid primary chip_id=%u.\n", port_id.chip_id);
+    if (port_id.bs.chip_id == 0 || port_id.bs.chip_id > CHIP_NUM) {
+        URMA_LOG_ERR("Invalid primary chip_id=%u.\n", port_id.bs.chip_id);
         return -1;
     }
 
-    if (port_id.die_id != 1) {
-        URMA_LOG_ERR("Invalid port_id.die_id=%u.\n", port_id.die_id);
+    if (port_id.bs.die_id != 1) {
+        URMA_LOG_ERR("Invalid port_id.die_id=%u.\n", port_id.bs.die_id);
         return -1;
     }
 
-    if (port_id.port_idx == UINT8_MAX) {
-        *active_index = port_id.chip_id - 1;
+    if (port_id.bs.port_idx == UINT8_MAX) {
+        *active_index = port_id.bs.chip_id - 1;
         return 0;
     }
 
-    if (port_id.port_idx > PORT_NUM) {
-        URMA_LOG_ERR("Invalid port_id.port_idx=%u.\n", port_id.port_idx);
+    if (port_id.bs.port_idx > PORT_NUM) {
+        URMA_LOG_ERR("Invalid port_id.port_idx=%u.\n", port_id.bs.port_idx);
         return -1;
     }
 
-    *active_index = (uint32_t)get_matrix_port_p_idx(port_id.chip_id - 1, port_id.port_idx);
+    *active_index = (uint32_t)get_matrix_port_p_idx(port_id.bs.chip_id - 1, port_id.bs.port_idx);
     if (*active_index >= (uint32_t)bdp_ctx->dev_num) {
         URMA_LOG_ERR("Invalid converted active index=%u.\n", *active_index);
         return -1;
@@ -595,7 +595,7 @@ static int init_active_indices_ex(bondp_context_t *bdp_ctx,
     for (uint32_t n = 0; n < port_count; ++n) {
         uint32_t active_index = 0;
         if (convert_bond_port_id_to_active_index(bdp_ctx, port_ids[n], &active_index) != 0) {
-            URMA_LOG_ERR("Invalid active port id, value=0x%lx.\n", port_ids[n].value);
+            URMA_LOG_ERR("Invalid active port id, value=0x%x.\n", port_ids[n].value);
             return -1;
         }
 
