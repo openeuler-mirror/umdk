@@ -187,6 +187,11 @@ static void read_all_env(bondp_env_t *env)
     } else {
         env->health_check_batch_node_num = (uint32_t)health_check_batch_node_num;
     }
+    if (env->rnr_retry_max == 0) {
+        URMA_LOG_WARN("Invalid BOND_RNR_RETRY_MAX value 0 (must be greater than 0), using default %lu\n",
+                      default_rnr_retry_max);
+        env->rnr_retry_max = default_rnr_retry_max;
+    }
     const uint64_t max_jitter_ratio = 100;
     if (rnr_retry_jitter_ratio > max_jitter_ratio) {
         URMA_LOG_WARN("Invalid BOND_RNR_RETRY_JITTER_RATIO value %lu (range 0~%lu), using default %u\n",
