@@ -2295,7 +2295,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
     } else {
         queue->bind_ctx = NULL;
     }
-    (void)umq_ub_remote_tseg_info_release(qcfg->dev_ctx->remote_imported_info, bind_ctx);
+    (void)umq_ub_remote_tseg_info_release(queue->dev_ctx->remote_imported_info, bind_ctx);
     UMQ_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind jetty\n", queue->umq_id,
         EID_ARGS(tjetty->id.eid), tjetty->id.id);
     if (qcfg->tp_mode == URMA_TM_RC) {
