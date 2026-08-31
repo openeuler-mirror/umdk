@@ -132,7 +132,15 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buffer->qbuf_ext;
     uint16_t mempool_id = buf_pro->remote_sge.mempool_id;
     urma_target_seg_t *tseg = NULL;
-    umq_ub_ctx_t *dev_ctx = umq_ub_queue_cfg_get(queue)->dev_ctx;
+    /* issue#38 (unbind race): umq_unbind NULLs queue->bind_ctx (under lock,
+     * before freeing it) concurrently with an in-flight post — the entry
+     * check in umq_ub_post_tx is check-then-act and cannot pin it. Snapshot
+     * and NULL-check here so a lost race returns an error (caller finalizes
+     * the transaction as failed) instead of dereferencing NULL. This is a
+     * guard, not the wall: the serialization that prevents the race lives in
+     * ubsocket (DoReadOffer posts under the state mutex CleanupSocketState
+     * drains with, before any unbind). */
+    ub_bind_ctx_t *bind_ctx = queue->bind_ctx;
     umq_ub_imm_t imm_data = {
         .io_imm.type = IMM_TYPE_USER_WITHOUT_IMM,
         .io_imm.umq_id = queue->remote_umq_id,
@@ -159,7 +167,12 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
                     queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
-            tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
+            if (bind_ctx == NULL) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), read on unbound umq (concurrent unbind)\n",
+                    queue->umq_id);
+                return -UMQ_ERR_ENODEV;
+            }
+            tseg = umq_ub_tseg_lookup(bind_ctx->tseg_table, mempool_id);
             if (tseg == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u has not been imported\n",
                     queue->umq_id, mempool_id);
@@ -195,7 +208,12 @@ int umq_ub_fill_wr(ub_queue_t *queue, umq_buf_t *buffer, urma_jfs_wr_t *urma_wr_
                     queue->umq_id, mempool_id);
                 return -UMQ_ERR_ETSEG_NON_IMPORTED;
             }
-            tseg = umq_ub_tseg_lookup(queue->bind_ctx->tseg_table, mempool_id);
+            if (bind_ctx == NULL) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), write on unbound umq (concurrent unbind)\n",
+                    queue->umq_id);
+                return -UMQ_ERR_ENODEV;
+            }
+            tseg = umq_ub_tseg_lookup(bind_ctx->tseg_table, mempool_id);
             if (tseg == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), mempool_id %u has not been imported\n",
                     queue->umq_id, mempool_id);
@@ -286,7 +304,11 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         *bad_qbuf = qbuf;
         return -UMQ_ERR_ENODEV;
     }
-    if (queue->bind_ctx == NULL) {
+    /* issue#38 (unbind race): snapshot once — this check is check-then-act
+     * against a concurrent umq_unbind (which NULLs queue->bind_ctx under
+     * lock, then frees it), so later uses must not re-read the field. */
+    ub_bind_ctx_t *bind_ctx_snap = queue->bind_ctx;
+    if (bind_ctx_snap == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), umq has not been binded\n", queue->umq_id);
         *bad_qbuf = qbuf;
         return -UMQ_ERR_ENODEV;
@@ -312,10 +334,9 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     }
     uint32_t max_sge_num = qcfg->max_tx_sge;
     urma_jfs_wr_t *urma_wr_ptr = g_umq_ub_urma_wr;
-    urma_sge_t src_sge[UMQ_BATCH_SIZE] = {};
-    urma_sge_t dst_sge[UMQ_BATCH_SIZE] = {};
-    urma_target_jetty_t *tjetty = queue->bind_ctx->tjetty[UB_QUEUE_JETTY_IO];
-    urma_target_seg_t **tseg_list = qcfg->dev_ctx->tseg_list;
+    urma_sge_t src_sge[UMQ_BATCH_SIZE] = {}, dst_sge[UMQ_BATCH_SIZE] = {};
+    urma_target_jetty_t *tjetty = bind_ctx_snap->tjetty[UB_QUEUE_JETTY_IO]; /* issue#38: snapshot, not re-read */
+    urma_target_seg_t **tseg_list = queue->dev_ctx->tseg_list;
     urma_sge_t *sges_ptr;
     umq_buf_t *buffer = qbuf;
     uint16_t wr_index = 0;
