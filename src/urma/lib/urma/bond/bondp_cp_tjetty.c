@@ -195,17 +195,45 @@ int bondp_get_rjetty(urma_context_t *ctx, urma_user_ctl_in_t *in,
     return 0;
 }
 
+/* Must mirror the slot-taking logic in bondp_import_pjetty_custom so that
+ * bondp_tjetty_ensure_paths pre-allocates an exact-sized p_tjettys[] array. */
 static uint32_t count_connected_pairs(const bondp_context_t *bdp_ctx,
                                       const urma_bond_id_info_out_t *info)
 {
-    uint32_t count = 0;
-    for (uint32_t m = 0; m < info->enabled_count; ++m) {
-        uint32_t target_idx = info->enabled_indices[m];
-        for (uint32_t n = 0; n < bdp_ctx->enabled_count; ++n) {
-            uint32_t local_idx = bdp_ctx->enabled_indices[n];
-            if (info->connected[local_idx][target_idx]) {
-                count++;
+    if (!bdp_ctx->port_cfg_enable) {
+        uint32_t count = 0;
+        for (uint32_t m = 0; m < info->enabled_count; ++m) {
+            uint32_t target_idx = info->enabled_indices[m];
+            for (uint32_t n = 0; n < bdp_ctx->enabled_count; ++n) {
+                uint32_t local_idx = bdp_ctx->enabled_indices[n];
+                if (info->connected[local_idx][target_idx]) {
+                    count++;
+                }
             }
+        }
+        return count;
+    }
+
+    uint32_t remote_cnt = info->enabled_count;
+    uint32_t local_cnt = bdp_ctx->port_cfg.enabled_count;
+    bool local_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
+    uint32_t count = 0;
+
+    for (uint32_t m = 0; m < remote_cnt; ++m) {
+        uint32_t target_idx = info->enabled_indices[m];
+        for (uint32_t n = 0; n < local_cnt; ++n) {
+            uint32_t local_idx = bdp_ctx->port_cfg.enabled_indices[n];
+
+            if (local_used[local_idx]) {
+                continue;
+            }
+            if (!info->connected[local_idx][target_idx]) {
+                continue;
+            }
+
+            count++;
+            local_used[local_idx] = true;
+            break;
         }
     }
     return count;
@@ -235,6 +263,8 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
                                       urma_bond_id_info_out_t *rvjetty_info)
 {
     uint32_t active_count = 0;
+    /* Custom mode: one slot per local port, mirroring the import greedy. */
+    bool local_used[URMA_UBAGG_DEV_MAX_NUM] = {0};
 
     /* loop rvjetty first to make target idx ordered */
     for (uint32_t m = 0; m < rvjetty_info->enabled_count; ++m) {
@@ -244,11 +274,15 @@ static int init_target_active_indices(bondp_context_t *bdp_ctx, bondp_target_jet
         for (uint32_t n = 0; n < local_cnt; ++n) {
             uint32_t local_indice = (bdp_ctx->port_cfg_enable) ?
                 bdp_ctx->port_cfg.enabled_indices[n] : bdp_ctx->enabled_indices[n];
+            if (bdp_ctx->port_cfg_enable && local_used[local_indice]) {
+                continue;
+            }
             if (rvjetty_info->connected[local_indice][target_indice]) {
                 bdp_tjetty->p_tjettys[active_count].local_indice = (uint8_t)local_indice;
                 bdp_tjetty->p_tjettys[active_count].remote_indice = (uint8_t)target_indice;
                 atomic_init(&bdp_tjetty->p_tjettys[active_count].valid, false);
                 active_count += 1;
+                local_used[local_indice] = true;
                 break;
             }
         }
@@ -451,13 +485,10 @@ static int bondp_import_pjetty_custom(
 
             bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
             if (p_tjetty == NULL) {
-                /* Non-active connected pair: add a new path */
-                p_tjetty = &bdp_tjetty->p_tjettys[bdp_tjetty->p_tjetty_count];
-                p_tjetty->local_indice = (uint8_t)local_idx;
-                p_tjetty->remote_indice = (uint8_t)target_idx;
-                p_tjetty->p_tjetty = NULL;
-                atomic_init(&p_tjetty->valid, false);
-                bdp_tjetty->p_tjetty_count++;
+                /* Matched pair must already exist; fail on drift. */
+                URMA_LOG_ERR("Custom import pair missing: local=%u, target=%u.\n",
+                             local_idx, target_idx);
+                return -1;
             }
 
             if (p_tjetty->p_tjetty != NULL) {
@@ -879,13 +910,10 @@ static int bondp_import_pjfr_custom(bondp_context_t *bdp_ctx, bondp_target_jetty
 
             bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
             if (p_tjetty == NULL) {
-                /* Non-active connected pair: add a new path */
-                p_tjetty = &bdp_tjetty->p_tjettys[bdp_tjetty->p_tjetty_count];
-                p_tjetty->local_indice = (uint8_t)local_idx;
-                p_tjetty->remote_indice = (uint8_t)target_idx;
-                p_tjetty->p_tjetty = NULL;
-                atomic_init(&p_tjetty->valid, false);
-                bdp_tjetty->p_tjetty_count++;
+                /* Matched pair must already exist; fail on drift. */
+                URMA_LOG_ERR("Custom import pair missing: local=%u, target=%u.\n",
+                             local_idx, target_idx);
+                return -1;
             }
 
             if (p_tjetty->p_tjetty != NULL) {
