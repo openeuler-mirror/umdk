@@ -34,6 +34,7 @@
 
 #include "qbuf_pool_tool.h"
 #include "umq_dfx_api.h" /* umq_stats_qbuf_pool_get + umq_qbuf_pool_stats_to_str */
+#include "umq_qbuf_pool_helper.h" /* umq_qbuf_pool_cfg_check + umq_qbuf_pool_plan_t */
 #include "umq_rx_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
 
@@ -159,15 +160,16 @@ uint32_t BlkSizeToSc(uint32_t blk_size, const umq_qbuf_sc_info_t *sc_info, uint3
  * RSS growth is NOT from the pool (which is bounded by these three counters).
  *
  * The pool claims OS memory at exactly 3 places (see umq_qbuf_pool.c):
- *   1) initial   — g_buf_addr (cfg.total_size, memalign'd by tool DoInit,
- *                  passed via cfg.buf_addr). Recorded as g_qbuf_pool.total_size.
+ *   1) initial   — umq_io_buf_addr() (cfg.total_size, allocated via
+ *                  umq_io_buf_malloc by DoInit following the standard API
+ *                  chain). Recorded as g_qbuf_pool.total_size.
  *   2) expansion — slot->buffer (memalign in slot_with_data_init /
  *                  slot_without_data_init). Sum tracked by CAS-protected
  *                  g_qbuf_pool.exp_total_mem_pool_size (see
  *                  try_inc_atomic_exp_mem_size / slot_uninit).
  *   3) escape    — buf_data (memalign in umq_qbuf_alloc_escape). Per-buf size =
  *                  sc_info[sc].blk_size + umq_buf_t_size. Count tracked by
- *                  g_escape_buf_cnt[sc] (per-size_class).
+ *                  g_escape_buf_cnt[sc] (per-size-class).
  *
  * NOT in pool's claim (tool's own bookkeeping, separate from this number):
  *   - g_actions vector buffer / std::string heap chunks (tool's history log)
@@ -176,7 +178,7 @@ uint32_t BlkSizeToSc(uint32_t blk_size, const umq_qbuf_sc_info_t *sc_info, uint3
  *
  * All 3 components derived from existing DFX fields — no production code change. */
 struct PoolMemBreakdown {
-    uint64_t initial;   /* cfg.total_size (g_buf_addr) */
+    uint64_t initial;   /* cfg.total_size (umq_io_buf_addr, allocated by umq_io_buf_malloc) */
     uint64_t expansion; /* exp_total_mem_pool_size (CAS-tracked) */
     uint64_t escape;    /* sum(escape_buf_cnt_by_sc[sc] * (blk_size[sc] + umq_buf_t_size)) */
     uint64_t total;     /* sum of the three */
@@ -524,7 +526,11 @@ void Cleanup()
         g_inited = false;
     }
     if (g_buf_addr != nullptr) {
-        free(g_buf_addr);
+        /* umq_io_buf_free frees the internal g_buffer_addr (allocated by
+         * umq_io_buf_malloc) and resets g_total_len — required before reinit
+         * so the next umq_io_buf_malloc allocates fresh instead of returning
+         * the stale pointer. */
+        umq_io_buf_free();
         g_buf_addr = nullptr;
         g_buf_size = 0;
     }
@@ -538,7 +544,6 @@ int DoInit(const std::vector<std::string> &args)
     uint32_t count = 2;
     umq_buf_mode_t mode = UMQ_BUF_SPLIT;
     bool scaleCapEnable = true; /* enable expansion/shrink */
-    uint64_t totalSz = 200ULL * 1024 * 1024;
     uint64_t tlsBudget = 0;
     /* expSlotSz: per-expansion slot target memory (cfg.expansion_size, default 32MB when 0).
      * poolMaxSz: total buf pool ceiling = initial pool + all expansion slots
@@ -598,8 +603,6 @@ int DoInit(const std::vector<std::string> &args)
             mode = ModeStrToEnum(v.c_str());
         } else if (k == "scaleCap") {
             scaleCapEnable = OnOffToBool(v.c_str(), true);
-        } else if (k == "totalSz") {
-            totalSz = ParseSize(v.c_str());
         } else if (k == "tlsBudget") {
             tlsBudget = ParseSize(v.c_str());
         } else if (k == "expSlotSz") {
@@ -722,66 +725,91 @@ int DoInit(const std::vector<std::string> &args)
         Cleanup();
     }
 
-    g_buf_addr = memalign(2UL * 1024 * 1024, totalSz);
-    if (g_buf_addr == nullptr) {
-        fprintf(stderr, "ERROR: memalign %lu failed\n", (unsigned long)totalSz);
+    /* Standard API init chain (mirrors umq_ub_impl.c:708-746):
+     *   1. umq_buf_size_pow_small_set — set base block size global
+     *   2. umq_qbuf_pool_cfg_check — validate config + compute normal_io_buf_size
+     *   3. umq_io_buf_malloc — allocate via standard API (sets internal
+     *      g_buffer_addr/g_total_len that umq_qbuf_pool_init reads for
+     *      expansion_mem_size_max derivation)
+     *   4. Build qbuf_pool_cfg_t from plan + umq_io_buf_addr/size
+     *   5. umq_qbuf_pool_init
+     * This replaces the old memalign + direct cfg approach, which bypassed
+     * cfg_check (allowing insufficient total_size) and failed to set
+     * g_total_len (corrupting expansion_mem_size_max = max - 0). */
+    (void)umq_buf_size_pow_small_set(BlkSizeToEnum(blockSizes[0]));
+
+    umq_init_cfg_t init_cfg;
+    memset(&init_cfg, 0, sizeof(init_cfg));
+    init_cfg.buf_mode = mode;
+    init_cfg.buf_pool_cfg.small_block_size = BlkSizeToEnum(blockSizes[0]);
+    init_cfg.buf_pool_cfg.size_class_count = count;
+    for (uint32_t i = 0; i < count; i++) {
+        init_cfg.buf_pool_cfg.explicit_block_sizes[i] = blockSizes[i];
+    }
+    /* per_sc_block_counts: 0 = use default (cfg_check fills
+     * QBUF_POOL_BLOCK_COUNT_DEFAULT=1536). Only set when blockCounts= given. */
+    if (blockCountsSet) {
+        for (uint32_t i = 0; i < count; i++) {
+            init_cfg.buf_pool_cfg.per_sc_block_counts[i] = blockCounts[i];
+        }
+    }
+    /* per_sc_tls_qbuf_pool_depth: 0 = use default (cfg_check fills
+     * QBUF_POOL_TLS_DEPTH_DEFAULT=1024). */
+    if (tlsDepthsSet) {
+        for (uint32_t i = 0; i < count; i++) {
+            init_cfg.buf_pool_cfg.per_sc_tls_qbuf_pool_depth[i] = tlsDepths[i];
+        }
+    }
+    init_cfg.buf_pool_cfg.tls_qbuf_pool_depth = tlsBudget;
+    init_cfg.buf_pool_cfg.tls_expand_qbuf_pool_depth = tlsExpandBudget;
+    init_cfg.buf_pool_cfg.expansion_size = expSlotSz;
+    init_cfg.buf_pool_cfg.expansion_threshold = expThreshold;
+    init_cfg.buf_pool_cfg.umq_buf_pool_max_size = poolMaxSz;
+    init_cfg.buf_pool_cfg.disable_scale_cap = !scaleCapEnable;
+    init_cfg.buf_pool_cfg.disable_malloc_escape = !escapeEnable;
+    /* enable_tiny_pool=false + rx_block_count=0: tool inits tiny/RX pools
+     * separately (umq_tiny_io_buf_malloc / umq_rx_io_buf_malloc), so they
+     * must not be counted in plan.normal_io_buf_size. */
+
+    umq_qbuf_pool_plan_t plan;
+    int cfg_ret = umq_qbuf_pool_cfg_check(&init_cfg, &plan);
+    if (cfg_ret != 0) {
+        fprintf(stderr, "ERROR: umq_qbuf_pool_cfg_check failed ret=%d\n", cfg_ret);
         return -1;
     }
-    memset(g_buf_addr, 0, totalSz);
-    g_buf_size = totalSz;
 
-    /* Derive base enum from blockSizes[0]. Production umq_qbuf_pool.c:1529
-     * requires explicit_block_sizes[0] == umq_buf_size_small() (which is
-     * set by umq_buf_size_pow_small_set). The old `base=` init parameter
-     * was removed — base is now derived automatically from blockSizes[0],
-     * removing the redundant param that had to match blockSizes[0] anyway. */
-    (void)umq_buf_size_pow_small_set(BlkSizeToEnum(blockSizes[0]));
+    if (umq_io_buf_malloc(mode, plan.normal_io_buf_size) == NULL) {
+        fprintf(stderr, "ERROR: umq_io_buf_malloc %lu failed\n", (unsigned long)plan.normal_io_buf_size);
+        return -1;
+    }
+    g_buf_addr = umq_io_buf_addr();
+    g_buf_size = umq_io_buf_size();
 
     qbuf_pool_cfg_t cfg;
     memset(&cfg, 0, sizeof(cfg));
-    cfg.buf_addr = g_buf_addr;
-    cfg.total_size = totalSz;
+    cfg.buf_addr = umq_io_buf_addr();
+    cfg.total_size = umq_io_buf_size();
     cfg.data_size = umq_buf_size_small();
     cfg.mode = mode;
-    cfg.size_class_count = count;
-    /* explicit_block_sizes[]: required, set from blockSizes= param. Matches
-     * production umq_backend.cpp:67-69 memcpy of UmqSetting::UMQ_EXPLICIT_BLOCK_SIZES. */
+    cfg.umq_buf_pool_max_size = plan.normal_pool_max_size;
+    cfg.disable_scale_cap = !scaleCapEnable;
+    g_scale_cap_enabled = scaleCapEnable;
+    g_block_size_count = count;
     for (uint32_t i = 0; i < count; i++) {
-        cfg.explicit_block_sizes[i] = blockSizes[i];
+        g_block_sizes[i] = blockSizes[i];
     }
-    cfg.disable_scale_cap = !scaleCapEnable; g_scale_cap_enabled = scaleCapEnable; g_block_size_count = count; for (uint32_t i = 0; i < count; i++) g_block_sizes[i] = blockSizes[i];
-    /* tlsBudget/tlsExpandBudget: count-based depth caps (tls_qbuf_pool_depth/
-     * tls_expand_qbuf_pool_depth). When 0, production uses defaults. */
     cfg.tls_qbuf_pool_depth = tlsBudget;
-    cfg.expansion_size = expSlotSz;
-    cfg.umq_buf_pool_max_size = poolMaxSz;
-    /* per_sc_block_counts[]: when blockCounts= is set, use the explicit values.
-     * Otherwise fill defaults (QBUF_POOL_BLOCK_COUNT_DEFAULT) to match production
-     * umq_qbuf_pool_cfg_check() behavior — without this, init_split_mode_layout
-     * skips SCs with count==0 (no data region allocated, TotalSize shows 0). */
-    if (blockCountsSet) {
-        for (uint32_t i = 0; i < count; i++) {
-            cfg.per_sc_block_counts[i] = blockCounts[i];
-        }
-    } else {
-        for (uint32_t i = 0; i < count; i++) {
-            cfg.per_sc_block_counts[i] = QBUF_POOL_BLOCK_COUNT_DEFAULT;
-        }
-    }
-    /* per_sc_tls_qbuf_pool_depth[]: when tlsDepths= is set, use the explicit
-     * values. Otherwise fill defaults (QBUF_POOL_TLS_DEPTH_DEFAULT). */
-    if (tlsDepthsSet) {
-        for (uint32_t i = 0; i < count; i++) {
-            cfg.per_sc_tls_qbuf_pool_depth[i] = tlsDepths[i];
-        }
-    } else {
-        for (uint32_t i = 0; i < count; i++) {
-            cfg.per_sc_tls_qbuf_pool_depth[i] = QBUF_POOL_TLS_DEPTH_DEFAULT;
-        }
-    }
-    cfg.disable_malloc_escape = !escapeEnable;
-    cfg.expansion_threshold = expThreshold;
     cfg.tls_expand_qbuf_pool_depth = tlsExpandBudget;
+    cfg.disable_malloc_escape = !escapeEnable;
+    cfg.size_class_count = plan.size_class_count;
+    cfg.expansion_size = expSlotSz;
+    cfg.expansion_threshold = expThreshold;
+    memcpy(cfg.explicit_block_sizes, plan.explicit_block_sizes,
+           sizeof(uint32_t) * plan.size_class_count);
+    memcpy(cfg.per_sc_block_counts, plan.per_sc_block_counts,
+           sizeof(uint64_t) * plan.size_class_count);
+    memcpy(cfg.per_sc_tls_qbuf_pool_depth, plan.per_sc_tls_qbuf_pool_depth,
+           sizeof(uint64_t) * plan.size_class_count);
     if (scaleCapEnable) {
         cfg.seg_ops.register_seg_callback = stub_register_seg;
     }
@@ -789,7 +817,7 @@ int DoInit(const std::vector<std::string> &args)
     int ret = umq_qbuf_pool_init(&cfg);
     if (ret != 0) {
         fprintf(stderr, "ERROR: umq_qbuf_pool_init failed ret=%d\n", ret);
-        free(g_buf_addr);
+        umq_io_buf_free();
         g_buf_addr = nullptr;
         g_buf_size = 0;
         return -1;
@@ -843,7 +871,7 @@ int DoInit(const std::vector<std::string> &args)
             StopWorkers();
             umq_qbuf_pool_uninit();
             g_inited = false;
-            free(g_buf_addr);
+            umq_io_buf_free();
             g_buf_addr = nullptr;
             g_buf_size = 0;
             return -1;
@@ -881,18 +909,18 @@ int DoInit(const std::vector<std::string> &args)
         snprintf(tlsDepthsStr, sizeof(tlsDepthsStr), "default");
     }
 
-    printf("pool inited ok (threads=%u count=%u mode=%s scaleCap=%s totalSz=%lu poolMaxSz=%lu "
+    printf("pool inited ok (threads=%u count=%u mode=%s scaleCap=%s allocSz=%lu poolMaxSz=%lu "
            "expSlotSz=%lu blockSizes=%s blockCounts=%s tlsDepths=%s escape=%s expThreshold=%u tlsExpandBudget=%lu)\n",
            threads, count, (mode == UMQ_BUF_SPLIT ? "split" : "combine"),
-           (scaleCapEnable ? "on" : "off"), (unsigned long)totalSz, (unsigned long)poolMaxSz,
+           (scaleCapEnable ? "on" : "off"), (unsigned long)umq_io_buf_size(), (unsigned long)poolMaxSz,
            (unsigned long)expSlotSz, blockSizesStr, blockCountsStr, tlsDepthsStr,
            (escapeEnable ? "on" : "off"), expThreshold, (unsigned long)tlsExpandBudget);
     char act[512];
     snprintf(act, sizeof(act),
-             "init threads=%u count=%u mode=%s scaleCap=%s totalSz=%lu poolMaxSz=%lu "
+             "init threads=%u count=%u mode=%s scaleCap=%s allocSz=%lu poolMaxSz=%lu "
              "expSlotSz=%lu blockSizes=%s blockCounts=%s tlsDepths=%s escape=%s expThreshold=%u tlsExpandBudget=%lu",
              threads, count, (mode == UMQ_BUF_SPLIT ? "split" : "combine"),
-             (scaleCapEnable ? "on" : "off"), (unsigned long)totalSz, (unsigned long)poolMaxSz,
+             (scaleCapEnable ? "on" : "off"), (unsigned long)umq_io_buf_size(), (unsigned long)poolMaxSz,
              (unsigned long)expSlotSz, blockSizesStr, blockCountsStr, tlsDepthsStr,
              (escapeEnable ? "on" : "off"), expThreshold, (unsigned long)tlsExpandBudget);
     g_actions.push_back(act);
@@ -1334,7 +1362,7 @@ int DoInfo(const std::vector<std::string> &args)
     printf("\n== [ Pool OS Mem Claimed ] ==\n");
     printf("  total:     %lu bytes (%.2f MB)\n", (unsigned long)mem.total,
            (double)mem.total / (1024.0 * 1024.0));
-    printf("  initial:   %lu bytes (cfg.total_size / g_buf_addr)\n", (unsigned long)mem.initial);
+    printf("  initial:   %lu bytes (cfg.total_size / umq_io_buf_addr)\n", (unsigned long)mem.initial);
     printf("  expansion: %lu bytes (sum of slot.total_buf_size, CAS-tracked)\n",
            (unsigned long)mem.expansion);
     if (pinfo != nullptr) {

@@ -6,7 +6,7 @@
 #   - No lost-alloc (every worker got its requested num bufs)
 #   - Conservation: global + sum(tls) + alloced == init total
 #   - Per-thread TLS rows in status all show independent fetch bytes
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Stage 1: concurrent alloc — 8 workers x 50 bufs sc0 = 400 bufs total
 parallel

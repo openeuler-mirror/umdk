@@ -32,7 +32,7 @@ done
 
 | 命令 | 形式 | 执行者 | 说明 |
 |---|---|---|---|
-| `init` | `init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M tlsBudget=0 poolMaxSz=0 expSlotSz=0 weights=2,1 escape=on expThreshold=0 tlsExpandBudget=0 threads=1` | 主线程 | key=value 顺序无关,缺省用默认;`threads=N` 启动 N 工作线程。**下限:threads≥1**(无上限,但 threads>8 时 spinlock 自旋烧 CPU,见 case_13)。`blockSizes=` 必填(无 `mult` 几何级数回退),`weights=` 缺省时生产代码兜底 `{1,1}` 等权 |
+| `init` | `init count=2 blockSizes=4K,64K mode=split scaleCap=on tlsBudget=0 poolMaxSz=0 expSlotSz=0 weights=2,1 escape=on expThreshold=0 tlsExpandBudget=0 threads=1` | 主线程 | key=value 顺序无关,缺省用默认;`threads=N` 启动 N 工作线程。**下限:threads≥1**(无上限,但 threads>8 时 spinlock 自旋烧 CPU,见 case_13)。`blockSizes=` 必填(无 `mult` 几何级数回退),`weights=` 缺省时生产代码兜底 `{1,1}` 等权 |
 | `thread_K alloc` | `thread_K alloc <size> [num=1] [headroom=0]` | worker K | 分配,size 支持 `4K`/`64K`/`1M` 后缀;输出每个 buf 的 sc/ptr/buf_size。**上限:num≤1000** |
 | `thread_K free` | `thread_K free <orig_idx>` 或 `thread_K free all` | worker K | `orig_idx` 是 buf 的**稳定索引**(alloc 时分配,单调递增,erase 不前移);`free all` 清该线程全部并重置 orig_idx 计数器 |
 | `info` | `info` | 主线程 | 全量状态(开发调试用,~50 行) |
@@ -43,7 +43,6 @@ done
 
 | 参数 | cfg 字段 | 默认值 | 语义 |
 |---|---|---|---|
-| `totalSz` | `total_size` | 200M | 初始预分配池大小 |
 | `poolMaxSz` | `umq_buf_pool_max_size` | 2GB(=0 时) | **总内存 ceiling** = 初始池 + 全部 expansion 槽。硬上限 6GB(`scaleCap=on` 时 `poolMaxSz>6G` 会被 umq_qbuf_pool_init 拒绝) |
 | `expSlotSz` | `expansion_size` | 32MB(=0 时) | **per-slot 目标内存**(每次 expansion 想"加"多少)。经量化(÷blk_size→÷sub_slot_blk_count→×2MB)后变成实际 `slot.total_buf_size`,与 `expSlotSz` 不严格相等 |
 | `tlsBudget` | `tls_pool_mem_budget` | 96MB(=0 时) | 全局 TLS bytes cap |
@@ -325,7 +324,7 @@ done
 ```
 ====================[ status ]====================
 actions (8):
-  [1] init threads=3 count=2 mode=split scaleCap=on totalSz=209715200 poolMaxSz=0 expSlotSz=0 blockSizes=4096,65536 weights=default(1,1) escape=on expThreshold=0 tlsExpandBudget=0
+  [1] init threads=3 count=2 mode=split scaleCap=on allocSz=209715200 poolMaxSz=0 expSlotSz=0 blockSizes=4096,65536 weights=default(1,1) escape=on expThreshold=0 tlsExpandBudget=0
   [2] [t0] alloc 4096 -> sc=0, 1 buf
   [3] [t0] alloc 32768 -> sc=1, 1 buf
   [4] [t1] alloc 65536 -> sc=1, 1 buf
@@ -413,7 +412,7 @@ alloc 的 num 是**位置参数**（args[2] 直接 strtoul），不是 key=value
 2. **per-worker 累计**: `alloced.size() ≤ WORKER_ALLOCED_CAP=65536`（防止 `alloced` vector 无界增长 + O(n) 扫描退化）。超限时 `DoAlloc` 返回错误，提示 "Free some bufs first or use `free all` to reset"
 3. **池子耗尽**: `umq_normal_qbuf_alloc` 返回 ENOMEM（自然上限，通常最先触发）
 
-per-worker 上限是安全网——池子通常只有 ~5760 bufs（200M totalSz），8 worker 平均每个 ~720 bufs，远低于 65536。只有当用户忘记 `free all` 而持续 alloc 时才会撞上限。
+per-worker 上限是安全网——池子通常只有 ~3072 bufs（~106MB allocSz），8 worker 平均每个 ~384 bufs，远低于 65536。只有当用户忘记 `free all` 而持续 alloc 时才会撞上限。
 
 ### Q3: 多线程时 actions 序号和 held allocs 序号怎么对应？
 held allocs 的 `[tK][N]` 中 `N` 是 `actions_idx+1`，对应 actions 段的序号（含 alloc+free 对，alloc 操作的序号）。alloc 又 free 的 `remaining=0` 时从 held allocs 隐藏，但 actions 段保留全历史。

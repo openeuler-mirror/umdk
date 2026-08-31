@@ -28,21 +28,29 @@ get_filename_component(UMDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOL
 #   info_get + multi-level size_class state). Compiled into the tool target
 #   (replaces the previous #include "umq_qbuf_pool.c" approach in core.cpp so
 #   the tool no longer reaches into production static state).
+# - umq_qbuf_pool_cfg.c: umq_qbuf_pool_cfg_check — config validation +
+#   normal_io_buf_size computation. Required so the tool can use the standard
+#   API init chain (umq_qbuf_pool_cfg_check -> umq_io_buf_malloc -> umq_qbuf_pool_init)
+#   instead of bypassing cfg_check with a self-allocated memalign buffer.
+# - util_lock.c: util_mutex_lock_create/lock/unlock/destroy — required by
+#   escape_registry_init/uninit/insert/remove/lookup in umq_qbuf_pool.c
+#   (escape buf address registry, added in commit b2c0c6de/ddbefc93).
 add_executable(qbuf_pool_tool
     stubs.cpp
     utils.cpp
     core.cpp
     main.cpp
-    ${UMDK_ROOT}/src/urpc/umq/umq_dfx_api_str.c
-    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool.c
-    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool_base.c
-    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_rx_qbuf_pool.c
-    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_tiny_qbuf_pool.c
-    ${UMDK_ROOT}/src/urpc/util/urpc_thread_closure.cpp
-    ${UMDK_ROOT}/src/urpc/util/urpc_id_generator.c
-    ${UMDK_ROOT}/src/urpc/util/urpc_bitmap.c
-    ${UMDK_ROOT}/src/urpc/util/urpc_dbuf_stat.c
-    ${UMDK_ROOT}/src/urpc/util/util_lock.c)
+    ${HCOM_ROOT}/src/hcom/umq/src/umq_dfx_api_str.c
+    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool.c
+    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool_base.c
+    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool_cfg.c
+    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_rx_qbuf_pool.c
+    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_tiny_qbuf_pool.c
+    ${HCOM_ROOT}/src/hcom/umq/util/urpc_thread_closure.cpp
+    ${HCOM_ROOT}/src/hcom/umq/util/urpc_id_generator.c
+    ${HCOM_ROOT}/src/hcom/umq/util/urpc_bitmap.c
+    ${HCOM_ROOT}/src/hcom/umq/util/urpc_dbuf_stat.c
+    ${HCOM_ROOT}/src/hcom/umq/util/util_lock.c)
 target_include_directories(qbuf_pool_tool PRIVATE
     ${UMDK_ROOT}/src/urpc/umq/qbuf
     ${UMDK_ROOT}/src/urpc/umq

@@ -24,7 +24,7 @@
 #   - g_actions size stays at 1 (just `init`) — verify with `status`
 #   - stress summary shows allocs=frees, errors=0
 #   - snapshot lines printed every 100 iters
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Bootstrap TLS cache (serial) — each worker needs at least one prior
 # alloc so its TLS has fetch bytes; subsequent stress iterations exercise
