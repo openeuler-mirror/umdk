@@ -7,7 +7,7 @@
 #
 # INFINITE — Ctrl-C to stop. Let it run for at least 1 minute to be sure
 # memory is stable, then check `status` after Ctrl-C.
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=2
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=2
 
 # 2 workers, each does alloc 1 + free idx 0 per iter.
 # Worker::alloc_ops must be cleared at iter boundary by DoStressRepeatBlock.

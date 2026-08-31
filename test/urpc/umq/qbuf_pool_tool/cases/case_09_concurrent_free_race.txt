@@ -5,7 +5,7 @@
 #   - No double-return (global rises by exactly the freed count)
 #   - No lost-return (no buf leaks in TLS)
 #   - Conservation holds during concurrent free
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Stage 1 (serial): each worker allocs 200 sc0 bufs — fills TLS via batch
 # prefetch (5 batches x 64 = 320 per worker). Note: serial stage, NOT

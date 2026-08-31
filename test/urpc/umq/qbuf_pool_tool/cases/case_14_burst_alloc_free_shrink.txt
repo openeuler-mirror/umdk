@@ -5,7 +5,7 @@
 #
 # Note: qbuf_pool_tool enforces alloc num<=1000 per call, so the 10000-buf burst
 # is split into 10 batches of 1000 each. Total = 10000 bufs (655360000 bytes).
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=1
 
 # Burst alloc 10000 sc1 bufs (65536 bytes each = 655360000 total) in 10 batches
 thread_0 alloc 65536 1000

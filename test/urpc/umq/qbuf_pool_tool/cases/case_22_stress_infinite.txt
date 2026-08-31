@@ -12,9 +12,9 @@
 #       sleep 60
 #   done
 #
-# Expected: RSS stays at ~204MB (= 200MB pool + 4MB tool overhead) regardless
+# Expected: RSS stays at ~110MB (= 106MB pool + 4MB tool overhead) regardless
 # of how long the loop runs. If RSS grows, see USAGE.md Q9 for debugging.
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Bootstrap
 thread_0 alloc 4096 50
