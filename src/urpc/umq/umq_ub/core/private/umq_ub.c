@@ -25,8 +25,6 @@
 static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node);
 #define DEFAULT_MIN_RNR_TIMER 19 // RNR single retransmission time: 2us*2^19 = 1.049s
 #define UMQ_MAX_QBUF_NUM 1
-#define UMQ_ENABLE_INLINE_LIMIT_SIZE 32
-#define UMQ_INLINE_ENABLE 1
 #define UMQ_LEN_ALIGNMENT_4 4
 #define UMQ_LEN_ALIGNMENT_8 8
 /* Buckets for the per-peer imported-tseg hmap. Each peer typically imports
@@ -3250,9 +3248,6 @@ int umq_ub_plus_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *
         buf_pro->flag.value = 0;
         buf_pro->flag.bs.complete_enable = 1;
         buf_pro->flag.bs.solicited_enable = 1;
-        if (buffer->data_size < UMQ_ENABLE_INLINE_LIMIT_SIZE) {
-            buf_pro->flag.bs.inline_flag = UMQ_INLINE_ENABLE;
-        }
         buf_pro->opcode = UMQ_OPC_SEND_IMM;
         uint32_t rest_size = buffer->total_data_size;
         if (rest_size > remote_rx_buf_size) {
@@ -3829,9 +3824,6 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
         buf_pro->flag.value = 0;
         buf_pro->flag.bs.complete_enable = 1;
         buf_pro->flag.bs.solicited_enable = 1;
-        if (buffer->data_size < UMQ_ENABLE_INLINE_LIMIT_SIZE) {
-            buf_pro->flag.bs.inline_flag = UMQ_INLINE_ENABLE;
-        }
         buf_pro->opcode = UMQ_OPC_SEND;
 
         uint32_t rest_size = buffer->total_data_size;
