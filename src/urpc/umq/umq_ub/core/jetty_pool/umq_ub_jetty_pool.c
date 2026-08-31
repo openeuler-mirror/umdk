@@ -313,6 +313,7 @@ void umq_ub_jetty_pool_uninit(void)
     }
 
     (void)close(g_jetty_pool.event_fd);
+    g_jetty_pool.event_fd = -1;
     (void)pthread_spin_destroy(&g_jetty_pool.lock);
     if (g_jetty_pool.avail_cb_lock != NULL) {
         (void)util_mutex_lock_destroy(g_jetty_pool.avail_cb_lock);
