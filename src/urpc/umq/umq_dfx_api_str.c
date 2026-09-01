@@ -119,7 +119,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                  * COMBINE -> data=blk_size-hdr, buf=blk_size. The pool-level
                  * info->data_size/buf_size only holds SC0's values and must not be
                  * reused for SC>=1 (would show Small's 4096/4224 on Medium's row). */
-                uint32_t sc_data_size, sc_buf_size;
+                uint32_t sc_data_size;
+                uint32_t sc_buf_size;
                 if (info->mode == UMQ_BUF_SPLIT) {
                     sc_data_size = sci->blk_size;
                     sc_buf_size = sci->blk_size + info->umq_buf_t_size;
@@ -145,7 +146,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
              * the other type rows that add TotalBlk * umq_buf_t_size to the data bytes. */
             const umq_qbuf_pool_config_t *cfg = &info->config;
             uint64_t rx_total_size = cfg->rx_pool_total_size;
-            uint32_t rx_data_size, rx_buf_size;
+            uint32_t rx_data_size;
+            uint32_t rx_buf_size;
             if (info->mode == UMQ_BUF_SPLIT) {
                 rx_data_size = cfg->rx_pool_block_size;
                 rx_buf_size = cfg->rx_pool_block_size + info->umq_buf_t_size;
@@ -271,13 +273,13 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         }
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
             char name[UMQ_DFX_LABEL_BUF_SIZE];
-            snprintf(name, sizeof(name), "block_counts[sc%u]", sc);
+            (void)snprintf(name, sizeof(name), "block_counts[sc%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", name,
                                  (unsigned long)cfg->per_sc_block_counts[sc]);
         }
         for (uint32_t sc = 0; sc < cfg->size_class_count; sc++) {
             char name[UMQ_DFX_LABEL_BUF_SIZE];
-            snprintf(name, sizeof(name), "tls_depth[sc%u]", sc);
+            (void)snprintf(name, sizeof(name), "tls_depth[sc%u]", sc);
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-30s %-12lu\n", name,
                                  (unsigned long)cfg->per_sc_tls_qbuf_pool_depth[sc]);
         }
