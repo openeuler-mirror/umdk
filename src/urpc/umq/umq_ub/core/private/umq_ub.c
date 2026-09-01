@@ -2667,7 +2667,7 @@ int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t re
 
         /* Forward the peer's seg blob verbatim to urma_import_seg. */
         urma_target_seg_t *imported_tseg = import_mem(umq_ub_queue_cfg_get(queue)->dev_ctx->urma_ctx, &entry->seg,
-                                                     entry->seg_size, entry->mempool_token_value);
+                                                      entry->seg_size, entry->mempool_token_value);
         if (imported_tseg == NULL) {
             free(new_node);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, import memory failed\n", EID_ARGS(*eid), id);

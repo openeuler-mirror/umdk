@@ -663,8 +663,6 @@ static inline uint32_t umq_qbuf_pool_shrink_threshold(void)
     return QBUF_POOL_SHRINK_THRESHOLD;
 }
 
-// Adaptive batch count: per size_class fetch granularity.
-//
 // Adaptive batch count based on per-SC total block count.
 // batch = per_sc_block_counts[sc] / QBUF_POOL_BATCH_CNT_DIVISOR(24),
 // clamped to [QBUF_POOL_BATCH_CNT_MIN(4), QBUF_POOL_BATCH_CNT(64)].
@@ -1636,7 +1634,7 @@ static void umq_qbuf_exp_pool_minimal_init(qbuf_expansion_pool_t *exp_pool)
     urpc_list_init(&exp_pool->slot_list);
     urpc_list_init(&exp_pool->shrink_task_list.head);
     (void)pthread_spin_init(&exp_pool->expansion_pool_lock, PTHREAD_PROCESS_PRIVATE);
-    (void)pthread_spin_init(&exp_pool->shrink_task_list.lock, PTHREAD_PROCESS_PRIVATE);
+    (void)pthread_mutex_init(&exp_pool->shrink_task_list.mutex, NULL);
     exp_pool->inited = false;
 }
 
@@ -1645,7 +1643,7 @@ static void umq_qbuf_exp_pool_minimal_init(qbuf_expansion_pool_t *exp_pool)
 static void umq_qbuf_exp_pool_minimal_uninit(qbuf_expansion_pool_t *exp_pool)
 {
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
-    (void)pthread_spin_destroy(&exp_pool->shrink_task_list.lock);
+    (void)pthread_mutex_destroy(&exp_pool->shrink_task_list.mutex);
 }
 
 static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
