@@ -18,7 +18,7 @@
   yum install -y glib2-devel
   yum install -y iperf3
   pip install pytest==8.0.2
-  pip install pytest-timeout
+  pip install pytest-timeout=2.4.0
   pip install fabric==2.7.1
   pip install paramiko==3.1.0
   pip install func_timeout
@@ -27,14 +27,17 @@
 
 2. Environment YAML File Preparation
 - YAML format requirements are as follows:
-  - host1 and host2 represent 2 test environments
-  - user and passed are the username and password for logging into the environment
-  - manage_nic represents the management network interface card (NIC)
-  - name and ip represent the NIC name and IP address of the management NIC
-  - test_nic1 represents the test NIC
-  - name, ip, and eid represent the device name, IP address, and EID information of the test NIC respectively
+  - `host1` and `host2` represent 2 test environments
+  - `user` and `passwd` are the username and password for logging into the environment
+  - `manage_nic` represents the management network interface card (NIC).
+    `name` and `ip` represent the NIC name and IP address of the management NIC.
+  - `test_nic1` represents the test UB NIC
+    fill in the `name` and `eid` with the device name and EID queried by the `urma_admin show` command. It is recommended to use the `bonding_dev_0` device.
+    ip is currently unused; you can fill in the IP of `manage_nic`.
+    `ipv6` you can fill it with the address of the "ipourma0" device, it will be used by IPOURMA test cases.
+    The `dev` field is queried using `urma_admin show` to obtain ubed_dev, same to `name` field.
 
-- YAML file path: /etc/ubus_ci/test_env.yaml, needs to be stored on both hosts
+- YAML file path: /etc/ubus_ci/test_env.yaml, needs to be stored on `host1` environment.
 
 ```yaml
   host_info:
@@ -63,9 +66,6 @@
               ipv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
               eid: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
 ```
-**Notes:** 
-- For `test_nic1`, fill in the `name` and `eid` with the device name and EID queried by the `urma_admin show` command. It is recommended to use the `bonding_dev_0` device.
-- The `ip` for `test_nic1` is currently unused; you can fill in the IP of `manage_nic`.
 
 #### 3. Running Test Cases
 1. The UMDK integration testing framework depends on the pytest framework; use pytest to run test cases.
