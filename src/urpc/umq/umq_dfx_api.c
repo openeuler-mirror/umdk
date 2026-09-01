@@ -221,6 +221,12 @@ int umq_info_to_str(const umq_info_t *umq_info, char *buf, int max_buf_len)
                              umq_info->ub.remote_io_jetty_id);
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Remote FC Jetty ID",
                              umq_info->ub.remote_fc_jetty_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Remote UMQ ID", umq_info->ub.remote_umq_id);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+            "%-40s " EID_FMT "\n", "Remote EID", EID_ARGS(umq_info->ub.remote_eid));
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-40s %-40u\n", "Remote PID", umq_info->ub.remote_pid);
+        UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+            "%-40s %-40s\n", "Remote Namespace", umq_info->ub.remote_namespace);
     }
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS);
