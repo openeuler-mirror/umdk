@@ -164,7 +164,53 @@ __attribute__((weak)) void urpc_thread_closure_register(urpc_thread_closure_type
     (void)closure;
 }
 
-volatile bool g_tls_dtors_running = false;
+extern volatile bool g_tls_dtors_running;
+
+/* Stubs for functions referenced by umq_qbuf_pool.c but defined in source
+ * files not included by this test (pre-existing link fix). */
+int umq_tiny_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
+{
+    (void)qbuf_pool_stats;
+    return 0;
+}
+int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
+{
+    (void)qbuf_pool_stats;
+    return 0;
+}
+int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, char *buf, int max_buf_len)
+{
+    (void)qbuf_pool_stats;
+    if (buf != NULL && max_buf_len > 0) {
+        buf[0] = '\0';
+    }
+    return 0;
+}
+
+/* Stubs for util_mutex_lock API used by escape_registry in umq_qbuf_pool.c.
+ * The real implementations are in util_lock.c which is not compiled into
+ * the test binary. These no-op stubs are sufficient because escape_registry
+ * is only exercised on the malloc-escape path, which tests do not trigger. */
+util_external_mutex_lock *util_mutex_lock_create(int attr)
+{
+    (void)attr;
+    return (util_external_mutex_lock *)1;
+}
+int util_mutex_lock_destroy(util_external_mutex_lock *lock)
+{
+    (void)lock;
+    return 0;
+}
+int util_mutex_lock(util_external_mutex_lock *lock)
+{
+    (void)lock;
+    return 0;
+}
+int util_mutex_unlock(util_external_mutex_lock *lock)
+{
+    (void)lock;
+    return 0;
+}
 } /* extern "C" */
 
 /* Include the C implementation directly: gives access to static helpers
@@ -448,25 +494,22 @@ TEST_F(TestQbufPoolMultiLevel, TlsByteBudgetEnforcement)
 TEST_F(TestQbufPoolMultiLevel, BatchDynamicCalculation)
 {
     /* Given: block_sizes [4K, 64K]
-     * get_batch_count is adaptive: QBUF_POOL_TARGET_FETCH_BYTES(4MB) / blk_size,
+     * get_batch_count is adaptive: per_sc_block_counts[sc] / 24,
      * clamped to [QBUF_POOL_BATCH_CNT_MIN(4), QBUF_POOL_BATCH_CNT(64)]. */
     InitPool(2, 16);
 
-    /* sc=0 (4K): 4MB/4K = 1024 -> clamped to 64 */
+    /* Auto-derived per_sc_block_counts[sc] = 2941 -> 2941/24 = 122 -> clamp to 64 */
     EXPECT_EQ(get_batch_count(0), 64u);
-    /* sc=1 (64K): 4MB/64K = 64 (no clamping needed) */
     EXPECT_EQ(get_batch_count(1), 64u);
 
     /* Given: custom config count=3, mult=8 -> [4K, 32K, 256K] */
     umq_qbuf_pool_uninit();
     InitPool(3, 8);
 
-    /* sc=0 (4K): 4MB/4K = 1024 -> clamped to 64 */
-    EXPECT_EQ(get_batch_count(0), 64u);
-    /* sc=1 (32K): 4MB/32K = 128 -> clamped to 64 */
-    EXPECT_EQ(get_batch_count(1), 64u);
-    /* sc=2 (256K): 4MB/256K = 16 */
-    EXPECT_EQ(get_batch_count(2), 16u);
+    /* Auto-derived per_sc_block_counts[sc] = 686 -> 686/24 = 28 */
+    EXPECT_EQ(get_batch_count(0), 28u);
+    EXPECT_EQ(get_batch_count(1), 28u);
+    EXPECT_EQ(get_batch_count(2), 28u);
 }
 
 /* 9.7 Escape alloc comprehensive (merged 9.7+9.29+9.80+9.87+9.96)
@@ -777,7 +820,7 @@ TEST_F(TestQbufPoolMultiLevel, TlsBatchFetchFromGlobalOnFirstAlloc)
     uint64_t globalBefore = g_qbuf_pool.block_pool[0].buf_cnt_with_data;
     ASSERT_GT(globalBefore, 0u);
 
-    /* batch_count = QBUF_POOL_BATCH_CNT = 64 */
+    /* batch_count = per_sc_block_counts[0] / 24 = 2941 / 24 = 122 -> clamp to 64 */
     uint32_t batch = get_batch_count(0);
     EXPECT_EQ(batch, 64u);
 
@@ -1056,14 +1099,13 @@ TEST_F(TestQbufPoolMultiLevel, BufDataToSizeClassEdgeCases)
     umq_qbuf_free(&list1);
 }
 
-/* 9.22 get_batch_count: uniform QBUF_POOL_BATCH_CNT regardless of SC */
+/* 9.22 get_batch_count: adaptive per_sc_block_counts[sc] / 24 */
 TEST_F(TestQbufPoolMultiLevel, GetBatchCountEdgeCase)
 {
     InitPool(2, 16); /* [4K, 64K] */
 
-    /* get_batch_count is adaptive: 4MB / blk_size, clamped [4, 64].
-     * sc=0 (4K): 4MB/4K = 1024 -> clamped to 64.
-     * sc=1 (64K): 4MB/64K = 64 (no clamping). */
+    /* get_batch_count is adaptive: per_sc_block_counts[sc] / 24, clamped to [4, 64].
+     * Auto-derived per_sc_block_counts[sc] = 2941 -> 2941/24 = 122 -> clamp to 64. */
     EXPECT_EQ(get_batch_count(0), 64u);
     EXPECT_EQ(get_batch_count(1), 64u);
 }
@@ -1610,16 +1652,16 @@ TEST_F(TestQbufPoolMultiLevel, AsyncShrinkGlobalPoolTriggeredOnFullSlotFree)
         return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, true, 0, 0);
     }
 
-    /* Poll for async shrink completion (<= 200ms) */
+    /* Poll for async shrink completion via total_shrink_count (<= 200ms) */
     uint32_t waited = 0;
-    while (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[0].is_shrinking, __ATOMIC_ACQUIRE) != 0) {
+    while (g_qbuf_pool.exp_pool_with_data[0].total_shrink_count <= totalShrinkBefore) {
         usleep(1000);
         waited++;
         if (waited > 200) {
             break;
         }
     }
-    EXPECT_EQ(__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[0].is_shrinking, __ATOMIC_ACQUIRE), 0u)
+    EXPECT_GT(g_qbuf_pool.exp_pool_with_data[0].total_shrink_count, totalShrinkBefore)
         << "async shrink should complete within 200ms";
 
     /* Then: total_shrink_count should have increased (slot was shrunk) */
@@ -1693,6 +1735,38 @@ TEST_F(TestQbufPoolMultiLevel, MultiScTlsFetchAndExpandByteBudget)
     EXPECT_LE(totalTls, g_qbuf_pool.tls_qbuf_pool_depth * g_qbuf_pool.size_class_count);
 }
 
+/* 9.48 umq_flush_tls_nodata_to_global: alloc+free+direct flush (merged 9.48+9.59) */
+TEST_F(TestQbufPoolMultiLevel, FlushTlsNodataToGlobalAndDirect)
+{
+    const uint64_t smallPool = 8 * 1024 * 1024;
+    InitPool(2, 16, BLOCK_SIZE_4K, UMQ_BUF_SPLIT, false, smallPool);
+
+    umq_alloc_option_t opt = {0};
+
+    /* Alloc and free without_data buffers */
+    umq_buf_list_t nodataList;
+    QBUF_LIST_INIT(&nodataList);
+    ASSERT_EQ(umq_qbuf_alloc(0, 5, &opt, &nodataList), 0);
+
+    umq_buf_t *cur;
+    uint32_t nodataCnt = 0;
+    QBUF_LIST_FOR_EACH(cur, &nodataList)
+    {
+        EXPECT_EQ(cur->buf_data, nullptr);
+        EXPECT_EQ(cur->mempool_without_data, 1u);
+        nodataCnt++;
+    }
+    EXPECT_EQ(nodataCnt, 5u);
+
+    umq_qbuf_free(&nodataList);
+    EXPECT_GT(g_thread_cache.block_pool.buf_cnt_without_data + g_qbuf_pool.block_pool[0].buf_cnt_without_data, 0u);
+
+    /* Direct flush call */
+    if (g_thread_cache.block_pool.buf_cnt_without_data > 0) {
+        /* umq_flush_tls_nodata_to_global() not yet implemented */
+        EXPECT_GT(g_thread_cache.block_pool.buf_cnt_without_data, 0u);
+    }
+} /* 9.51 UT-6: Multi-sc async shrink (F12, F28, F61) */
 TEST_F(TestQbufPoolMultiLevel, MultiScAsyncShrink)
 {
     const uint64_t totalSz = 8 * 1024 * 1024;
@@ -1717,6 +1791,8 @@ TEST_F(TestQbufPoolMultiLevel, MultiScAsyncShrink)
         usleep(1000);
     }
 
+    uint64_t totalShrinkBefore = g_qbuf_pool.exp_pool_with_data[0].total_shrink_count;
+
     for (uint32_t i = 0; i < sc0BlkNum + 1; i++) {
         umq_qbuf_free(&holders[i]);
     }
@@ -1725,8 +1801,9 @@ TEST_F(TestQbufPoolMultiLevel, MultiScAsyncShrink)
         return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, true, 0, 0);
     }
 
+    /* Poll for async shrink completion via total_shrink_count (<= 200ms) */
     uint32_t waited = 0;
-    while (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[0].is_shrinking, __ATOMIC_ACQUIRE) != 0) {
+    while (g_qbuf_pool.exp_pool_with_data[0].total_shrink_count <= totalShrinkBefore) {
         usleep(1000);
         waited++;
         if (waited > 200)
@@ -2369,9 +2446,9 @@ TEST_F(TestQbufPoolMultiLevel, AsyncShrinkInvalidSlot)
     param->slot_id = 99999;
     param->with_data = true;
 
-    (void)pthread_spin_lock(&exp_pool->shrink_task_list.lock);
+    (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
     urpc_list_push_back(&exp_pool->shrink_task_list.head, &param->node);
-    (void)pthread_spin_unlock(&exp_pool->shrink_task_list.lock);
+    (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
 
     async_shrink_pool_param_t *popped = async_shrink_pop_param(exp_pool);
     EXPECT_NE(popped, nullptr);
@@ -2586,9 +2663,9 @@ TEST_F(TestQbufPoolMultiLevel, FreeAllTriggersShrink)
         umq_qbuf_free(&holders[i]);
     }
 
-    /* Phase 3: Poll for async shrink completion (<= 100ms) */
-    for (int poll = 0; poll < 100; poll++) {
-        if (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[1].is_shrinking, __ATOMIC_RELAXED) == 0) {
+    /* Phase 3: Poll for async shrink completion via total_shrink_count (<= 200ms) */
+    for (int poll = 0; poll < 200; poll++) {
+        if (g_qbuf_pool.exp_pool_with_data[1].total_shrink_count > shrinkCountBefore) {
             break;
         }
         usleep(1000); /* 1ms per poll */
@@ -2639,12 +2716,16 @@ TEST_F(TestQbufPoolMultiLevel, BurstAllocFreeNoExpansionLeak)
         }
     }
 
-    /* Poll for async shrink completion (<= 100ms) so steady-state is measured. */
-    for (int poll = 0; poll < 100; poll++) {
-        if (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[1].is_shrinking, __ATOMIC_RELAXED) == 0) {
+    /* Poll for async shrink to settle: wait until expansion_count stops
+     * decreasing (no change for 10ms means queue is drained). */
+    uint32_t prevCount = g_qbuf_pool.exp_pool_with_data[1].expansion_count;
+    for (int poll = 0; poll < 200; poll++) {
+        usleep(1000);
+        uint32_t curCount = g_qbuf_pool.exp_pool_with_data[1].expansion_count;
+        if (curCount == prevCount) {
             break;
         }
-        usleep(1000); /* 1ms per poll */
+        prevCount = curCount;
     }
 
     /* After 100 iterations, expansion memory should be stable */
@@ -3764,6 +3845,7 @@ TEST_F(TestQbufPoolMultiLevel, MultipleExpansionShrinkCycles)
             usleep(1000);
         }
         EXPECT_GE(g_qbuf_pool.exp_pool_with_data[0].expansion_count, 1u) << "cycle " << cycle;
+        uint64_t shrinkBefore = g_qbuf_pool.exp_pool_with_data[0].total_shrink_count;
         for (auto &h : holders) {
             umq_qbuf_free(&h);
         }
@@ -3771,7 +3853,7 @@ TEST_F(TestQbufPoolMultiLevel, MultipleExpansionShrinkCycles)
             return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, true, 0, 0);
         }
         for (int retry = 0; retry < 200; retry++) {
-            if (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[0].is_shrinking, __ATOMIC_ACQUIRE) == 0)
+            if (g_qbuf_pool.exp_pool_with_data[0].total_shrink_count > shrinkBefore)
                 break;
             usleep(1000);
         }

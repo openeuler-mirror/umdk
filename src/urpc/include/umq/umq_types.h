@@ -15,9 +15,10 @@
 #include <stdlib.h>
 
 /** Maximum number of size_class levels in a qbuf pool.
- * Used throughout umq_types.h, umq_dfx_types.h, and internal headers
- * instead of the magic number 16. */
-#define UMQ_SIZE_CLASS_MAX (16u)
+ * Used throughout umq_types.h, umq_dfx_types.h, and internal headers.
+ * DFX names (umq_dfx_api_str.c): SC[0]=Small, SC[1]=Medium, SC[2]=Large,
+ * SC[3]=Huge, SC[4]=Gigantic. Role macros: SMALL=0, MIDDLE=1, LARGE_MIN=2. */
+#define UMQ_SIZE_CLASS_MAX (5u)
 
 #ifdef __cplusplus
 extern "C" {
@@ -300,6 +301,7 @@ typedef struct umq_buf_pool_cfg {
     umq_tiny_buf_block_size_t tiny_pool_block_size;
     uint32_t tiny_pool_block_count;
     uint64_t tls_tiny_pool_depth;
+    uint32_t shrink_decay_ms;
 } umq_buf_pool_cfg_t;
 
 typedef struct umq_tp_pool_cfg {

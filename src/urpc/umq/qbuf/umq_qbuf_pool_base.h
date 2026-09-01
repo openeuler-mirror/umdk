@@ -12,6 +12,8 @@
 
 #include <pthread.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include "qbuf_list.h"
 #include "umq_dfx_types.h"
@@ -85,6 +87,7 @@ extern "C" {
 #define QBUF_POOL_BATCH_CNT (64)        // max batch count when fetch from global or return to global
 #define QBUF_POOL_TARGET_FETCH_BYTES (4ULL * 1024 * 1024)  // adaptive batch: ~4MB per fetch (batch = this / block_size)
 #define QBUF_POOL_BATCH_CNT_MIN (4)   // min batch count, prevents degenerate single-block fetches for large blocks
+#define QBUF_POOL_BATCH_CNT_DIVISOR (24) // divisor for adaptive batch count: batch = per_sc_block_counts[sc] / this
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
 #define QBUF_POOL_EXPAND_MAX_RATIO (2)
@@ -141,6 +144,7 @@ typedef struct qbuf_pool_cfg {
 
     bool disable_scale_cap;
     bool disable_malloc_escape;
+    uint32_t shrink_decay_ms;
 } qbuf_pool_cfg_t;
 
 typedef struct qbuf_alloc_param {
@@ -267,7 +271,7 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
         QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
         thread_cache->block_pool.buf_cnt_without_data = 0;
         (void)memset(&thread_cache->stats, 0, sizeof(thread_cache->stats));
-        thread_cache->stats.tid = (uint64_t)pthread_self();
+        thread_cache->stats.tid = (uint64_t)syscall(SYS_gettid);
         thread_cache->inited = true;
         /* Register thread-exit closure so pools->closure (set by qbuf_pool_base_init's
          * callers, e.g. release_tiny_thread_cache) runs when this thread exits,
@@ -472,8 +476,9 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
         count = allocate_batch(info.global_head, batch_count, info.local_head);
         *info.global_buf_cnt -= count;
         *info.local_buf_cnt += count;
+        uint64_t global_cnt_after = *info.global_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
-        async_expand_global_pool(with_data, sc, *info.global_buf_cnt);
+        async_expand_global_pool(with_data, sc, global_cnt_after);
         return count;
     }
 
@@ -490,6 +495,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
         *info.local_buf_cnt += take;
         count += take;
     }
+    uint64_t global_cnt_snapshot = *info.global_buf_cnt;
     (void)pthread_spin_unlock(&global_pool->global_mutex);
 
     { // fetch from expansion pools (pre-allocated overflow slots)
@@ -529,7 +535,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
 
         count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
     }
-    async_expand_global_pool(with_data, sc, *info.global_buf_cnt);
+    async_expand_global_pool(with_data, sc, global_cnt_snapshot);
     return count;
 
 ROLLBACK:

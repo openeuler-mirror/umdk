@@ -260,11 +260,13 @@ typedef struct ub_flow_control {
     bool local_set;
     bool remote_get;
     bool enabled;
-    volatile bool is_credit_applying;
-    volatile uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
-                                              // the link if the rsp does not return within the timeout
-    volatile uint64_t fc_eagain_start_us; // timestamp(us) of the first continuous EAGAIN on credit req send;
-    volatile uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
+    bool is_credit_applying;
+    bool tx_fc_interrupt;
+    bool rx_fc_interrupt;
+    uint64_t credit_req_send_time; // timestamp(us, CLOCK_MONOTONIC) when a credit req was sent; used to break
+                                   // the link if the rsp does not return within the timeout
+    uint64_t fc_eagain_start_us; // timestamp(us) of the first continuous EAGAIN on credit req send;
+    uint64_t imm[UB_QUEUE_FC_MSG_TYPE_MAX];
     umq_ub_fc_msg_retry_list_t *fc_msg_retry_list;
     ub_queue_idle_check_t *checker;
     uint8_t local_req_seq;
@@ -525,6 +527,12 @@ typedef struct jetty_pool_node {
 
 typedef struct ub_queue_cfg {
     bondp_port_id_t *used_port;
+    umq_ub_ctx_t *dev_ctx;   // device ctx; Logic UMQ borrows share_rq's cfg (same dev_ctx, validated)
+    urma_jfce_t *jfs_jfce;  // io and flow control jetty share same jfce
+    jfr_ctx_t *jfr_ctx[UB_QUEUE_JETTY_NUM];
+    umq_ub_jetty_node_list_t *jetty_node_list;  // main+share queue owns it; Logic UMQ borrows via share_rq's cfg
+    umq_buf_t *addr_list;                       // msg_id->buf map; lazily alloc; Logic UMQ borrows via share_rq's cfg
+    wait_ack_import_t wait_ack_import;          // lazily init; Logic UMQ does not use it
     urma_order_type_t order_type;
     urma_transport_mode_t tp_mode;
     urma_tp_type_t tp_type;
@@ -535,8 +543,8 @@ typedef struct ub_queue_cfg {
     uint32_t rx_depth;
     uint32_t tx_depth;
     uint32_t fc_rx_depth;
-    volatile uint32_t require_rx_count;
-    volatile uint32_t prefill_rqe_cnt;
+    uint32_t require_rx_count;
+    uint32_t prefill_rqe_cnt;
     bool prefill_done;          // until prefill_rqe_cnt = rqe_post_factor * rx_depth, prefill is done
     uint8_t priority;           // priority of the queue
     uint8_t max_rx_sge;         // max sge number of receive array
@@ -559,37 +567,25 @@ typedef struct ub_queue {
     urpc_list_t qctx_node;
     // queue param
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
-    jfr_ctx_t *jfr_ctx[UB_QUEUE_JETTY_NUM];
     urma_jfc_t *jfs_jfc[UB_QUEUE_JETTY_NUM];
-    urma_jfce_t *jfs_jfce; // io and flow control jetty share same jfce
-    umq_ub_ctx_t *dev_ctx;
     ub_bind_ctx_t *bind_ctx;
-    umq_buf_t *addr_list;
     ub_flow_control_t *flow_control;
 
-    // umq_ub_jetty_node_list_t jetty_node_list;
-    umq_ub_jetty_node_list_t *jetty_node_list;
     volatile uint64_t jetty_node;       // jetty_pool_node_t *, atomically accessed
     pthread_spinlock_t get_jetty_node_lock;
 
     uint64_t share_rq_umqh;
     uint64_t umq_ctx;
-    volatile uint64_t *packet_stats;
-    volatile uint32_t ref_cnt;
-    volatile uint32_t tx_outstanding;
+    uint32_t ref_cnt;
+    uint32_t tx_outstanding;
 
     uint32_t create_flag;
     uint32_t umq_id;
     uint32_t remote_umq_id;
     uint32_t remote_rx_buf_size;
-    wait_ack_import_t wait_ack_import;
 
-    volatile bool tx_io_interrupt;
-    volatile bool rx_io_interrupt;
-    volatile bool tx_fc_interrupt;
-    volatile bool rx_fc_interrupt;
-    volatile bool tx_flush_done;               // tx recv flush err done
-    volatile bool rx_flush_done;               // rx buf ctx all report
+    bool tx_flush_done;               // tx recv flush err done
+    bool rx_flush_done;               // rx buf ctx all report
 
     // config param, logic umq get cfg from share_rq_umqh
     ub_queue_cfg_t cfg[0];
@@ -790,20 +786,6 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt);
 
 int umq_bondp_port_id_set(umq_used_ports_t *used_ports, bondp_port_id_t *used_port, uint8_t used_port_num);
 
-static ALWAYS_INLINE void umq_ub_io_packet_stats(
-    ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt, bool lock_free)
-{
-    if (queue->packet_stats == NULL) {
-        return;
-    }
-
-    if (lock_free) {
-        queue->packet_stats[type] += cnt;
-    } else {
-        (void)__atomic_add_fetch(&queue->packet_stats[type], cnt, __ATOMIC_RELAXED);
-    }
-}
-
 urma_target_seg_t *umq_ub_tseg_lookup(import_tseg_table_t *tseg_table, uint32_t mempool_id);
 
 /* Look up the imported-tseg node (carrying its import-time version) for a
@@ -827,6 +809,44 @@ static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
     return (feature & UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS) != 0;
 }
 
+// Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
+static ALWAYS_INLINE bool is_umq_ub_logic_queue(uint32_t create_flag)
+{
+    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 &&
+        (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0 &&
+        (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0;
+}
+
+static inline ub_queue_cfg_t *umq_ub_queue_cfg_get(ub_queue_t *queue)
+{
+    if (!is_umq_ub_logic_queue(queue->create_flag)) {
+        return queue->cfg;
+    }
+
+    // share_rq_umqh has been validated
+    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
+    return share_rq->cfg;
+}
+
+// jetty_node_list is main-queue-only; Logic UMQ borrows share_rq's cfg (hence its list).
+static inline umq_ub_jetty_node_list_t *umq_ub_queue_jetty_node_list_get(ub_queue_t *queue)
+{
+    return umq_ub_queue_cfg_get(queue)->jetty_node_list;
+}
+
+// addr_list is lazily alloc'd on first big-data send; Logic UMQ borrows share_rq's cfg (hence its list).
+static inline umq_buf_t *umq_ub_queue_addr_list_get(ub_queue_t *queue)
+{
+    return umq_ub_queue_cfg_get(queue)->addr_list;
+}
+
+// wait_ack_import is lazily init'd on import-mem; Logic UMQ does not use it.
+static inline wait_ack_import_t *umq_ub_queue_wait_ack_import_get(ub_queue_t *queue)
+{
+    return &umq_ub_queue_cfg_get(queue)->wait_ack_import;
+}
+
 // for exclusive acquisition of umq, it needs to be put back after use
 static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *queue, const uint32_t umq_id)
 {
@@ -834,15 +854,16 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
         return NULL;
     }
 
-    uint32_t old_ref_cnt = __atomic_load_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], __ATOMIC_ACQUIRE);
+    umq_ub_ctx_t *dev_ctx = umq_ub_queue_cfg_get(queue)->dev_ctx;
+    uint32_t old_ref_cnt = __atomic_load_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], __ATOMIC_ACQUIRE);
     do {
         if (old_ref_cnt == 0) {
             return NULL;
         }
-    } while (__atomic_compare_exchange_n(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
+    } while (__atomic_compare_exchange_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
         false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
-    return (ub_queue_t *)(uintptr_t)queue->dev_ctx->umq_ctx_table[umq_id];
+    return (ub_queue_t *)(uintptr_t)dev_ctx->umq_ctx_table[umq_id];
 }
 
 static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_id)
@@ -851,7 +872,8 @@ static ALWAYS_INLINE void umq_ub_put_real_queue(ub_queue_t *queue, uint32_t umq_
         return;
     }
 
-    (void)__atomic_fetch_sub(&queue->dev_ctx->umq_ctx_ref_cnt_table[umq_id], 1, __ATOMIC_RELAXED);
+    umq_ub_ctx_t *dev_ctx = umq_ub_queue_cfg_get(queue)->dev_ctx;
+    (void)__atomic_fetch_sub(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], 1, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
@@ -862,15 +884,6 @@ static ALWAYS_INLINE bool is_umq_ub_main_queue(uint32_t create_flag)
 static ALWAYS_INLINE bool is_umq_ub_sub_queue(uint32_t create_flag)
 {
     return (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) != 0;
-}
-
-// Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
-static ALWAYS_INLINE bool is_umq_ub_logic_queue(uint32_t create_flag)
-{
-    return (create_flag & UMQ_CREATE_FLAG_SHARE_TRANSPORT) != 0 &&
-        (create_flag & UMQ_CREATE_FLAG_SHARE_RQ) != 0 &&
-        (create_flag & UMQ_CREATE_FLAG_MAIN_UMQ) == 0 &&
-        (create_flag & UMQ_CREATE_FLAG_SUB_UMQ) == 0;
 }
 
 static ALWAYS_INLINE bool is_umq_ub_share_transport(uint32_t create_flag)
@@ -888,15 +901,29 @@ static inline bool is_umq_ub_bonding_dev(const char *name)
     return strstr(name, "bonding") != NULL;
 }
 
-static inline ub_queue_cfg_t *umq_ub_queue_cfg_get(ub_queue_t *queue)
+static inline uint64_t *umq_ub_queue_packet_stats_get(ub_queue_t *queue)
 {
-    if (!is_umq_ub_logic_queue(queue->create_flag)) {
-        return queue->cfg;
+    if ((umq_ub_queue_cfg_get(queue)->dev_ctx->feature & UMQ_FEATURE_ENABLE_STATS) == 0) {
+        return NULL;
     }
 
-    // share_rq_umqh has been validated
-    ub_queue_t *share_rq = (ub_queue_t *)(uintptr_t)queue->share_rq_umqh;
-    return share_rq->cfg;
+    uint32_t offset = is_umq_ub_logic_queue(queue->create_flag) ? 0 : sizeof(ub_queue_cfg_t);
+    return (uint64_t *)((char *)queue->cfg + offset);
+}
+
+static ALWAYS_INLINE void umq_ub_io_packet_stats(ub_queue_t *queue, ub_packet_stats_type_t type, uint32_t cnt,
+                                                 bool lock_free)
+{
+    uint64_t *packet_stats = umq_ub_queue_packet_stats_get(queue);
+    if (packet_stats == NULL) {
+        return;
+    }
+
+    if (lock_free) {
+        packet_stats[type] += cnt;
+    } else {
+        (void)__atomic_add_fetch(&packet_stats[type], cnt, __ATOMIC_RELAXED);
+    }
 }
 
 #ifdef __cplusplus
