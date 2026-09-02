@@ -268,6 +268,118 @@ static int bondp_user_ctl_get_seg_ctx(urma_context_t *ctx, urma_user_ctl_in_t *i
     return 0;
 }
 
+typedef urma_user_info_ext_hdr_t bondp_user_tseg_ext_priv_t;
+
+static inline size_t bondp_calc_user_tseg_ext_len(uint32_t peer_cnt)
+{
+    return sizeof(urma_bond_user_tseg_ext_v0_t) + sizeof(bondp_user_tseg_peer_ctx_t) * peer_cnt;
+}
+
+static inline bondp_user_tseg_ext_priv_t *bondp_user_tseg_get_priv_ext(urma_user_tseg_t *user_tseg)
+{
+    return (bondp_user_tseg_ext_priv_t *)((uintptr_t)user_tseg + sizeof(*user_tseg));
+}
+
+static inline void bondp_set_user_tseg_peer_ctx_entry(urma_bond_user_tseg_ext_v0_t *ext, uint32_t idx,
+                                                      const bondp_user_tseg_peer_ctx_t *entry)
+{
+    size_t off = sizeof(bondp_user_tseg_peer_ctx_t) * idx;
+    /* Use sizeof(*ext) instead of ext->data: GCC -Wstringop-overflow treats data[0] as size 0. */
+    (void)memcpy((uint8_t *)ext + sizeof(*ext) + off, entry, sizeof(*entry));
+}
+
+static int bondp_fill_user_tseg_ext_from_tseg(const bondp_tseg_t *bdp_tseg,
+                                              urma_bond_user_tseg_ext_v0_t *ext, size_t ext_len)
+{
+    if (bdp_tseg == NULL || ext == NULL) {
+        return -EINVAL;
+    }
+
+    uint32_t peer_cnt = 0;
+    for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
+        if (bdp_tseg->p_tseg[local_idx] != NULL) {
+            ++peer_cnt;
+        }
+    }
+    if (ext_len < bondp_calc_user_tseg_ext_len(peer_cnt)) {
+        URMA_LOG_ERR("Invalid compact user tseg ext len=%zu, peer_cnt=%u.\n", ext_len, peer_cnt);
+        return -EINVAL;
+    }
+
+    ext->version = 0;
+    ext->mask = 0;
+    ext->peer_cnt = peer_cnt;
+
+    uint32_t n = 0;
+    for (uint32_t local_idx = 0; local_idx < URMA_UBAGG_DEV_MAX_NUM; ++local_idx) {
+        urma_target_seg_t *p_tseg = bdp_tseg->p_tseg[local_idx];
+        if (p_tseg == NULL) {
+            continue;
+        }
+        bondp_user_tseg_peer_ctx_t entry = {0};
+        entry.peer_idx = (uint8_t)local_idx;
+        entry.token_id = p_tseg->seg.token_id;
+        bondp_set_user_tseg_peer_ctx_entry(ext, n, &entry);
+        ++n;
+    }
+    return 0;
+}
+
+static int bondp_user_ctl_get_user_tseg(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                        urma_user_ctl_out_t *out)
+{
+    if (in == NULL || out == NULL || in->addr == 0 || in->len < sizeof(urma_target_seg_t) ||
+        out->addr == 0 || out->len < sizeof(urma_user_tseg_t *)) {
+        URMA_LOG_ERR("Invalid parameter for get user tseg.\n");
+        return -EINVAL;
+    }
+
+    urma_target_seg_t *tseg = (urma_target_seg_t *)(uintptr_t)in->addr;
+    if (tseg == NULL || tseg->urma_ctx != ctx) {
+        URMA_LOG_ERR("Invalid target seg context for get user tseg.\n");
+        return -EINVAL;
+    }
+    /* Only locally registered segs expose per-slave token ids. */
+    if (tseg->token_id == NULL) {
+        URMA_LOG_ERR("Imported seg does not support get user tseg.\n");
+        return -EINVAL;
+    }
+
+    bondp_tseg_t *bdp_tseg = CONTAINER_OF_FIELD(tseg, bondp_tseg_t, v_tseg);
+
+    uint32_t peer_cnt = 0;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_tseg->p_tseg[i] != NULL) {
+            ++peer_cnt;
+        }
+    }
+    size_t ext_len = bondp_calc_user_tseg_ext_len(peer_cnt);
+
+    urma_user_tseg_t *new_ut = (urma_user_tseg_t *)calloc(1, sizeof(urma_user_tseg_t) +
+                                                                sizeof(bondp_user_tseg_ext_priv_t) +
+                                                                ext_len);
+    if (new_ut == NULL) {
+        URMA_LOG_ERR("Failed to alloc user tseg.\n");
+        return -ENOMEM;
+    }
+
+    /* The core overwrites the outer attr/token_id/token_value fields afterwards;
+     * only the has_user_info bit must survive that overwrite. */
+    new_ut->attr.bs.has_user_info = 1;
+    bondp_user_tseg_ext_priv_t *ut_ext = bondp_user_tseg_get_priv_ext(new_ut);
+    ut_ext->len = (uint32_t)ext_len;
+    urma_bond_user_tseg_ext_v0_t *ext = (urma_bond_user_tseg_ext_v0_t *)ut_ext->data;
+    int ret = bondp_fill_user_tseg_ext_from_tseg(bdp_tseg, ext, ext_len);
+    if (ret != 0) {
+        free(new_ut);
+        return ret;
+    }
+
+    urma_user_tseg_t **out_ut = (urma_user_tseg_t **)(uintptr_t)out->addr;
+    *out_ut = new_ut;
+    return 0;
+}
+
 static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in_t *in,
                                            urma_user_ctl_out_t *out)
 {
@@ -378,6 +490,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_get_rjetty(ctx, in, out);
         case BONDP_USER_CTL_OPCODE_GET_SEG_CTX:
             return bondp_user_ctl_get_seg_ctx(ctx, in, out);
+        case BONDP_USER_CTL_OPCODE_GET_USER_TSEG:
+            return bondp_user_ctl_get_user_tseg(ctx, in, out);
         case BONDP_USER_CTL_SET_BONDING_PORT:
             return bondp_user_ctl_set_bonding_port(ctx, in, out);
         case BONDP_USER_CTL_SET_CTX_CFG:

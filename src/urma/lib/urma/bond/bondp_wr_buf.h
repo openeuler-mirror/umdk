@@ -15,10 +15,29 @@
 #include <stdint.h>
 #include <pthread.h>
 
+#include "urma_private.h"
 #include "urma_types.h"
+#include "urma_ubagg.h"
 
 #define BONDP_MAX_SGE_NUM             (32)
 #define BONDP_BATCH_POST_MAX_NUM      (256)
+
+/*
+ * Import-free (user_tseg) support: a bonding user_tseg buffer is laid out as
+ *   urma_user_tseg_t + urma_user_info_ext_hdr_t + urma_bond_user_tseg_ext_v0_t
+ *   + peer_cnt * bondp_user_tseg_peer_ctx_t
+ * BONDP_USER_TSEG_MAX_LEN is its upper bound (peer_cnt = URMA_UBAGG_DEV_MAX_NUM).
+ * The data path deep-copies the whole buffer into fixed-size slots so a WR
+ * entry never keeps a pointer into the caller's (possibly stack) buffer.
+ */
+#define BONDP_USER_TSEG_MAX_LEN                                                                     \
+    (sizeof(urma_user_tseg_t) + sizeof(urma_user_info_ext_hdr_t) +                                  \
+     sizeof(urma_bond_user_tseg_ext_v0_t) +                                                         \
+     URMA_UBAGG_DEV_MAX_NUM * sizeof(bondp_user_tseg_peer_ctx_t))
+
+/* 8-byte aligned stride of one deep-copy slot. */
+#define BONDP_USER_TSEG_SLOT_STRIDE                                                                 \
+    (((uint32_t)(BONDP_USER_TSEG_MAX_LEN) + 7u) & ~7u)
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +68,8 @@ typedef struct bondp_chip_id_info {
  * For jfr: [0 .. max_sge-1] = src_sge.
  * The actual entry size is computed at init time as:
  *   jfs: sizeof(header) + (max_sge + max_rsge) * sizeof(urma_sge_t)
+ *        + N * (BONDP_USER_TSEG_SLOT_STRIDE + sizeof(urma_user_tseg_t *)
+ *                + sizeof(urma_user_tseg_t)), N = max_sge + max_rsge
  *   jfr: sizeof(header) + max_sge * sizeof(urma_sge_t)
  */
 typedef struct jfs_wr_entry {
@@ -88,6 +109,32 @@ static inline urma_sge_t *jfs_wr_entry_dst_sge(jfs_wr_entry_t *e, uint32_t max_s
 static inline urma_sge_t *jfr_wr_entry_src_sge(jfr_wr_entry_t *e)
 {
     return e->sge_data;
+}
+
+/*
+ * Import-free user_tseg scratch regions appended after sge_data (N = max_sge +
+ * max_rsge). Region order keeps every region properly aligned:
+ *   [ut_ext_copy:     N * BONDP_USER_TSEG_SLOT_STRIDE] deep-copied bonding user_tseg,
+ *                                                    shares the entry lifetime
+ *   [ut_ext_ptr_save: N * sizeof(urma_user_tseg_t *)]  restore pointers
+ *   [bare_ut_scratch: N * sizeof(urma_user_tseg_t)]    bare form posted to slaves
+ * jfr entries do not carry these regions (recv SGEs are always local).
+ */
+static inline uint8_t *jfs_wr_entry_ut_ext_copy(jfs_wr_entry_t *e, uint32_t max_sge, uint32_t max_rsge)
+{
+    return (uint8_t *)(e->sge_data + max_sge + max_rsge);
+}
+static inline urma_user_tseg_t **jfs_wr_entry_ut_ext_ptr_save(jfs_wr_entry_t *e, uint32_t max_sge,
+                                                              uint32_t max_rsge)
+{
+    return (urma_user_tseg_t **)(jfs_wr_entry_ut_ext_copy(e, max_sge, max_rsge) +
+                                 (uint64_t)(max_sge + max_rsge) * BONDP_USER_TSEG_SLOT_STRIDE);
+}
+static inline urma_user_tseg_t *jfs_wr_entry_bare_ut_scratch(jfs_wr_entry_t *e, uint32_t max_sge,
+                                                             uint32_t max_rsge)
+{
+    return (urma_user_tseg_t *)(jfs_wr_entry_ut_ext_ptr_save(e, max_sge, max_rsge) +
+                                (max_sge + max_rsge));
 }
 
 typedef struct wr_buf {
