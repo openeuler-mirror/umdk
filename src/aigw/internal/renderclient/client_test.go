@@ -8,7 +8,10 @@ package renderclient
 
 import (
 	"bytes"
+	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -58,5 +61,56 @@ func TestReadSSEResponse_EmptyBody(t *testing.T) {
 	}
 	if err != io.EOF {
 		t.Fatalf("expected io.EOF for empty body, got %v", err)
+	}
+}
+
+// TestWithAuth_Forwards: a non-empty authHeader is set on the request verbatim.
+func TestWithAuth_Forwards(t *testing.T) {
+	c := &RenderClient{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+	c.withAuth(req, "Bearer sk-test")
+	if got := req.Header.Get("Authorization"); got != "Bearer sk-test" {
+		t.Fatalf("Authorization = %q, want %q", got, "Bearer sk-test")
+	}
+}
+
+// TestWithAuth_EmptySkips: an empty authHeader sends no auth header.
+func TestWithAuth_EmptySkips(t *testing.T) {
+	c := &RenderClient{}
+	req := httptest.NewRequest(http.MethodPost, "http://example.com", nil)
+	c.withAuth(req, "")
+	if got := req.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization = %q, want empty", got)
+	}
+}
+
+// TestRenderChat_SendsAuth: RenderChat forwards the authHeader and a 401 without
+// it becomes 200 with it.
+func TestRenderChat_SendsAuth(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		// Non-SSE single-line JSON body (see TestReadSSEResponse_SingleLineJSONNoTrailingNewline).
+		_, _ = w.Write([]byte(`{"token_ids":[1,2,3]}`))
+	}))
+	defer srv.Close()
+
+	c := &RenderClient{
+		config:  RenderClientConfig{MaxRetries: 0, ConnPoolSize: 1},
+		baseURL: srv.URL,
+		adapter: newVLLMAdapter("test"),
+		client:  &http.Client{},
+	}
+
+	tokens, err := c.RenderChat(context.Background(), "test", []ChatMessage{{Role: "user", Content: "hi"}}, "Bearer sk-test")
+	if err != nil {
+		t.Fatalf("RenderChat returned error: %v", err)
+	}
+	if len(tokens) != 3 {
+		t.Fatalf("tokens = %v, want 3", tokens)
+	}
+	if gotAuth != "Bearer sk-test" {
+		t.Fatalf("server received Authorization = %q, want %q", gotAuth, "Bearer sk-test")
 	}
 }

@@ -47,7 +47,17 @@ func NewRenderClient(config RenderClientConfig, model, baseURL string) *RenderCl
 	}
 }
 
-func (c *RenderClient) RenderChat(ctx context.Context, model string, messages []ChatMessage) ([]int64, error) {
+// withAuth forwards the inbound Authorization header verbatim to the render
+// endpoint so a vLLM started with --api-key can be authenticated without
+// storing a secret in config. Empty (no inbound Authorization) => no header.
+func (c *RenderClient) withAuth(req *http.Request, authHeader string) {
+	if authHeader == "" {
+		return
+	}
+	req.Header.Set("Authorization", authHeader)
+}
+
+func (c *RenderClient) RenderChat(ctx context.Context, model string, messages []ChatMessage, authHeader string) ([]int64, error) {
 	req := RenderChatRequest{
 		Model:    model,
 		Messages: messages,
@@ -64,6 +74,7 @@ func (c *RenderClient) RenderChat(ctx context.Context, model string, messages []
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.withAuth(httpReq, authHeader)
 
 	resp, err := c.doRequest(httpReq)
 	if err != nil {
@@ -94,7 +105,7 @@ func (c *RenderClient) RenderChat(ctx context.Context, model string, messages []
 // TokenizePrompt tokenizes a raw prompt in the content domain (no chat
 // template, no special tokens), matching the token domain used by vLLM KV
 // events that report raw content tokens.
-func (c *RenderClient) TokenizePrompt(ctx context.Context, model, prompt string) ([]int64, error) {
+func (c *RenderClient) TokenizePrompt(ctx context.Context, model, prompt, authHeader string) ([]int64, error) {
 	req := TokenizeRequest{
 		Model:            model,
 		Prompt:           prompt,
@@ -112,6 +123,7 @@ func (c *RenderClient) TokenizePrompt(ctx context.Context, model, prompt string)
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.withAuth(httpReq, authHeader)
 
 	resp, err := c.doRequest(httpReq)
 	if err != nil {
@@ -138,7 +150,7 @@ func (c *RenderClient) TokenizePrompt(ctx context.Context, model, prompt string)
 	return tokenizeResp.Tokens, nil
 }
 
-func (c *RenderClient) RenderCompletion(ctx context.Context, model string, prompt string) ([]int64, error) {
+func (c *RenderClient) RenderCompletion(ctx context.Context, model string, prompt, authHeader string) ([]int64, error) {
 	req := RenderCompletionRequest{
 		Model:  model,
 		Prompt: prompt,
@@ -155,6 +167,7 @@ func (c *RenderClient) RenderCompletion(ctx context.Context, model string, promp
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.withAuth(httpReq, authHeader)
 
 	resp, err := c.doRequest(httpReq)
 	if err != nil {
@@ -249,6 +262,7 @@ func (c *RenderClient) IsHealthy(ctx context.Context) bool {
 		return false
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.withAuth(httpReq, "") // health probe: no inbound request to source auth from
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
