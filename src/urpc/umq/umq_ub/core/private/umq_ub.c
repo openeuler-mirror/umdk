@@ -32,7 +32,7 @@ static void umq_tseg_node_destroy(imported_tseg_node_t *tseg_node);
  * 4KB-per-connection cost a large bucket array would add at 48K+ peers. */
 #define TSEG_MAP_NUM 8
 #define UMQ_CTP_MAX_BUF_SIZE 4096
-#define UMQ_INITIAL_CREDIT 16
+#define UMQ_INITIAL_CREDIT 0
 
 static util_id_allocator_t g_umq_ub_id_allocator = {0};
 static ub_queue_ctx_list_t g_umq_ub_queue_ctx_list;
