@@ -2250,8 +2250,10 @@ int umq_ub_unbind_impl(uint64_t umqh)
     uint64_t start_timestamp;
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh;
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
-    ub_bind_ctx_t *bind_ctx = queue->bind_ctx;
-    if (bind_ctx == NULL) {
+    /* Fast-path hint only: bind_ctx is re-read after the exclusive CAS below,
+     * because a concurrent unbind may set it to NULL and free it while we are
+     * waiting for exclusive access. */
+    if (queue->bind_ctx == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), umq has not been binded\n", queue->umq_id);
         return -UMQ_ERR_ENODEV;
     }
@@ -2259,6 +2261,17 @@ int umq_ub_unbind_impl(uint64_t umqh)
     if (umq_ub_exclusive_sub_queue(queue) == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), queue is in use, cannot unbind\n", queue->umq_id);
         return -UMQ_ERR_EBUSY;
+    }
+
+    /* Re-read bind_ctx after acquiring exclusive access. The release store in
+     * umq_ub_release_sub_queue pairs with the acquire CAS above, so if another
+     * unbind completed while we were retrying, its NULL write is visible here:
+     * bail out instead of using the freed pointer (TOCTOU). */
+    ub_bind_ctx_t *bind_ctx = queue->bind_ctx;
+    if (bind_ctx == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), umq has not been binded\n", queue->umq_id);
+        umq_ub_release_sub_queue(queue);
+        return -UMQ_ERR_ENODEV;
     }
 
     umq_inc_ref(qcfg->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
