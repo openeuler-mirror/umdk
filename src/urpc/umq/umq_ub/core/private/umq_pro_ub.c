@@ -2076,6 +2076,17 @@ static inline void umq_ub_process_flush_done(ub_queue_t *queue, jetty_pool_node_
     }
 }
 
+static inline umq_opcode_t umq_ub_cr_opcode_get(urma_cr_t *cr)
+{
+    umq_opcode_t opcode = UMQ_OPC_LAST;
+    umq_buf_t *err_qbuf = (umq_buf_t *)(uintptr_t)cr->user_ctx;
+    if (err_qbuf != NULL) {
+        umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)err_qbuf->qbuf_ext;
+        opcode = buf_pro->opcode;
+    }
+    return opcode;
+}
+
 int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, umq_io_option_t *option)
 {
     /* 进程退出期跳过 poll：ubsocket_uninit 先 ReleaseAll(Socket) 释放 jfc/jetty，
@@ -2186,9 +2197,11 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
             }
 
             if (cr[i].status != BOND_CR_FLOW_CONTROL_NOTIFY) {
+                umq_opcode_t opcode = umq_ub_cr_opcode_get(&cr[i]);
                 umq_ub_process_cr_err_for_jetty_pool(queue, &cr[i], tp_handle_idx, option);
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d] "
-                    "status: %d local_id: %u\n", EID_ARGS(*eid), id, i, cr[i].status, cr[i].local_id);
+                    "status: %d, opcode: %u, local_id: %u\n", EID_ARGS(*eid), id, i, cr[i].status, opcode,
+                    cr[i].local_id);
                 failed_cnt++;
             } else {
                 UMQ_LIMIT_VLOG_INFO(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d]"

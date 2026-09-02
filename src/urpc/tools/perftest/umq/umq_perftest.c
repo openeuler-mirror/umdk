@@ -211,6 +211,7 @@ static int umq_perftest_init_umq(umq_perftest_config_t *cfg)
     umq_config->trans_info_num = 1;
     umq_config->trans_info[0].trans_mode = (umq_trans_mode_t)cfg->trans_mode;
     umq_config->buf_pool_cfg.small_block_size = cfg->blk_mode;
+    umq_config->buf_pool_cfg.rx_block_count = cfg->config.rx_depth;
     if (fill_dev_info(&umq_config->trans_info[0].dev_info, cfg) != 0) {
         free(umq_config);
         return -1;
