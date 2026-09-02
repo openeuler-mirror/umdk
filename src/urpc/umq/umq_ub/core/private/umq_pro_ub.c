@@ -771,15 +771,6 @@ int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     return ret;
 }
 
-static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_cr(ub_queue_t *queue, const urma_cr_t *cr)
-{
-    umq_ub_imm_t imm = {.value = cr->imm_data};
-    if (imm.io_imm.umq_id >= UMQ_ID_ALLOC_SIZE) {
-        return NULL;
-    }
-    return (ub_queue_t *)(uintptr_t)umq_ub_queue_cfg_get(queue)->dev_ctx->umq_ctx_table[imm.io_imm.umq_id];
-}
-
 static void process_rx_mem_import_done(umq_ub_imm_t imm, ub_queue_t *queue, ub_queue_t *real_queue,
                                        umq_buf_pro_t *buf_pro, umq_buf_status_t *qbuf_status)
 {
@@ -842,7 +833,8 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
 
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)rx_buf->qbuf_ext;
     buf_pro->opcode = UMQ_OPC_SEND_IMM;
-    ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
+    umq_ub_imm_t imm = {.value = cr->imm_data};
+    ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, imm.io_imm.umq_id);
     if (real_queue != NULL) {
         umq_inc_ref(umq_ub_queue_cfg_get(real_queue)->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
         buf_pro->umq_ctx = real_queue->umq_ctx;
@@ -850,7 +842,6 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
         buf_pro->umq_ctx = 0;
     }
 
-    umq_ub_imm_t imm = {.value = cr->imm_data};
     switch (imm.bs.type) {
         case IMM_TYPE_USER:
             buf_pro->opcode = UMQ_OPC_SEND_IMM;
@@ -869,6 +860,7 @@ static int umq_ub_on_rx_done(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t *rx_buf
 
     if (real_queue != NULL) {
         umq_dec_ref(umq_ub_queue_cfg_get(real_queue)->dev_ctx->io_lock_free, &real_queue->ref_cnt, 1);
+        umq_ub_put_real_queue(queue, imm.io_imm.umq_id);
     }
     return UMQ_SUCCESS;
 }
@@ -913,9 +905,11 @@ static int process_rx_msg(urma_cr_t *cr, umq_buf_t *buf, ub_queue_t *queue, umq_
         case URMA_CR_OPC_SEND: {
             umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
             buf_pro->opcode = UMQ_OPC_SEND;
-            ub_queue_t *real_queue = umq_ub_get_real_queue_by_cr(queue, cr);
+            umq_ub_imm_t imm = {.value = cr->imm_data};
+            ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, imm.io_imm.umq_id);
             if (real_queue != NULL) {
                 buf_pro->umq_ctx = real_queue->umq_ctx;
+                umq_ub_put_real_queue(queue, imm.io_imm.umq_id);
             } else {
                 buf_pro->umq_ctx = 0;
             }
