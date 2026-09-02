@@ -108,7 +108,9 @@ func (lb *prefixCacheLoadBalancer) schedule(request *ScheduleRequestMsg, options
 	if lb.renderClient != nil && request.Request != nil {
 		log.Debug().Msg("[prefixCache] branch: using render client for tokenization")
 		messages := lb.buildChatMessages(request.Request)
-		tokenIDs, err = lb.prefixCacheMgr.Tokenize(context.Background(), modelName, messages)
+		// Forward the inbound Authorization header to the render endpoint.
+		authHeader := request.Headers["Authorization"]
+		tokenIDs, err = lb.prefixCacheMgr.Tokenize(context.Background(), modelName, messages, authHeader)
 		if err != nil || len(tokenIDs) == 0 {
 			log.Error().Msgf("[prefixCache] branch: render tokenization failed: %v, tokenIDs=%v", err, tokenIDs)
 		} else {

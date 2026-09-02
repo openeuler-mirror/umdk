@@ -326,6 +326,8 @@ func extractHeaders(r *http.Request) map[string]string {
 		"X-Correlation-Id",
 		"X-Request-Id",
 		"X-Trace-Id",
+		// Forwarded to the vLLM render endpoint (prefix_cache_lb.go).
+		"Authorization",
 	}
 	headers := make(map[string]string)
 	for _, name := range sessionHeaders {
