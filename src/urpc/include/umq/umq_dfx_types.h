@@ -137,10 +137,17 @@ typedef struct umq_qbuf_pool_config {
     uint64_t tls_qbuf_pool_depth;         // global TLS depth cap (per-SC for normal pool; default ~1.5K)
     uint32_t batch_count;                // batch size when fetch from / return to global (uniform across sc)
     uint32_t per_sc_batch_count[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc batch count (varies by blk_size)
+    uint64_t per_sc_block_counts[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc initial block count
+    uint64_t per_sc_tls_qbuf_pool_depth[UMQ_DFX_QBUF_SIZE_CLASS_MAX]; // per-sc TLS depth cap
     uint64_t rx_pool_total_size;        // RX recv pool total memory (bytes)
     uint32_t rx_pool_block_size;        // RX recv pool block size (bytes)
     uint32_t rx_pool_depth;             // RX recv pool total block count (capacity)
     uint64_t rx_pool_free_depth;        // RX recv pool free block count (current depth)
+    /* Tiny pool specific config (only meaningful for UMQ_QBUF_POOL_TYPE_TINY).
+     * Normal/Huge pools leave these zero-filled. */
+    uint32_t tiny_pool_block_size;      // tiny pool block size (bytes, default 1024)
+    uint32_t tiny_pool_block_count;     // tiny pool total block count (default 8192)
+    uint64_t tls_tiny_pool_depth;       // TLS depth cap for tiny pool (default 64)
 } umq_qbuf_pool_config_t;
 
 typedef enum umq_qbuf_pool_type {
@@ -219,6 +226,8 @@ typedef struct umq_qbuf_pool_info {
             uint64_t size_with_data;         // available buf size in data area
             uint64_t block_num_without_data; // number of available buf in non-data area
             uint64_t size_without_data;      // available buf size in non-data area
+            uint64_t total_block_num_without_data; // total capacity of without-data pool (fixed at init, never changes)
+            uint64_t total_size_without_data;      // total size of without-data pool (blocks * umq_buf_t_size)
         } split;
         struct {
             uint64_t block_num_with_data;
