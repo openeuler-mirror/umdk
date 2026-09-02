@@ -109,22 +109,24 @@ int urpc_bitmap_id_generator_alloc_auto_inc(urpc_id_generator_t *gen, unsigned i
 
     urpc_bitmap_id_generator_t *generator = (urpc_bitmap_id_generator_t *)gen->private_data;
     uint32_t min_bit = min % generator->total;
-    uint32_t bit = min_bit < generator->cur ? generator->cur : min_bit;
 
-    /* The search starts from MAX (min_bit, generator->cur).
-     * If the ID is insufficient, the search starts again from min_bit. */
+    /* cur is the next scan position (one past the last allocated bit). The start
+     * must be computed under the lock so a stale cur snapshot is never used. */
     (void)pthread_spin_lock(&generator->lock);
-    bit = (unsigned int)urpc_bitmap_find_next_zero_bit(generator->bitmap, generator->total, bit);
+    uint32_t start = min_bit > generator->cur ? min_bit : generator->cur;
+    uint32_t bit = (unsigned int)urpc_bitmap_find_next_zero_bit(generator->bitmap, generator->total, start);
     if (bit >= generator->total) {
-        generator->cur = min_bit;
-        bit = (unsigned int)urpc_bitmap_find_next_zero_bit(generator->bitmap, generator->total, generator->cur);
+        /* Wrap around: search again from min_bit only after the forward scan hits the top. */
+        bit = (unsigned int)urpc_bitmap_find_next_zero_bit(generator->bitmap, generator->total, min_bit);
         if (bit >= generator->total) {
             (void)pthread_spin_unlock(&generator->lock);
             return -ENOSPC;
         }
     }
-    generator->cur = bit;
+
     urpc_bitmap_set(generator->bitmap, bit, true);
+    /* Advance past the allocated bit so a freed cur-bit id is not immediately reissued. */
+    generator->cur = (bit + 1 >= generator->total) ? generator->total : bit + 1;
     (void)pthread_spin_unlock(&generator->lock);
     *id = bit;
     return 0;
