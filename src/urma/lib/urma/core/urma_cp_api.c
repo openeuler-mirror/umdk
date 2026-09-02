@@ -20,8 +20,12 @@
 #include "urma_provider.h"
 #include "urma_types.h"
 
+/* Hard-coded copies of bondp_user_ctl_opcode_t values (urma_ubagg.h) - the core
+ * layer cannot include that bond-private header. Keep them in sync; the bond
+ * provider guards the drift with _Static_assert in bondp_cp_user_ctl.c. */
 #define BONDP_USER_CTL_GET_RJETTY  9
 #define BONDP_USER_CTL_GET_SEG_CTX 10
+#define BONDP_USER_CTL_GET_USER_TSEG 14
 
 #define URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx)                                                                 \
     do {                                                                                                               \
@@ -2916,6 +2920,69 @@ void urma_put_seg_ctx(urma_seg_t *seg)
     }
 
     free(seg);
+}
+
+urma_status_t urma_get_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
+                                 urma_user_tseg_t **user_tseg, uint32_t *size)
+{
+    if (tseg == NULL || token == NULL || user_tseg == NULL || size == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+    /* Only a locally registered seg carries a stable token id for the owner
+     * to export; imported segs are out of scope. */
+    if (tseg->token_id == NULL) {
+        URMA_LOG_ERR("Only locally registered seg supports get user tseg.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_context_t *urma_ctx = tseg->urma_ctx;
+    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
+    if (status != URMA_SUCCESS) {
+        return status;
+    }
+
+    urma_user_tseg_t *new_ut = NULL;
+    if (urma_is_bonding_dev(urma_ctx->dev->name)) {
+        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_USER_TSEG,
+                                           (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
+                                           (uint64_t)(uintptr_t)&new_ut);
+        if (status != URMA_SUCCESS) {
+            return URMA_FAIL;
+        }
+    } else {
+        new_ut = (urma_user_tseg_t *)calloc(1, sizeof(urma_user_tseg_t));
+        if (new_ut == NULL) {
+            URMA_LOG_ERR("Failed to alloc user tseg.\n");
+            return URMA_ENOMEM;
+        }
+    }
+
+    if (new_ut == NULL) {
+        URMA_LOG_ERR("Failed to get user tseg.\n");
+        return URMA_FAIL;
+    }
+
+    bool has_user_info = (new_ut->attr.bs.has_user_info != 0);
+    new_ut->attr = tseg->seg.attr;
+    if (has_user_info) {
+        new_ut->attr.bs.has_user_info = 1;
+    }
+    new_ut->token_id = tseg->seg.token_id;
+    new_ut->token_value = *token;
+    *user_tseg = new_ut;
+    *size = urma_calc_user_info_total_len(new_ut, sizeof(urma_user_tseg_t),
+                                          new_ut->attr.bs.has_user_info != 0);
+    return URMA_SUCCESS;
+}
+
+void urma_put_user_tseg(urma_user_tseg_t *user_tseg)
+{
+    if (user_tseg == NULL) {
+        return;
+    }
+
+    free(user_tseg);
 }
 
 urma_token_id_t *urma_alloc_token_id(urma_context_t *ctx)

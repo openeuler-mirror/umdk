@@ -48,6 +48,10 @@ typedef enum bondp_user_ctl_opcode {
        config when creating jetty */
     BONDP_USER_CTL_SET_BONDING_PORT,
     BONDP_USER_CTL_SET_CTX_CFG,
+    /* Export import-free user_tseg context (with per-slave token id ext).
+     * Semantically grouped with GET_SEG_CTX; appended at the tail to keep the
+     * numbering of the existing opcodes stable. */
+    BONDP_USER_CTL_OPCODE_GET_USER_TSEG,
 } bondp_user_ctl_opcode_t;
 
 typedef enum bondp_ctx_cfg_mask {
@@ -255,6 +259,30 @@ typedef struct urma_bond_seg_ext_v0 {
     uint32_t peer_cnt;
     char data[0];
 } __attribute__((packed)) urma_bond_seg_ext_v0_t;
+#pragma pack(pop)
+
+/*
+ * Compact variable-length user_tseg ext layout (version 0), appended after
+ * urma_user_tseg_t + urma_user_info_ext_hdr_t on bonding devices:
+ *   data: bondp_user_tseg_peer_ctx_t entries[peer_cnt]
+ * Used by import-free (user_tseg) remote SGEs. The outer urma_user_tseg_t
+ * only carries the shared attr/token_value plus a virtual token id (never
+ * used for bare SQE); the per-slave token ids live only in the peer entries.
+ * peer_idx shares the same absolute device index space as the schedule
+ * target_idx / bondp_seg_peer_ctx_t.peer_idx.
+ */
+#pragma pack(push, 1)
+typedef struct bondp_user_tseg_peer_ctx {
+    uint8_t peer_idx; /* absolute device index; must match schedule target_idx */
+    uint32_t token_id; /* token_id of this slave device's p_tseg */
+} __attribute__((packed)) bondp_user_tseg_peer_ctx_t;
+
+typedef struct urma_bond_user_tseg_ext_v0 {
+    uint8_t version;
+    uint64_t mask;
+    uint32_t peer_cnt;
+    char data[0];
+} __attribute__((packed)) urma_bond_user_tseg_ext_v0_t;
 #pragma pack(pop)
 
 typedef struct bondp_rjetty {
