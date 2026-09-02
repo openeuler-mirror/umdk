@@ -715,6 +715,17 @@ int bondp_set_ctx_cfg(urma_context_t *ctx, const bondp_set_ctx_cfg_in_t *cfg_in)
         if (bondp_init_ctx_features(bdp_ctx) != 0) {
             URMA_LOG_ERR("Failed to restore context features.\n");
         }
+    } else {
+        URMA_LOG_INFO("Context configuration updated: mask=0x%lx, failover=%d, failback=%d, "
+                      "health_check=%d, health_check_interval_ms=%lu, "
+                      "health_check_batch_node_num=%u, rnr_retry=%d, "
+                      "rnr_retry_sleep_ms=%lu, rnr_retry_max=%lu, "
+                      "rnr_retry_jitter_ratio=%u.\n",
+                      cfg_in->mask, new_cfg.enable_failover, new_cfg.enable_failback,
+                      new_cfg.enable_health_check, new_cfg.health_check_interval_ms,
+                      new_cfg.health_check_batch_node_num, new_cfg.enable_rnr_retry,
+                      new_cfg.rnr_retry_sleep_ms, new_cfg.rnr_retry_max,
+                      new_cfg.rnr_retry_jitter_ratio);
     }
 
 EXIT:
