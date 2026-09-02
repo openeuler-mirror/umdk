@@ -18,6 +18,7 @@
 #include "umq_qbuf_pool.h"
 #include "umq_qbuf_pool_helper.h"
 #include "umq_tiny_qbuf_pool.h"
+#include "umq_thread_local.h"
 #include "urpc_timer.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_errno.h"
@@ -31,6 +32,7 @@
 
 #define MAX_SO_NAME_LEN     (32)
 #define MAX_FUNCNAME_LEN    (32)
+
 typedef struct umq_framework {
     umq_trans_mode_t mode;
     bool enable;
@@ -603,6 +605,7 @@ void umq_uninit(void)
     g_umq_inited = false;
     (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
     g_umq_config_mutex_lock = NULL;
+    umq_thread_id_uninit();
 }
 
 #ifndef UMQ_STATIC_LIB
@@ -780,27 +783,35 @@ int umq_init(umq_init_cfg_t *cfg)
         return -UMQ_ERR_EINVAL;
     }
 
+    ret = umq_thread_id_init();
+    if (ret != UMQ_SUCCESS) {
+        return ret;
+    }
+
     if ((cfg->feature & UMQ_FEATURE_ENABLE_TOKEN_POLICY) != 0) {
         ret = urpc_rand_seed_init();
         if (ret != 0) {
             UMQ_VLOG_ERR(VLOG_UMQ, "rand seed init failed, status: %d\n", ret);
-            return ret;
+            goto UNINIT_THREAD_ID;
         }
     }
 
     if (umq_buf_size_pow_small_set(cfg->buf_pool_cfg.small_block_size) != UMQ_SUCCESS) {
-        return -UMQ_ERR_EINVAL;
+        ret = -UMQ_ERR_EINVAL;
+        goto UNINIT_THREAD_ID;
     }
 
     for (uint8_t trans_info_i = 0; trans_info_i < cfg->trans_info_num; trans_info_i++) {
         umq_trans_info_t *info = &cfg->trans_info[trans_info_i];
         if (umq_dev_assign_validate(&info->dev_info) != UMQ_SUCCESS) {
-            return -UMQ_ERR_EINVAL;
+            ret = -UMQ_ERR_EINVAL;
+            goto UNINIT_THREAD_ID;
         }
 #ifdef UMQ_STATIC_LIB
         if (info->trans_mode != UMQ_TRANS_MODE_UB && info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
             UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
-            return -UMQ_ERR_EINVAL;
+            ret = -UMQ_ERR_EINVAL;
+            goto UNINIT_THREAD_ID;
         }
 #endif
         if (info->trans_mode >= UMQ_TRANS_MODE_MAX || info->trans_mode < 0) {
@@ -812,7 +823,8 @@ int umq_init(umq_init_cfg_t *cfg)
     g_umq_config_mutex_lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
     if (g_umq_config_mutex_lock == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq config mutex create failed\n");
-        return -UMQ_ERR_ENOMEM;
+        ret = -UMQ_ERR_ENOMEM;
+        goto UNINIT_THREAD_ID;
     }
 
     if ((cfg->feature & UMQ_FEATURE_ENABLE_FLOW_CONTROL) != 0) {
@@ -855,6 +867,10 @@ FW_UNINIT:
 LOCK_DESTROY:
     (void)util_mutex_lock_destroy(g_umq_config_mutex_lock);
     g_umq_config_mutex_lock = NULL;
+
+UNINIT_THREAD_ID:
+    umq_thread_id_uninit();
+
     return ret;
 }
 
