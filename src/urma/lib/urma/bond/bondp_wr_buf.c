@@ -32,7 +32,10 @@ void jfs_wr_get_refs(urma_jfs_wr_t *wr)
         case URMA_OPC_SEND_INVALIDATE:
             if (wr->send.src.sge != NULL) {
                 for (int i = 0; i < wr->send.src.num_sge; ++i) {
-                    bondp_tseg_get(wr->send.src.sge[i].tseg);
+                    /* tseg is NULL for import-free SGEs (user_tseg path). */
+                    if (wr->send.src.sge[i].tseg != NULL) {
+                        bondp_tseg_get(wr->send.src.sge[i].tseg);
+                    }
                 }
             }
             return;
@@ -41,10 +44,14 @@ void jfs_wr_get_refs(urma_jfs_wr_t *wr)
         case URMA_OPC_WRITE_NOTIFY:
         case URMA_OPC_READ:
             for (int i = 0; i < wr->rw.src.num_sge; ++i) {
-                bondp_tseg_get(wr->rw.src.sge[i].tseg);
+                if (wr->rw.src.sge[i].tseg != NULL) {
+                    bondp_tseg_get(wr->rw.src.sge[i].tseg);
+                }
             }
             for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
-                bondp_tseg_get(wr->rw.dst.sge[i].tseg);
+                if (wr->rw.dst.sge[i].tseg != NULL) {
+                    bondp_tseg_get(wr->rw.dst.sge[i].tseg);
+                }
             }
             return;
         case URMA_OPC_CAS:
@@ -73,7 +80,9 @@ void jfs_wr_put_refs(urma_jfs_wr_t *wr)
         case URMA_OPC_SEND_INVALIDATE:
             if (wr->send.src.sge != NULL) {
                 for (int i = 0; i < wr->send.src.num_sge; ++i) {
-                    bondp_tseg_put(wr->send.src.sge[i].tseg);
+                    if (wr->send.src.sge[i].tseg != NULL) {
+                        bondp_tseg_put(wr->send.src.sge[i].tseg);
+                    }
                 }
             }
             return;
@@ -82,10 +91,14 @@ void jfs_wr_put_refs(urma_jfs_wr_t *wr)
         case URMA_OPC_WRITE_NOTIFY:
         case URMA_OPC_READ:
             for (int i = 0; i < wr->rw.src.num_sge; ++i) {
-                bondp_tseg_put(wr->rw.src.sge[i].tseg);
+                if (wr->rw.src.sge[i].tseg != NULL) {
+                    bondp_tseg_put(wr->rw.src.sge[i].tseg);
+                }
             }
             for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
-                bondp_tseg_put(wr->rw.dst.sge[i].tseg);
+                if (wr->rw.dst.sge[i].tseg != NULL) {
+                    bondp_tseg_put(wr->rw.dst.sge[i].tseg);
+                }
             }
             return;
         case URMA_OPC_CAS:
@@ -150,7 +163,12 @@ int jfs_wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge, uint32
         return -EINVAL;
     }
 
-    uint32_t entry_size = sizeof(jfs_wr_entry_t) + (max_sge + max_rsge) * sizeof(urma_sge_t);
+    /* sge_data + import-free user_tseg scratch regions (see bondp_wr_buf.h). */
+    uint32_t n = max_sge + max_rsge;
+    uint32_t entry_size = sizeof(jfs_wr_entry_t) +
+                          n * (sizeof(urma_sge_t) + BONDP_USER_TSEG_SLOT_STRIDE +
+                               sizeof(urma_user_tseg_t) + sizeof(urma_user_tseg_t *));
+    entry_size = (entry_size + 7u) & ~7u; /* keep every entry 8-byte aligned */
     return wr_buf_init(buf, max_wr_num, entry_size);
 }
 

@@ -857,6 +857,28 @@ urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32
 void urma_put_seg_ctx(urma_seg_t *seg);
 
 /**
+ * Get user target segment context for proxy transmission, so that the peer can
+ * access the segment import-free by filling it into urma_sge_t.user_tseg.
+ * @param[in] [Required] tseg: the locally registered target segment;
+ * @param[in] [Required] token: the token value for remote access check;
+ * @param[out] [Required] user_tseg: pointer to the user target segment context;
+ * @param[out] [Required] size: size of the encapsulated data structure;
+ * Return: 0 on success, other value on error
+ * Note: only locally registered segments are supported. On bonding devices the
+ * returned buffer carries a bonding extension (attr.bs.has_user_info = 1) with
+ * the per-slave token ids; the peer must pass the whole buffer of @size bytes
+ * as-is into urma_sge_t.user_tseg and must not modify the peer mapping.
+ */
+urma_status_t urma_get_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
+                                 urma_user_tseg_t **user_tseg, uint32_t *size);
+
+/**
+ * Free the user target segment context allocated by urma_get_user_tseg.
+ * @param[in] [Required] user_tseg: the user target segment context to free;
+ */
+void urma_put_user_tseg(urma_user_tseg_t *user_tseg);
+
+/**
  * post a request to read, write, atomic or send data.
  * @param[in] jfs: the jfs created before, which is used to put command;
  * @param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
