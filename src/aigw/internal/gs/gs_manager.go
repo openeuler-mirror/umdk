@@ -17,6 +17,7 @@ import (
 
 	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/internal/cachecenter"
+	"huawei.com/aigw/internal/kvevents"
 	"huawei.com/aigw/internal/prefixcache"
 	"huawei.com/aigw/internal/renderclient"
 	"huawei.com/aigw/internal/stats"
@@ -173,6 +174,9 @@ type AlgorithmParams struct {
 
 	// Phase 2: KvcSessionManager to receive kvevents fan-out (nil if KVC disabled).
 	KvcSessionMgr *KvcSessionManager
+
+	// KVEventsConfig overrides the kvevents defaults when set (EndpointTemplate != "").
+	KVEventsConfig kvevents.KVEventsManagerConfig
 }
 
 // NewGlobalSchedulerManager creates a new GS with options
@@ -285,6 +289,13 @@ func (m *GlobalSchedulerManager) setConfig(gsConfig *base.GlobalSchedulerConfig)
 		options = append(options, WithRenderClientConfig(gsConfig.RenderClient))
 	} else {
 		log.Info().Msg("[GS] setConfig: no renderClient config found in JSON")
+	}
+
+	// Add kv events config if provided
+	if gsConfig.KVEvents.EndpointTemplate != "" {
+		log.Info().Msgf("[GS] setConfig: found kvEvents config in JSON, endpointTemplate=%s",
+			gsConfig.KVEvents.EndpointTemplate)
+		options = append(options, WithKVEventsConfig(gsConfig.KVEvents))
 	}
 
 	for _, opt := range options {

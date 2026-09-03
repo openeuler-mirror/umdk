@@ -37,6 +37,9 @@ func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*
 	}
 
 	kveventsConfig := kvevents.DefaultKVEventsManagerConfig()
+	if params.KVEventsConfig.EndpointTemplate != "" {
+		kveventsConfig.EndpointTemplate = params.KVEventsConfig.EndpointTemplate
+	}
 	var extraHandlers []kvevents.EventHandler
 	if params.KvcSessionMgr != nil {
 		// Phase 2: fan out kvevents to both prefixcache and the per-model KvcSessionManager.

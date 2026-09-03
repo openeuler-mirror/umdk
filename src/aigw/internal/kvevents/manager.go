@@ -10,6 +10,7 @@ package kvevents
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ const (
 )
 
 type KVEventsManagerConfig struct {
-	EndpointTemplate string
+	EndpointTemplate string `json:"endpointTemplate"`
 	Topic            string
 	PollTimeout      time.Duration
 	ReconnectDelay   time.Duration
@@ -130,11 +131,7 @@ func (m *KVEventsManager) UnsubscribeInstance(instanceName string) {
 }
 
 func (m *KVEventsManager) buildEndpoint(ip string) string {
-	template := m.config.EndpointTemplate
-	if ip == "" {
-		return template
-	}
-	return fmt.Sprintf("tcp://%s:5557", ip)
+	return strings.ReplaceAll(m.config.EndpointTemplate, "{ip}", ip)
 }
 
 func (m *KVEventsManager) eventLoop(instanceName string, client *ZMQClient, handler *eventHandler) {
