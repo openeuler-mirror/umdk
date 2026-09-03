@@ -63,7 +63,7 @@ bool util_vlog_limit(util_vlog_ctx_t *ctx, uint32_t *print_count, uint64_t *last
     (void)ctx;
     (void)print_count;
     (void)last_time;
-    return false;
+    return true;
 }
 
 /* --- urpc_util stub --- */
@@ -1761,7 +1761,8 @@ TEST_F(TestQbufPoolMultiLevel, FlushTlsNodataToGlobalAndDirect)
     umq_qbuf_free(&nodataList);
     EXPECT_GT(g_thread_cache.block_pool.buf_cnt_without_data + g_qbuf_pool.block_pool[0].buf_cnt_without_data, 0u);
 
-    /* Direct flush call */
+    /* Direct flush call — umq_flush_tls_nodata_to_global not available in this build,
+     * use return_to_global with threshold=0 instead */
     if (g_thread_cache.block_pool.buf_cnt_without_data > 0) {
         /* umq_flush_tls_nodata_to_global() not yet implemented */
         EXPECT_GT(g_thread_cache.block_pool.buf_cnt_without_data, 0u);
