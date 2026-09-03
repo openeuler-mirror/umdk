@@ -223,8 +223,10 @@ static int bondp_delete_vcontext(bondp_context_t *bdp_ctx)
     }
     bdp_ctx->v_ctx.async_fd = bdp_ctx->real_async_fd;
     bdp_ctx->real_async_fd = -1;
-    URMA_LOG_INFO("bondp delete_vctx, eid_idx is %d, ref_cnt is %lu, dev_num is %d, bonding_model is %d, bonding_level is %d.\n",
-                  bdp_ctx->v_ctx.eid_index, ref_cnt, bdp_ctx->dev_num, bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
+    URMA_LOG_DEBUG("Deleting vcontext, eid_idx=%d, ref_cnt=%lu, dev_num=%d, bonding_mode=%d, "
+                   "bonding_level=%d.\n",
+                   bdp_ctx->v_ctx.eid_index, ref_cnt, bdp_ctx->dev_num,
+                   bdp_ctx->bonding_mode, bdp_ctx->bonding_level);
 
     if (urma_cmd_delete_context(&bdp_ctx->v_ctx) != 0) {
         URMA_LOG_ERR("Failed to urma_cmd_delete_context\n");
@@ -375,8 +377,8 @@ static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
         }
         (void)epoll_ctl(bdp_ctx->v_ctx.async_fd, EPOLL_CTL_DEL,
                         bdp_ctx->p_ctxs[i]->async_fd, NULL);
-        URMA_LOG_DEBUG("bondp delete_pctx, eid_idx is %u.\n",
-                       bdp_ctx->p_ctxs[i]->eid_index);
+        URMA_LOG_DEBUG("Deleting pcontext, idx=%d, eid_idx=%u.\n",
+                       i, bdp_ctx->p_ctxs[i]->eid_index);
 
         sub_ret = urma_delete_context(bdp_ctx->p_ctxs[i]);
         if (sub_ret != 0) {
