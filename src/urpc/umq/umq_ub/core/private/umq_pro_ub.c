@@ -455,8 +455,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         wr_index++;
         if (wr_index == UMQ_BATCH_SIZE && buffer != NULL) {
             // wr count exceed UMQ_BATCH_SIZE
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, wr count exceeds %d, not supported, first_qbuf=%p, cur_buffer=%p, total_data_size=%u\n",
-                queue->umq_id, opcode, UMQ_BATCH_SIZE, (void *)qbuf, (void *)buffer, buffer->total_data_size);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, wr count exceeds %d, not supported, total_data_size=%u\n",
+                queue->umq_id, opcode, UMQ_BATCH_SIZE, buffer->total_data_size);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
             goto ERROR;
