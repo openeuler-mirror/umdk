@@ -96,6 +96,25 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
+
+/*
+ * Touch one byte per 2MB-aligned huge page to trigger page fault and force
+ * kernel to back the region with 2MB transparent huge pages. Replaces full
+ * memset(0) which is O(total_size) with O(total_size / 2MB).
+ * buf must be 2MB-aligned (from memalign(QBUF_MEMALIGN_SIZE, ...)).
+ */
+static ALWAYS_INLINE void qbuf_touch_huge_pages(void *buf, uint64_t total_size)
+{
+    char *p = (char *)buf;
+    uint64_t full_pages = total_size / QBUF_MEMALIGN_SIZE;
+    uint64_t remainder = total_size % QBUF_MEMALIGN_SIZE;
+    for (uint64_t i = 0; i < full_pages; i++) {
+        p[i * QBUF_MEMALIGN_SIZE] = 0;
+    }
+    if (remainder > 0) {
+        memset(p + full_pages * QBUF_MEMALIGN_SIZE, 0, remainder);
+    }
+}
 #define QBUF_POOL_MAX_BLOCK_SIZE (1024U * 1024U)
 #define QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA (4 * 1024 * 1024)
 

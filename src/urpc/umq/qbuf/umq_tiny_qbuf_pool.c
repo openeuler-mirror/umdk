@@ -78,6 +78,12 @@ void *umq_tiny_io_buf_addr(void)
     return g_tiny_buffer_addr;
 }
 
+void umq_tiny_io_buf_set_buffer(void *addr, uint64_t size)
+{
+    g_tiny_buffer_addr = addr;
+    g_tiny_total_len = size;
+}
+
 uint64_t umq_tiny_io_buf_size(void)
 {
     return g_tiny_total_len;
