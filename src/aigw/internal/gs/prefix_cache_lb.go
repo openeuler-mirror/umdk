@@ -32,10 +32,6 @@ func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*
 	log.Info().Msg("[prefixCache] Init prefixCache loadbalancer.")
 
 	pcConfig := prefixcache.DefaultConfig()
-	// Align the prefix block size with the per-model blockSize (params.BlockSize,
-	// = GlobalSchedulerConfig.BlockSize) so it matches the vLLM --block-size the
-	// user already configures, without requiring AIGW_PREFIX_CACHE_BLOCK_SIZE.
-	// The env var still wins when set (DefaultConfig applies it). See #900.
 	if params.BlockSize > 0 {
 		pcConfig.BlockSize = params.BlockSize
 	}
@@ -263,8 +259,6 @@ func (lb *prefixCacheLoadBalancer) selectFromMatched(instances []string, matched
 		return scores[i].metric.ReqNum < scores[j].metric.ReqNum
 	})
 
-	// No match-threshold gate: a partial prefix hit still beats the fallback
-	// path (KV reuse > none), so always use the top-scored instance. See #900.
 	log.Info().Msgf("[prefixCache] selectFromMatched: selected instance %s with %d%% match",
 		scores[0].instanceName, scores[0].matchPercent)
 	return scores[0].metric

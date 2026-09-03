@@ -69,9 +69,6 @@ type prefixCacheManager struct {
 	urlToInstanceName map[string]string
 }
 
-// NewPrefixCacheManager creates a manager that is active on construction:
-// the prefix cache is driven solely by selecting the prefixCache
-// load-balancer algorithm, so no enable flag or env var is needed (#900).
 func NewPrefixCacheManager(
 	config Config,
 	kvEventsConfig kvevents.KVEventsManagerConfig,

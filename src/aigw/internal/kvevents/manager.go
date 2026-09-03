@@ -10,9 +10,6 @@ package kvevents
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,41 +17,11 @@ import (
 )
 
 const (
-	defaultPollTimeout    = 100 * time.Millisecond
-	defaultReconnectDelay = 1 * time.Second
-	defaultHWM            = 100000
-)
-
-func loadEnvBool(key string, defaultVal bool) bool {
-	if val := os.Getenv(key); val != "" {
-		return val == "true" || val == "1"
-	}
-	return defaultVal
-}
-
-func loadEnvString(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultVal
-}
-
-func loadEnvInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if intVal, err := strconv.Atoi(val); err == nil {
-			return intVal
-		}
-	}
-	return defaultVal
-}
-
-var (
-	envKVEventsEndpointTemplate = loadEnvString("AIGW_KV_EVENTS_ENDPOINT_TEMPLATE", "tcp://{ip}:5557")
-	envKVEventsTopic            = loadEnvString("AIGW_KV_EVENTS_TOPIC", "")
-	envKVEventsPollTimeoutMs    = loadEnvInt("AIGW_KV_EVENTS_POLL_TIMEOUT_MS", 100)
-	envKVEventsReconnectDelayMs = loadEnvInt("AIGW_KV_EVENTS_RECONNECT_DELAY_MS", 1000)
-	envKVEventsHWM              = loadEnvInt("AIGW_KV_EVENTS_HWM", defaultHWM)
-	envKVEventsUseMockPorts     = loadEnvBool("AIGW_KV_EVENTS_USE_MOCK_PORTS", false) // only enable in test solution
+	defaultEndpointTemplate = "tcp://{ip}:5557"
+	defaultTopic            = ""
+	defaultPollTimeout      = 100 * time.Millisecond
+	defaultReconnectDelay   = 1 * time.Second
+	defaultHWM              = 100000
 )
 
 type KVEventsManagerConfig struct {
@@ -67,11 +34,11 @@ type KVEventsManagerConfig struct {
 
 func DefaultKVEventsManagerConfig() KVEventsManagerConfig {
 	return KVEventsManagerConfig{
-		EndpointTemplate: envKVEventsEndpointTemplate,
-		Topic:            envKVEventsTopic,
-		PollTimeout:      time.Duration(envKVEventsPollTimeoutMs) * time.Millisecond,
-		ReconnectDelay:   time.Duration(envKVEventsReconnectDelayMs) * time.Millisecond,
-		HWM:              envKVEventsHWM,
+		EndpointTemplate: defaultEndpointTemplate,
+		Topic:            defaultTopic,
+		PollTimeout:      defaultPollTimeout,
+		ReconnectDelay:   defaultReconnectDelay,
+		HWM:              defaultHWM,
 	}
 }
 
@@ -88,9 +55,6 @@ type KVEventsManager struct {
 	wg     sync.WaitGroup
 }
 
-// NewKVEventsManager creates a manager that is active on construction:
-// kvevents is driven solely by the prefixCache algorithm selection, so no
-// separate enable flag or env var is needed (#900).
 func NewKVEventsManager(handler EventHandler, config KVEventsManagerConfig) *KVEventsManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -106,9 +70,6 @@ func NewKVEventsManager(handler EventHandler, config KVEventsManagerConfig) *KVE
 	}
 }
 
-// IsEnabled reports whether the manager is active. A constructed manager is
-// always active; the method is retained as a non-nil convenience check for
-// callers that gate on it.
 func (m *KVEventsManager) IsEnabled() bool {
 	return m != nil
 }
@@ -121,23 +82,8 @@ func (m *KVEventsManager) SubscribeInstance(instanceName, instanceIP, modelName 
 		return nil
 	}
 
-	// Calculate endpoint - use mock ports if env var is set
-	var endpoint string
-	if envKVEventsUseMockPorts && strings.HasPrefix(instanceName, "worker-") {
-		workerPortStr := strings.TrimPrefix(instanceName, "worker-")
-		if workerPort, err := strconv.Atoi(workerPortStr); err == nil {
-			zmqPort := 55570 + (workerPort - 19000)
-			endpoint = fmt.Sprintf("tcp://%s:%d", instanceIP, zmqPort)
-			log.Info().Msgf("[kvevents] using mock port %s for instance %s", endpoint, instanceName)
-		} else {
-			endpoint = m.buildEndpoint(instanceIP)
-		}
-	} else {
-		endpoint = m.buildEndpoint(instanceIP)
-	}
-
 	config := ZMQConfig{
-		Endpoint:       endpoint,
+		Endpoint:       m.buildEndpoint(instanceIP),
 		Topic:          m.config.Topic,
 		PollTimeout:    m.config.PollTimeout,
 		ReconnectDelay: m.config.ReconnectDelay,
@@ -164,7 +110,7 @@ func (m *KVEventsManager) SubscribeInstance(instanceName, instanceIP, modelName 
 	}
 
 	log.Info().Msgf("[kvevents] subscribed to %s (model: %s, endpoint: %s)",
-		instanceName, modelName, endpoint)
+		instanceName, modelName, config.Endpoint)
 	return nil
 }
 

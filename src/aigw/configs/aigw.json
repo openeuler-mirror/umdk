@@ -35,14 +35,6 @@
     "path": "/getAIGWEnableModelList",
     "interval": 5
   },
-  "prefixCache": {
-    "blockSize": 16,
-    "seed": 12345678901234567890,
-    "maxContexts": 1000,
-    "maxPrefixsPerContext": 10000,
-    "evictionIntervalSeconds": 60,
-    "evictionDurationMinutes": 20
-  },
   "predictor": {
     "predictType": "none/ema/lightgbm",
     "lightgbm": {

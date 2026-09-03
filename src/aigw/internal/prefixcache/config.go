@@ -56,9 +56,6 @@ var (
 	envSeed                    = loadEnvUint64("AIGW_PREFIX_CACHE_SEED", 0) // 0 means random seed
 )
 
-// Config has no Enabled or MatchThreshold fields: the prefix cache is driven
-// solely by selecting the prefixCache load-balancer algorithm, and partial
-// prefix hits are always preferred over falling back (#900).
 type Config struct {
 	BlockSize              int
 	MaxContexts            int

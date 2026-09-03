@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// TestNewKVEventsManager_ConstructedActive asserts that a manager is active on
-// construction — kvevents is driven solely by the prefixCache algorithm
-// selection, with no enable flag or env var (#900).
 func TestNewKVEventsManager_ConstructedActive(t *testing.T) {
 	cfg := KVEventsManagerConfig{
 		EndpointTemplate: "tcp://{ip}:5557",
@@ -27,7 +24,6 @@ func TestNewKVEventsManager_ConstructedActive(t *testing.T) {
 	}
 }
 
-// countingHandlerAsEventHandler is a minimal EventHandler for constructor tests.
 type countingHandlerAsEventHandler struct{}
 
 func (countingHandlerAsEventHandler) OnBlockStored(_ BlockStored) error           { return nil }
