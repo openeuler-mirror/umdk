@@ -37,10 +37,7 @@ void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
     if (buf_mode == UMQ_BUF_SPLIT) {
         min_size = UMQ_RX_QBUF_BLOCK_SIZE + (uint32_t)sizeof(umq_buf_t);
     }
-    g_rx_total_len = (size == 0) ? UMQ_RX_QBUF_POOL_MAX_SIZE : size;
-    if (g_rx_total_len > UMQ_RX_QBUF_POOL_MAX_SIZE) {
-        g_rx_total_len = UMQ_RX_QBUF_POOL_MAX_SIZE;
-    }
+    g_rx_total_len = (size == 0) ? UMQ_RX_QBUF_POOL_DEFAULT_SIZE : size;
 
     g_rx_buffer_addr = umq_qbuf_base_io_buf_malloc(g_rx_total_len, min_size);
     if (g_rx_buffer_addr == NULL) {
