@@ -26,14 +26,19 @@ type prefixCacheLoadBalancer struct {
 	prefixCacheMgr prefixcache.PrefixCacheManager
 	renderClient   *renderclient.RenderClient
 	fallbackLB     loadBalancer
-	matchThreshold int
 }
 
 func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*prefixCacheLoadBalancer, error) {
 	log.Info().Msg("[prefixCache] Init prefixCache loadbalancer.")
 
 	pcConfig := prefixcache.DefaultConfig()
-	pcConfig.Enabled = true
+	// Align the prefix block size with the per-model blockSize (params.BlockSize,
+	// = GlobalSchedulerConfig.BlockSize) so it matches the vLLM --block-size the
+	// user already configures, without requiring AIGW_PREFIX_CACHE_BLOCK_SIZE.
+	// The env var still wins when set (DefaultConfig applies it). See #900.
+	if params.BlockSize > 0 {
+		pcConfig.BlockSize = params.BlockSize
+	}
 
 	kveventsConfig := kvevents.DefaultKVEventsManagerConfig()
 	var extraHandlers []kvevents.EventHandler
@@ -58,7 +63,6 @@ func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*
 			instanceRoleType: params.InstanceRoleType,
 		},
 		prefixCacheMgr: pcMgr,
-		matchThreshold: pcConfig.MatchThreshold,
 		fallbackLB:     fallback,
 	}, nil
 }
@@ -259,13 +263,11 @@ func (lb *prefixCacheLoadBalancer) selectFromMatched(instances []string, matched
 		return scores[i].metric.ReqNum < scores[j].metric.ReqNum
 	})
 
-	if scores[0].matchPercent >= lb.matchThreshold {
-		log.Info().Msgf("[prefixCache] selectFromMatched: selected instance %s with %d%% match",
-			scores[0].instanceName, scores[0].matchPercent)
-		return scores[0].metric
-	}
-
-	return nil
+	// No match-threshold gate: a partial prefix hit still beats the fallback
+	// path (KV reuse > none), so always use the top-scored instance. See #900.
+	log.Info().Msgf("[prefixCache] selectFromMatched: selected instance %s with %d%% match",
+		scores[0].instanceName, scores[0].matchPercent)
+	return scores[0].metric
 }
 
 func (lb *prefixCacheLoadBalancer) getReadyInstances(candidateIDs []string) ([]string, error) {

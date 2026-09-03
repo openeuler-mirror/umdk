@@ -60,8 +60,7 @@ type prefixCacheManager struct {
 	kvEventsMgr  *kvevents.KVEventsManager
 	renderClient *renderclient.RenderClient
 
-	mu      sync.RWMutex
-	enabled bool
+	mu sync.RWMutex
 
 	fallbackStringMatching bool
 
@@ -70,6 +69,9 @@ type prefixCacheManager struct {
 	urlToInstanceName map[string]string
 }
 
+// NewPrefixCacheManager creates a manager that is active on construction:
+// the prefix cache is driven solely by selecting the prefixCache
+// load-balancer algorithm, so no enable flag or env var is needed (#900).
 func NewPrefixCacheManager(
 	config Config,
 	kvEventsConfig kvevents.KVEventsManagerConfig,
@@ -77,24 +79,20 @@ func NewPrefixCacheManager(
 ) (PrefixCacheManager, error) {
 	m := &prefixCacheManager{
 		config:                 config,
-		enabled:                config.Enabled,
 		fallbackStringMatching: config.FallbackStringMatching,
 	}
 
 	m.syncTable = NewSyncPrefixTable(config, nil)
 
-	if config.Enabled {
-		// Phase 2: fan out kvevents to prefixcache + any extra handlers (e.g. KvcSessionManager).
-		handler := kvevents.EventHandler(m)
-		if len(extraKveventsHandlers) > 0 {
-			all := append([]kvevents.EventHandler{handler}, extraKveventsHandlers...)
-			handler = kvevents.NewMultiHandler(all...)
-		}
-		m.kvEventsMgr = kvevents.NewKVEventsManager(handler, kvEventsConfig)
+	// Phase 2: fan out kvevents to prefixcache + any extra handlers (e.g. KvcSessionManager).
+	handler := kvevents.EventHandler(m)
+	if len(extraKveventsHandlers) > 0 {
+		all := append([]kvevents.EventHandler{handler}, extraKveventsHandlers...)
+		handler = kvevents.NewMultiHandler(all...)
 	}
+	m.kvEventsMgr = kvevents.NewKVEventsManager(handler, kvEventsConfig)
 
-	log.Info().Msgf("[prefixcache] manager created: enabled=%v, blockSize=%d",
-		config.Enabled, config.BlockSize)
+	log.Info().Msgf("[prefixcache] manager created: blockSize=%d", config.BlockSize)
 
 	return m, nil
 }
@@ -122,7 +120,7 @@ func (m *prefixCacheManager) MatchPrefix(
 	promptTokenIDs []int64,
 	readyInstances []string,
 ) (map[string]int, int, error) {
-	if !m.enabled || len(promptTokenIDs) == 0 {
+	if len(promptTokenIDs) == 0 {
 		return map[string]int{}, 0, nil
 	}
 
@@ -143,7 +141,7 @@ func (m *prefixCacheManager) MatchPrefixByText(
 	promptText string,
 	readyInstances []string,
 ) (map[string]int, int, error) {
-	if !m.enabled || !m.fallbackStringMatching || len(promptText) == 0 {
+	if !m.fallbackStringMatching || len(promptText) == 0 {
 		return map[string]int{}, 0, nil
 	}
 
@@ -164,7 +162,7 @@ func (m *prefixCacheManager) AddPrefix(
 	instanceName string,
 	promptTokenIDs []int64,
 ) error {
-	if !m.enabled || len(promptTokenIDs) == 0 {
+	if len(promptTokenIDs) == 0 {
 		return nil
 	}
 
@@ -172,10 +170,6 @@ func (m *prefixCacheManager) AddPrefix(
 }
 
 func (m *prefixCacheManager) RemoveInstance(instanceName string) error {
-	if !m.enabled {
-		return nil
-	}
-
 	return m.syncTable.RemoveInstance("", -1, instanceName)
 }
 
@@ -206,18 +200,10 @@ func (m *prefixCacheManager) GetStats() PrefixCacheStats {
 }
 
 func (m *prefixCacheManager) OnBlockStored(event kvevents.BlockStored) error {
-	if !m.enabled {
-		return nil
-	}
-
 	return m.syncTable.ProcessBlockStored(event)
 }
 
 func (m *prefixCacheManager) OnBlockRemoved(event kvevents.BlockRemoved) error {
-	if !m.enabled {
-		return nil
-	}
-
 	return m.syncTable.ProcessBlockRemoved(event)
 }
 

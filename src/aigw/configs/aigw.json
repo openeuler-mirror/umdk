@@ -36,12 +36,10 @@
     "interval": 5
   },
   "prefixCache": {
-    "enabled": false,
     "blockSize": 16,
     "seed": 12345678901234567890,
     "maxContexts": 1000,
     "maxPrefixsPerContext": 10000,
-    "matchThreshold": 50,
     "evictionIntervalSeconds": 60,
     "evictionDurationMinutes": 20
   },

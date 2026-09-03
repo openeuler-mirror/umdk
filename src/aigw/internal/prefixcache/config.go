@@ -47,38 +47,35 @@ func loadEnvUint64(key string, defaultVal uint64) uint64 {
 }
 
 var (
-	envEnabled                 = loadEnvBool("AIGW_PREFIX_CACHE_ENABLED", false)
 	envBlockSize               = loadEnvInt("AIGW_PREFIX_CACHE_BLOCK_SIZE", defaultBlockSize)
 	envMaxContexts             = loadEnvInt("AIGW_PREFIX_CACHE_MAX_CONTEXTS", defaultMaxContexts)
 	envMaxPrefixesPerContext   = loadEnvInt("AIGW_PREFIX_CACHE_MAX_PREFIXES_PER_CONTEXT", defaultMaxPrefixesPerContext)
 	envEvictionIntervalSeconds = loadEnvInt("AIGW_PREFIX_CACHE_EVICTION_INTERVAL_SECONDS", defaultEvictionIntervalSeconds)
 	envEvictionDurationMinutes = loadEnvInt("AIGW_PREFIX_CACHE_EVICTION_DURATION_MINUTES", defaultEvictionDurationMinutes)
-	envMatchThreshold          = loadEnvInt("AIGW_PREFIX_CACHE_MATCH_THRESHOLD", 50)
 	envFallbackStringMatching  = loadEnvBool("AIGW_PREFIX_CACHE_FALLBACK_STRING_MATCHING", true)
 	envSeed                    = loadEnvUint64("AIGW_PREFIX_CACHE_SEED", 0) // 0 means random seed
 )
 
+// Config has no Enabled or MatchThreshold fields: the prefix cache is driven
+// solely by selecting the prefixCache load-balancer algorithm, and partial
+// prefix hits are always preferred over falling back (#900).
 type Config struct {
-	Enabled                bool
 	BlockSize              int
 	MaxContexts            int
 	MaxPrefixesPerContext  int
 	EvictionInterval       time.Duration
 	EvictionDuration       time.Duration
-	MatchThreshold         int
 	FallbackStringMatching bool
 	Seed                   uint64 // 0 means generate random seed
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Enabled:                envEnabled,
 		BlockSize:              envBlockSize,
 		MaxContexts:            envMaxContexts,
 		MaxPrefixesPerContext:  envMaxPrefixesPerContext,
 		EvictionInterval:       time.Duration(envEvictionIntervalSeconds) * time.Second,
 		EvictionDuration:       time.Duration(envEvictionDurationMinutes) * time.Minute,
-		MatchThreshold:         envMatchThreshold,
 		FallbackStringMatching: envFallbackStringMatching,
 		Seed:                   envSeed,
 	}
