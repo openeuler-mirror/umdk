@@ -351,12 +351,19 @@ static void urma_sim_dtor(void)
 
 /* ====== 拦截实现 ====== */
 
+static const char *get_provider_install_dir(void)
+{
+    const char *dir = getenv("URMA_DT_INSTALL_DIR");
+    if (dir != NULL && dir[0] != '\0') {
+        return dir;
+    }
+    return "/usr/lib64/urma";
+}
+
 DIR *opendir(const char *name)
 {
     init_real_funcs();
-    /* /sys/class/ubcore(枚举设备) 和 /dev/uburma(check_dev_name 校验设备名)
-     * 都重定向到 constructor 造的临时目录，该目录含每个设备名作为子条目。 */
-    if (g_sim_ready && g_sim_dir_root[0] != '\0' &&
+    if (g_sim_ready &&
         (strcmp(name, URMA_SYSFS_PREFIX) == 0 || strcmp(name, URMA_DEV_PREFIX) == 0)) {
         return real_opendir(g_sim_dir_root);
     }
@@ -372,7 +379,7 @@ DIR *opendir(const char *name)
     size_t name_len = strlen(name);
     if (strstr(name, "build") != NULL && name_len >= strlen("/urma") &&
         strcmp(name + name_len - strlen("/urma"), "/urma") == 0) {
-        return real_opendir("/usr/lib64/urma");
+        return real_opendir(get_provider_install_dir());
     }
     return real_opendir(name);
 }
@@ -409,7 +416,7 @@ int stat(const char *path, struct stat *buf)
 
 /* build 路径下的 provider .so（urma_open_drivers 用 dladdr 推算 liburma 路径，build_noasan
  * 的 liburma 没有 urma 子目录）。把 build 路径下 urma 目录里的 .so 重定向到
- * /usr/lib64/urma/<file>。命中返回 malloc 的重定向路径（caller free），否则 NULL。 */
+ * 安装目录/<file>。命中返回 malloc 的重定向路径（caller free），否则 NULL。 */
 static char *urma_sim_provider_redirect(const char *path)
 {
     if (path == NULL) {
@@ -443,11 +450,13 @@ static char *urma_sim_provider_redirect(const char *path)
     if (blen < 3 || strstr(basename, ".so") == NULL) {
         return NULL;
     }
-    char *out = malloc(strlen("/usr/lib64/urma/") + blen + 1);
+    const char *idir = get_provider_install_dir();
+    size_t idir_len = strlen(idir);
+    char *out = malloc(idir_len + 1 + blen + 1);
     if (out == NULL) {
         return NULL;
     }
-    snprintf(out, strlen("/usr/lib64/urma/") + blen + 1, "/usr/lib64/urma/%s", basename);
+    snprintf(out, idir_len + 1 + blen + 1, "%s/%s", idir, basename);
     return out;
 }
 
