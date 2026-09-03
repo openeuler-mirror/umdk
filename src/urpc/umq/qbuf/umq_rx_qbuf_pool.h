@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 #define UMQ_RX_QBUF_BLOCK_SIZE (4096U)
-#define UMQ_RX_QBUF_POOL_MAX_SIZE (256ULL * 1024ULL * 1024ULL)
+#define UMQ_RX_QBUF_POOL_DEFAULT_SIZE ((uint64_t)UMQ_DEFAULT_RX_DEPTH * 4ULL * UMQ_RX_QBUF_BLOCK_SIZE)
 
 /*
  * Independent RX qbuf pool: 4KB-only, single size class.

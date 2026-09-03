@@ -229,6 +229,11 @@ int util_mutex_unlock(util_external_mutex_lock *lock)
  * umq_qbuf_pool_helper.h at line 25. */
 #include "umq_rx_qbuf_pool.c"
 
+/* Include tiny pool (provides umq_tiny_buf_block_size_bytes for cfg.c) +
+ * pool cfg check, needed by 11.16. */
+#include "umq_qbuf_pool_cfg.c"
+#include "umq_tiny_qbuf_pool.c"
+
 /* umq_qbuf_alloc is defined in umq_qbuf_pool_helper.c which depends on
  * umq_tiny_qbuf_pool and umq_huge_qbuf_pool. Rather than pulling in that
  * entire dependency chain, we provide a simplified version here that covers
@@ -364,10 +369,11 @@ TEST_F(TestQbufPoolMultiLevel, MultiLevelSizeClassSelection)
     InitPool(2, 16);
 
     /* When/Then: select_size_class picks the smallest sc whose block_size >= need */
-    EXPECT_EQ(select_size_class(2 * 1024), 0u);   /* 2K  -> sc=0 (4K >= 2K)  */
-    EXPECT_EQ(select_size_class(4 * 1024), 0u);   /* 4K  -> sc=0 (4K >= 4K)  */
-    EXPECT_EQ(select_size_class(50 * 1024), 1u);  /* 50K -> sc=1 (64K >= 50K) */
-    EXPECT_EQ(select_size_class(200 * 1024), UMQ_QBUF_SIZE_CLASS_MAX); /* 200K > 64K -> no single block, fail sentinel */
+    EXPECT_EQ(select_size_class(2 * 1024), 0u);  /* 2K  -> sc=0 (4K >= 2K)  */
+    EXPECT_EQ(select_size_class(4 * 1024), 0u);  /* 4K  -> sc=0 (4K >= 4K)  */
+    EXPECT_EQ(select_size_class(50 * 1024), 1u); /* 50K -> sc=1 (64K >= 50K) */
+    EXPECT_EQ(select_size_class(200 * 1024),
+              UMQ_QBUF_SIZE_CLASS_MAX); /* 200K > 64K -> no single block, fail sentinel */
 
     /* Given: custom config count=7, mult=2 -> [4K,8K,16K,32K,64K,128K,256K] */
     umq_qbuf_pool_uninit();
@@ -631,7 +637,8 @@ TEST_F(TestQbufPoolMultiLevel, ConfigurationValidationComprehensive)
     fillSizes(2, 16);
     cfg.expansion_threshold = 0;
     uint64_t bc0[] = {1000, 1000};
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc0[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc0[i];
     EXPECT_EQ(umq_qbuf_pool_init(&cfg), 0);
     umq_qbuf_pool_uninit();
 
@@ -639,19 +646,22 @@ TEST_F(TestQbufPoolMultiLevel, ConfigurationValidationComprehensive)
      * value used directly. Need per_sc_block_counts for init to succeed (all-zero -> 0 blocks -> layout fails). */
     cfg.expansion_threshold = 101;
     uint64_t bc101[] = {1000, 1000};
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc101[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc101[i];
     EXPECT_EQ(umq_qbuf_pool_init(&cfg), 0);
     umq_qbuf_pool_uninit();
 
     /* expansion_threshold=200 -> no upper bound check, accepted */
     cfg.expansion_threshold = 200;
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc101[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc101[i];
     EXPECT_EQ(umq_qbuf_pool_init(&cfg), 0);
     umq_qbuf_pool_uninit();
 
     /* Valid threshold=50 -> success */
     cfg.expansion_threshold = 50;
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc101[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc101[i];
     EXPECT_EQ(umq_qbuf_pool_init(&cfg), 0);
     umq_qbuf_pool_uninit();
 
@@ -664,7 +674,8 @@ TEST_F(TestQbufPoolMultiLevel, ConfigurationValidationComprehensive)
     cfg.disable_scale_cap = true;
     fillSizes(2, 16);
     uint64_t bc_defaults[] = {10000, 1000};
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc_defaults[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc_defaults[i];
     ASSERT_EQ(umq_qbuf_pool_init(&cfg), 0);
     EXPECT_EQ(g_qbuf_pool.size_class_count, 2u);
     EXPECT_EQ(g_qbuf_pool.expansion_size, 32ULL * 1024 * 1024);
@@ -2787,7 +2798,8 @@ TEST_F(TestQbufPoolMultiLevel, SteadyChurnMaintainsTlsCache)
 
     /* TLS cap should accommodate the working set */
     uint64_t tlsCapAfterSecond = g_thread_cache.block_pool.capacity_with_data[1];
-    EXPECT_GE(tlsCapAfterSecond, static_cast<uint64_t>(numBufs)) << "TLS cap (block count) should be >= working set size";
+    EXPECT_GE(tlsCapAfterSecond, static_cast<uint64_t>(numBufs))
+        << "TLS cap (block count) should be >= working set size";
 
     /* Cleanup */
     for (uint32_t i = 0; i < numBufs; i++) {
@@ -2815,7 +2827,7 @@ TEST_F(TestQbufPoolMultiLevel, LazyInitLargeScZeroInitialBlocks)
     /* Verify expansion trigger for lazy SC uses expansion_block_count */
     uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / g_qbuf_pool.block_sizes[2];
     if (exp_blk_cnt == 0)
-            exp_blk_cnt = 1;
+        exp_blk_cnt = 1;
     uint64_t expected_trigger = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
     EXPECT_EQ(g_qbuf_pool.exp_pool_with_data[2].trigger_expand_block_num, expected_trigger);
 
@@ -3516,6 +3528,55 @@ TEST_F(TestQbufPoolMultiLevel, RxPoolExhaustionThenFallbackInterleaved)
     EXPECT_EQ(g_rx_pool.buf_cnt_with_data, totalBlocks);
 }
 
+/* 11.15 RX io_buf_malloc: no fixed 256MB cap, requested size honored in full */
+TEST_F(TestQbufPoolMultiLevel, RxPoolIoBufMallocNoFixedCap)
+{
+    const uint64_t req = 256ULL * 1024 * 1024 + UMQ_RX_QBUF_BLOCK_SIZE + sizeof(umq_buf_t);
+    void *addr = umq_rx_io_buf_malloc(UMQ_BUF_SPLIT, req);
+    ASSERT_NE(addr, nullptr);
+    EXPECT_EQ(umq_rx_io_buf_size(), req);
+
+    umq_rx_io_buf_free();
+    EXPECT_EQ(umq_rx_io_buf_addr(), nullptr);
+
+    const uint64_t tooSmall = UMQ_RX_QBUF_BLOCK_SIZE + sizeof(umq_buf_t) - 1;
+    EXPECT_EQ(umq_rx_io_buf_malloc(UMQ_BUF_SPLIT, tooSmall), nullptr);
+    EXPECT_EQ(umq_rx_io_buf_size(), 0u);
+}
+
+/* 11.16 RX pool size bound = umq_buf_pool_max_size, enforced in umq_qbuf_pool_cfg_check */
+TEST_F(TestQbufPoolMultiLevel, RxPoolSizeBoundedByBufPoolMaxSize)
+{
+    umq_init_cfg_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.buf_mode = UMQ_BUF_SPLIT;
+    cfg.buf_pool_cfg.enable_tiny_pool = false;
+    cfg.buf_pool_cfg.size_class_count = 2;
+    cfg.buf_pool_cfg.explicit_block_sizes[0] = umq_buf_size_small();
+    cfg.buf_pool_cfg.explicit_block_sizes[1] = QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT;
+    cfg.buf_pool_cfg.per_sc_block_counts[0] = QBUF_POOL_BLOCK_COUNT_DEFAULT;
+    cfg.buf_pool_cfg.per_sc_block_counts[1] = QBUF_POOL_BLOCK_COUNT_DEFAULT;
+    cfg.buf_pool_cfg.umq_buf_pool_max_size = 1ULL << 30; /* 1GB */
+
+    const uint64_t blkHdr = umq_buf_size_small() + sizeof(umq_buf_t);
+    const uint64_t midBlkHdr = QBUF_POOL_MIDDLE_BLOCK_SIZE_DEFAULT + sizeof(umq_buf_t);
+    const uint64_t normalInit = (uint64_t)QBUF_POOL_BLOCK_COUNT_DEFAULT * (blkHdr + midBlkHdr) +
+                                (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * sizeof(umq_buf_t);
+
+    const uint32_t okCnt = 200000;
+    cfg.buf_pool_cfg.rx_block_count = okCnt;
+    umq_qbuf_pool_plan_t plan;
+    ASSERT_EQ(umq_qbuf_pool_cfg_check(&cfg, &plan), 0);
+    EXPECT_EQ(plan.rx_block_count, (uint64_t)okCnt);
+    EXPECT_EQ(plan.rx_io_buf_size, (uint64_t)okCnt * blkHdr);
+    EXPECT_EQ(plan.normal_io_buf_size, normalInit);
+
+    const uint32_t badCnt = 300000;
+    cfg.buf_pool_cfg.rx_block_count = badCnt;
+    EXPECT_GT((uint64_t)badCnt * blkHdr + normalInit, cfg.buf_pool_cfg.umq_buf_pool_max_size);
+    EXPECT_EQ(umq_qbuf_pool_cfg_check(&cfg, &plan), -UMQ_ERR_EINVAL);
+}
+
 /* 10.10 SPLIT layout descending-order verification: blk_sizes [4K, 64K] laid out with the 64K
  * (larger) SC first so per-SC alignment padding is eliminated. With explicit blockCounts={8,8},
  * the closed-form denom = 4096+65536+2*128 = 69888 matches the real (padding-free) linear
@@ -3544,20 +3605,20 @@ TEST_F(TestQbufPoolMultiLevel, SplitLayoutDescendingNoPaddingNoOverflow)
     /* Descending order: sc=1 (64K) data region is at the LOW address, sc=0 (4K) at the HIGH address. */
     ASSERT_NE(g_qbuf_pool.data_region_start[1], nullptr);
     ASSERT_NE(g_qbuf_pool.data_region_start[0], nullptr);
-    EXPECT_EQ(g_qbuf_pool.data_region_start[1], base);                /* 64K SC at buf+0 */
-    EXPECT_EQ(g_qbuf_pool.data_region_end[1], base + 524288);          /* 8*65536 */
-    EXPECT_EQ(g_qbuf_pool.data_region_start[0], base + 524288);       /* 4K SC right after, no padding */
-    EXPECT_EQ(g_qbuf_pool.data_region_end[0], base + 557056);         /* 524288 + 8*4096 */
+    EXPECT_EQ(g_qbuf_pool.data_region_start[1], base);          /* 64K SC at buf+0 */
+    EXPECT_EQ(g_qbuf_pool.data_region_end[1], base + 524288);   /* 8*65536 */
+    EXPECT_EQ(g_qbuf_pool.data_region_start[0], base + 524288); /* 4K SC right after, no padding */
+    EXPECT_EQ(g_qbuf_pool.data_region_end[0], base + 557056);   /* 524288 + 8*4096 */
 
     /* Header region (8*2*128 = 2048 B) immediately after the last data region. */
     ASSERT_NE(g_qbuf_pool.header_buffer, nullptr);
     EXPECT_EQ(g_qbuf_pool.header_buffer, base + 557056);
     char *headerEnd = (char *)g_qbuf_pool.header_buffer + g_qbuf_pool.total_block_num * (uint64_t)sizeof(umq_buf_t);
-    EXPECT_EQ(headerEnd, base + 559104);                              /* data+header region end */
+    EXPECT_EQ(headerEnd, base + 559104); /* data+header region end */
     /* ext_header region follows: 32768*128 = 4194304 bytes */
     EXPECT_EQ(g_qbuf_pool.ext_header_buffer, base + 559104);
     char *extHeaderEnd = (char *)g_qbuf_pool.ext_header_buffer + 32768ULL * sizeof(umq_buf_t);
-    EXPECT_EQ(extHeaderEnd, base + totalSize);                        /* exactly total_size */
+    EXPECT_EQ(extHeaderEnd, base + totalSize); /* exactly total_size */
     EXPECT_LE(extHeaderEnd, limit);
 
     /* All region ends within [base, limit]. */
@@ -3705,8 +3766,7 @@ TEST_F(TestQbufPoolMultiLevel, SetTlsExpandQbufPoolDepth)
     uint64_t origExpandDepth = g_qbuf_pool.tls_expand_qbuf_pool_depth;
     EXPECT_GT(origExpandDepth, 0u);
     umq_qbuf_set_tls_expand_qbuf_pool_depth(1);
-    EXPECT_GT(g_qbuf_pool.tls_expand_qbuf_pool_depth, 0u)
-        << "value should remain positive after adjustment";
+    EXPECT_GT(g_qbuf_pool.tls_expand_qbuf_pool_depth, 0u) << "value should remain positive after adjustment";
 }
 
 /* FourScConfiguration: 4-SC [4K, 16K, 64K, 256K] routing */
@@ -3876,7 +3936,8 @@ TEST_F(TestQbufPoolMultiLevel, PerScTlsDepthVerification)
     cfg.explicit_block_sizes[0] = 4096;
     cfg.explicit_block_sizes[1] = 65536;
     cfg.disable_scale_cap = false;
-    for (uint32_t i = 0; i < 2; i++) cfg.per_sc_block_counts[i] = bc_tls[i];
+    for (uint32_t i = 0; i < 2; i++)
+        cfg.per_sc_block_counts[i] = bc_tls[i];
     cfg.per_sc_tls_qbuf_pool_depth[0] = 2048;
     cfg.per_sc_tls_qbuf_pool_depth[1] = 128;
     cfg.seg_ops.register_seg_callback = stub_register_seg;
@@ -3905,7 +3966,8 @@ TEST_F(TestQbufPoolMultiLevel, FreeReturnsExpansionBufToSlot)
     EXPECT_GE(g_qbuf_pool.exp_pool_with_data[0].expansion_count, 1u);
     uint64_t expFreeBefore = 0;
     qbuf_expansion_pool_slot_t *slot;
-    URPC_LIST_FOR_EACH(slot, node, &g_qbuf_pool.exp_pool_with_data[0].slot_list) {
+    URPC_LIST_FOR_EACH(slot, node, &g_qbuf_pool.exp_pool_with_data[0].slot_list)
+    {
         expFreeBefore += slot->free_block_cnt;
     }
     for (auto &h : holders) {
@@ -3915,7 +3977,8 @@ TEST_F(TestQbufPoolMultiLevel, FreeReturnsExpansionBufToSlot)
         return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, true, 0, 0);
     }
     uint64_t expFreeAfter = 0;
-    URPC_LIST_FOR_EACH(slot, node, &g_qbuf_pool.exp_pool_with_data[0].slot_list) {
+    URPC_LIST_FOR_EACH(slot, node, &g_qbuf_pool.exp_pool_with_data[0].slot_list)
+    {
         expFreeAfter += slot->free_block_cnt;
     }
     EXPECT_GT(expFreeAfter, expFreeBefore) << "expansion slot should have more free blocks after return";
