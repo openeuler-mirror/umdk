@@ -1,0 +1,17 @@
+/src/urma/hw/udma/kernel_headers @wsoydl @will_niutao
+/src/urma/hw/udma/include @wsoydl @will_niutao
+
+/src/urma/lib/urma/core/include/urma_cmd.h  @jerry_lilijun @will_niutao
+/src/urma/lib/uvs/core/uvs_ubagg_ioctl.h  @jerry_lilijun @will_niutao
+/src/urma/lib/uvs/core/tpsa_ioctl.h  @jerry_lilijun @will_niutao
+/src/urma/lib/uvs/core/uvs_cmd_tlv.h  @jerry_lilijun @will_niutao
+/src/urma/tools/urma_admin/admin_cmd.h @jerry_lilijun @will_niutao
+/src/urma/lib/urma/core/include  @jerry_lilijun @will_niutao
+/src/urma/lib/urma/bond/include  @jerry_lilijun @will_niutao
+/src/urma/lib/uvs/core/include  @jerry_lilijun @will_niutao
+/src/ulock/dlock/lib/include  @jerry_lilijun @will_niutao
+/src/urpc/include/framework  @jerry_lilijun @will_niutao
+/src/urpc/include/umq  @jerry_lilijun @will_niutao
+/src/urma/tools/urma_admin/admin_parameters.c @jerry_lilijun @will_niutao
+
+/CODEOWNERS @openeuler-ci-bot
