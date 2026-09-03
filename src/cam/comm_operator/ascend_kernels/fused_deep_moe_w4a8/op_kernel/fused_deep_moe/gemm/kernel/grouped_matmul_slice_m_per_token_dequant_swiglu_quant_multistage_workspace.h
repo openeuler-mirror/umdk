@@ -384,21 +384,21 @@ __aicore__ inline static void EncreaseSyncFlag(__gm__ uint8_t *flagAddr, uint8_t
 {
     // flag++, like set flag
     AscendC::PipeBarrier<PIPE_ALL>();
-    AscendC::GlobalTensor<uint8_t> global;
+    AscendC::GlobalTensor<uint32_t> global;
     if constexpr (g_coreType == AscendC::AIV) {
-        global.SetGlobalBuffer(flagAddr +
-            idx * SOFT_SYNC_SPACE_SIZE + AscendC::GetSubBlockIdx() * (SOFT_SYNC_SPACE_SIZE / SUB_AIV_NUM));
+        global.SetGlobalBuffer((__gm__ uint32_t *)(flagAddr +
+            idx * SOFT_SYNC_SPACE_SIZE + AscendC::GetSubBlockIdx() * (SOFT_SYNC_SPACE_SIZE / SUB_AIV_NUM)));
     } else {
-        global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE);
+        global.SetGlobalBuffer((__gm__ uint32_t *)(flagAddr + idx * SOFT_SYNC_SPACE_SIZE));
     }
     __asm__ __volatile__("");
-    AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE, AscendC::DcciDst::CACHELINE_OUT>(
+    AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE, AscendC::DcciDst::CACHELINE_OUT>(
         global);
     __asm__ __volatile__("");
-    uint8_t value = global.GetValue(0);
+    uint32_t value = global.GetValue(0);
     global.SetValue(0, value + 1);
     __asm__ __volatile__("");
-    AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE, AscendC::DcciDst::CACHELINE_OUT>(
+    AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE, AscendC::DcciDst::CACHELINE_OUT>(
         global);
     __asm__ __volatile__("");
     AscendC::PipeBarrier<PIPE_ALL>();
@@ -408,18 +408,18 @@ __aicore__ inline static void CheckSyncFlag(__gm__ uint8_t *flagAddr, uint8_t id
 {
     //  check flag, like wait flag
     AscendC::PipeBarrier<PIPE_ALL>();
-    AscendC::GlobalTensor<uint8_t> global;
+    AscendC::GlobalTensor<uint32_t> global;
     if constexpr (g_coreType == AscendC::AIV) {
-        global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE);
+        global.SetGlobalBuffer((__gm__ uint32_t *)(flagAddr + idx * SOFT_SYNC_SPACE_SIZE));
         while (true) {
             __asm__ __volatile__("");
-            AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+            AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                 AscendC::DcciDst::CACHELINE_OUT>(global);
             __asm__ __volatile__("");
-            uint8_t value = global.GetValue(0);
+            uint32_t value = global.GetValue(0);
             if (value >= target) {
                 __asm__ __volatile__("");
-                AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                     AscendC::DcciDst::CACHELINE_OUT>(global);
                 __asm__ __volatile__("");
                 break;
@@ -427,32 +427,33 @@ __aicore__ inline static void CheckSyncFlag(__gm__ uint8_t *flagAddr, uint8_t id
             SPIN_WAIT_CYCLES();
         }
     } else {
-        global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE);
+        global.SetGlobalBuffer((__gm__ uint32_t *)(flagAddr + idx * SOFT_SYNC_SPACE_SIZE));
         while (true) {
             __asm__ __volatile__("");
-            AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+            AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                 AscendC::DcciDst::CACHELINE_OUT>(global);
             __asm__ __volatile__("");
-            uint8_t value = global.GetValue(0);
+            uint32_t value = global.GetValue(0);
             if (value >= target) {
                 __asm__ __volatile__("");
-                AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                     AscendC::DcciDst::CACHELINE_OUT>(global);
                 __asm__ __volatile__("");
                 break;
             }
             SPIN_WAIT_CYCLES();
         }
-        global.SetGlobalBuffer(flagAddr + idx * SOFT_SYNC_SPACE_SIZE + 1 * (SOFT_SYNC_SPACE_SIZE / SUB_AIV_NUM));
+        global.SetGlobalBuffer((__gm__ uint32_t *)(flagAddr + idx * SOFT_SYNC_SPACE_SIZE +
+            1 * (SOFT_SYNC_SPACE_SIZE / SUB_AIV_NUM)));
         while (true) {
             __asm__ __volatile__("");
-            AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+            AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                 AscendC::DcciDst::CACHELINE_OUT>(global);
             __asm__ __volatile__("");
-            uint8_t value = global.GetValue(0);
+            uint32_t value = global.GetValue(0);
             if (value >= target) {
                 __asm__ __volatile__("");
-                AscendC::DataCacheCleanAndInvalid<uint8_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                AscendC::DataCacheCleanAndInvalid<uint32_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
                     AscendC::DcciDst::CACHELINE_OUT>(global);
                 __asm__ __volatile__("");
                 break;

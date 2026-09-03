@@ -410,7 +410,6 @@ class FusionOp(DecodeMoeOps):
         super().__init__(ep_hcomm_info, meta_info, weight_datas, share_weight_datas)
 
     def _apply_ops(self, x, expert_ids, expert_scales, x_active_mask):
-        self.share_smooth_scales_fp32 = torch.zeros(256*1024*1024).npu().to(torch.float32)
         output, share_output, expert_token_nums = torch.ops.umdk_cam_op_lib.fused_deep_moe(
             x=x,
             expert_ids=expert_ids,
@@ -428,7 +427,7 @@ class FusionOp(DecodeMoeOps):
             share_gmm2_weight=self.share_gmm2_weight,
             share_gmm2_weight_scale=self.share_gmm2_weight_scale,
             expert_smooth_scales=self.smooth_scales,
-            share_smooth_scales=self.share_smooth_scales_fp32,
+            share_smooth_scales=None,
             x_active_mask=x_active_mask,
             group_ep=self.ep_hcomm_info,
             ep_rank_size=self.ep_world_size,
@@ -642,6 +641,12 @@ def run_once(local_rank_id,
     ]
     small_ops = SmallOps(ep_hcomm_info_small, meta_info, weight_datas_npu, share_weight_datas_npu).npu()
     fused_ops = FusionOp(ep_hcomm_info_fused, meta_info, weight_datas_npu, share_weight_datas_npu).npu()
+
+    if test_graph:
+        config = torchair.CompilerConfig()
+        config.mode = "reduce-overhead"
+        npu_backend = torchair.get_npu_backend(compiler_config=config)
+        fused_ops = torch.compile(fused_ops, backend=npu_backend)
 
     def validate_pair(sim_out, op_out, name, atol=1e-3, rtol=1e-2):
         sim = sim_out.cpu()
