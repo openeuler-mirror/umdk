@@ -128,8 +128,9 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                     sc_data_size = sci->blk_size - info->umq_buf_t_size;
                     sc_buf_size = sci->blk_size;
                 }
-                const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ?
-                                       umq_dfx_sc_names[sc] : "sc?";
+                static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
+                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ?
+                                       sc_names[sc] : "sc?";
                 char ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
                 (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
                                (double)sc_total_size / (UMQ_DFX_BYTES_PER_MB));
@@ -315,6 +316,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "Type", "free_blk", "blk_size", "exp_total_blk", "exp_total_exp", "exp_total_shrink",
                          "alloc_cnt", "free_cnt", "outstanding");
     /* Normal pool: per-SC with_data rows + RX + without-data */
+    static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
         if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
@@ -392,6 +394,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "SyncExpCnt", "AsyncExpCnt", "AccShrinkCnt");
     /* WithData: per-SC breakdown for multi-level pools (Small/Medium/...). */
     if (small_info != NULL && small_info->sc_count > 1) {
+        static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
         for (uint32_t sc = 0; sc < small_info->sc_count; sc++) {
             const umq_qbuf_sc_info_t *sci = &small_info->sc_info[sc];
             const char *sc_name =

@@ -67,6 +67,12 @@ void *umq_rx_io_buf_addr(void)
     return g_rx_buffer_addr;
 }
 
+void umq_rx_io_buf_set_buffer(void *addr, uint64_t size)
+{
+    g_rx_buffer_addr = addr;
+    g_rx_total_len = size;
+}
+
 uint64_t umq_rx_io_buf_size(void)
 {
     return g_rx_total_len;

@@ -77,6 +77,9 @@ static inline void umq_invalid_handle_buf_free(umq_buf_list_t *head, umq_pool_ty
 int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list);
 int umq_qbuf_pool_cfg_check(const umq_init_cfg_t *cfg, umq_qbuf_pool_plan_t *plan);
 
+void *umq_qbuf_unified_io_buf_malloc(umq_buf_mode_t mode, const umq_qbuf_pool_plan_t *plan);
+void umq_qbuf_unified_io_buf_free(void);
+
 #ifdef __cplusplus
 }
 #endif
