@@ -16,6 +16,7 @@ import (
 	"huawei.com/aigw/internal/base"
 	"huawei.com/aigw/internal/cachecenter"
 	"huawei.com/aigw/internal/kvevents"
+	"huawei.com/aigw/internal/prefixcache"
 	"huawei.com/aigw/internal/renderclient"
 	"huawei.com/aigw/internal/tokenizers"
 	"huawei.com/aigw/pkg/crypto"
@@ -250,6 +251,14 @@ func WithRenderClientConfig(renderCfg renderclient.RenderClientConfig) GlobalSch
 func WithKVEventsConfig(kvEventsCfg kvevents.KVEventsManagerConfig) GlobalSchedulerManagerOption {
 	return func(gs *GlobalSchedulerManager) error {
 		gs.config.lbConfig.KVEventsConfig = kvEventsCfg
+		return nil
+	}
+}
+
+// WithPrefixCacheConfig set prefix cache config for gs
+func WithPrefixCacheConfig(pcCfg prefixcache.Config) GlobalSchedulerManagerOption {
+	return func(gs *GlobalSchedulerManager) error {
+		gs.config.lbConfig.PrefixCacheConfig = pcCfg
 		return nil
 	}
 }

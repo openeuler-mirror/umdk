@@ -177,6 +177,10 @@ type AlgorithmParams struct {
 
 	// KVEventsConfig overrides the kvevents defaults when set (EndpointTemplate != "").
 	KVEventsConfig kvevents.KVEventsManagerConfig
+
+	// PrefixCacheConfig carries the user's prefixCache JSON section (zero
+	// values = unset) for the prefixCache LB to merge onto defaults.
+	PrefixCacheConfig prefixcache.Config
 }
 
 // NewGlobalSchedulerManager creates a new GS with options
@@ -296,6 +300,12 @@ func (m *GlobalSchedulerManager) setConfig(gsConfig *base.GlobalSchedulerConfig)
 		log.Info().Msgf("[GS] setConfig: found kvEvents config in JSON, endpointTemplate=%s",
 			gsConfig.KVEvents.EndpointTemplate)
 		options = append(options, WithKVEventsConfig(gsConfig.KVEvents))
+	}
+
+	// Add prefix cache config if any field is set
+	if gsConfig.PrefixCache != (prefixcache.Config{}) {
+		log.Info().Msgf("[GS] setConfig: found prefixCache config in JSON: %+v", gsConfig.PrefixCache)
+		options = append(options, WithPrefixCacheConfig(gsConfig.PrefixCache))
 	}
 
 	for _, opt := range options {

@@ -31,7 +31,7 @@ type prefixCacheLoadBalancer struct {
 func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*prefixCacheLoadBalancer, error) {
 	log.Info().Msg("[prefixCache] Init prefixCache loadbalancer.")
 
-	pcConfig := prefixcache.DefaultConfig()
+	pcConfig := prefixcache.ApplyJSONDefaults(params.PrefixCacheConfig)
 	if params.BlockSize > 0 {
 		pcConfig.BlockSize = params.BlockSize
 	}

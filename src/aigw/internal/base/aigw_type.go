@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 
 	"huawei.com/aigw/internal/kvevents"
+	"huawei.com/aigw/internal/prefixcache"
 	"huawei.com/aigw/internal/renderclient"
 )
 
@@ -165,6 +166,10 @@ type GlobalSchedulerConfig struct {
 
 	// KVEvents configures the ZMQ KV-events subscription for the prefixCache LB
 	KVEvents kvevents.KVEventsManagerConfig `json:"kvEvents"`
+
+	// PrefixCache tunes the prefix cache table (eviction, capacity, seed);
+	// zero values fall back to built-in defaults.
+	PrefixCache prefixcache.Config `json:"prefixCache"`
 }
 
 // ProviderPoolConfig configures a provider (SaaS API) pool for mode=provider.

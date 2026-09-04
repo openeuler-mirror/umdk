@@ -8,72 +8,67 @@
 package prefixcache
 
 import (
-	"os"
-	"strconv"
 	"time"
 )
 
 const (
-	defaultMaxContexts             = 1000
-	defaultMaxPrefixesPerContext   = 10000
-	defaultEvictionIntervalSeconds = 60
-	defaultEvictionDurationMinutes = 20
-	defaultBlockSize               = 16
+	defaultBlockSize              = 16
+	defaultMaxContexts            = 1000
+	defaultMaxPrefixesPerContext  = 10000
+	defaultEvictionInterval       = 60 * time.Second
+	defaultEvictionDuration       = 20 * time.Minute
+	defaultFallbackStringMatching = true
 )
 
-func loadEnvBool(key string, defaultVal bool) bool {
-	if val := os.Getenv(key); val != "" {
-		return val == "true" || val == "1"
-	}
-	return defaultVal
-}
-
-func loadEnvInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if intVal, err := strconv.Atoi(val); err == nil {
-			return intVal
-		}
-	}
-	return defaultVal
-}
-
-func loadEnvUint64(key string, defaultVal uint64) uint64 {
-	if val := os.Getenv(key); val != "" {
-		if uintVal, err := strconv.ParseUint(val, 10, 64); err == nil {
-			return uintVal
-		}
-	}
-	return defaultVal
-}
-
-var (
-	envBlockSize               = loadEnvInt("AIGW_PREFIX_CACHE_BLOCK_SIZE", defaultBlockSize)
-	envMaxContexts             = loadEnvInt("AIGW_PREFIX_CACHE_MAX_CONTEXTS", defaultMaxContexts)
-	envMaxPrefixesPerContext   = loadEnvInt("AIGW_PREFIX_CACHE_MAX_PREFIXES_PER_CONTEXT", defaultMaxPrefixesPerContext)
-	envEvictionIntervalSeconds = loadEnvInt("AIGW_PREFIX_CACHE_EVICTION_INTERVAL_SECONDS", defaultEvictionIntervalSeconds)
-	envEvictionDurationMinutes = loadEnvInt("AIGW_PREFIX_CACHE_EVICTION_DURATION_MINUTES", defaultEvictionDurationMinutes)
-	envFallbackStringMatching  = loadEnvBool("AIGW_PREFIX_CACHE_FALLBACK_STRING_MATCHING", true)
-	envSeed                    = loadEnvUint64("AIGW_PREFIX_CACHE_SEED", 0) // 0 means random seed
-)
-
+// Config holds the prefix cache tuning knobs. Zero values mean "use the
+// default", so every JSON field is optional. Seed 0 means random.
+// BlockSize is driven by globalSchedulers[].blockSize (aligned with the
+// vLLM --block-size), not by this struct's JSON.
 type Config struct {
-	BlockSize              int
-	MaxContexts            int
-	MaxPrefixesPerContext  int
-	EvictionInterval       time.Duration
-	EvictionDuration       time.Duration
-	FallbackStringMatching bool
-	Seed                   uint64 // 0 means generate random seed
+	BlockSize              int           `json:"-"`
+	MaxContexts            int           `json:"maxContexts,omitempty"`
+	MaxPrefixesPerContext  int           `json:"maxPrefixesPerContext,omitempty"`
+	EvictionInterval       time.Duration `json:"-"`
+	EvictionDuration       time.Duration `json:"-"`
+	FallbackStringMatching bool          `json:"-"`
+	Seed                   uint64        `json:"seed,omitempty"`
+
+	EvictionIntervalSeconds int `json:"evictionIntervalSeconds,omitempty"`
+	EvictionDurationMinutes int `json:"evictionDurationMinutes,omitempty"`
 }
 
+// DefaultConfig returns the built-in defaults. JSON sections that set a
+// field override the corresponding default (see ApplyJSONDefaults).
 func DefaultConfig() Config {
 	return Config{
-		BlockSize:              envBlockSize,
-		MaxContexts:            envMaxContexts,
-		MaxPrefixesPerContext:  envMaxPrefixesPerContext,
-		EvictionInterval:       time.Duration(envEvictionIntervalSeconds) * time.Second,
-		EvictionDuration:       time.Duration(envEvictionDurationMinutes) * time.Minute,
-		FallbackStringMatching: envFallbackStringMatching,
-		Seed:                   envSeed,
+		BlockSize:              defaultBlockSize,
+		MaxContexts:            defaultMaxContexts,
+		MaxPrefixesPerContext:  defaultMaxPrefixesPerContext,
+		EvictionInterval:       defaultEvictionInterval,
+		EvictionDuration:       defaultEvictionDuration,
+		FallbackStringMatching: defaultFallbackStringMatching,
+		Seed:                   0,
 	}
+}
+
+// ApplyJSONDefaults merges a JSON-unmarshalled Config (zero values = unset)
+// onto the defaults: each set JSON field overrides the corresponding default.
+func ApplyJSONDefaults(jsonCfg Config) Config {
+	cfg := DefaultConfig()
+	if jsonCfg.MaxContexts > 0 {
+		cfg.MaxContexts = jsonCfg.MaxContexts
+	}
+	if jsonCfg.MaxPrefixesPerContext > 0 {
+		cfg.MaxPrefixesPerContext = jsonCfg.MaxPrefixesPerContext
+	}
+	if jsonCfg.EvictionIntervalSeconds > 0 {
+		cfg.EvictionInterval = time.Duration(jsonCfg.EvictionIntervalSeconds) * time.Second
+	}
+	if jsonCfg.EvictionDurationMinutes > 0 {
+		cfg.EvictionDuration = time.Duration(jsonCfg.EvictionDurationMinutes) * time.Minute
+	}
+	if jsonCfg.Seed != 0 {
+		cfg.Seed = jsonCfg.Seed
+	}
+	return cfg
 }

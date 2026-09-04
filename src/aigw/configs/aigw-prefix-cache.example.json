@@ -55,6 +55,11 @@
       },
       "kvEvents": {
         "endpointTemplate": "tcp://{ip}:5557"
+      },
+      "prefixCache": {
+        "evictionIntervalSeconds": 60,
+        "evictionDurationMinutes": 20,
+        "seed": 0
       }
     }
   ],
