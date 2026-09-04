@@ -88,12 +88,9 @@ func (c *ZMQClient) connect() error {
 	}
 
 	// Always set a subscription. A ZMQ SUB socket with no subscription receives
-	// NOTHING. The previous guard (`if Topic != ""`) meant that with the default
-	// empty topic — which is exactly what real vLLM's kv-events publisher uses
-	// (it publishes with an empty topic frame) — aigw silently dropped every
-	// event. SetSubscribe("") subscribes to all messages (ZMQ wildcard),
-	// matching vLLM; a non-empty topic subscribes to that prefix (e.g. the
-	// e2e mock publishes with a "kv" prefix and sets AIGW_KV_EVENTS_TOPIC=kv).
+	// NOTHING. SetSubscribe("") subscribes to all messages (ZMQ wildcard),
+	// matching vLLM, which publishes with an empty topic frame; a non-empty
+	// topic subscribes to that prefix.
 	if err := socket.SetSubscribe(c.config.Topic); err != nil {
 		socket.Close()
 		return fmt.Errorf("failed to subscribe to topic: %w", err)

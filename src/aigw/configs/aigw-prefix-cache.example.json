@@ -51,8 +51,15 @@
         "endpointTemplate": "http://{ip}:8000",
         "timeout": 5000,
         "maxRetries": 3,
-        "connPoolSize": 100,
-        "baseURL": "http://127.0.0.1:8081"
+        "connPoolSize": 100
+      },
+      "kvEvents": {
+        "endpointTemplate": "tcp://{ip}:5557"
+      },
+      "prefixCache": {
+        "evictionIntervalSeconds": 60,
+        "evictionDurationMinutes": 20,
+        "seed": 0
       }
     }
   ],

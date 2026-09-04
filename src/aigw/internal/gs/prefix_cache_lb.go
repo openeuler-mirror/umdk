@@ -26,16 +26,20 @@ type prefixCacheLoadBalancer struct {
 	prefixCacheMgr prefixcache.PrefixCacheManager
 	renderClient   *renderclient.RenderClient
 	fallbackLB     loadBalancer
-	matchThreshold int
 }
 
 func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*prefixCacheLoadBalancer, error) {
 	log.Info().Msg("[prefixCache] Init prefixCache loadbalancer.")
 
-	pcConfig := prefixcache.DefaultConfig()
-	pcConfig.Enabled = true
+	pcConfig := prefixcache.ApplyJSONDefaults(params.PrefixCacheConfig)
+	if params.BlockSize > 0 {
+		pcConfig.BlockSize = params.BlockSize
+	}
 
 	kveventsConfig := kvevents.DefaultKVEventsManagerConfig()
+	if params.KVEventsConfig.EndpointTemplate != "" {
+		kveventsConfig.EndpointTemplate = params.KVEventsConfig.EndpointTemplate
+	}
 	var extraHandlers []kvevents.EventHandler
 	if params.KvcSessionMgr != nil {
 		// Phase 2: fan out kvevents to both prefixcache and the per-model KvcSessionManager.
@@ -58,7 +62,6 @@ func newPrefixCacheLB(metricProvider MetricProvider, params *AlgorithmParams) (*
 			instanceRoleType: params.InstanceRoleType,
 		},
 		prefixCacheMgr: pcMgr,
-		matchThreshold: pcConfig.MatchThreshold,
 		fallbackLB:     fallback,
 	}, nil
 }
@@ -259,13 +262,9 @@ func (lb *prefixCacheLoadBalancer) selectFromMatched(instances []string, matched
 		return scores[i].metric.ReqNum < scores[j].metric.ReqNum
 	})
 
-	if scores[0].matchPercent >= lb.matchThreshold {
-		log.Info().Msgf("[prefixCache] selectFromMatched: selected instance %s with %d%% match",
-			scores[0].instanceName, scores[0].matchPercent)
-		return scores[0].metric
-	}
-
-	return nil
+	log.Info().Msgf("[prefixCache] selectFromMatched: selected instance %s with %d%% match",
+		scores[0].instanceName, scores[0].matchPercent)
+	return scores[0].metric
 }
 
 func (lb *prefixCacheLoadBalancer) getReadyInstances(candidateIDs []string) ([]string, error) {
