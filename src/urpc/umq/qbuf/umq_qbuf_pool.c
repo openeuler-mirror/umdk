@@ -1783,6 +1783,16 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
     }
 
     uint64_t exp_size = (cfg->expansion_size == 0) ? QBUF_POOL_DEFAULT_EXPANSION_SIZE : cfg->expansion_size;
+    if (exp_size < QBUF_POOL_MIN_EXPANSION_SIZE || exp_size > QBUF_POOL_MAX_EXPANSION_SIZE ||
+        exp_size % QBUF_POOL_MIN_EXPANSION_SIZE != 0) {
+        UMQ_VLOG_WARN(VLOG_UMQ, "expansion_size %llu invalid (must be in [%llu, %llu] and multiple of %llu), "
+                      "will use default\n",
+                      (unsigned long long)exp_size,
+                      (unsigned long long)QBUF_POOL_MIN_EXPANSION_SIZE,
+                      (unsigned long long)QBUF_POOL_MAX_EXPANSION_SIZE,
+                      (unsigned long long)QBUF_POOL_MIN_EXPANSION_SIZE);
+        exp_size = QBUF_POOL_DEFAULT_EXPANSION_SIZE;
+    }
     if (!cfg->disable_scale_cap && (uint64_t)g_qbuf_pool.block_sizes[count - 1] > exp_size) {
         UMQ_VLOG_ERR(VLOG_UMQ, "max block_size %u exceeds expansion_size %llu\n", g_qbuf_pool.block_sizes[count - 1],
                      (unsigned long long)exp_size);
