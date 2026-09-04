@@ -202,12 +202,15 @@ typedef struct umq_qbuf_pool_alloc_stats {
     /* per-SC with_data: matches sc_info[sc] by index */
     uint64_t sc_alloc_count[UMQ_SIZE_CLASS_MAX];  // per-SC cumulative with_data alloc count
     uint64_t sc_free_count[UMQ_SIZE_CLASS_MAX];   // per-SC cumulative with_data free count
+    uint64_t sc_outstanding_max[UMQ_SIZE_CLASS_MAX]; // per-SC historical max outstanding
     /* without_data: single pool, no per-SC split */
     uint64_t nodata_alloc_count;                   // cumulative without_data alloc count
     uint64_t nodata_free_count;                    // cumulative without_data free count
+    uint64_t nodata_outstanding_max;               // without_data historical max outstanding
     /* rx pool: independent 4K-only recv pool */
     uint64_t rx_pool_alloc_count;                  // RX recv pool cumulative alloc count
     uint64_t rx_pool_free_count;                   // RX recv pool cumulative free count
+    uint64_t rx_pool_outstanding_max;              // RX recv pool historical max outstanding
 } umq_qbuf_pool_alloc_stats_t;
 
 typedef struct umq_qbuf_pool_info {

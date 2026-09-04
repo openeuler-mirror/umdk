@@ -26,6 +26,9 @@ static bool g_rx_pool_inited = false;
 // rx pool cumulative alloc/free counters (atomic, for DFX leak analysis)
 static volatile uint64_t g_rx_alloc_count = 0;
 static volatile uint64_t g_rx_free_count = 0;
+static volatile uint64_t g_rx_outstanding_max = 0;
+volatile uint64_t g_rx_fallback_count = 0;
+volatile uint64_t g_rx_fallback_outstanding = 0;
 
 void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
 {
@@ -165,7 +168,17 @@ int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *o
         uint32_t forced_req = UMQ_RX_QBUF_BLOCK_SIZE - headroom_size;
         UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "RX pool fallback to normal: req=%u forced_req=%u num=%u avail=%lu\n",
                              request_size, forced_req, num, (unsigned long)g_rx_pool.buf_cnt_with_data);
-        return umq_normal_qbuf_alloc(forced_req, num, &fallback_opt, list);
+        __atomic_add_fetch(&g_rx_fallback_count, num, __ATOMIC_RELAXED);
+        int fb_ret = umq_normal_qbuf_alloc(forced_req, num, &fallback_opt, list);
+        if (fb_ret == UMQ_SUCCESS) {
+            umq_buf_t *fb_node;
+            QBUF_LIST_FOR_EACH(fb_node, list)
+            {
+                fb_node->rx_fallback = 1;
+                __atomic_add_fetch(&g_rx_fallback_outstanding, 1, __ATOMIC_RELAXED);
+            }
+        }
+        return fb_ret;
     }
     uint32_t cnt = allocate_batch(&g_rx_pool.head_with_data, num, list);
     g_rx_pool.buf_cnt_with_data -= cnt;
@@ -185,6 +198,17 @@ int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *o
     }
 
     __atomic_add_fetch(&g_rx_alloc_count, cnt, __ATOMIC_RELAXED);
+    {
+        uint64_t outstanding = __atomic_load_n(&g_rx_alloc_count, __ATOMIC_RELAXED) -
+                               __atomic_load_n(&g_rx_free_count, __ATOMIC_RELAXED);
+        uint64_t old_max = __atomic_load_n(&g_rx_outstanding_max, __ATOMIC_RELAXED);
+        while (outstanding > old_max) {
+            if (__atomic_compare_exchange_n(&g_rx_outstanding_max, &old_max,
+                                            outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                break;
+            }
+        }
+    }
     return UMQ_SUCCESS;
 }
 
@@ -280,6 +304,11 @@ void umq_rx_qbuf_pool_depth_get(uint64_t *total_size, uint32_t *block_size, uint
     }
 }
 
+uint64_t umq_rx_qbuf_pool_outstanding_max_get(void)
+{
+    return __atomic_load_n(&g_rx_outstanding_max, __ATOMIC_RELAXED);
+}
+
 void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free_count)
 {
     if (alloc_count != NULL) {
@@ -288,4 +317,14 @@ void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free
     if (free_count != NULL) {
         *free_count = __atomic_load_n(&g_rx_free_count, __ATOMIC_RELAXED);
     }
+}
+
+uint64_t umq_rx_qbuf_pool_fallback_count_get(void)
+{
+    return __atomic_load_n(&g_rx_fallback_count, __ATOMIC_RELAXED);
+}
+
+uint64_t umq_rx_qbuf_pool_fallback_outstanding_get(void)
+{
+    return __atomic_load_n(&g_rx_fallback_outstanding, __ATOMIC_RELAXED);
 }
