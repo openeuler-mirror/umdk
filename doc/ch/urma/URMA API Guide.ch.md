@@ -6865,17 +6865,22 @@ typedef struct bondp_set_bonding_port_in {
 - `die_id`：固定为 1；
 - `port_idx`：端口 EID 编号，合法取值 [0, PORT_NUM]；取 `UINT8_MAX` 时表示该芯片的 primary EID。
 
+**重复项约束**：
+
+`port_ids` 中的 `chip_id + port_idx` 组合不得重复；包含重复项时本 opcode 返回错误，liburma 不会做静默去重。
+
 **与创建对象时端口配置的一致性约束**：
 
 调用方在创建 JFC、JFS、JFR、Jetty 时若置位 `has_drv_ext`，其扩展字段传入的 `port_ids` 必须与本配置一致。一致性校验在创建流程中执行，规则如下：
 
 - **chip_id 顺序必须一致**：本配置与创建对象时传入的 `port_ids`，其 chip_id 的排列顺序必须相同。liburma 在设置与创建时均按 port_id 逐项转化为 matrix active index，并保留 chip_id 与 index 的对应关系；顺序不一致会导致配对错位、校验失败。
-- **port_idx 顺序不做要求**：同一 chip 内的 port_idx 出现顺序可以不同，liburma 会对 port_id 做去重，最终比较的是去重后的端口集合。
-- **全量 port 必须一致**：本配置的端口集合与创建对象时传入的端口集合（去重后）必须完全相同，即包含的 chip_id + port_idx 组合完全一致，不能多也不能少；否则创建对象时校验失败。
+- **port_idx 顺序不做要求**：同一 chip 内的 port_idx 出现顺序可以不同，liburma 最终比较的是端口集合。
+- **全量 port 必须一致**：本配置的端口集合与创建对象时传入的端口集合必须完全相同，即包含的 chip_id + port_idx 组合完全一致，不能多也不能少；否则创建对象时校验失败。
 
 约束与时序：
 
 - liburma 内部会拷贝 `port_ids` 数组（含 chip_id），调用返回后调用方可立即释放该缓冲区。
+- `port_ids` 数组的越界问题由调用方自行保证：`urma_user_ctl` 以指针方式传入 `port_ids`，liburma 无法校验指针所指数组的实际长度，调用方须保证数组实际元素个数不小于 `port_count`。
 - 该配置为上下文级，作用于同一 `urma_context_t` 上后续创建的 JFC/JFS/JFR/Jetty。
 - 配置必须在创建任何 JFC/JFS/JFR/Jetty **之前**完成；若上下文已被对象引用（仍有存活对象），再次调用将返回 `URMA_EAGAIN`，调用方需先销毁已有对象再重新设置。
 
