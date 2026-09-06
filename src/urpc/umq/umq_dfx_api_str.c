@@ -522,9 +522,11 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "partial_slot_count: WithData=%u WithoutData=%u\n",
                          qbuf_pool_stats->exp_pool_with_data.partial_slot_count,
                          qbuf_pool_stats->exp_pool_without_data.partial_slot_count);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "rx_pool_fallback_to_normal: alloc=%llu outstanding=%llu\n",
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
+                         "rx_pool_fallback_to_normal: alloc=%llu outstanding=%llu outstanding_max=%llu\n",
                          (unsigned long long)umq_rx_qbuf_pool_fallback_count_get(),
-                         (unsigned long long)umq_rx_qbuf_pool_fallback_outstanding_get());
+                         (unsigned long long)umq_rx_qbuf_pool_fallback_outstanding_get(),
+                         (unsigned long long)umq_rx_qbuf_pool_fallback_outstanding_max_get());
 
     // Per-SC Expansion Slot Detail
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {

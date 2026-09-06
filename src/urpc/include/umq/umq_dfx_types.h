@@ -130,7 +130,7 @@ typedef struct umq_qbuf_pool_config {
     uint8_t disable_scale_cap;           // expansion/shrink switch (1 = disabled)
     uint8_t disable_malloc_escape;       // escape mechanism switch (1 = disabled)
     uint64_t expansion_size;             // per-expansion memory size
-    uint32_t expansion_threshold;        // water level % triggering expansion (1-100)
+    uint32_t expansion_threshold;        // water level % triggering expansion (1-50)
     uint64_t expansion_mem_size_max;     // cap on expansion memory
     uint64_t exp_total_mem_pool_size;    // current total expansion pool memory
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 1/2 of tls_qbuf_pool_depth)
