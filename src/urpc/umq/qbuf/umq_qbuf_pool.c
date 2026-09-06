@@ -46,6 +46,9 @@
 #define QBUF_POOL_SHRINK_THRESHOLD (64) // self-driven shrink threshold: N/4 >= this value (N >= 256)
 #define QBUF_POOL_SELF_SHRINK_RATIO (4) // adaptive shrink ratio(1/4)
 
+#define QBUF_POOL_SHRINK_HYSTERESIS 2  // shrink threshold = expand threshold * this multiplier
+#define QBUF_WALL_TIME_BUF_SIZE 24     // "HH:MM:SS.uuuuuu" + null terminator
+
 #define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_EXPANSION_SIZE_RAMP_0 (8ULL * 1024 * 1024)
@@ -108,6 +111,10 @@ typedef struct async_shrink_pool_param {
     urpc_list_t node;
     uint32_t slot_id;
     bool with_data;
+    uint32_t sc;
+    uint64_t trigger_shrink;
+    uint64_t exp_total_at_trigger;
+    uint64_t g_pool_blk_at_trigger;
     uint64_t push_time_ns;
 } async_shrink_pool_param_t;
 
@@ -125,12 +132,14 @@ typedef struct expansion_qbuf_pool {
     pthread_t shrink_thread;
     bool shrink_thread_created;
     uint64_t trigger_expand_block_num;
+    uint64_t trigger_shrink_block_num;
     uint32_t expansion_block_count;
     uint32_t expansion_count;
     uint32_t partial_slot_count; // DFX: slots with 0 < free_block_cnt < total_block_cnt
     urpc_list_t slot_list;       // linked list of slots (replaces exp_slot_list array)
     uint32_t slot_count;         // number of slots in slot_list
     uint64_t exp_total_block_num;
+    uint64_t exp_total_capacity;
     async_shrink_pool_task_list_t shrink_task_list;
     uint64_t total_expansion_count;
     uint64_t sync_expansion_count;   // expansion in alloc hot path (caller blocked)
@@ -193,6 +202,28 @@ typedef struct qbuf_pool {
 } qbuf_pool_t;
 
 static qbuf_pool_t g_qbuf_pool = {0};
+
+/*
+ * Get current wall-clock time as both a human-readable string and a nanosecond
+ * timestamp from a single clock_gettime call.
+ *
+ * @param buf  output buffer for formatted time string "HH:MM:SS.uuuuuu"
+ * @param size size of buf, must be >= QBUF_WALL_TIME_BUF_SIZE
+ * @return     current time in nanoseconds (CLOCK_REALTIME), for elapsed calculation
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+static uint64_t fmt_wall_time(char *buf, size_t size)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm tm_val;
+    (void)localtime_r(&ts.tv_sec, &tm_val);
+    (void)snprintf(buf, size, "%02d:%02d:%02d.%06ld",
+                   tm_val.tm_hour, tm_val.tm_min, tm_val.tm_sec, ts.tv_nsec / 1000);
+    return (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+#pragma GCC diagnostic pop
 
 /* DFX periodic + final report on pool uninit */
 #define QBUF_DFX_BUF_SIZE (32 * 1024)
@@ -442,7 +473,7 @@ static const char *qbuf_lc_labels[QBUF_LC_PATHS] = {
 };
 
 static qbuf_debug_stats_t g_dbg_stats = {0};
-static __thread bool g_dbg_in_async_expand = false; // 防止异步扩容递归重入
+static __thread bool g_dfx_in_async_expand = false; // mark current thread is in async expand path
 __thread bool g_dbg_expansion_happened = false; // 线程局部标志: expansion pool/mmap路径标识，fetch前reset，alloc后读取
 static volatile uint64_t g_dbg_alloc_count = 0;     // total allocs for summary interval
 #define QBUF_DBG_SUMMARY_INTERVAL 10000             // print summary every N allocs
@@ -1080,7 +1111,9 @@ static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansio
     return UMQ_SUCCESS;
 }
 
-static void async_shrink_push_param(bool with_data, qbuf_expansion_pool_t *exp_pool, uint32_t slot_id)
+static void async_shrink_push_param(bool with_data, uint32_t sc, qbuf_expansion_pool_t *exp_pool,
+                                    uint32_t slot_id, uint64_t trigger_shrink, uint64_t exp_total_at_trigger,
+                                    uint64_t g_pool_blk_at_trigger)
 {
     async_shrink_pool_param_t *param = (async_shrink_pool_param_t *)calloc(1, sizeof(async_shrink_pool_param_t));
     if (param == NULL) {
@@ -1089,6 +1122,10 @@ static void async_shrink_push_param(bool with_data, qbuf_expansion_pool_t *exp_p
     }
     param->slot_id = slot_id;
     param->with_data = with_data;
+    param->sc = sc;
+    param->trigger_shrink = trigger_shrink;
+    param->exp_total_at_trigger = exp_total_at_trigger;
+    param->g_pool_blk_at_trigger = g_pool_blk_at_trigger;
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     param->push_time_ns = (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
@@ -1122,6 +1159,8 @@ static void *async_shrink_global_pool_callback(void *arg)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
         return NULL;
     }
+    char shrink_start_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
+    char shrink_end_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
 
     while (true) {
         /* Wait for shrink tasks or stop signal. */
@@ -1196,13 +1235,58 @@ static void *async_shrink_global_pool_callback(void *arg)
             exp_pool->expansion_count -= 1;
             exp_pool->slot_count -= 1;
             exp_pool->exp_total_block_num -= slot->total_block_cnt;
+            uint64_t exp_pool_total_before = exp_pool->exp_total_capacity;
+            exp_pool->exp_total_capacity -= slot->total_block_cnt;
+            uint64_t exp_pool_blk_after = exp_pool->exp_total_block_num;
+            uint64_t exp_pool_total_after = exp_pool->exp_total_capacity;
+            uint32_t slots_after = exp_pool->expansion_count;
+            uint64_t blk_count = slot->total_block_cnt;
             (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
 
             bool shrink_wd = shrink_param->with_data;
+            uint64_t shrink_start_ns = fmt_wall_time(shrink_start_time, sizeof(shrink_start_time));
             slot_uninit(shrink_wd, slot);
             free_expansion_pool_slot(slot);
-            free(shrink_param);
             exp_pool->total_shrink_count++;
+            uint64_t shrink_end_ns = fmt_wall_time(shrink_end_time, sizeof(shrink_end_time));
+            uint64_t shrink_elapsed_us = (shrink_end_ns - shrink_start_ns) / NS_PER_US;
+            uint32_t shrink_sc = shrink_param->sc;
+            uint64_t shrink_g_pool = shrink_param->g_pool_blk_at_trigger;
+            uint64_t shrink_exp_before = shrink_param->exp_total_at_trigger;
+            uint64_t shrink_tls_pool = (shrink_param->with_data) ?
+                __atomic_load_n(&g_total_local_cap_with_data_cnt[shrink_sc], __ATOMIC_RELAXED) : 0;
+            uint64_t shrink_sc_alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[shrink_sc], __ATOMIC_RELAXED);
+            uint64_t shrink_sc_free = __atomic_load_n(&g_qbuf_pool.free_count[shrink_sc], __ATOMIC_RELAXED);
+            uint64_t shrink_sc_outstanding = (shrink_sc_alloc > shrink_sc_free) ? (shrink_sc_alloc - shrink_sc_free) : 0;
+            uint64_t shrink_sc_outstanding_max = __atomic_load_n(&g_qbuf_pool.outstanding_max[shrink_sc], __ATOMIC_RELAXED);
+            UMQ_VLOG_INFO(VLOG_UMQ, "%s_SHRINK sc=%u slot_id=%u blk_count=%llu "
+                           "trigger_shrink=%llu "
+                           "tls_pool_blk=%llu "
+                           "total_free_before=%llu(g=%llu+e=%llu) g_pool_blk=%llu/%llu "
+                           "slots_after=%u exp_pool_free_blk=%llu->%llu exp_pool_total_blk=%llu->%llu "
+                           "outstanding=%llu(%.1fMB) outstanding_max=%llu(%.1fMB) "
+                           "start=%s end=%s elapsed=%llu us\n",
+                           shrink_wd ? "WD" : "ND", shrink_sc, shrink_param->slot_id,
+                           (unsigned long long)blk_count,
+                           (unsigned long long)shrink_param->trigger_shrink,
+                           (unsigned long long)shrink_tls_pool,
+                           (unsigned long long)(shrink_g_pool + shrink_exp_before),
+                           (unsigned long long)shrink_g_pool,
+                           (unsigned long long)shrink_exp_before,
+                           (unsigned long long)shrink_g_pool,
+                           (unsigned long long)g_qbuf_pool.per_sc_block_counts[shrink_sc],
+                            slots_after,
+                            (unsigned long long)shrink_exp_before,
+                            (unsigned long long)exp_pool_blk_after,
+                             (unsigned long long)exp_pool_total_before,
+                             (unsigned long long)exp_pool_total_after,
+                             (unsigned long long)shrink_sc_outstanding,
+                             (double)(shrink_sc_outstanding * (g_qbuf_pool.block_sizes[shrink_sc] + (uint32_t)sizeof(umq_buf_t))) / (1024.0 * 1024.0),
+                             (unsigned long long)shrink_sc_outstanding_max,
+                             (double)(shrink_sc_outstanding_max * (g_qbuf_pool.block_sizes[shrink_sc] + (uint32_t)sizeof(umq_buf_t))) / (1024.0 * 1024.0),
+                           shrink_start_time, shrink_end_time,
+                           (unsigned long long)shrink_elapsed_us);
+            free(shrink_param);
             if (shrink_wd) {
                 if (qbuf_debug_on())
                     g_dbg_stats.shrink_with_data++;
@@ -1219,7 +1303,9 @@ static void *async_shrink_global_pool_callback(void *arg)
     return NULL;
 }
 
-static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_id)
+static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_id,
+                                     uint64_t trigger_shrink, uint64_t exp_total_at_trigger,
+                                     uint64_t g_pool_blk_at_trigger)
 {
     if (g_qbuf_pool.disable_scale_cap) {
         return;
@@ -1227,10 +1313,8 @@ static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_
 
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_date;
-    /* Push the task and signal the dedicated shrink thread. The thread
-     * is created at pool init time and persists for the pool's lifetime,
-     * so no per-event pthread_create is needed. */
-    async_shrink_push_param(with_data, exp_pool, slot_id);
+    async_shrink_push_param(with_data, sc, exp_pool, slot_id, trigger_shrink, exp_total_at_trigger,
+                            g_pool_blk_at_trigger);
 }
 
 static ALWAYS_INLINE void return_batch_to_expansion_pool(uint16_t mempool_id, umq_buf_t *batch_head,
@@ -1297,13 +1381,28 @@ static ALWAYS_INLINE void return_batch_to_expansion_pool(uint16_t mempool_id, um
      * slot between our unlock and the read. The async shrink callback
      * re-checks under the lock, so pushing the param here is safe even
      * if the slot changes state before the callback runs. */
-    bool need_shrink = (slot->free_block_cnt == slot->total_block_cnt) && !slot->shrink_pending;
+    bool slot_full_free = (slot->free_block_cnt == slot->total_block_cnt);
+    bool need_shrink = slot_full_free
+                       && !slot->shrink_pending
+                       && (exp_pool->exp_total_block_num >= exp_pool->trigger_shrink_block_num);
+    uint64_t exp_total_snapshot = exp_pool->exp_total_block_num;
+    uint64_t trigger_shrink_snapshot = exp_pool->trigger_shrink_block_num;
+    uint64_t g_pool_blk_snapshot = with_data ? g_qbuf_pool.block_pool[sc].buf_cnt_with_data :
+                                               g_qbuf_pool.block_pool[0].buf_cnt_without_data;
     if (need_shrink) {
         slot->shrink_pending = true;
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+    if (slot_full_free && !need_shrink && !slot->shrink_pending) {
+        UMQ_VLOG_DEBUG(VLOG_UMQ, "%s_SHRINK_SKIP sc=%u slot_id=%u exp_total=%llu trigger_shrink=%llu "
+                       "(slot full but below shrink threshold)\n",
+                       with_data ? "WD" : "ND", sc, slot_id,
+                       (unsigned long long)exp_total_snapshot,
+                       (unsigned long long)trigger_shrink_snapshot);
+    }
     if (need_shrink) {
-        async_shrink_global_pool(with_data, sc, slot_id);
+        async_shrink_global_pool(with_data, sc, slot_id, trigger_shrink_snapshot, exp_total_snapshot,
+                                 g_pool_blk_snapshot);
     }
 }
 
@@ -1712,8 +1811,8 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
         exp_pool->sub_slot_data_buf_size = exp_pool->sub_slot_blk_count * blk_size;
     } else {
         exp_pool->expansion_block_count = umq_qbuf_expansion_count();
-        exp_pool->trigger_expand_block_num =
-            exp_pool->expansion_block_count * g_qbuf_pool.expansion_threshold / QBUF_POOL_EXPANSION_THRESHOLD_DENOM;
+        exp_pool->trigger_expand_block_num = exp_pool->expansion_block_count * g_qbuf_pool.expansion_threshold / 100;
+        exp_pool->trigger_shrink_block_num = exp_pool->trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
     }
     urpc_list_init(&exp_pool->slot_list);
     urpc_list_init(&exp_pool->shrink_task_list.head);
@@ -2011,8 +2110,9 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         }
         g_qbuf_pool.block_pool[sc].buf_cnt_with_data = blk_num;
         g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
-        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num =
-            blk_num * g_qbuf_pool.expansion_threshold / QBUF_POOL_EXPANSION_THRESHOLD_DENOM;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = blk_num * g_qbuf_pool.expansion_threshold / 100;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_shrink_block_num =
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
         header_cur += blk_num * sizeof(umq_buf_t);
         UMQ_VLOG_INFO(VLOG_UMQ, "qbuf pool SPLIT: sc=%u blk_size=%u num=%lu\n", sc, blk_size,
                      (unsigned long)blk_num);
@@ -2026,11 +2126,10 @@ static void init_split_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
         g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
         uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
-        if (exp_blk_cnt == 0) {
-            exp_blk_cnt = QBUF_POOL_MIN_EXP_BLK_CNT;
-        }
-        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num =
-            exp_blk_cnt * g_qbuf_pool.expansion_threshold / QBUF_POOL_EXPANSION_THRESHOLD_DENOM;
+        if (exp_blk_cnt == 0) exp_blk_cnt = 1;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_shrink_block_num =
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
     }
 
     {
@@ -2104,11 +2203,10 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
             g_qbuf_pool.block_pool[sc].buf_cnt_with_data = 0;
             g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
             uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / blk_size;
-            if (exp_blk_cnt == 0) {
-                exp_blk_cnt = QBUF_POOL_MIN_EXP_BLK_CNT;
-            }
-            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num =
-                exp_blk_cnt * g_qbuf_pool.expansion_threshold / QBUF_POOL_EXPANSION_THRESHOLD_DENOM;
+            if (exp_blk_cnt == 0) exp_blk_cnt = 1;
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_shrink_block_num =
+                g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
             continue;
         }
         for (uint64_t i = 0; i < blk_num; i++) {
@@ -2127,8 +2225,9 @@ static void init_combine_mode_layout(const qbuf_pool_cfg_t *cfg, uint32_t count)
         }
         g_qbuf_pool.block_pool[sc].buf_cnt_with_data = blk_num;
         g_qbuf_pool.block_pool[sc].buf_cnt_without_data = 0;
-        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num =
-            blk_num * g_qbuf_pool.expansion_threshold / QBUF_POOL_EXPANSION_THRESHOLD_DENOM;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num = blk_num * g_qbuf_pool.expansion_threshold / 100;
+        g_qbuf_pool.exp_pool_with_data[sc].trigger_shrink_block_num =
+            g_qbuf_pool.exp_pool_with_data[sc].trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
     }
 }
 
@@ -2489,12 +2588,15 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data, uint32_t sc)
     }
 }
 
-static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_locked)
+static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_locked, uint64_t g_buf_cnt)
 {
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_date;
     qbuf_expansion_pool_slot_t *slot = NULL;
     uint32_t alloc_sc = with_data ? sc : UMQ_QBUF_SIZE_CLASS_MAX;
+    char expand_start_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
+    char expand_end_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
+    uint64_t expand_start_ns = fmt_wall_time(expand_start_time, sizeof(expand_start_time));
 
     if (!already_locked) {
         uint32_t sync_expand_expected = 0;
@@ -2531,34 +2633,65 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool not init\n");
         goto UNINIT_SLOT;
     }
+    uint64_t exp_pool_blk_before = exp_pool->exp_total_block_num;
+    uint64_t exp_pool_total_before = exp_pool->exp_total_capacity;
     urpc_list_push_back(&exp_pool->slot_list, &slot->node);
     g_exp_slot_table[slot->slot_id] = slot;
     exp_pool->slot_count++;
     exp_pool->expansion_count += 1;
     exp_pool->exp_total_block_num += slot->total_block_cnt;
+    exp_pool->exp_total_capacity += slot->total_block_cnt;
     exp_pool->total_expansion_count++;
-    if (g_dbg_in_async_expand) {
+    if (g_dfx_in_async_expand) {
         exp_pool->async_expansion_count++;
     } else {
         exp_pool->sync_expansion_count++;
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
-    UMQ_VLOG_DEBUG(VLOG_UMQ,
-                   "%s_EXPAND_%s sc=%u slot_id=%u mpool=%u blk_count=%llu total_size=%llu "
-                   "exp_total_block=%llu exp_count=%u total_exp_mem=%llu/%llu\n",
-                   with_data ? "WD" : "ND", g_dbg_in_async_expand ? "ASYNC" : "SYNC", sc, slot->slot_id,
+    uint64_t expand_end_ns = fmt_wall_time(expand_end_time, sizeof(expand_end_time));
+    uint64_t expand_elapsed_us = (expand_end_ns - expand_start_ns) / NS_PER_US;
+    uint64_t sc_alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED);
+    uint64_t sc_free = __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED);
+    uint64_t sc_outstanding = (sc_alloc > sc_free) ? (sc_alloc - sc_free) : 0;
+    uint64_t sc_outstanding_max = __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED);
+    UMQ_VLOG_INFO(VLOG_UMQ,
+                   "%s_EXPAND_%s sc=%u slot_id=%u mpool=%u blk_count=%llu total_size=%.1fMB "
+                   "trigger_expand=%llu "
+                   "tls_pool_blk=%llu "
+                   "total_free_before=%llu(g=%llu+e=%llu) g_pool_blk=%llu/%llu "
+                   "slots_after=%u exp_pool_free_blk=%llu->%llu exp_pool_total_blk=%llu->%llu "
+                   "outstanding=%llu(%.1fMB) outstanding_max=%llu(%.1fMB) total_exp_mem=%.1f/%.1fMB "
+                   "start=%s end=%s elapsed=%llu us\n",
+                   with_data ? "WD" : "ND", already_locked ? "ASYNC" : "SYNC", sc, slot->slot_id,
                    (uint16_t)(slot->slot_id + QBUF_POOL_EXP_SLOT_ID_MIN),
-                   (unsigned long long)slot->total_block_cnt, (unsigned long long)slot->total_buf_size,
-                   (unsigned long long)exp_pool->exp_total_block_num, exp_pool->expansion_count,
-                   (unsigned long long)__atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED),
-                   (unsigned long long)g_qbuf_pool.expansion_mem_size_max);
+                   (unsigned long long)slot->total_block_cnt,
+                   (double)slot->total_buf_size / (1024.0 * 1024.0),
+                    (unsigned long long)exp_pool->trigger_expand_block_num,
+                    (unsigned long long)__atomic_load_n(&g_total_local_cap_with_data_cnt[sc], __ATOMIC_RELAXED),
+                    (unsigned long long)(g_buf_cnt + exp_pool_blk_before),
+                    (unsigned long long)g_buf_cnt,
+                    (unsigned long long)exp_pool_blk_before,
+                    (unsigned long long)g_buf_cnt,
+                    (unsigned long long)g_qbuf_pool.per_sc_block_counts[sc],
+                    exp_pool->expansion_count,
+                     (unsigned long long)exp_pool_blk_before,
+                     (unsigned long long)exp_pool->exp_total_block_num,
+                     (unsigned long long)exp_pool_total_before,
+                     (unsigned long long)exp_pool->exp_total_capacity,
+                     (unsigned long long)sc_outstanding,
+                     (double)(sc_outstanding * (g_qbuf_pool.block_sizes[sc] + (uint32_t)sizeof(umq_buf_t))) / (1024.0 * 1024.0),
+                     (unsigned long long)sc_outstanding_max,
+                     (double)(sc_outstanding_max * (g_qbuf_pool.block_sizes[sc] + (uint32_t)sizeof(umq_buf_t))) / (1024.0 * 1024.0),
+                   (double)__atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED) / (1024.0 * 1024.0),
+                   (double)g_qbuf_pool.expansion_mem_size_max / (1024.0 * 1024.0),
+                   expand_start_time, expand_end_time,
+                   (unsigned long long)expand_elapsed_us);
     if (qbuf_debug_on()) {
-        if (g_dbg_in_async_expand) {
+        if (g_dfx_in_async_expand) {
             if (with_data)
                 g_dbg_stats.expand_with_data_async++;
             else
                 g_dbg_stats.expand_without_data_async++;
-            g_dbg_in_async_expand = false;
         } else {
             if (with_data)
                 g_dbg_stats.expand_with_data_sync++;
@@ -2585,15 +2718,16 @@ FREE_SLOT:
     return -UMQ_ERR_ENOMEM;
 }
 
-int expand_global_pool(bool with_data, uint32_t sc)
+int expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt)
 {
-    return expand_global_pool_impl(with_data, sc, false);
+    return expand_global_pool_impl(with_data, sc, false, g_buf_cnt);
 }
 
 typedef struct async_expand_pool_param {
     qbuf_expansion_pool_t *exp_pool;
     bool with_data;
     uint32_t sc;
+    uint64_t g_buf_cnt;
 } async_expand_pool_param_t;
 
 static void *async_expand_global_pool_callback(void *arg)
@@ -2608,10 +2742,10 @@ static void *async_expand_global_pool_callback(void *arg)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async param invalid\n");
         return NULL;
     }
-    if (qbuf_debug_on())
-        g_dbg_in_async_expand = true;
-    (void)expand_global_pool_impl(async_param->with_data, async_param->sc, true);
+    g_dfx_in_async_expand = true;
+    (void)expand_global_pool_impl(async_param->with_data, async_param->sc, true, async_param->g_buf_cnt);
     __atomic_store_n(&async_param->exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+    g_dfx_in_async_expand = false;
     free(arg);
     return NULL;
 }
@@ -2644,6 +2778,7 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt)
     arg->exp_pool = exp_pool;
     arg->with_data = with_data;
     arg->sc = sc;
+    arg->g_buf_cnt = g_buf_cnt;
     if (pthread_create(&tid, NULL, async_expand_global_pool_callback, arg) != 0) {
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);

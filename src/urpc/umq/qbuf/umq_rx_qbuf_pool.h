@@ -50,8 +50,9 @@ void umq_rx_qbuf_pool_depth_get(uint64_t *total_size, uint32_t *block_size, uint
 void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free_count);
 uint64_t umq_rx_qbuf_pool_fallback_count_get(void);
 uint64_t umq_rx_qbuf_pool_fallback_outstanding_get(void);
+uint64_t umq_rx_qbuf_pool_fallback_outstanding_max_get(void);
 uint64_t umq_rx_qbuf_pool_outstanding_max_get(void);
-extern volatile uint64_t g_rx_fallback_outstanding;
+extern uint64_t g_rx_fallback_outstanding;
 
 #ifdef __cplusplus
 }

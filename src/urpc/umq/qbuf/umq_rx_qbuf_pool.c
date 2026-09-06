@@ -23,12 +23,12 @@ static global_block_pool_t g_rx_pool = {0};
 static void *g_rx_buffer_addr = NULL;
 static uint64_t g_rx_total_len = 0;
 static bool g_rx_pool_inited = false;
-// rx pool cumulative alloc/free counters (atomic, for DFX leak analysis)
-static volatile uint64_t g_rx_alloc_count = 0;
-static volatile uint64_t g_rx_free_count = 0;
-static volatile uint64_t g_rx_outstanding_max = 0;
-volatile uint64_t g_rx_fallback_count = 0;
-volatile uint64_t g_rx_fallback_outstanding = 0;
+static uint64_t g_rx_alloc_count = 0;
+static uint64_t g_rx_free_count = 0;
+static uint64_t g_rx_outstanding_max = 0;
+uint64_t g_rx_fallback_count = 0;
+uint64_t g_rx_fallback_outstanding = 0;
+static uint64_t g_rx_fallback_outstanding_max = 0;
 
 void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size)
 {
@@ -176,6 +176,14 @@ int umq_rx_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *o
             {
                 fb_node->rx_fallback = 1;
                 __atomic_add_fetch(&g_rx_fallback_outstanding, 1, __ATOMIC_RELAXED);
+            }
+            uint64_t outstanding = __atomic_load_n(&g_rx_fallback_outstanding, __ATOMIC_RELAXED);
+            uint64_t old_max = __atomic_load_n(&g_rx_fallback_outstanding_max, __ATOMIC_RELAXED);
+            while (outstanding > old_max) {
+                if (__atomic_compare_exchange_n(&g_rx_fallback_outstanding_max, &old_max,
+                                                outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                    break;
+                }
             }
         }
         return fb_ret;
@@ -327,4 +335,9 @@ uint64_t umq_rx_qbuf_pool_fallback_count_get(void)
 uint64_t umq_rx_qbuf_pool_fallback_outstanding_get(void)
 {
     return __atomic_load_n(&g_rx_fallback_outstanding, __ATOMIC_RELAXED);
+}
+
+uint64_t umq_rx_qbuf_pool_fallback_outstanding_max_get(void)
+{
+    return __atomic_load_n(&g_rx_fallback_outstanding_max, __ATOMIC_RELAXED);
 }
