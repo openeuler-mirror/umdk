@@ -227,7 +227,9 @@ static uint64_t fmt_wall_time(char *buf, size_t size)
 
 /* DFX periodic + final report on pool uninit */
 #define QBUF_DFX_BUF_SIZE (32 * 1024)
-#define QBUF_DFX_PRINT_INTERVAL_MS (30 * 1000)
+#define QBUF_DFX_PRINT_INTERVAL_MS (60 * 1000)
+#define QBUF_MS_PER_SEC 1000
+static uint32_t g_dfx_print_interval_ms = QBUF_DFX_PRINT_INTERVAL_MS;
 #define QBUF_DFX_PTHREAD_NAME "qbuf_dfx_print"
 static pthread_t g_dfx_print_thread;
 static volatile bool g_dfx_print_running = false;
@@ -239,7 +241,7 @@ static void *qbuf_dfx_print_callback(void *arg)
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "set thread name %s failed, errno %d\n", QBUF_DFX_PTHREAD_NAME, errno);
     }
     while (g_dfx_print_running) {
-        usleep(QBUF_DFX_PRINT_INTERVAL_MS * 1000);
+        usleep(g_dfx_print_interval_ms * QBUF_MS_PER_SEC);
         if (!g_dfx_print_running || !g_qbuf_pool.inited) {
             break;
         }
@@ -264,6 +266,13 @@ static void *qbuf_dfx_print_callback(void *arg)
 
 static void qbuf_dfx_print_thread_start(void)
 {
+    const char *env = getenv("UMQ_QBUF_DFX_INTERVAL_S");
+    if (env != NULL) {
+        uint32_t val = (uint32_t)atoi(env);
+        if (val > 0) {
+            g_dfx_print_interval_ms = val * QBUF_MS_PER_SEC;
+        }
+    }
     g_dfx_print_running = true;
     if (pthread_create(&g_dfx_print_thread, NULL, qbuf_dfx_print_callback, NULL) != 0) {
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "create dfx print thread failed, errno: %d\n", errno);
@@ -293,7 +302,7 @@ static void qbuf_dfx_print_once(void)
     free(pool_buf);
 }
 
-static void qbuf_dfx_print_thread_stop(void)
+void umq_qbuf_dfx_print_final(void)
 {
     if (!g_dfx_print_running) {
         return;
@@ -2370,7 +2379,6 @@ void umq_qbuf_pool_uninit(void)
     if (!g_qbuf_pool.disable_scale_cap) {
         urpc_id_generator_uninit(&g_global_exp_id_gen);
     }
-    qbuf_dfx_print_thread_stop();
     g_qbuf_pool.inited = false;
     if (exp_pool_ok) {
         memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
@@ -3162,13 +3170,16 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
         g_thread_cache.stats.alloc_cnt_without_data += num;
         __atomic_add_fetch(&g_qbuf_pool.nodata_alloc_count, num, __ATOMIC_RELAXED);
         {
-            uint64_t _outstanding = __atomic_load_n(&g_qbuf_pool.nodata_alloc_count, __ATOMIC_RELAXED) -
-                                    __atomic_load_n(&g_qbuf_pool.nodata_free_count, __ATOMIC_RELAXED);
-            uint64_t _old_max = __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
-            while (_outstanding > _old_max) {
-                if (__atomic_compare_exchange_n(&g_qbuf_pool.nodata_outstanding_max, &_old_max,
-                                                _outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
-                    break;
+            uint64_t _alloc = __atomic_load_n(&g_qbuf_pool.nodata_alloc_count, __ATOMIC_RELAXED);
+            uint64_t _free = __atomic_load_n(&g_qbuf_pool.nodata_free_count, __ATOMIC_RELAXED);
+            if (_alloc > _free) {
+                uint64_t _outstanding = _alloc - _free;
+                uint64_t _old_max = __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
+                while (_outstanding > _old_max) {
+                    if (__atomic_compare_exchange_n(&g_qbuf_pool.nodata_outstanding_max, &_old_max,
+                                                    _outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                        break;
+                    }
                 }
             }
         }
@@ -3261,13 +3272,16 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
     g_thread_cache.stats.sc_alloc_cnt[sc] += param.actual_buf_count;
     __atomic_add_fetch(&g_qbuf_pool.alloc_count[sc], param.actual_buf_count, __ATOMIC_RELAXED);
     {
-        uint64_t _outstanding = __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED) -
-                                __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED);
-        uint64_t _old_max = __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED);
-        while (_outstanding > _old_max) {
-            if (__atomic_compare_exchange_n(&g_qbuf_pool.outstanding_max[sc], &_old_max,
-                                            _outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
-                break;
+        uint64_t _alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED);
+        uint64_t _free = __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED);
+        if (_alloc > _free) {
+            uint64_t _outstanding = _alloc - _free;
+            uint64_t _old_max = __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED);
+            while (_outstanding > _old_max) {
+                if (__atomic_compare_exchange_n(&g_qbuf_pool.outstanding_max[sc], &_old_max,
+                                                _outstanding, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                    break;
+                }
             }
         }
     }

@@ -45,6 +45,12 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg);
 void umq_qbuf_pool_uninit(void);
 
 /*
+ * Print final DFX report and stop the periodic DFX thread.
+ * Must be called before any pool uninit to capture full state.
+ */
+void umq_qbuf_dfx_print_final(void);
+
+/*
  * alloc memory from qbuf pool.
  * try to alloc from thread local pool.
  * if not enough, fetch some more memory fragments from global pool to thread local pool first.

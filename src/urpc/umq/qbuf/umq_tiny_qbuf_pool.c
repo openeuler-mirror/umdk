@@ -18,6 +18,9 @@
 static qbuf_pool_base_t g_tiny_qbuf_pool = {0};
 static __thread thread_local_qbuf_pool_t g_thread_tiny_cache = {0};
 static void *g_tiny_buffer_addr = NULL;
+static uint64_t g_tiny_alloc_count = 0;
+static uint64_t g_tiny_free_count = 0;
+static uint64_t g_tiny_outstanding_max = 0;
 static uint64_t g_tiny_total_len = 0;
 
 uint32_t umq_tiny_buf_block_size_bytes(umq_tiny_buf_block_size_t size_enum)
@@ -193,12 +196,36 @@ int umq_tiny_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t 
     }
 
     qbuf_alloc_param_t param = {0};
-    return umq_qbuf_base_alloc(&g_tiny_qbuf_pool, &g_thread_tiny_cache, request_size, num, list, option, &param);
+    int ret = umq_qbuf_base_alloc(&g_tiny_qbuf_pool, &g_thread_tiny_cache, request_size, num, list, option, &param);
+    if (ret == UMQ_SUCCESS) {
+        uint64_t alloc = __atomic_add_fetch(&g_tiny_alloc_count, param.actual_buf_count, __ATOMIC_RELAXED);
+        uint64_t free_cnt = __atomic_load_n(&g_tiny_free_count, __ATOMIC_RELAXED);
+        if (alloc > free_cnt) {
+            uint64_t outstanding = alloc - free_cnt;
+            uint64_t old_max = __atomic_load_n(&g_tiny_outstanding_max, __ATOMIC_RELAXED);
+            while (outstanding > old_max) {
+                if (__atomic_compare_exchange_n(&g_tiny_outstanding_max, &old_max, outstanding,
+                                                false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                    break;
+                }
+            }
+        }
+    }
+    return ret;
 }
 
 void umq_tiny_qbuf_free(umq_buf_list_t *list)
 {
+    uint64_t cnt = 0;
+    umq_buf_t *node = QBUF_LIST_FIRST(list);
+    while (node != NULL) {
+        cnt++;
+        node = node->qbuf_next;
+    }
     umq_qbuf_base_free(&g_tiny_qbuf_pool, &g_thread_tiny_cache, list, true);
+    if (cnt > 0) {
+        __atomic_add_fetch(&g_tiny_free_count, cnt, __ATOMIC_RELAXED);
+    }
 }
 
 int umq_tiny_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
@@ -223,7 +250,13 @@ int umq_tiny_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         return -UMQ_ERR_EINVAL;
     }
 
-    return umq_qbuf_pool_base_info_get(&g_tiny_qbuf_pool, qbuf_pool_stats, false, UMQ_QBUF_POOL_TYPE_TINY);
+    int ret = umq_qbuf_pool_base_info_get(&g_tiny_qbuf_pool, qbuf_pool_stats, false, UMQ_QBUF_POOL_TYPE_TINY);
+    if (ret == UMQ_SUCCESS) {
+        qbuf_pool_stats->alloc_stats.tiny_alloc_count = __atomic_load_n(&g_tiny_alloc_count, __ATOMIC_RELAXED);
+        qbuf_pool_stats->alloc_stats.tiny_free_count = __atomic_load_n(&g_tiny_free_count, __ATOMIC_RELAXED);
+        qbuf_pool_stats->alloc_stats.tiny_outstanding_max = __atomic_load_n(&g_tiny_outstanding_max, __ATOMIC_RELAXED);
+    }
+    return ret;
 }
 
 int umq_tiny_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops)

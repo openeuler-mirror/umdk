@@ -812,6 +812,8 @@ DELETE_TIMER:
 QUEUE_CTX_LIST_UNINIT:
     umq_ub_queue_ctx_list_uninit();
 
+    umq_qbuf_dfx_print_final();
+
 TINY_QBUF_POOL_UNINIT:
     umq_tiny_qbuf_pool_uninit();
 
@@ -881,6 +883,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     umq_ub_jetty_pool_uninit();
     umq_ub_check_idle_queue_timer_delete();
     umq_ub_queue_ctx_list_uninit();
+    umq_qbuf_dfx_print_final();
     umq_tiny_qbuf_pool_uninit();
     umq_rx_qbuf_pool_uninit();
     umq_qbuf_pool_uninit();

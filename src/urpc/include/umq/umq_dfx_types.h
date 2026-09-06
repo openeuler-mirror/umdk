@@ -211,6 +211,10 @@ typedef struct umq_qbuf_pool_alloc_stats {
     uint64_t rx_pool_alloc_count;                  // RX recv pool cumulative alloc count
     uint64_t rx_pool_free_count;                   // RX recv pool cumulative free count
     uint64_t rx_pool_outstanding_max;              // RX recv pool historical max outstanding
+    /* tiny pool: independent small-block pool */
+    uint64_t tiny_alloc_count;                     // tiny pool cumulative alloc count
+    uint64_t tiny_free_count;                      // tiny pool cumulative free count
+    uint64_t tiny_outstanding_max;                 // tiny pool historical max outstanding
 } umq_qbuf_pool_alloc_stats_t;
 
 typedef struct umq_qbuf_pool_info {
