@@ -6860,17 +6860,22 @@ Semantic fields of `bondp_port_id_t`:
 - `die_id`: fixed to 1;
 - `port_idx`: port EID number, valid range [0, PORT_NUM]; `UINT8_MAX` represents the primary EID of the chip.
 
+**Constraint on duplicates**:
+
+The chip_id + port_idx combinations in `port_ids` must be unique; this opcode returns an error when duplicates are present, and liburma does not silently de-duplicate them.
+
 **Consistency constraint with the port config supplied at object creation**:
 
 When the caller sets `has_drv_ext` while creating JFC, JFS, JFR, or Jetty, the `port_ids` supplied via the extension fields must be consistent with this configuration. The consistency check runs during the creation flow with the following rules:
 
 - **chip_id order must match**: the chip_id ordering in this configuration and in the `port_ids` supplied at object creation must be identical. liburma converts each port_id into a matrix active index at both set and create time, preserving the chip_id-to-index correspondence; a mismatched order would cause mispairing and fail the check.
-- **port_idx order is not required**: the order of port_idx values within a chip may differ. liburma de-duplicates port_ids and ultimately compares the de-duplicated port sets.
-- **the full port set must match**: the port set of this configuration and the port set supplied at object creation (after de-duplication) must be exactly the same, i.e. the chip_id + port_idx combinations must match exactly with no missing or extra entries; otherwise the object creation fails the check.
+- **port_idx order is not required**: the order of port_idx values within a chip may differ; liburma ultimately compares the port sets.
+- **the full port set must match**: the port set of this configuration and the port set supplied at object creation must be exactly the same, i.e. the chip_id + port_idx combinations must match exactly with no missing or extra entries; otherwise the object creation fails the check.
 
 Constraints and ordering:
 
 - liburma copies the `port_ids` array (including chip_id) internally; the caller may release the buffer immediately after the call returns.
+- The `port_ids` array bounds are guaranteed by the caller: `urma_user_ctl` passes `port_ids` in as a pointer, so liburma cannot validate the actual length of the array it points to; the caller must ensure the array contains at least `port_count` elements.
 - The configuration is context-scoped and applies to JFC/JFS/JFR/Jetty created afterwards on the same `urma_context_t`.
 - The configuration must be done **before** creating any JFC/JFS/JFR/Jetty; if the context is still referenced by existing objects, a subsequent call returns `URMA_EAGAIN`, and the caller must destroy the existing objects first before reconfiguring.
 

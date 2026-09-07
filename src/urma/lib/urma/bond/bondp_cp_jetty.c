@@ -555,6 +555,11 @@ int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_p
 
     if (port_id.bs.port_idx == UINT8_MAX) {
         *active_index = port_id.bs.chip_id - 1;
+        if (bdp_ctx->p_ctxs[*active_index] == NULL) {
+            URMA_LOG_ERR("Primary eid has no live physical ctx, chip_id=%u, bonding_level=%d.\n",
+                         port_id.bs.chip_id, bdp_ctx->bonding_level);
+            return -1;
+        }
         return 0;
     }
 
@@ -566,6 +571,14 @@ int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_p
     *active_index = (uint32_t)get_matrix_port_p_idx(port_id.bs.chip_id - 1, port_id.bs.port_idx);
     if (*active_index >= (uint32_t)bdp_ctx->dev_num) {
         URMA_LOG_ERR("Invalid converted active index=%u.\n", *active_index);
+        return -1;
+    }
+    /* A primary EID only has a live p_ctx under IODIE bonding level and a port EID
+     * only under PORT level; reject ids addressing an empty p_ctxs slot here so
+     * callers fail early instead of at physical object creation. */
+    if (bdp_ctx->p_ctxs[*active_index] == NULL) {
+        URMA_LOG_ERR("Port eid has no live physical ctx, active_index=%u, bonding_level=%d, value=0x%x.\n",
+                     *active_index, bdp_ctx->bonding_level, port_id.value);
         return -1;
     }
     return 0;
