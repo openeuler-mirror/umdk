@@ -52,7 +52,28 @@ typedef enum bondp_user_ctl_opcode {
      * Semantically grouped with GET_SEG_CTX; appended at the tail to keep the
      * numbering of the existing opcodes stable. */
     BONDP_USER_CTL_OPCODE_GET_USER_TSEG,
+    /* Query per-port health status (GOOD/BAD). in: addr=0, len=0;
+     * out: bondp_query_port_status_out_t. Only enabled ports are filled. */
+    BONDP_USER_CTL_QUERY_PORT_STATUS,
 } bondp_user_ctl_opcode_t;
+
+typedef enum bondp_port_status_state {
+    BONDP_PORT_STATUS_GOOD = 0,
+    BONDP_PORT_STATUS_BAD  = 1,
+} bondp_port_status_state_t;
+
+typedef struct bondp_port_status {
+    uint32_t chip_id;   /* [1, CHIP_NUM] */
+    uint32_t die_id;    /* always 1 while IODIE_NUM_PER_CHIP == 1 */
+    uint32_t port_idx;  /* [0, PORT_NUM], or UINT8_MAX for primary EID */
+    uint32_t status;    /* bondp_port_status_state_t */
+    uint64_t reserved;  /* always 0 */
+} bondp_port_status_t;
+
+typedef struct bondp_query_port_status_out {
+    uint32_t port_count;
+    bondp_port_status_t port_status[URMA_UBAGG_DEV_MAX_NUM];
+} bondp_query_port_status_out_t;
 
 typedef enum bondp_ctx_cfg_mask {
     BONDP_CTX_CFG_ENABLE_FAILOVER        = 1ULL << 0,

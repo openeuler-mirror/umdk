@@ -466,6 +466,46 @@ static int bondp_user_ctl_set_ctx_cfg(urma_context_t *ctx, urma_user_ctl_in_t *i
     return bondp_set_ctx_cfg(ctx, cfg_in);
 }
 
+static int bondp_user_ctl_query_port_status(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                            urma_user_ctl_out_t *out)
+{
+    if (in == NULL || out == NULL || in->addr != 0 || in->len != 0 ||
+        out->addr == 0 || out->len < sizeof(bondp_query_port_status_out_t)) {
+        URMA_LOG_ERR("Invalid query port status param.\n");
+        return -EINVAL;
+    }
+
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    bondp_query_port_status_out_t *query_out =
+        (bondp_query_port_status_out_t *)(uintptr_t)out->addr;
+
+    const uint32_t *enabled_indices = bdp_ctx->port_cfg_enable
+        ? bdp_ctx->port_cfg.enabled_indices
+        : bdp_ctx->enabled_indices;
+    uint32_t enabled_count = bdp_ctx->port_cfg_enable
+        ? bdp_ctx->port_cfg.enabled_count
+        : bdp_ctx->enabled_count;
+
+    query_out->port_count = 0;
+    for (uint32_t i = 0; i < enabled_count; ++i) {
+        uint32_t send_idx = enabled_indices[i];
+        if (send_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+            URMA_LOG_ERR("Invalid send_idx=%u at enabled_indices[%u].\n", send_idx, i);
+            continue;
+        }
+        bondp_port_id_t pid = bondp_active_index_to_port_id(send_idx);
+        bondp_port_status_t *ps = &query_out->port_status[query_out->port_count];
+        ps->chip_id  = pid.bs.chip_id;
+        ps->die_id   = pid.bs.die_id;
+        ps->port_idx = pid.bs.port_idx;
+        ps->status   = atomic_load(&bdp_ctx->port_status_bad[send_idx])
+                       ? BONDP_PORT_STATUS_BAD : BONDP_PORT_STATUS_GOOD;
+        ps->reserved = 0;
+        query_out->port_count++;
+    }
+    return 0;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     if (in == NULL) {
@@ -496,6 +536,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_user_ctl_set_bonding_port(ctx, in, out);
         case BONDP_USER_CTL_SET_CTX_CFG:
             return bondp_user_ctl_set_ctx_cfg(ctx, in, out);
+        case BONDP_USER_CTL_QUERY_PORT_STATUS:
+            return bondp_user_ctl_query_port_status(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;

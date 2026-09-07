@@ -571,6 +571,22 @@ int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_p
     return 0;
 }
 
+/* Inverse of convert_bond_port_id_to_active_index. */
+bondp_port_id_t bondp_active_index_to_port_id(uint32_t active_index)
+{
+    bondp_port_id_t id = {0};
+    id.bs.die_id = 1;
+    if (active_index < (uint32_t)IODIE_NUM) {
+        id.bs.chip_id  = (uint16_t)(active_index + 1);
+        id.bs.port_idx = UINT8_MAX;
+    } else {
+        uint32_t off = active_index - (uint32_t)IODIE_NUM;
+        id.bs.chip_id  = (uint16_t)(off / PORT_EID_MAX_NUM_PER_DEV + 1);
+        id.bs.port_idx = (uint16_t)(off % PORT_EID_MAX_NUM_PER_DEV);
+    }
+    return id;
+}
+
 static int init_active_indices_ex(bondp_context_t *bdp_ctx,
                                   uint32_t enabled_indices[], uint32_t *enabled_count,
                                   uint32_t active_indices[], uint32_t *active_count,
