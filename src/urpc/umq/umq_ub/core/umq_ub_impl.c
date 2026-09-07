@@ -1777,9 +1777,10 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    uint32_t umq_id = queue->umq_id;
     if (qcfg->mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue mode is not interrupt\n", EID_ARGS(*eid),
-                           id);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, queue mode is not interrupt\n",
+                           umq_id, EID_ARGS(*eid), id);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -1792,20 +1793,23 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     if ((option->flag & UMQ_INTERRUPT_FLAG_TP_HANDLE_IDX) != 0) {
         if (!(is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) &&
               (option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) != 0 && option->direction == UMQ_IO_TX)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "enable tp handle idx only obtaining the tx fd of tp resources\n");
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                "enable tp handle idx only obtaining the tx fd of tp resources\n", umq_id, EID_ARGS(*eid), id);
             umq_trace_end_record(UMQ_TRACE_TYPE_WAIT, umq_trace_timestamp_get());
             return -UMQ_ERR_EINVAL;
         }
 
         umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
         if (option->tp_handle_idx >= jetty_node_list->list_len) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tp handle idx %u exceeds the jetty node list len %u\n", option->tp_handle_idx,
-                               jetty_node_list->list_len);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                "tp handle idx %u exceeds the jetty node list len %u\n", umq_id, EID_ARGS(*eid), id,
+                option->tp_handle_idx, jetty_node_list->list_len);
             umq_trace_end_record(UMQ_TRACE_TYPE_WAIT, umq_trace_timestamp_get());
             return -UMQ_ERR_EINVAL;
         }
         if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u not exist\n", option->tp_handle_idx);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, tx_handle_idx %u not exist\n",
+                               umq_id, EID_ARGS(*eid), id, option->tp_handle_idx);
             umq_trace_end_record(UMQ_TRACE_TYPE_WAIT, umq_trace_timestamp_get());
             return -UMQ_ERR_EINVAL;
         }
@@ -1821,9 +1825,8 @@ int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrup
     if (cnt < 0) {
         if (errno != EAGAIN) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
-                               "eid: " EID_FMT ", jetty_id: %u, urma_wait_jfc failed, direction %u,"
-                               " errno: %d, status: %d\n",
-                               EID_ARGS(*eid), id, option->direction, errno, cnt);
+                "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, urma_wait_jfc failed, direction %u,"
+                " errno: %d, status: %d\n", umq_id, EID_ARGS(*eid), id, option->direction, errno, cnt);
             return -1;
         }
         return 0;
@@ -2050,9 +2053,10 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
+    uint32_t umq_id = queue->umq_id;
     if (qcfg->mode != UMQ_MODE_INTERRUPT) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, queue mode is not interrupt\n", EID_ARGS(*eid),
-                           id);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, queue mode is not interrupt\n",
+                           umq_id, EID_ARGS(*eid), id);
         return -UMQ_ERR_EINVAL;
     }
 
@@ -2066,14 +2070,16 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             (option->flag & UMQ_INTERRUPT_FLAG_IO_DIRECTION) != 0 && option->direction == UMQ_IO_TX) {
             umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
             if (option->tp_handle_idx >= jetty_node_list->list_len) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tp handle idx %u exceeds the jetty node list len %u\n",
-                                   option->tp_handle_idx, jetty_node_list->list_len);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                                   "tp handle idx %u exceeds the jetty node list len %u\n",
+                                   umq_id, EID_ARGS(*eid), id, option->tp_handle_idx, jetty_node_list->list_len);
                 umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
                 return -UMQ_ERR_EINVAL;
             }
 
             if (!urpc_bitmap_is_set(jetty_node_list->bitmap, option->tp_handle_idx)) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "tx_handle_idx %u does not exist\n", option->tp_handle_idx);
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, tx_handle_idx %u does not "
+                                   "exist\n", umq_id, EID_ARGS(*eid), id, option->tp_handle_idx);
                 umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
                 return -UMQ_ERR_EINVAL;
             }
@@ -2085,10 +2091,9 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             uint64_t rearm_delta = umq_trace_write_delta(tp_rearm_start);
             umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_REARM_JFC, tp_rearm_start, rearm_delta);
             if (status != URMA_SUCCESS) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
-                                   "eid: " EID_FMT ", jetty_id: %u, "
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
                                    "urma_rearm_jfc for io jfc failed, status: %d\n",
-                                   EID_ARGS(*eid), id, (int)status);
+                                   umq_id, EID_ARGS(*eid), id, (int)status);
                 umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
                 return umq_status_convert(status);
             }
@@ -2100,10 +2105,9 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
                 rearm_delta = umq_trace_write_delta(fc_rearm_start);
                 umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_FC_REARM_JFC, fc_rearm_start, rearm_delta);
                 if (status != URMA_SUCCESS) {
-                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
-                                       "eid: " EID_FMT ", jetty_id: %u, "
-                                       "urma_rearm_jfc for io jfc failed, status: %d\n",
-                                       EID_ARGS(*eid), id, (int)status);
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                                       "urma_rearm_jfc for flowcontrol jfc failed, status: %d\n",
+                                       umq_id, EID_ARGS(*eid), id, (int)status);
                     umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
                     return umq_status_convert(status);
                 }
@@ -2112,7 +2116,8 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
             return UMQ_SUCCESS;
         }
-        UMQ_VLOG_ERR(VLOG_UMQ, "enable tp handle idx only rearm tp resources tx\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                    "enable tp handle idx only rearm tp resources tx\n", umq_id, EID_ARGS(*eid), id);
         umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
         return -UMQ_ERR_EINVAL;
     }
@@ -2133,10 +2138,9 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
         umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_REARM_JFC, tp_rearm_start, rearm_delta);
     }
     if (status != URMA_SUCCESS) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
-                           "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for io jfc failed, "
-                           "status: %d\n",
-                           EID_ARGS(*eid), id, (int)status);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                           "urma_rearm_jfc for io jfc failed, status: %d\n",
+                           umq_id, EID_ARGS(*eid), id, (int)status);
         umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
         return umq_status_convert(status);
     }
@@ -2157,10 +2161,9 @@ int umq_ub_rearm_impl(uint64_t umqh_tp, bool solicited, umq_interrupt_option_t *
             umq_trace_sub_record(UMQ_TRACE_TYPE_REARM, UMQ_URMA_FUNC_FC_REARM_JFC, fc_rearm_start, rearm_delta);
         }
         if (status != URMA_SUCCESS) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API,
-                               "eid: " EID_FMT ", jetty_id: %u, urma_rearm_jfc for flowcontrol jfc"
-                               " failed, status: %d\n",
-                               EID_ARGS(*eid), id, (int)status);
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                               "urma_rearm_jfc for flowcontrol jfc failed, status: %d\n",
+                               umq_id, EID_ARGS(*eid), id, (int)status);
             umq_trace_end_record(UMQ_TRACE_TYPE_REARM, umq_trace_timestamp_get());
             return umq_status_convert(status);
         }
