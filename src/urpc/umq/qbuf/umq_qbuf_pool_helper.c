@@ -8,13 +8,13 @@
  */
 
 #include "umq_qbuf_pool_helper.h"
+#include <malloc.h>
+#include <sys/mman.h>
 #include "umq_errno.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_rx_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
 #include "umq_vlog.h"
-#include <malloc.h>
-#include <sys/mman.h>
 
 static uint32_t umq_qbuf_alloc_headroom_get(umq_alloc_option_t *option)
 {

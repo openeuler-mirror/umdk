@@ -333,7 +333,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
             const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
             uint64_t sc_outstanding_max = qbuf_pool_stats->alloc_stats.sc_outstanding_max[sc];
-            double sc_peak_mb = (double)(sc_outstanding_max * (sci->blk_size + info->umq_buf_t_size)) / (1024.0 * 1024.0);
+            double sc_peak_mb =
+                (double)(sc_outstanding_max * (sci->blk_size + info->umq_buf_t_size)) / UMQ_DFX_BYTES_PER_MB;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-10lu %-10u %-11lu %-11lu %-11lu %-11lu %-11lu %-11ld %llu(%.1fMB)\n",
                                  sc_name,
@@ -352,7 +353,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         {
             const umq_qbuf_pool_config_t *cfg = &info->config;
             uint64_t rx_outstanding_max = qbuf_pool_stats->alloc_stats.rx_pool_outstanding_max;
-            double rx_peak_mb = (double)(rx_outstanding_max * (cfg->rx_pool_block_size + info->umq_buf_t_size)) / (1024.0 * 1024.0);
+            double rx_peak_mb =
+                (double)(rx_outstanding_max * (cfg->rx_pool_block_size + info->umq_buf_t_size)) / UMQ_DFX_BYTES_PER_MB;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-13s %-10lu %-10u %-11s %-11s %-11s %-11lu %-11lu %-11ld %llu(%.1fMB)\n",
                                  "RX_pool",
@@ -392,7 +394,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             continue;
         }
         uint64_t tiny_outstanding_max = qbuf_pool_stats->alloc_stats.tiny_outstanding_max;
-        double tiny_peak_mb = (double)(tiny_outstanding_max * (info->block_size + info->umq_buf_t_size)) / (1024.0 * 1024.0);
+        double tiny_peak_mb =
+            (double)(tiny_outstanding_max * (info->block_size + info->umq_buf_t_size)) / UMQ_DFX_BYTES_PER_MB;
         UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                              "%-13s %-10lu %-10u %-11s %-11s %-11s %-11lu %-11lu %-11ld %llu(%.1fMB)\n",
                              "Tiny",
@@ -473,7 +476,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             uint64_t nodata_recommended = (uint64_t)((nodata_outstanding_max + QBUF_SIZING_SCALING_DENOM - 1) /
                                                       QBUF_SIZING_SCALING_DENOM * QBUF_SIZING_SCALING_NUMER);
             nodata_recommended = QBUF_ALIGN_UP(nodata_recommended, QBUF_SIZING_ALIGN_BLOCKS);
-            double nodata_rec_mem_mb = (double)(nodata_recommended * info->umq_buf_t_size) / (1024.0 * 1024.0);
+            double nodata_rec_mem_mb = (double)(nodata_recommended * info->umq_buf_t_size) / UMQ_DFX_BYTES_PER_MB;
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "[SIZING] without-data: outstanding_max=%llu (%.1fMB) > initial=%llu (%.1fMB), "
                                  "recommended: %llu (%.1fMB)\n",
@@ -488,7 +491,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n",
                          "                                             Expansion Pool");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-10s %-10s %-10s %-11s %-11s %-11s %-11s %-12s\n", "Type", "ExpandCnt",
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-10s %-10s %-10s %-11s %-11s %-11s %-11s %-12s\n",
+                         "Type", "ExpandCnt",
                          "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "SyncExpCnt", "AsyncExpCnt", "AccShrinkCnt");
     /* WithData: per-SC breakdown for multi-level pools (Small/Medium/...). */
     if (small_info != NULL && small_info->sc_count > 1) {
@@ -522,7 +526,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              (unsigned long)sci->exp_async_expansion_count,
                              (unsigned long)sci->exp_total_shrink_count);
     }
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-10u %-10lu %-10lu %-11lu %-11lu %-11lu %-11lu %-12lu\n", "WithoutData",
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-13s %-10u %-10lu %-10lu %-11lu %-11lu %-11lu %-11lu %-12lu\n",
+                         "WithoutData",
                          qbuf_pool_stats->exp_pool_without_data.expansion_count,
                          qbuf_pool_stats->exp_pool_without_data.exp_total_block_num,
                          qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num,
