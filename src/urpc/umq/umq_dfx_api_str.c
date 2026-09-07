@@ -135,9 +135,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                     sc_data_size = sci->blk_size - info->umq_buf_t_size;
                     sc_buf_size = sci->blk_size;
                 }
-                static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
-                const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ?
-                                       sc_names[sc] : "sc?";
+                const char *sc_name = (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ?
+                                       umq_dfx_sc_names[sc] : "sc?";
                 char ts_buf[UMQ_DFX_LABEL_BUF_SIZE];
                 (void)snprintf(ts_buf, sizeof(ts_buf), "%lu(%.1fMB)", sc_total_size,
                                (double)sc_total_size / (UMQ_DFX_BYTES_PER_MB));
@@ -323,7 +322,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "Type", "free_blk", "blk_size", "exp_blk", "exp_cnt", "exp_shrink",
                          "alloc_cnt", "free_cnt", "outstanding", "outstanding_max");
     /* Normal pool: per-SC with_data rows + RX + without-data */
-    static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
     for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
         const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
         if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
@@ -331,7 +329,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         }
         for (uint32_t sc = 0; sc < info->sc_count && sc < UMQ_SIZE_CLASS_MAX; sc++) {
             const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
-            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            const char *sc_name =
+                (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
             uint64_t sc_outstanding_max = qbuf_pool_stats->alloc_stats.sc_outstanding_max[sc];
             double sc_peak_mb =
                 (double)(sc_outstanding_max * (sci->blk_size + info->umq_buf_t_size)) / UMQ_DFX_BYTES_PER_MB;
@@ -417,7 +416,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
         if (info->mode != UMQ_BUF_SPLIT || info->sc_count <= 1) {
             continue;
         }
-        static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
         static const char *tls_param_names[] = {
             "--ubsocket_small_buf_pool_depth",
             "--ubsocket_middle_buf_pool_depth",
@@ -439,7 +437,8 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
             if (init_blocks == 0 || outstanding_max <= init_blocks) {
                 continue;
             }
-            const char *sc_name = (sc < sizeof(sc_names) / sizeof(sc_names[0])) ? sc_names[sc] : "sc?";
+            const char *sc_name =
+                (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
             const char *tls_param = (sc < sizeof(tls_param_names) / sizeof(tls_param_names[0])) ?
                                     tls_param_names[sc] : "--ubsocket_unknown_buf_pool_depth";
             const char *global_param = (sc < sizeof(global_param_names) / sizeof(global_param_names[0])) ?
@@ -496,7 +495,6 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                          "TotalBlk", "FreeBlk", "MemSize", "AccExpCnt", "SyncExpCnt", "AsyncExpCnt", "AccShrinkCnt");
     /* WithData: per-SC breakdown for multi-level pools (Small/Medium/...). */
     if (small_info != NULL && small_info->sc_count > 1) {
-        static const char *sc_names[] = {"Small", "Medium", "Large", "Huge", "Gigantic"};
         for (uint32_t sc = 0; sc < small_info->sc_count; sc++) {
             const umq_qbuf_sc_info_t *sci = &small_info->sc_info[sc];
             const char *sc_name =
