@@ -57,6 +57,11 @@ public:
         const c10::optional<at::Tensor> &expert_smooth_scales,
         const c10::optional<at::Tensor> &share_smooth_scales,
         const c10::optional<at::Tensor> &x_active_mask,
+        // W4A8: bias/compensation matrix (optional)
+        const TensorVector &gmm1_bias,
+        const TensorVector &gmm2_bias,
+        const c10::optional<at::Tensor> &share_gmm1_bias,
+        const c10::optional<at::Tensor> &share_gmm2_bias,
         c10::string_view group_ep,
         int64_t ep_rank_size,
         int64_t ep_rank_id,

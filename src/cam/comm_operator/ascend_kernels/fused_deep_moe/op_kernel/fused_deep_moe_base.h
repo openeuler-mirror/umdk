@@ -33,4 +33,11 @@ __aicore__ inline void SPIN_WAIT_CYCLES()
     }
 }
 
+// W4A8 相关常量定义
+constexpr int32_t CONSTANT_TWO = 2;
+constexpr int32_t CONSTANT_INT4_PACKING_RATIO = 2;
+constexpr int32_t TILE_HALF_SPLIT = 2;
+constexpr int32_t TILE_QUARTER_SPLIT = 4;
+constexpr int32_t TILE_OFFSET_FACTOR = 3;
+
 #endif  // FUSED_DEEP_MOE_BASE_H

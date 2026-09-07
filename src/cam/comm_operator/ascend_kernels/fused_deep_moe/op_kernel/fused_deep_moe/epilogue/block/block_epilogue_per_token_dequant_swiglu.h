@@ -87,8 +87,11 @@ public:
                   "TileShape is too large to fit in UB");
 
     struct Params {
+        __gm__ ElementC *ptrC{nullptr}; // layoutC = layoutD
         __gm__ ElementRawScale *ptrScale{nullptr};
         LayoutScale layoutScale{};
+        // W4A8: bias/compensation matrix pointer
+        __gm__ float *ptrBias{nullptr};
         __gm__ ElementPerTokenScale *ptrPerTokenScale{nullptr};
         LayoutPerTokenScale layoutPerTokenScale{};
         __gm__ ElementD *ptrD{nullptr};
@@ -98,11 +101,14 @@ public:
         Params() {};
 
         CATLASS_DEVICE
-        Params(__gm__ ElementRawScale *ptrScale_, LayoutScale const &layoutScale_,
+        Params(__gm__ ElementC *ptrC_, __gm__ ElementRawScale *ptrScale_, LayoutScale const &layoutScale_,
+               __gm__ float *ptrBias_,
                __gm__ ElementPerTokenScale *ptrPerTokenScale_, LayoutPerTokenScale const &layoutPerTokenScale_,
                __gm__ ElementD *ptrD_, LayoutD const &layoutD_)
-            : ptrScale(ptrScale_),
+            : ptrC(ptrC_),
+              ptrScale(ptrScale_),
               layoutScale(layoutScale_),
+              ptrBias(ptrBias_),
               ptrPerTokenScale(ptrPerTokenScale_),
               layoutPerTokenScale(layoutPerTokenScale_),
               ptrD(ptrD_),
@@ -131,6 +137,12 @@ public:
             ubOffset += TileShape::ROW * sizeof(ElementPerTokenScale);
             ubDList[i] = resource.ubBuf.template GetBufferByByte<ElementD>(ubOffset);
             ubOffset += TileShape::COUNT * sizeof(ElementD);
+
+            // W4A8: ubweighAux local tensor
+            if constexpr (EXEC_FLAG_ & EXEC_FLAG_W4A8) {
+                ubweighAuxList[i] = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
+                ubOffset += TileShape::COLUMN * sizeof(float);
+            }
 
             eventUbCVMTE2List[i] = eventVMTE2++;
             eventUbCMTE2VList[i] = eventMTE2V++;
@@ -172,8 +184,7 @@ public:
 
     CATLASS_DEVICE
     void operator()(GemmCoord const &blockShapeMNK, GemmCoord const &blockCoordMNK,
-                    GemmCoord const &actualBlockShapeMNK, AscendC::GlobalTensor<ElementC> const &gmBlockC,
-                    LayoutC const &layoutBlockC, bool act_left = true, Callback &&callback = Callback{})
+                    GemmCoord const &actualBlockShapeMNK, bool act_left = true, Callback &&callback = Callback{})
     {
         if (0 == actualBlockShapeMNK.k()) {
             return;
@@ -184,10 +195,31 @@ public:
         MatrixCoord blockCoord = blockCoordMNK.GetCoordMN();
         MatrixCoord actualBlockShape = actualBlockShapeMNK.GetCoordMN();
         MatrixCoord blockOffset = blockCoord * blockShape;
+
+        // W4A8 constants
+        constexpr float DEFAULT_MUL_SCALE = 16.0f;
+        constexpr uint32_t mulsMask = 64;
+        constexpr uint32_t mulsRepeatTimes = 32;
+        constexpr uint32_t src0RepStride = 32;
+        constexpr uint32_t addDstRepStride = 1;
+        constexpr uint32_t addSrc0RepStrideHighLow = 16;
+        constexpr uint32_t addSrc1RepStrideHighLow = 32;
+        constexpr uint32_t addSrc0RepStrideWeightAux = 16;
+        constexpr uint32_t addSrc1RepStrideWeightAux = 0;
+        constexpr uint32_t TILE_HALF_SPLIT = 2;
+        constexpr uint32_t TILE_OFFSET_FACTOR = 3;
+
         bool isLeft = blockOffset.column() < (params.layoutD.shape(1) >> 1);
         isLeft = act_left ? isLeft : (!isLeft);
+        AscendC::GlobalTensor<ElementC> gmC;
+        gmC.SetGlobalBuffer(params.ptrC);
         AscendC::GlobalTensor<ElementRawScale> gmScale;
         gmScale.SetGlobalBuffer(params.ptrScale);
+        // W4A8: bias/compensation matrix - only set when in W4A8 mode
+        AscendC::GlobalTensor<float> gmBias;
+        if constexpr (EXEC_FLAG_ & EXEC_FLAG_W4A8) {
+            gmBias.SetGlobalBuffer(params.ptrBias);
+        }
         AscendC::GlobalTensor<ElementPerTokenScale> gmPerTokenScale;
         gmPerTokenScale.SetGlobalBuffer(params.ptrPerTokenScale);
         AscendC::GlobalTensor<ElementD> gmD;
@@ -205,8 +237,8 @@ public:
             auto tileOffsetInBlock = tileCoord * tileShape;
             auto tileOffset = blockOffset + tileOffsetInBlock;
 
-            auto gmTileC = gmBlockC[layoutBlockC.GetOffset(tileOffsetInBlock)];
-            auto layoutGmTileC = layoutBlockC.GetTileLayout(actualTileShape);
+            auto gmTileC = gmC[params.layoutD.GetOffset(tileOffset)];
+            auto layoutGmTileC = params.layoutD.GetTileLayout(actualTileShape);
 
             auto &ubC = ubCList[ubListId];
             LayoutC layoutUbC{actualTileShape, ubTileStride};
@@ -226,7 +258,20 @@ public:
             auto &ubRawScale = ubRawScaleList[ubListId];
             auto layoutRawUbScale = LayoutScale::template MakeLayoutInUb<ElementRawScale>(scaleTileShape);
 
+            // W4A8: load weightAux matrix
+            auto &ubweighAux = ubweighAuxList[ubListId];
+            AscendC::DataCopyExtParams copyParams{
+                1, static_cast<uint32_t>(TileShape::COLUMN * sizeof(float)), 0, 0, 0};
+            AscendC::DataCopyPadExtParams<float> padParams{false, 0, 0, 0};
+
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(eventUbScaleVMTE2List[ubListId]);
+            // W4A8: load bias/compensation matrix
+            if constexpr (EXEC_FLAG_ & EXEC_FLAG_W4A8) {
+                AscendC::DataCopyPad(ubweighAux,
+                    gmBias[params.layoutScale.GetOffset(scaleTileOffset)],
+                    copyParams, padParams);
+            }
+
             if constexpr (!std::is_same_v<ElementRawScale, ElementFp32Scale>) {
                 copyGmToUbScale(ubRawScale, gmTileScale, layoutRawUbScale, layoutGmTileScale);
             } else {
@@ -237,12 +282,19 @@ public:
             auto perTokenScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
             auto perTokenScaleTileShape = actualTileShape.template GetCoordByAxis<0>();
 
-            auto gmTilePerTokenScale = gmPerTokenScale[params.layoutPerTokenScale.GetOffset(perTokenScaleTileOffset)];
-            auto layoutGmTilePerTokenScale = params.layoutPerTokenScale.GetTileLayout(perTokenScaleTileShape);
+            // W4A8: recalculate offset
+            Catlass::Coord<1> newperTokenScaleOffset(perTokenScaleTileOffset[0] / TILE_HALF_SPLIT);
+            Catlass::Coord<1> newperTokenScaleTileShape(perTokenScaleTileShape[0] / TILE_HALF_SPLIT);
+
+            auto gmTilePerTokenScale = gmPerTokenScale[params.layoutPerTokenScale.GetOffset(
+                (EXEC_FLAG_ & EXEC_FLAG_W4A8) ? newperTokenScaleOffset : perTokenScaleTileOffset)];
+            auto layoutGmTilePerTokenScale = params.layoutPerTokenScale.GetTileLayout(
+                (EXEC_FLAG_ & EXEC_FLAG_W4A8) ? newperTokenScaleTileShape : perTokenScaleTileShape);
 
             auto &ubPerTokenScale = ubPerTokenScaleList[ubListId];
             auto layoutUbPerTokenScale =
-                LayoutScale::template MakeLayoutInUb<ElementPerTokenScale>(perTokenScaleTileShape);
+                LayoutScale::template MakeLayoutInUb<ElementPerTokenScale>(
+                    (EXEC_FLAG_ & EXEC_FLAG_W4A8) ? newperTokenScaleTileShape : perTokenScaleTileShape);
 
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(eventUbPerTokenScaleVMTE2List[ubListId]);
             copyGmToUbPerTokenScale(ubPerTokenScale, gmTilePerTokenScale, layoutUbPerTokenScale,
@@ -259,6 +311,41 @@ public:
             }
             tileRowBroadcastMul(ubTmpMxN, ubTmpMxN, ubFp32Scale);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventUbScaleVMTE2List[ubListId]);
+
+            // W4A8: merge high/low bits and add weightAux compensation
+            if constexpr (EXEC_FLAG_ & EXEC_FLAG_W4A8) {
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Muls(ubTmpMxN, ubTmpMxN, DEFAULT_MUL_SCALE, mulsMask, mulsRepeatTimes,
+                    {1, 1, src0RepStride, src0RepStride});
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Muls(ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT], DEFAULT_MUL_SCALE, mulsMask, mulsRepeatTimes,
+                    {1, 1, src0RepStride, src0RepStride});
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(ubTmpMxN, ubTmpMxN, ubTmpMxN[TileShape::COLUMN],
+                    mulsMask, mulsRepeatTimes,
+                    {1, 1, addDstRepStride, addSrc0RepStrideHighLow,
+                    addSrc1RepStrideHighLow, addSrc1RepStrideHighLow});
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    ubTmpMxN[TileShape::COLUMN * TILE_OFFSET_FACTOR / TILE_HALF_SPLIT],
+                    mulsMask, mulsRepeatTimes,
+                    {1, 1, addDstRepStride, addSrc0RepStrideHighLow,
+                    addSrc1RepStrideHighLow, addSrc1RepStrideHighLow});
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(ubTmpMxN, ubTmpMxN, ubweighAux, mulsMask, mulsRepeatTimes,
+                    {1, 1, addDstRepStride, addSrc0RepStrideWeightAux,
+                    addSrc0RepStrideWeightAux, addSrc1RepStrideWeightAux});
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    ubTmpMxN[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    ubweighAux[TileShape::COLUMN / TILE_HALF_SPLIT],
+                    mulsMask, mulsRepeatTimes,
+                    {1, 1, addDstRepStride, addSrc0RepStrideWeightAux,
+                    addSrc0RepStrideWeightAux, addSrc1RepStrideWeightAux});
+            }
+
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(eventUbPerTokenScaleMTE2VList[ubListId]);
             tileBroadcastOneBlk(ubTmpMx32B, ubPerTokenScale);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventUbPerTokenScaleVMTE2List[ubListId]);
@@ -284,11 +371,22 @@ public:
             }
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(eventUbDVMTE3List[ubListId]);
 
-            auto gmTileD = gmD[params.layoutD.GetOffset(tileOffset)];
+            auto gmTileD = gmD[params.layoutD.GetOffset(
+                (EXEC_FLAG_ & EXEC_FLAG_W4A8) ?
+                MatrixCoord(tileOffset.row() / TILE_HALF_SPLIT, tileOffset.column()) : tileOffset)];
             auto layoutGmTileD = params.layoutD.GetTileLayout(actualTileShape);
+            // W4A8: adjust layout shape(0)
+            auto newlayoutGmTileD = layoutGmTileD;
+            auto newlayoutUbD = layoutUbD;
+            if constexpr (EXEC_FLAG_ & EXEC_FLAG_W4A8) {
+                newlayoutGmTileD.shape(0) = newlayoutGmTileD.shape(0) / TILE_HALF_SPLIT;
+                newlayoutUbD.shape(0) = newlayoutUbD.shape(0) / TILE_HALF_SPLIT;
+            }
 
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(eventUbDVMTE3List[ubListId]);
-            copyUbToGmD(gmTileD, ubD, layoutGmTileD, layoutUbD);
+            copyUbToGmD(gmTileD, ubD,
+                (EXEC_FLAG_ & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
+                (EXEC_FLAG_ & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD);
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(eventUbDMTE3VList[ubListId]);
             ubListId = (ubListId + 1 < UB_STAGES) ? (ubListId + 1) : 0;
         }
@@ -302,6 +400,9 @@ private:
     AscendC::LocalTensor<ElementFp32Scale> ubFp32ScaleList[UB_STAGES];
     AscendC::LocalTensor<ElementPerTokenScale> ubPerTokenScaleList[UB_STAGES];
     AscendC::LocalTensor<ElementD> ubDList[UB_STAGES];
+
+    // W4A8: compensation matrix
+    AscendC::LocalTensor<float> ubweighAuxList[UB_STAGES];
 
     int32_t eventUbCVMTE2List[UB_STAGES];
     int32_t eventUbCMTE2VList[UB_STAGES];
