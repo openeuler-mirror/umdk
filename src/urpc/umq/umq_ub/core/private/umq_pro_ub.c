@@ -335,7 +335,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     }
     uint32_t max_sge_num = qcfg->max_tx_sge;
     urma_jfs_wr_t *urma_wr_ptr = g_umq_ub_urma_wr;
-    urma_sge_t src_sge[UMQ_BATCH_SIZE] = {}, dst_sge[UMQ_BATCH_SIZE] = {};
+    urma_sge_t src_sge[UMQ_BATCH_SIZE] = {};
+    urma_sge_t dst_sge[UMQ_BATCH_SIZE] = {};
     urma_target_jetty_t *tjetty = bind_ctx_snap->tjetty[UB_QUEUE_JETTY_IO]; /* issue#38: snapshot, not re-read */
     urma_target_seg_t **tseg_list = qcfg->dev_ctx->tseg_list;
     urma_sge_t *sges_ptr;
@@ -455,7 +456,8 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
         wr_index++;
         if (wr_index == UMQ_BATCH_SIZE && buffer != NULL) {
             // wr count exceed UMQ_BATCH_SIZE
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, wr count exceeds %d, not supported, total_data_size=%u\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), opcode: %u, wr count exceeds %d, not supported, "
+                "total_data_size=%u\n",
                 queue->umq_id, opcode, UMQ_BATCH_SIZE, buffer->total_data_size);
             *bad_qbuf = qbuf;
             ret = -UMQ_ERR_EINVAL;
