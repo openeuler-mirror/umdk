@@ -262,6 +262,7 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
             continue;
         }
         atomic_store(&comp->hc_valid[local_idx], true);
+        atomic_store(&comp->bondp_ctx->port_status_bad[local_idx], false);
         ready_cnt++;
     }
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);

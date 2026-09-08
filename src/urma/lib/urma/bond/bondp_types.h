@@ -149,6 +149,12 @@ typedef struct bondp_context {
     uint32_t enabled_count;
     bool port_cfg_enable;
     bondp_port_cfg_t port_cfg;
+    /* Per-send_idx port health: true=BAD, false=GOOD. Atomic for poll_jfc / hc concurrency. */
+#ifndef __cplusplus
+    atomic_bool port_status_bad[URMA_UBAGG_DEV_MAX_NUM];
+#else
+    std::atomic_bool port_status_bad[URMA_UBAGG_DEV_MAX_NUM];
+#endif
 } bondp_context_t;
 
 typedef struct bondp_jfc {

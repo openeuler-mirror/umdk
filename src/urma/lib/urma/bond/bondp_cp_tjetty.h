@@ -70,6 +70,9 @@ urma_status_t bondp_unimport_jfr(urma_target_jetty_t *target_jfr);
 int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_port_id_t port_id,
                                          uint32_t *active_index);
 
+/* Inverse of convert_bond_port_id_to_active_index. */
+bondp_port_id_t bondp_active_index_to_port_id(uint32_t active_index);
+
 #ifdef __cplusplus
 }
 #endif
