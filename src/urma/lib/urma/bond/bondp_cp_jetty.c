@@ -1536,7 +1536,15 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto FREE_JETTY;
     }
 
-    if (bondp_hc_start(bdp_ctx, jetty_cfg->jfs_cfg.priority) != 0) {
+    /* bondp_hc_start creates the probe jettys and schedules the probe task.
+     * Hold ctx->mutex to serialize with bondp_hc_uninit: both
+     * bondp_delete_context and bondp_set_bonding_mode tear the health check
+     * down under this mutex, so without it a concurrent uninit could delete
+     * the same probe jettys hc_start is creating (double delete). */
+    (void)pthread_mutex_lock(&ctx->mutex);
+    int hc_ret = bondp_hc_start(bdp_ctx, jetty_cfg->jfs_cfg.priority);
+    (void)pthread_mutex_unlock(&ctx->mutex);
+    if (hc_ret != 0) {
         URMA_LOG_ERR("Failed to start health check\n");
         goto FREE_JETTY;
     }
