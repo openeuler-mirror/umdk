@@ -422,7 +422,9 @@ static int bondp_user_ctl_set_bonding_port(urma_context_t *ctx, urma_user_ctl_in
             }
         }
         if (is_duplicate) {
-            continue;
+            URMA_LOG_ERR("Duplicate bonding port_id at index=%u, value=0x%x.\n",
+                         i, port_in->port_ids[i].value);
+            return -EINVAL;
         }
         enabled_indices[enabled_count] = active_index;
         enabled_count++;
