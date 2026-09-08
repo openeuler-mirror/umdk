@@ -40,17 +40,17 @@ add_executable(qbuf_pool_tool
     utils.cpp
     core.cpp
     main.cpp
-    ${HCOM_ROOT}/src/hcom/umq/src/umq_dfx_api_str.c
-    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool.c
-    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool_base.c
-    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_qbuf_pool_cfg.c
-    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_rx_qbuf_pool.c
-    ${HCOM_ROOT}/src/hcom/umq/src/qbuf/umq_tiny_qbuf_pool.c
-    ${HCOM_ROOT}/src/hcom/umq/util/urpc_thread_closure.cpp
-    ${HCOM_ROOT}/src/hcom/umq/util/urpc_id_generator.c
-    ${HCOM_ROOT}/src/hcom/umq/util/urpc_bitmap.c
-    ${HCOM_ROOT}/src/hcom/umq/util/urpc_dbuf_stat.c
-    ${HCOM_ROOT}/src/hcom/umq/util/util_lock.c)
+    ${UMDK_ROOT}/src/urpc/umq/umq_dfx_api_str.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool_base.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool_cfg.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_rx_qbuf_pool.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_tiny_qbuf_pool.c
+    ${UMDK_ROOT}/src/urpc/util/urpc_thread_closure.cpp
+    ${UMDK_ROOT}/src/urpc/util/urpc_id_generator.c
+    ${UMDK_ROOT}/src/urpc/util/urpc_bitmap.c
+    ${UMDK_ROOT}/src/urpc/util/urpc_dbuf_stat.c
+    ${UMDK_ROOT}/src/urpc/util/util_lock.c)
 target_include_directories(qbuf_pool_tool PRIVATE
     ${UMDK_ROOT}/src/urpc/umq/qbuf
     ${UMDK_ROOT}/src/urpc/umq
