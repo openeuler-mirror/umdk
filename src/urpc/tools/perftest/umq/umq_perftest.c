@@ -299,7 +299,7 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
     return 0;
 }
 
-static inline uint64_t umq_perftest_main_umqh_get()
+static inline uint64_t umq_perftest_main_umqh_get(void)
 {
     return g_umq_perftest_ctx.cfg.share_jfr ? g_umq_perftest_ctx.main_umqh : g_umq_perftest_ctx.umqh;
 }

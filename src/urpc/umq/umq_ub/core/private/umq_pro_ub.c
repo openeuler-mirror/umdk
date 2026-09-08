@@ -1900,7 +1900,7 @@ int umq_ub_get_jetty_node(ub_queue_t *queue, uint32_t wr_cnt)
     }
 
     __atomic_store_n(&node->umq_ref, our_ref, __ATOMIC_RELEASE);
-    __atomic_store_n(&queue->jetty_node, (jetty_pool_node_t *)(uintptr_t)node, __ATOMIC_RELEASE);
+    __atomic_store_n(&queue->jetty_node, (uint64_t)(uintptr_t)node, __ATOMIC_RELEASE);
     pthread_spin_unlock(&queue->get_jetty_node_lock);
 
 GOT_NODE:
