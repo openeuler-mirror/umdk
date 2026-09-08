@@ -1385,17 +1385,17 @@ umq_state_t umq_state_get(uint64_t umqh)
 
 int umq_async_event_fd_get(umq_trans_info_t *trans_info)
 {
+    if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX || trans_info->trans_mode < 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans info invalid\n");
+        return UMQ_INVALID_FD;
+    }
+
 #ifdef UMQ_STATIC_LIB
     if (trans_info->trans_mode != UMQ_TRANS_MODE_UB && trans_info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
         return -UMQ_ERR_EINVAL;
     }
 #endif
-
-    if (trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX || trans_info->trans_mode < 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "trans info invalid\n");
-        return UMQ_INVALID_FD;
-    }
 
     if (umq_dev_assign_validate(&trans_info->dev_info) != UMQ_SUCCESS) {
         return UMQ_INVALID_FD;
@@ -1416,18 +1416,18 @@ int umq_async_event_fd_get(umq_trans_info_t *trans_info)
 
 int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event)
 {
+    if (event == NULL || trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX ||
+        trans_info->trans_mode < 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "trans info invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
 #ifdef UMQ_STATIC_LIB
     if (trans_info->trans_mode != UMQ_TRANS_MODE_UB && trans_info->trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq static library only support UB transport mode\n");
         return -UMQ_ERR_EINVAL;
     }
 #endif
-
-    if (event == NULL || trans_info == NULL || trans_info->trans_mode >= UMQ_TRANS_MODE_MAX ||
-        trans_info->trans_mode < 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "trans info invalid\n");
-        return -UMQ_ERR_EINVAL;
-    }
 
     if (umq_dev_assign_validate(&trans_info->dev_info) != UMQ_SUCCESS) {
         return -UMQ_ERR_EINVAL;
@@ -1447,6 +1447,10 @@ int umq_get_async_event(umq_trans_info_t *trans_info, umq_async_event_t *event)
 
 void umq_ack_async_event(umq_async_event_t *event)
 {
+    if (event == NULL || event->trans_info.trans_mode >= UMQ_TRANS_MODE_MAX || event->trans_info.trans_mode < 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "event invalid\n");
+        return;
+    }
 #ifdef UMQ_STATIC_LIB
     if (event->trans_info.trans_mode != UMQ_TRANS_MODE_UB &&
         event->trans_info.trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
@@ -1454,11 +1458,6 @@ void umq_ack_async_event(umq_async_event_t *event)
         return;
     }
 #endif
-
-    if (event == NULL || event->trans_info.trans_mode >= UMQ_TRANS_MODE_MAX || event->trans_info.trans_mode < 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "event invalid\n");
-        return;
-    }
 
     umq_framework_t *umq_fw = &g_umq_fws[event->trans_info.trans_mode];
 
