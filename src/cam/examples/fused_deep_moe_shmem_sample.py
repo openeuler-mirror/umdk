@@ -263,6 +263,8 @@ class ShmemFusionOp(DecodeMoeOps):
               f"memsize={self.shmem_memsize}, ip_port={self.ip_port}")
 
     def _apply_ops(self, x, expert_ids, expert_scales, x_active_mask):
+        # W8A8: pass empty tensor with correct dtype on NPU for op_def matching
+        empty_bias = torch.empty(0, dtype=torch.float32, device=x.device)
         output, share_output, expert_token_nums = self.buffer.zb_fused_deep_moe(
             x,
             expert_ids,
@@ -278,6 +280,10 @@ class ShmemFusionOp(DecodeMoeOps):
             self.smooth_scales,
             self.share_smooth_scales_fp32 if hasattr(self, 'share_smooth_scales_fp32') else None,
             x_active_mask,
+            [empty_bias],
+            [empty_bias],
+            None,
+            None,
             "",
             self.ep_world_size,
             self.global_rank_id,

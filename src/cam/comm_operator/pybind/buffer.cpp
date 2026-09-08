@@ -140,6 +140,11 @@ std::vector<at::Tensor> Buffer::zb_fused_deep_moe(
     const c10::optional<at::Tensor> &expert_smooth_scales,
     const c10::optional<at::Tensor> &share_smooth_scales,
     const c10::optional<at::Tensor> &x_active_mask,
+    // W4A8: bias/compensation matrix (optional)
+    const TensorVector &gmm1_bias,
+    const TensorVector &gmm2_bias,
+    const c10::optional<at::Tensor> &share_gmm1_bias,
+    const c10::optional<at::Tensor> &share_gmm2_bias,
     c10::string_view group_ep,
     int64_t ep_rank_size,
     int64_t ep_rank_id,
@@ -159,6 +164,8 @@ std::vector<at::Tensor> Buffer::zb_fused_deep_moe(
     auto gmm1_weight_scale_list = at::TensorList(gmm1_weight_scale);
     auto gmm2_weight_list = at::TensorList(gmm2_weight);
     auto gmm2_weight_scale_list = at::TensorList(gmm2_weight_scale);
+    auto gmm1_bias_list = at::TensorList(gmm1_bias);
+    auto gmm2_bias_list = at::TensorList(gmm2_bias);
     
     at::Tensor output = at::empty({bs, h}, x.options());
     at::Tensor share_output = at::empty({bs, h}, x.options());
@@ -180,6 +187,9 @@ std::vector<at::Tensor> Buffer::zb_fused_deep_moe(
         share_gmm1_weight, share_gmm1_weight_scale,
         share_gmm2_weight, share_gmm2_weight_scale,
         expert_smooth_scales, share_smooth_scales, x_active_mask,
+        // W4A8: bias/compensation matrix
+        gmm1_bias_list, gmm2_bias_list,
+        share_gmm1_bias, share_gmm2_bias,
         group_ep_ptr, ep_rank_size, ep_rank_id, moe_expert_num, quant_mode, global_bs,
         ext_info, shmem_workspace, shmem_workspace_size,
         output, share_output, expert_token_nums);

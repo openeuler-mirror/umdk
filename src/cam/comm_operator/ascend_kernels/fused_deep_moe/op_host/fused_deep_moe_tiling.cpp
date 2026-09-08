@@ -34,11 +34,14 @@ constexpr uint32_t L1_TILE_BYTE_SIZE = 32 * 1024;
 constexpr uint32_t CUBE_WORKSPACE_STAGE = 4;
 constexpr uint32_t RESERVED_WORKSPACE_SIZE = 256 * 1024;
 constexpr uint32_t ROUND_INFO_WORKSPACE_SIZE = 16 * 1024;
-constexpr uint32_t TOKEN_FLAG_SLOT_SIZE = 32;
+constexpr uint32_t TOKEN_FLAG_SLOT_SIZE = 4;
 constexpr uint32_t SHMEM_WORKSPACE_SAFETY_MARGIN = 16 * 1024 * 1024;
 constexpr uint32_t ROUND_RECV_TOKEN_ALIGN = GMM1_EPIM;
 static_assert(ROUND_RECV_TOKEN_ALIGN % GMM2_EPIM == 0,
               "The round token alignment must satisfy both GMM1 and GMM2 epilogues.");
+
+// W4A8: int4 weights are packed in int32, scale factor for hidden dimension
+constexpr uint64_t INT4_WEIGHT_HIDDEN_SCALE = 8;
 
 constexpr uint32_t INPUT_X_INDEX = 0;
 constexpr uint32_t INPUT_EXPERT_IDS_INDEX = 1;
@@ -54,6 +57,11 @@ constexpr uint32_t INPUT_SHARE_GMM2_WEIGHT_SCALE_INDEX = 10;
 constexpr uint32_t INPUT_SMOOTH_SCALE_INDEX = 11;
 constexpr uint32_t INPUT_SHARE_SMOOTH_SCALE_INDEX = 12;
 constexpr uint32_t INPUT_SHARE_X_ACTIVE_MASK_INDEX = 13;
+// W4A8: bias/compensation matrix input indices
+constexpr uint32_t INPUT_GMM1_BIAS_INDEX = 14;
+constexpr uint32_t INPUT_GMM2_BIAS_INDEX = 15;
+constexpr uint32_t INPUT_SHARE_GMM1_BIAS_INDEX = 16;
+constexpr uint32_t INPUT_SHARE_GMM2_BIAS_INDEX = 17;
 
 constexpr uint32_t ATTR_GROUP_EP_INDEX = 0;
 constexpr uint32_t ATTR_EP_RANK_SIZE_INDEX = 1;
@@ -82,6 +90,7 @@ constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
 constexpr uint32_t MB_SIZE = 1024 * 1024;
 constexpr uint32_t DOUBLE_BUFFER = 2;
+constexpr int32_t CONSTANT_TWO = 2;
 }  // namespace
 
 namespace optiling {
@@ -107,7 +116,28 @@ static bool CheckOptionalInputExist(const gert::TilingContext &context, int desc
 {
     const gert::StorageShape* tensorStorageShape = context.GetOptionalInputShape(descIndex);
     bool tensorExist = (tensorStorageShape != nullptr);
-    return tensorExist;
+    if (!tensorExist) {
+        return false;
+    }
+    // For DYNAMIC (TensorList) inputs, check if list has actual tensors
+    uint32_t listLen = CountTensorListLen(context, descIndex);
+    if (listLen == 0) {
+        return false;
+    }
+    // W8A8: check if the first tensor is empty (size=0 dummy tensor)
+    auto firstTensor = context.GetDynamicInputTensor(descIndex, 0);
+    if (firstTensor != nullptr) {
+        auto storageShape = firstTensor->GetStorageShape();
+        // Check if total element count is 0
+        size_t totalElements = 1;
+        for (uint32_t i = 0; i < storageShape.GetDimNum(); ++i) {
+            totalElements *= storageShape.GetDim(i);
+        }
+        if (totalElements == 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoeTilingData &tilingData)
@@ -124,6 +154,10 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
     uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
     uint32_t localExpertNum = moeExpertNumPerRank;
 
+    // W4A8: detect by bias input existence
+    bool isW4a8 = CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX);
+    uint64_t weightScale = isW4a8 ? INT4_WEIGHT_HIDDEN_SCALE : 1;
+
     OPS_ERR_IF(elementDims != TWO_DIMS && elementDims != THREE_DIMS,
                     OPS_LOG_E(nodeName, "gmm1Weight shape is invalid."),
                     return ge::GRAPH_FAILED);
@@ -133,16 +167,16 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
         OPS_ERR_IF(h != gmm1FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
-        tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(TENSOR_HIDDEN_INDEX));
+        tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen = static_cast<uint64_t>(
+                                    gmm1FirstTensorElementShape.GetDim(TENSOR_HIDDEN_INDEX)) * weightScale;
         tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList = true;
     } else { // Single
         if (elementDims == TWO_DIMS) {  // one localExpert perRank
             OPS_ERR_IF(h != gmm1FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
-            tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX - 1));
+            tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen = static_cast<uint64_t>(
+                                    gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX - 1)) * weightScale;
         } else {    // multi localExperts perRank
             OPS_ERR_IF(localExpertNum != gmm1FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm1Weight does not match local expert number per rank."),
@@ -150,8 +184,8 @@ static ge::graphStatus CheckGmm1Shape(gert::TilingContext &context, FusedDeepMoe
             OPS_ERR_IF(h != gmm1FirstTensorElementShape.GetDim(1),
                 OPS_LOG_E(nodeName, "gmm1Weight input length does not equals to token hidden size."),
                 return ge::GRAPH_FAILED);
-            tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen =
-                                    static_cast<uint64_t>(gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX));
+            tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen = static_cast<uint64_t>(
+                                    gmm1FirstTensorElementShape.GetDim(SINGLE_HIDDEN_INDEX)) * weightScale;
         }
         tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList = false;
     }
@@ -162,6 +196,10 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
 {
     const char *nodeName = context.GetNodeName();
     uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
+
+    // W4A8: weight is INT32 (int4 packed), hidden dim in shape needs to be scaled
+    bool isW4a8 = CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX);
+    uint64_t weightScale = isW4a8 ? INT4_WEIGHT_HIDDEN_SCALE : 1;
 
     // Check share_gmm1_weight: [h, shareGmm1HLen] (2D) or [1, h, shareGmm1HLen] (3D)
     const gert::StorageShape* shareGmm1WeightStorageShape =
@@ -178,7 +216,7 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
             OPS_LOG_E(nodeName, "shareGmm1Weight dim0 should be h(%u), but got %ld.",
                       h, shareGmm1OriginShape.GetDim(0)),
             return ge::GRAPH_FAILED);
-        shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(1));
+        shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(1)) * weightScale;
     } else {    // [1, h, shareGmm1HLen] format (three dims)
         OPS_ERR_IF(1 != shareGmm1OriginShape.GetDim(0),
             OPS_LOG_E(nodeName, "shareGmm1Weight dim0 should be 1 for shared expert, but got %ld.",
@@ -188,7 +226,7 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
             OPS_LOG_E(nodeName, "shareGmm1Weight dim1 should be h(%u), but got %ld.",
                       h, shareGmm1OriginShape.GetDim(1)),
             return ge::GRAPH_FAILED);
-        shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(SINGLE_HIDDEN_INDEX));
+        shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(SINGLE_HIDDEN_INDEX)) * weightScale;
     }
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen = shareGmm1HLen;
 
@@ -236,7 +274,7 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
             OPS_LOG_E(nodeName, "shareGmm2Weight dim0 should be shareGmm1HLen/2(%lu), but got %ld.",
                     shareGmm2InputDim, shareGmm2OriginShape.GetDim(0)),
             return ge::GRAPH_FAILED);
-        OPS_ERR_IF(h != shareGmm2OriginShape.GetDim(1),
+        OPS_ERR_IF(h != shareGmm2OriginShape.GetDim(1) * weightScale,
             OPS_LOG_E(nodeName, "shareGmm2Weight dim1 should be h(%u), but got %ld.",
                       h, shareGmm2OriginShape.GetDim(1)),
             return ge::GRAPH_FAILED);
@@ -358,6 +396,10 @@ static ge::graphStatus CheckGmm2Shape(const gert::TilingContext &context, const 
     uint32_t localExpertNum = moeExpertNumPerRank;
     bool listFlag = false;
 
+    // W4A8: weight is INT32 (int4 packed), hidden dim in shape needs to be scaled
+    bool isW4a8 = CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX);
+    uint64_t weightScale = isW4a8 ? INT4_WEIGHT_HIDDEN_SCALE : 1;
+
     uint32_t gmm2ListLen = CountTensorListLen(context, INPUT_GMM2_WEIGHT_INDEX);
     auto gmm2FirstTensorElement = context.GetDynamicInputTensor(INPUT_GMM2_WEIGHT_INDEX, 0);
     OPS_ERR_IF(gmm2FirstTensorElement == nullptr,
@@ -371,21 +413,21 @@ static ge::graphStatus CheckGmm2Shape(const gert::TilingContext &context, const 
                 OPS_LOG_E(nodeName, "gmm2 does not match local expert number perRank."), return ge::GRAPH_FAILED);
         OPS_ERR_IF(n / 2 != gmm2FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm2 does not match half of gmm1 hidden size."), return ge::GRAPH_FAILED);
-        OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(1),
+        OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(1) * weightScale,
                 OPS_LOG_E(nodeName, "gmm2 does not match token hidden size."), return ge::GRAPH_FAILED);
         listFlag = true;
     } else { // Single
         if (elementDims == TWO_DIMS) { // one localExpert perRank
             OPS_ERR_IF(n / 2 != gmm2FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm2 does not match half of gmm1 hidden size."), return ge::GRAPH_FAILED);
-            OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(1),
+            OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(1) * weightScale,
                 OPS_LOG_E(nodeName, "gmm2 does not match token hidden size."), return ge::GRAPH_FAILED);
         } else { // multi localExperts perRank
             OPS_ERR_IF(localExpertNum != gmm2FirstTensorElementShape.GetDim(0),
                 OPS_LOG_E(nodeName, "gmm2 does not match local expert num perRank."), return ge::GRAPH_FAILED);
             OPS_ERR_IF(n / 2 != gmm2FirstTensorElementShape.GetDim(1),
                 OPS_LOG_E(nodeName, "gmm2 does not match half of gmm1 hidden size."), return ge::GRAPH_FAILED);
-            OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(2),
+            OPS_ERR_IF(h != gmm2FirstTensorElementShape.GetDim(2) * weightScale,
                 OPS_LOG_E(nodeName, "gmm2 does not match token hidden size."), return ge::GRAPH_FAILED);
         }
     }
@@ -722,7 +764,7 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     uint64_t shareGmm2HLen = shareGmm1HLen / 2;
     uint64_t gmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
     uint64_t gmm2HLen = gmm1HLen / 2;
-    maxTokenNum = maxBatchSize * epRankSize * std::min(topK, moeExpertNumPerRank);
+    maxTokenNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.roundRecvTokenNum;
     maxHandleTokenNum = shareExpertTokenNum + maxTokenNum;
 
     size_t x1TokenSize = maxHandleTokenNum * h * sizeof(int8_t);
@@ -734,24 +776,32 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     size_t shareX2TokenSize = shareExpertTokenNum * shareGmm2HLen * sizeof(int8_t);
     size_t shareTokenSize = CeilUp(std::max(shareX1TokenSize, shareX2TokenSize), GM_ALIGN_SIZE);
     size_t shareTokenScaleSize = CeilUp(shareExpertTokenNum * sizeof(float), GM_ALIGN_SIZE);
-    size_t CVSwapBufferSize =
-        CeilUp(aicNum * L1_TILE_BYTE_SIZE * CUBE_WORKSPACE_STAGE * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t swigluOutSize = (maxTokenNum * gmm1HLen + shareExpertTokenNum * shareGmm1HLen) * sizeof(float);
     size_t gmm2DepOutSize = maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE;
     size_t maxSwigluGmm2Size = swigluOutSize < gmm2DepOutSize ? gmm2DepOutSize : swigluOutSize;
     maxSwigluGmm2Size = CeilUp(maxSwigluGmm2Size, GM_ALIGN_SIZE);
+    
+    // W4A8: C矩阵需要独立的workspace区域，避免与swiglu输出同时使用导致数据覆盖
+    bool isW4a8 = CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX);
+    size_t gmm1CSize = 0;
+    if (isW4a8) {
+        size_t maxN = shareGmm1HLen > gmm1HLen ? shareGmm1HLen : gmm1HLen;
+        gmm1CSize = maxTokenNum * maxN * sizeof(int32_t) * CONSTANT_TWO;
+        gmm1CSize = CeilUp(gmm1CSize, GM_ALIGN_SIZE);
+    }
+    
     size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
     size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t epSendCountSize = CeilUp(epRankSize * epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t resveredSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
     size_t allEpRecvCountSize = CeilUp(epRankSize * epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
     if (shmemWorkspacePtr == 0) {
-        size_t usrSize = maxTokenSize + tokenScaleSize + CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
+        size_t usrSize = maxTokenSize + tokenScaleSize + maxSwigluGmm2Size + gmm1CSize + groupListSize +
                         expandIdxSize + epSendCountSize + resveredSize;
 
         workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     } else {
-        size_t usrSize = CVSwapBufferSize + maxSwigluGmm2Size + groupListSize +
+        size_t usrSize = maxSwigluGmm2Size + gmm1CSize + groupListSize +
                         expandIdxSize + epSendCountSize + resveredSize + allEpRecvCountSize +
                         shareTokenSize + shareTokenScaleSize;
         workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
@@ -840,9 +890,8 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     if (calShareExpert) {
         tilingKey |= EXEC_FLAG_SHARED_EXPERT;
     }
-    if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank != 1) {
-        tilingKey |= EXEC_FLAG_DEEP_FUSE;
-    }
+    // 只支持深融合：即使 localExpertNum == 1 也走深融合流程
+    tilingKey |= EXEC_FLAG_DEEP_FUSE;
     if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList) {
         tilingKey |= EXEC_FLAG_TENSOR_LIST;
     }
@@ -851,6 +900,10 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     }
     if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr != 0) {
         tilingKey |= EXEC_FLAG_ZERO_BUFFER;
+    }
+    // W4A8: detect by bias input existence
+    if (CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX)) {
+        tilingKey |= EXEC_FLAG_W4A8;
     }
     context.SetTilingKey(tilingKey);
     context.SetBlockDim(aicNum);

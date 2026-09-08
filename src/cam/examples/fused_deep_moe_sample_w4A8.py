@@ -215,8 +215,12 @@ BASE_KWARGS = {
     "dynamic_eplb": False,
     "with_share": False,
     "with_smooth": False,
-    "share_expert_intermediate_size": 2048
+    "share_expert_intermediate_size": 2048,
+    "with_shmem": False,
+    "shmem_memsize": 3 * 1024 * 1024 * 1024,
 }
+
+DEFAULT_SHMEM_IP_PORT = "tcp://172.16.0.146:8766"
 
 def redirect_output(log_file_path):
     log_path = Path(LOG_NAME) / log_file_path
@@ -483,6 +487,73 @@ class FusionOp(DecodeMoeOps):
         self.smooth_scales = convert_tensor_into_parameter(smooth_scales)
 
 
+class ShmemFusionOp(FusionOp):
+    """SHMEM (ZeroBuffer) 版本的融合算子：初始化 FusedDeepMoeBuffer，调用
+    zb_fused_deep_moe 替代 torch.ops.umdk_cam_op_lib.fused_deep_moe。
+    开启后 group_ep 传空字符串（通信走 SHMEM 零拷贝），其余入参与 FusionOp 一致。"""
+
+    def __init__(self,
+                 ep_hcomm_info,
+                 meta_info,
+                 weight_datas,
+                 share_weight_datas,
+                 shmem_memsize,
+                 ip_port):
+        super().__init__(ep_hcomm_info, meta_info, weight_datas, share_weight_datas)
+        self.shmem_memsize = shmem_memsize
+        self.ip_port = ip_port
+        self.buffer = None
+        self._init_shmem_buffer()
+
+    def _init_shmem_buffer(self):
+        self.buffer = umdk_cam_op_lib.FusedDeepMoeBuffer()
+        self.buffer.init(
+            rank=self.global_rank_id,
+            num_ranks=self.ep_world_size,
+            memsize=self.shmem_memsize,
+            ip_port=self.ip_port
+        )
+        print(f"rank-{self.global_rank_id} SHMEM Buffer initialized: "
+              f"rank={self.global_rank_id}, num_ranks={self.ep_world_size}, "
+              f"memsize={self.shmem_memsize}, ip_port={self.ip_port}")
+
+    def _apply_ops(self, x, expert_ids, expert_scales, x_active_mask):
+        # zb_fused_deep_moe 入参（与 buffer.h 最新签名一致）：
+        # x, expert_ids, gmm1_weight[], gmm1_weight_scale[], gmm2_weight[],
+        # gmm2_weight_scale[], expert_scales, share_gmm1_weight,
+        # share_gmm1_weight_scale, share_gmm2_weight, share_gmm2_weight_scale,
+        # expert_smooth_scales, share_smooth_scales, x_active_mask,
+        # gmm1_bias[], gmm2_bias[], share_gmm1_bias, share_gmm2_bias,
+        # group_ep, ep_rank_size, ep_rank_id, moe_expert_num, quant_mode, global_bs
+        output, share_output, expert_token_nums = self.buffer.zb_fused_deep_moe(
+            x,
+            expert_ids,
+            self.gmm1_weight,
+            self.gmm1_weight_scale,
+            self.gmm2_weight,
+            self.gmm2_weight_scale,
+            expert_scales,
+            self.share_gmm1_weight,
+            self.share_gmm1_weight_scale,
+            self.share_gmm2_weight,
+            self.share_gmm2_weight_scale,
+            self.smooth_scales,
+            self.share_smooth_scales_fp32,
+            x_active_mask,
+            self.gmm1_bias,
+            self.gmm2_bias,
+            self.share_gmm1_bias,
+            self.share_gmm2_bias,
+            "",
+            self.ep_world_size,
+            self.global_rank_id,
+            self.moe_expert_num,
+            0,
+            self.global_batch_size
+        )
+        return (output, share_output, expert_token_nums)
+
+
 def _int32_unpack_int4(int32_tensor):
     """INT32 按 4-bit nibble 解包为有符号 INT4。N 个 int32 → 8*N 个并列 int4 (值域 [-8, 7])。"""
     unpacked = []
@@ -601,7 +672,9 @@ def run_once(local_rank_id,
              dynamic_eplb=False,
              with_share=False,
              with_smooth=False,
-             share_expert_intermediate_size=None):
+             share_expert_intermediate_size=None,
+             with_shmem=False,
+             shmem_memsize=3 * 1024 * 1024 * 1024):
     torch.set_printoptions(precision=8, sci_mode=False)
     log_file = redirect_output(f"local_rank_{local_rank_id}.log"
                                ) if output_to_file(local_rank_id) else None
@@ -640,7 +713,14 @@ def run_once(local_rank_id,
         data.npu() if data is not None else None for data in share_weight_datas
     ]
     small_ops = SmallOps(ep_hcomm_info_small, meta_info, weight_datas_npu, share_weight_datas_npu).npu()
-    fused_ops = FusionOp(ep_hcomm_info_fused, meta_info, weight_datas_npu, share_weight_datas_npu).npu()
+    if with_shmem:
+        fused_ops = ShmemFusionOp(
+            ep_hcomm_info_fused, meta_info, weight_datas_npu, share_weight_datas_npu,
+            shmem_memsize=shmem_memsize,
+            ip_port=DEFAULT_SHMEM_IP_PORT
+        ).npu()
+    else:
+        fused_ops = FusionOp(ep_hcomm_info_fused, meta_info, weight_datas_npu, share_weight_datas_npu).npu()
 
     if test_graph:
         config = torchair.CompilerConfig()
@@ -739,6 +819,15 @@ def test_fused_deep_moe_eplb():
     mp.spawn(run_once, args=custom_args, nprocs=ep_world_size, join=True)
 
 
+@torch.inference_mode()
+def test_fused_deep_moe_with_shmem():
+    custom_kwargs = BASE_KWARGS.copy()
+    custom_kwargs["with_shmem"] = True
+    ep_world_size = custom_kwargs["ep_world_size"]
+    custom_args = tuple(custom_kwargs.values())
+    mp.spawn(run_once, args=custom_args, nprocs=ep_world_size, join=True)
+
+
 
 if __name__ == "__main__":
     import argparse
@@ -757,6 +846,9 @@ if __name__ == "__main__":
     parser.add_argument("--with_share", action="store_true", default=False)
     parser.add_argument("--with_smooth", action="store_true", default=False)
     parser.add_argument("--share_expert_intermediate_size", type=int)
+    parser.add_argument("--with_shmem", action="store_true", default=False)
+    parser.add_argument("--shmem_memsize", type=int, default=3 * 1024 * 1024 * 1024,
+                        help="SHMEM memory size in bytes (default: 3GB)")
     args = parser.parse_args()
     BASE_KWARGS["batch_size"] = args.batch_size
     BASE_KWARGS["token_hidden_size"] = args.token_hidden_size
@@ -773,4 +865,9 @@ if __name__ == "__main__":
     BASE_KWARGS["with_smooth"] = args.with_smooth
     BASE_KWARGS["share_expert_intermediate_size"] = args.share_expert_intermediate_size \
         if args.share_expert_intermediate_size is not None else args.moe_intermediate_size
-    test_fused_deep_moe_base()
+    BASE_KWARGS["with_shmem"] = args.with_shmem
+    BASE_KWARGS["shmem_memsize"] = args.shmem_memsize
+    if args.with_shmem:
+        test_fused_deep_moe_with_shmem()
+    else:
+        test_fused_deep_moe_base()

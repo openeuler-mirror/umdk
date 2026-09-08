@@ -53,8 +53,11 @@ constexpr bool CUSTOM_ENABLE_SHUFFLE_K = true;
 
 constexpr uint32_t GMM1_L1M = 256;
 constexpr uint32_t GMM1_L1N = 128;
-constexpr uint32_t GMM1_L1K = 512;
-constexpr uint32_t GMM1_L0K = 128;
+// W4A8 uses int4b_t (2x compression), can use larger K; W8A8 uses int8_t, needs smaller K to fit L1
+constexpr uint32_t GMM1_L1K_W4A8 = 1024;
+constexpr uint32_t GMM1_L1K_W8A8 = 512;
+constexpr uint32_t GMM1_L0K_W4A8 = 256;
+constexpr uint32_t GMM1_L0K_W8A8 = 128;
 constexpr uint32_t GMM1_EPIM = 64;
 constexpr uint32_t GMM1_SWIZZLE_OFFSET = 3;
 constexpr uint32_t GMM1_SWIZZLE_DIRECTION = 0;
@@ -65,8 +68,11 @@ constexpr uint32_t GMM2_L0A_STAGES = 4;
 constexpr uint32_t GMM2_L0B_STAGES = 2;
 constexpr uint32_t GMM2_L1M = 128;
 constexpr uint32_t GMM2_L1N = 256;
-constexpr uint32_t GMM2_L1K = 512;
-constexpr uint32_t GMM2_L0K = 128;
+// W4A8 uses int4b_t (2x compression), can use larger K; W8A8 uses int8_t, needs smaller K to fit L1
+constexpr uint32_t GMM2_L1K_W4A8 = 1024;
+constexpr uint32_t GMM2_L1K_W8A8 = 512;
+constexpr uint32_t GMM2_L0K_W4A8 = 256;
+constexpr uint32_t GMM2_L0K_W8A8 = 128;
 constexpr uint32_t GMM2_EPIM = 32;
 constexpr uint32_t GMM2_SWIZZLE_OFFSET = 3;
 constexpr uint32_t GMM2_SWIZZLE_DIRECTION = 0;
@@ -79,5 +85,6 @@ constexpr uint32_t EXEC_FLAG_X_ACTIVE_MASK = (1U << 2);
 constexpr uint32_t EXEC_FLAG_SHARED_EXPERT = (1U << 3);
 constexpr uint32_t EXEC_FLAG_SMOOTH_QUANT = (1U << 4);
 constexpr uint32_t EXEC_FLAG_ZERO_BUFFER = (1U << 5);
+constexpr uint32_t EXEC_FLAG_W4A8 = (1U << 6);
 } // namespace Cam
 #endif  // FUSED_DEEP_MOE_TILING_H

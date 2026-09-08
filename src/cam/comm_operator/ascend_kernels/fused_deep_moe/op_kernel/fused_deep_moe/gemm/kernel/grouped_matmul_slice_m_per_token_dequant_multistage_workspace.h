@@ -96,6 +96,9 @@ public:
         LayoutA layoutA;
         __gm__ ElementB *ptrB;
         LayoutB layoutB;
+        // W4A8: bias/compensation matrix pointers
+        __gm__ float *gmBias{nullptr};
+        __gm__ float *gmShareBias{nullptr};
         __gm__ ElementScale *ptrScale;
         LayoutScale layoutScale;
         __gm__ ElementPerTokenScale *ptrPerTokenScale;
@@ -130,7 +133,9 @@ public:
 
         CATLASS_DEVICE
         Params(GemmCoord problemShape_, uint32_t problemCount_, GM_ADDR ptrGroupList_, GM_ADDR ptrA_, LayoutA layoutA_,
-               GM_ADDR ptrB_, LayoutB layoutB_, GM_ADDR ptrScale_, LayoutScale layoutScale_, GM_ADDR ptrPerTokenScale_,
+               GM_ADDR ptrB_, LayoutB layoutB_,
+               GM_ADDR gmBias_, GM_ADDR gmShareBias_,
+               GM_ADDR ptrScale_, LayoutScale layoutScale_, GM_ADDR ptrPerTokenScale_,
                LayoutPerTokenScale layoutPerTokenScale_, GM_ADDR ptrD_, LayoutD layoutD_, uint32_t batchSize_,
                GemmCoord sharedGmm2ProblemShape_, GM_ADDR ptrSharedA_, GM_ADDR ptrSharedB_, GM_ADDR ptrSharedD_,
                GM_ADDR ptrSharedScale_, GM_ADDR ptrSharedPtrPerTokenScale_, LayoutA sharedLayoutA_,
@@ -147,6 +152,8 @@ public:
               layoutA(layoutA_),
               ptrB(reinterpret_cast<__gm__ ElementB *>(ptrB_)),
               layoutB(layoutB_),
+              gmBias(reinterpret_cast<__gm__ float *>(gmBias_)),
+              gmShareBias(reinterpret_cast<__gm__ float *>(gmShareBias_)),
               ptrScale(reinterpret_cast<__gm__ ElementScale *>(ptrScale_)),
               layoutScale(layoutScale_),
               ptrPerTokenScale(reinterpret_cast<__gm__ ElementPerTokenScale *>(ptrPerTokenScale_)),
@@ -284,7 +291,9 @@ public:
                 continue;
             }
 
-            GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
+            // W4A8: each input token row is split into high/low 4-bit rows in GM, so M is doubled.
+            uint32_t inGroupM = (EXEC_FLAG & EXEC_FLAG_W4A8) ? currentM * CONSTANT_TWO : currentM;
+            GemmCoord inGroupProblemShape{inGroupM, params.problemShape.n(), params.problemShape.k()};
             LayoutA layoutA = params.layoutA.GetTileLayout(inGroupProblemShape.GetCoordMK());
             LayoutB layoutB = params.layoutB;
             blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
@@ -309,7 +318,10 @@ public:
                 int64_t gmOffsetB = layoutB.GetOffset(offsetB);
                 int64_t gmOffsetC = layoutC.GetOffset(offsetC);
                 uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
-                int64_t gmGroupOffsetA = static_cast<int64_t>(roundBufferStart) * params.problemShape.k();
+                // W4A8: each round-buffer token occupies 2 int4 rows (high/low 4-bit) in GM.
+                int64_t gmGroupOffsetA = (EXEC_FLAG & EXEC_FLAG_W4A8)
+                    ? static_cast<int64_t>(roundBufferStart) * CONSTANT_TWO * params.problemShape.k()
+                    : static_cast<int64_t>(roundBufferStart) * params.problemShape.k();
 
                 if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
                     blockMmad(gmA[gmGroupOffsetA + gmOffsetA], layoutA, gmB[gmGroupOffsetB + gmOffsetB],
@@ -360,8 +372,17 @@ public:
         uint32_t startCoreIdx = 0;
         AscendC::ListTensorDesc gmScaleListTensor(reinterpret_cast<__gm__ void *>(params.ptrScale));
         __gm__ ElementScale* gmScalePtr;
+        AscendC::ListTensorDesc gmBiasListTensor;
+        // W4A8: only create bias list tensor when bias is valid
+        if constexpr (EXEC_FLAG & EXEC_FLAG_W4A8) {
+            gmBiasListTensor = AscendC::ListTensorDesc(reinterpret_cast<__gm__ void *>(params.gmBias));
+        }
+        __gm__ float* gmBiasPtr = nullptr;
         if constexpr (!(EXEC_FLAG & EXEC_FLAG_TENSOR_LIST)) {
             gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(gmScaleListTensor.GetDataPtr<int32_t>(0));
+            if constexpr (EXEC_FLAG & EXEC_FLAG_W4A8) {
+                gmBiasPtr = reinterpret_cast<__gm__ float*>(gmBiasListTensor.GetDataPtr<int32_t>(0));
+            }
         }
 
         for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
@@ -373,26 +394,39 @@ public:
                 continue;
             }
 
-            GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
+            // W4A8: blockScheduler iterates over 2x rows (high/low 4-bit), but per-token scale and
+            // output D are still indexed by the real token count.
+            uint32_t inGroupM = (EXEC_FLAG & EXEC_FLAG_W4A8) ? currentM * CONSTANT_TWO : currentM;
+            GemmCoord inGroupProblemShape{inGroupM, params.problemShape.n(), params.problemShape.k()};
+            // W4A8: pertokenGroupProblemShape uses original token count (not 2x) for D and scale layouts
+            GemmCoord pertokenGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
             LayoutScale layoutScale = params.layoutScale;
-            LayoutPerTokenScale layoutPerTokenScale = layout::VectorLayout{currentM};
-            LayoutD layoutD = layout::RowMajor{currentM, params.problemShape.n()};
+            LayoutPerTokenScale layoutPerTokenScale =
+                params.layoutPerTokenScale.GetTileLayout(pertokenGroupProblemShape.template GetCoordByAxis<0>());
+            LayoutD layoutD = params.layoutD.GetTileLayout(pertokenGroupProblemShape.GetCoordMN());
             uint32_t roundBufferStart = groupRoundStart - roundIdx * params.roundRecvTokenNum;
+            // W4A8: D offset uses original token count (not 2x), matching pertokenGroupProblemShape
+            int64_t gmGroupOffsetD = static_cast<int64_t>(groupRoundStart) * params.problemShape.n();
             EpilogueParams epilogueParams;
             if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
                 gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(
                                 gmScaleListTensor.GetDataPtr<int32_t>(groupIdx));
+                if constexpr (EXEC_FLAG & EXEC_FLAG_W4A8) {
+                    gmBiasPtr = reinterpret_cast<__gm__ float*>(
+                                    gmBiasListTensor.GetDataPtr<int32_t>(groupIdx));
+                }
                 epilogueParams = EpilogueParams {
                         gmScalePtr, layoutScale,
+                        gmBiasPtr,
                         params.ptrPerTokenScale + roundBufferStart, layoutPerTokenScale,
-                        params.ptrD + static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), layoutD};
+                        params.ptrD + gmGroupOffsetD, layoutD};
             } else {
                 epilogueParams = EpilogueParams{gmScalePtr + groupIdx * params.problemShape.n(),
                                           layoutScale,
+                                          gmBiasPtr + groupIdx * params.problemShape.n(),
                                           params.ptrPerTokenScale + roundBufferStart,
                                           layoutPerTokenScale,
-                                          params.ptrD + static_cast<int64_t>(groupRoundStart) *
-                                            params.problemShape.n(),
+                                          params.ptrD + gmGroupOffsetD,
                                           layoutD};
             }
             blockScheduler.Update(inGroupProblemShape, L1TileShape::ToCoordMN());
@@ -412,11 +446,13 @@ public:
                 Callback callbackAfterBlockEpilogue = MakeCallbackWithCall2(&aicSetFuncList[stageId]);
 
                 callbackBeforeBlockEpilogue();
-                blockEpilogue(static_cast<int64_t>(groupRoundStart) * params.problemShape.n(), groupIdx,
+                // W4A8: pass gmGroupOffsetD (original token count based) instead of 2x row offset
+                blockEpilogue(gmGroupOffsetD, groupIdx,
                               blockShapeMNK, blockCoordMNK, actualBlockShapeMNK, gmBlockC, layoutBlockC);
                 callbackAfterBlockEpilogue();
                 stageId = (stageId + 1 < WORKSPACE_STAGES) ? (stageId + 1) : 0;
             }
+
             startCoreIdx = (startCoreIdx + coreLoops) % coreNum;
         }
 
@@ -446,7 +482,12 @@ public:
         uint32_t softStageUsed = 0;
         uint32_t startCoreIdx = 0;
         bool skipWithSoft[WORKSPACE_STAGES] = {};
-        GemmCoord inGroupProblemShape = params.sharedGmm2ProblemShape;
+        // W4A8: shared expert activation also has 2x int4 rows (high/low 4-bit) in GM.
+        GemmCoord inGroupProblemShape = (EXEC_FLAG & EXEC_FLAG_W4A8)
+            ? GemmCoord{params.sharedGmm2ProblemShape.m() * CONSTANT_TWO,
+                        params.sharedGmm2ProblemShape.n(),
+                        params.sharedGmm2ProblemShape.k()}
+            : params.sharedGmm2ProblemShape;
         LayoutA layoutA = params.sharedLayoutA;
         LayoutB layoutB = params.sharedLayoutB;
         blockScheduler.Update(inGroupProblemShape, MakeCoord(L1TileShape::M, L1TileShape::N));
@@ -515,7 +556,12 @@ public:
                 uint32_t startCoreIdx = 0;
                 AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
                 AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
-                GemmCoord inGroupProblemShape = params.sharedGmm2ProblemShape;
+                // W4A8: shared expert epilogue iterates over 2x int4 rows (matches AIC GEMM).
+                GemmCoord inGroupProblemShape = (EXEC_FLAG & EXEC_FLAG_W4A8)
+                    ? GemmCoord{params.sharedGmm2ProblemShape.m() * CONSTANT_TWO,
+                                params.sharedGmm2ProblemShape.n(),
+                                params.sharedGmm2ProblemShape.k()}
+                    : params.sharedGmm2ProblemShape;
                 LayoutScale layoutScale = params.layoutScale;
                 LayoutPerTokenScale layoutPerTokenScale =
                     params.sharedLayoutPerTokenScale.GetTileLayout(
@@ -523,6 +569,7 @@ public:
                 LayoutD layoutD = params.sharedLayoutD.GetTileLayout(inGroupProblemShape.GetCoordMN());
                 EpilogueParams epilogueParams{
                     params.ptrSharedScale, layoutScale,
+                    params.gmShareBias,
                     params.ptrSharedPtrPerTokenScale, layoutPerTokenScale,
                     params.ptrSharedD, layoutD
                 };
@@ -574,12 +621,6 @@ public:
                 combiner->TPipeSet(nullptr);
                 resource.pipe.Destroy();
             }
-        } else {
-            resource.pipe.Init();
-            combiner->TPipeSet(&resource.pipe);
-            combiner->Process();
-            combiner->TPipeSet(nullptr);
-            resource.pipe.Destroy();
         }
     }
 
@@ -595,7 +636,7 @@ public:
         Arch::CrossCoreFlag gmm2RoundReady{static_cast<Arch::FlagID>(GMM2::ROUND_READY_FLAG_ID)};
         RunRoutingAicRound(params, params.roundIdx);
         Arch::CrossCoreWaitFlag(gmm2RoundReady);
-        if (params.roundRecvTokenNum >= params.problemShape.m()) {
+        if (roundNum == 1) {
             RunFinalizeAic(params);
         }
     }
@@ -613,7 +654,7 @@ public:
         RunRoutingAivRound(params, params.roundIdx);
         Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
         Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm2RoundReady);
-        if (params.roundRecvTokenNum >= params.problemShape.m()) {
+        if (roundNum == 1) {
             RunFinalizeAiv(params);
         }
     }
