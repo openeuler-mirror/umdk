@@ -217,6 +217,10 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                 break;
             case 'n':
                 cfg->test_round = (uint32_t)strtoul(optarg, NULL, 0);
+                if (cfg->test_round == 0) {
+                    LOG_PRINT("test_round must be greater than 0\n");
+                    return -1;
+                }
                 break;
             case 'F':
                 cfg->enable_perf = true;
