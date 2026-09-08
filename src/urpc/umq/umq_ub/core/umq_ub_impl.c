@@ -1284,6 +1284,10 @@ uint32_t umq_ub_transport_pool_resource_create_impl(uint64_t umqh_tp, umq_tp_res
         UMQ_VLOG_ERR(VLOG_UMQ, "create jetty node failed, ret %d\n", ret);
         return UINT32_MAX;
     }
+    // register only after the node is fully created: valid_idx[] entries are guaranteed non-NULL
+    jetty_node_list->node_list[offset]->node_list_pos = (uint16_t)jetty_node_list->valid_cnt;
+    jetty_node_list->valid_idx[jetty_node_list->valid_cnt] = (uint16_t)offset;
+    jetty_node_list->valid_cnt++;
     urpc_bitmap_set1(jetty_node_list->bitmap, offset);
     (void)util_mutex_unlock(jetty_node_list->lock);
 
@@ -1323,6 +1327,28 @@ int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_ha
         (void)util_mutex_unlock(jetty_node_list->lock);
         UMQ_VLOG_ERR(VLOG_UMQ, "destroy jetty node failed, index %u\n", tp_handle_idx);
         return ret;
+    }
+
+    // compact the slot-id array: shift entries after pos one slot left, so the data-plane poll
+    // iterates a dense array of live nodes instead of scanning the bitmap.
+    uint32_t pos = jetty_node_list->node_list[tp_handle_idx]->node_list_pos;
+    if (pos >= jetty_node_list->valid_cnt || jetty_node_list->valid_idx[pos] != tp_handle_idx) {
+        // defensive fallback: locate the entry linearly (theoretically unreachable)
+        for (pos = 0; pos < jetty_node_list->valid_cnt; pos++) {
+            if (jetty_node_list->valid_idx[pos] == tp_handle_idx) {
+                break;
+            }
+        }
+    }
+    if (pos < jetty_node_list->valid_cnt) {
+        (void)memmove(&jetty_node_list->valid_idx[pos], &jetty_node_list->valid_idx[pos + 1],
+                      (jetty_node_list->valid_cnt - pos - 1) * sizeof(uint16_t));
+        jetty_node_list->valid_cnt--;
+        // cursor fixup in valid_idx space: entries left of the cursor shift down by one; the
+        // cursor itself (pos == next_poll_idx) naturally lands on the former successor.
+        if (pos < jetty_node_list->next_poll_idx) {
+            jetty_node_list->next_poll_idx--;
+        }
     }
 
     urpc_bitmap_set0(jetty_node_list->bitmap, tp_handle_idx);
