@@ -23,23 +23,16 @@ import lombok.ToString;
 @ToString(exclude = "mgmtInfo")
 public abstract class DeviceEntity {
     private String deviceName;
-    @Setter(AccessLevel.NONE)
-    private DeviceType deviceType;
     private MgmtInfo mgmtInfo;
     private String rack;
 
-    protected DeviceEntity(String deviceName, DeviceType deviceType) {
+    protected DeviceEntity(String deviceName, MgmtInfo mgmtInfo, String rack) {
         this.deviceName = deviceName;
-        this.deviceType = deviceType;
-    }
-
-    protected DeviceEntity(String deviceName, DeviceType deviceType,
-                           MgmtInfo mgmtInfo, String rack) {
-        this.deviceName = deviceName;
-        this.deviceType = deviceType;
         this.mgmtInfo = mgmtInfo;
         this.rack = rack;
     }
+
+    public abstract DeviceType getDeviceType();
 
     public abstract Map<Integer, ? extends ForwardingChip> getForwardingChips();
 }
