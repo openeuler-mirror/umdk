@@ -3489,9 +3489,9 @@ int umq_qbuf_headroom_reset(umq_buf_t *qbuf, uint16_t headroom_size)
     }
     uint32_t block_size;
     if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
-        if (qbuf->buf_size < (uint32_t)sizeof(umq_buf_t)) {
+        if (qbuf->buf_size <= (uint32_t)sizeof(umq_buf_t)) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                "umq_qbuf_headroom_reset: buf_size=%u underflow (< %zu)\n",
+                "umq_qbuf_headroom_reset: buf_size=%u underflow (<= %zu)\n",
                 qbuf->buf_size, sizeof(umq_buf_t));
             return -UMQ_ERR_EINVAL;
         }

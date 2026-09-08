@@ -1016,6 +1016,16 @@ static ALWAYS_INLINE uint32_t umq_qbuf_base_actual_buf_count(const qbuf_pool_bas
 static ALWAYS_INLINE int headroom_reset_with_split(umq_buf_t *qbuf, uint16_t headroom_size, uint32_t block_size)
 {
     umq_buf_t *data = qbuf;
+    if (data->buf_data == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "cannot reset headroom for without_data buffer\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (block_size == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "headroom_reset_with_split: block_size is 0\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     uint32_t total_data_size = qbuf->total_data_size;
     uint32_t remaining_size = total_data_size;
     uint32_t max_data_capacity;
@@ -1049,6 +1059,16 @@ static ALWAYS_INLINE int headroom_reset_with_split(umq_buf_t *qbuf, uint16_t hea
 static ALWAYS_INLINE int headroom_reset_with_combine(umq_buf_t *qbuf, uint16_t headroom_size, uint32_t block_size)
 {
     umq_buf_t *data = qbuf;
+    if (data->buf_data == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "cannot reset headroom for without_data buffer\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if (block_size == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "headroom_reset_with_combine: block_size is 0\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     uint32_t total_data_size = qbuf->total_data_size;
     uint32_t align_size = block_size - sizeof(umq_buf_t);
     uint32_t after_reset_buf_count = ((total_data_size + headroom_size + align_size - 1) / align_size);
