@@ -2986,11 +2986,12 @@ static void umq_ub_non_rev_pull_tx_cqe(ub_queue_t *queue, umq_buf_t *cur_tx_buf,
 
 int umq_ub_dequeue_plus_with_poll_tx(ub_queue_t *queue, urma_cr_t *cr, umq_buf_t **buf, int return_rx_cnt)
 {
-    umq_buf_t *tx_buf[UMQ_BATCH_SIZE];
+    umq_buf_t *tx_buf[UMQ_BATCH_SIZE - return_rx_cnt];
     urma_eid_t *eid = &queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.eid;
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     uint32_t id = queue->jetty[UB_QUEUE_JETTY_IO]->jetty_id.id;
-    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_BATCH_SIZE, cr);
+    int tx_cr_cnt = umq_symbol_urma()->urma_poll_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO], UMQ_BATCH_SIZE - return_rx_cnt,
+        cr);
     if (tx_cr_cnt < 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx_cr_cnt[%d]\n",
             EID_ARGS(*eid), id, tx_cr_cnt);
@@ -3888,7 +3889,12 @@ int umq_ub_fill_wr_impl(umq_buf_t *qbuf, ub_queue_t *queue, urma_jfs_wr_t *urma_
                     EID_ARGS(*eid), id);
                 return -UMQ_ERR_EFAULT;
             }
-            sges_ptr->tseg = tseg_list[buffer->mempool_id];
+            if (real_buf->mempool_id >= UMQ_MAX_TSEG_NUM) {
+                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "the buf mempool id [%u] exceeds max value [%u]\n",
+                    real_buf->mempool_id, UMQ_MAX_TSEG_NUM);
+                return -UMQ_ERR_EINVAL;
+            }
+            sges_ptr->tseg = tseg_list[real_buf->mempool_id];
             if (sges_ptr->tseg == NULL) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, mempool %u tseg not exist\n",
                     EID_ARGS(*eid), id, real_buf->mempool_id);
