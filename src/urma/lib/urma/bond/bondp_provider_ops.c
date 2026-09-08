@@ -451,6 +451,9 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
 
     bdp_ctx->msn_enable = false;
     bdp_ctx->seg_cache_enable = false;
+    for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        atomic_init(&bdp_ctx->port_status_bad[i], false);
+    }
     bdp_ctx->enable_failover = g_bondp_env.enable_failover;
     bdp_ctx->enable_failback = g_bondp_env.enable_failback;
     bdp_ctx->enable_health_check = g_bondp_env.enable_health_check;
