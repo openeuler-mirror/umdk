@@ -98,59 +98,67 @@ int umq_ub_bind_info_check(ub_queue_t *queue, umq_ub_bind_info_t *info)
 
     umq_ub_bind_queue_info_t *queue_info = (umq_ub_bind_queue_info_t *)(uintptr_t)info->queue_info;
     if (queue_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), queue_info does not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote pid: %u, queue_info does not exist\n",
+                     queue->umq_id, dev_info->pid);
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->flow_control != NULL && info->fc_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), fc_info does not exist\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+                     "fc_info does not exist\n", queue->umq_id, queue_info->umq_id, dev_info->pid);
         return -UMQ_ERR_EINVAL;
     }
 
     if (dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB && dev_info->umq_trans_mode != UMQ_TRANS_MODE_UB_PLUS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), trans mode %u is not UB\n", queue->umq_id, dev_info->umq_trans_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+            "trans mode %u is not UB\n", queue->umq_id, queue_info->umq_id, dev_info->pid, dev_info->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->state > QUEUE_STATE_READY || queue_info->state > QUEUE_STATE_READY) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), queue state is not ready or idle, local is %u, remote is %u\n",
-            queue->umq_id, queue->state, queue_info->state);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, queue state is not ready or idle, "
+            "local is %u, remote is %u\n", queue->umq_id, queue_info->umq_id, dev_info->pid,
+            queue->state, queue_info->state);
         return -UMQ_ERR_EINVAL;
     }
 
     if (qcfg->dev_ctx->trans_info.trans_mode != dev_info->umq_trans_mode) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), trans mode mismatch, local is %u but remote %u\n",
-                     queue->umq_id, qcfg->dev_ctx->trans_info.trans_mode, dev_info->umq_trans_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, trans mode mismatch, "
+            "local is %u but remote %u\n", queue->umq_id, queue_info->umq_id, dev_info->pid,
+            qcfg->dev_ctx->trans_info.trans_mode, dev_info->umq_trans_mode);
         return -UMQ_ERR_EINVAL;
     }
 
     if (qcfg->tp_mode != queue_info->rjetty->trans_mode) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), tp_mode mismatch, local is %u but remote %u\n",
-            queue->umq_id, umq_tp_mode_convert(qcfg->tp_mode),
-            umq_tp_mode_convert(queue_info->rjetty->trans_mode));
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, tp_mode mismatch, "
+            "local is %u but remote %u\n", queue->umq_id, queue_info->umq_id, dev_info->pid,
+            umq_tp_mode_convert(qcfg->tp_mode), umq_tp_mode_convert(queue_info->rjetty->trans_mode));
         return -UMQ_ERR_EINVAL;
     }
 
     if (qcfg->tp_type != queue_info->rjetty->tp_type) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), tp_type mismatch, local is %u but remote %u\n",
-            queue->umq_id, umq_tp_type_convert(qcfg->tp_type), umq_tp_type_convert(queue_info->rjetty->tp_type));
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, tp_type mismatch, "
+            "local is %u but remote %u\n", queue->umq_id, queue_info->umq_id, dev_info->pid,
+            umq_tp_type_convert(qcfg->tp_type), umq_tp_type_convert(queue_info->rjetty->tp_type));
         return -UMQ_ERR_EINVAL;
     }
 
     if (!umq_ub_bind_feature_check(qcfg->dev_ctx->feature, dev_info->feature)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), feature mismatch, local is %u but remote %u\n",
-                     queue->umq_id, qcfg->dev_ctx->feature, dev_info->feature);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, feature mismatch, local is %u "
+            "but remote %u\n", queue->umq_id, queue_info->umq_id, dev_info->pid,
+            qcfg->dev_ctx->feature, dev_info->feature);
         return -UMQ_ERR_EINVAL;
     }
 
     if (dev_info->buf_pool_mode != umq_qbuf_mode_get()) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), buf pool mode negotiation inconsistency, recv mode: %d\n",
-            queue->umq_id, dev_info->buf_pool_mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, buf pool mode negotiation inconsistency,"
+            " recv mode: %d\n", queue->umq_id, queue_info->umq_id, dev_info->pid, dev_info->buf_pool_mode);
         return -UMQ_ERR_EINVAL;
     }
 
     if (queue->bind_ctx != NULL || queue_info->is_binded != 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), umq has already been binded\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+                     "umq has already been binded\n", queue->umq_id, queue_info->umq_id, dev_info->pid);
         return -UMQ_ERR_EEXIST;
     }
 
@@ -674,20 +682,25 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
 {
     int ret = UMQ_SUCCESS;
     if (info->dev_info->namespace_len > UMQ_NAMESPACE_SIZE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "dev info namespace len %u exceeds the maximum length %u\n",
-            info->dev_info->namespace_len, UMQ_NAMESPACE_SIZE);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+                     "dev info namespace len %u exceeds the maximum length %u\n",
+                     queue->umq_id, info->queue_info->umq_id,
+                     info->dev_info->pid, info->dev_info->namespace_len, UMQ_NAMESPACE_SIZE);
         return -UMQ_ERR_EINVAL;
     }
 
     ub_bind_ctx_t *ctx = (ub_bind_ctx_t *)calloc(1, sizeof(ub_bind_ctx_t) + info->dev_info->namespace_len);
     if (ctx == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), bind ctx calloc failed\n", queue->umq_id);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+            "bind ctx calloc failed\n", queue->umq_id, info->queue_info->umq_id, info->dev_info->pid);
         return -UMQ_ERR_ENOMEM;
     }
 
     queue->remote_umq_id = info->queue_info->umq_id;
     ctx->tjetty[UB_QUEUE_JETTY_IO] = umq_ub_connect_jetty(queue, info, UB_QUEUE_JETTY_IO);
     if (ctx->tjetty[UB_QUEUE_JETTY_IO] == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+            "umq_ub_connect_jetty failed\n", queue->umq_id, info->queue_info->umq_id, info->dev_info->pid);
         ret = UMQ_FAIL;
         goto FREE_CTX;
     }
@@ -695,6 +708,8 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     if (queue->flow_control != NULL) {
         ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL] = umq_ub_connect_jetty(queue, info, UB_QUEUE_JETTY_FLOW_CONTROL);
         if (ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote pid: %u, "
+                "umq_ub_connect_jetty failed\n", queue->umq_id, info->queue_info->umq_id, info->dev_info->pid);
             ret = UMQ_FAIL;
             goto DISCONNECT_IO_JETTY;
         }
@@ -703,6 +718,10 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     if ((umq_ub_queue_cfg_get(queue)->dev_ctx->feature & UMQ_FEATURE_API_PRO) == 0) {
         ret = umq_ub_prefill_rx_buf(queue);
         if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u, "
+                "remote pid: %u, umq_ub_prefill_rx_buf failed\n", queue->umq_id, info->queue_info->umq_id,
+                EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid), ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id,
+                info->dev_info->pid);
             goto DISCONNECT_FC_JETTY;
         }
     }
@@ -710,14 +729,20 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
     ctx->remote_pid = info->dev_info->pid;
     ret = snprintf(ctx->remote_namespace, info->dev_info->namespace_len, "%s", info->dev_info->bind_namespace);
     if (ret < 0 || ret >= (int)info->dev_info->namespace_len) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "snprintf failed, ret: %d\n", ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u, "
+            "remote pid: %u, snprintf failed, ret: %d\n",
+            queue->umq_id, queue->remote_umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
+            ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, ret);
         goto RESET_BIND_CTX;
     }
     queue->bind_ctx = ctx;
 
     ret = umq_ub_remote_tseg_info_get(queue, info, ctx);
     if (ret != UMQ_SUCCESS) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), get eid id failed, status: %d\n", queue->umq_id, ret);
+        UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u, "
+            "remote pid: %u, remote namespace: %s, get eid id failed, status: %d\n",
+            queue->umq_id, queue->remote_umq_id, EID_ARGS(ctx->tjetty[UB_QUEUE_JETTY_IO]->id.eid),
+            ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, info->dev_info->bind_namespace, ret);
         goto RESET_BIND_CTX;
     }
 
