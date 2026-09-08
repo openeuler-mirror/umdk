@@ -190,13 +190,26 @@ static int umq_ub_jetty_node_list_init(umq_ub_jetty_node_list_t *jetty_node_list
         goto FREE_BITMAP;
     }
 
+    // slot ids fit in uint16_t: node_cnt <= JETTY_POOL_MAX_NODES (65536), ids in [0, 65535]
+    jetty_node_list->valid_idx = (uint16_t *)calloc(node_cnt, sizeof(uint16_t));
+    if (jetty_node_list->valid_idx == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "calloc valid idx array failed\n");
+        ret = -UMQ_ERR_ENOMEM;
+        goto FREE_NODE_LIST;
+    }
+    jetty_node_list->valid_cnt = 0;
+
     jetty_node_list->lock = util_mutex_lock_create(UTIL_MUTEX_ATTR_EXCLUSIVE);
     if (jetty_node_list->lock == NULL) {
         UMQ_VLOG_ERR(VLOG_UMQ, "jetty node list mutex create failed\n");
         ret = -UMQ_ERR_ENOMEM;
-        goto FREE_NODE_LIST;
+        goto FREE_VALID_IDX;
     }
     return UMQ_SUCCESS;
+
+FREE_VALID_IDX:
+    free(jetty_node_list->valid_idx);
+    jetty_node_list->valid_idx = NULL;
 
 FREE_NODE_LIST:
     free(jetty_node_list->node_list);
@@ -264,6 +277,12 @@ static void umq_ub_jetty_node_list_uninit(umq_ub_jetty_node_list_t *jetty_node_l
         jetty_node_list->list_len = 0;
         free(jetty_node_list->node_list);
         jetty_node_list->node_list = NULL;
+    }
+
+    if (jetty_node_list->valid_idx != NULL) {
+        jetty_node_list->valid_cnt = 0;
+        free(jetty_node_list->valid_idx);
+        jetty_node_list->valid_idx = NULL;
     }
 
     if (jetty_node_list->bitmap != NULL) {
