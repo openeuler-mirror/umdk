@@ -670,7 +670,7 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
              * All columns show per-SC values (fetch/return/alloc/free are per-sc). */
             for (uint32_t sc = 0; sc < s->sc_count; sc++) {
                 const char *sc_name =
-                (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
+                    (sc < sizeof(umq_dfx_sc_names) / sizeof(umq_dfx_sc_names[0])) ? umq_dfx_sc_names[sc] : "sc?";
                 UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                      "%-10s %-8lu %-8lu %-8lu %-11lu %-11lu %-11lu %-11lu %-11lu %-11lu\n",
                                      sc_name, s->tid,
