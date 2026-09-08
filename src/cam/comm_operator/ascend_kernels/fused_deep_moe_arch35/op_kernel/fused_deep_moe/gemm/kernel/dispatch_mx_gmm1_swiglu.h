@@ -256,10 +256,6 @@ public:
             isCompCore = true;
             compCoreIdx = aiCoreGroupIdx;
         }
-        if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-            return ;
-        }
-
         recvCoreNum = aiCoreGroupNum;
         sendCoreNum = aiCoreGroupNum;
         if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
@@ -365,15 +361,13 @@ public:
             auto tensorB = tla::MakeTensor(gmB, params.layoutShareB, Arch::PositionGM{});
             auto tensorMxScaleB = tla::MakeTensor(gmMxScaleB, params.layoutShareMxScaleB, Arch::PositionGM{});
             auto tensorC = tla::MakeTensor(gmC, params.layoutShareC, Arch::PositionGM{});
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                // wait AIV quantize needed tokens
-                AscendC::GlobalTensor<int32_t> shareQuantTokenStateTensor;
-                uint32_t waitFlagCount = params.bs < shareQuantCoreNum ? params.bs : shareQuantCoreNum;
-                shareQuantTokenStateTensor.SetGlobalBuffer((__gm__ int32_t*)(
-                    statusDataSpaceGm + SHARE_QUANT_SOFT_SYNC_OFFSET));
-                uint32_t expected = waitFlagCount * vToCFlag;
-                WaitGroupTokenNumReady(shareQuantTokenStateTensor, expected);
-            }
+            // wait AIV quantize needed tokens
+            AscendC::GlobalTensor<int32_t> shareQuantTokenStateTensor;
+            uint32_t waitFlagCount = params.bs < shareQuantCoreNum ? params.bs : shareQuantCoreNum;
+            shareQuantTokenStateTensor.SetGlobalBuffer((__gm__ int32_t*)(
+                statusDataSpaceGm + SHARE_QUANT_SOFT_SYNC_OFFSET));
+            uint32_t expected = waitFlagCount * vToCFlag;
+            WaitGroupTokenNumReady(shareQuantTokenStateTensor, expected);
             for (uint32_t loopIdx = startLoopIdx; loopIdx < coreLoops; loopIdx += aicNum) {
                 GemmCoord blockCoord = matmulBlockScheduler.GetBlockCoord(loopIdx);
                 GemmCoord actualBlockShape = matmulBlockScheduler.GetActualBlockShape(blockCoord);
@@ -408,8 +402,6 @@ public:
             startCoreIdx = (startCoreIdx + coreLoops) % aicNum;
         }
         {
-            AscendC::GlobalTensor<ElementGroupList> groupList;
-            groupList.SetGlobalBuffer(params.ptrGroupList);
             gmA.SetGlobalBuffer((__gm__ ElementA *)params.ptrA);
             gmC.SetGlobalBuffer((__gm__ ElementC *)params.ptrC);
             AscendC::ListTensorDesc gmBlistTensorDesc(reinterpret_cast<__gm__ void *>(params.ptrB));
@@ -436,18 +428,13 @@ public:
                     gmMxScaleB.SetGlobalBuffer(gmBScalelistTensorDesc.GetDataPtr<ElementMxScaleB>(0) +
                         gmGroupOffsetMxScaleB);
                 }
-                if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                    groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(
-                        statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
-                    // wait AIV recv needed tokens
-                    uint32_t expected = actualRecvCoreNumPerGroup * vToCFlag;
-                    WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
-                    callbackAfterFixpipe();
-                    currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
-                } else {
-                    currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
-                                                    : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
-                }
+                groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(
+                    statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
+                // wait AIV recv needed tokens
+                uint32_t expected = actualRecvCoreNumPerGroup * vToCFlag;
+                WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
+                callbackAfterFixpipe();
+                currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
                 GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
 
                 BlockScheduler matmulBlockScheduler(inGroupProblemShape, MakeCoord(L1_TILE_M, L1_TILE_N));
@@ -1232,9 +1219,6 @@ public:
             AscendC::DataCopy(softSyncTensor[compCoreIdx * CVSoftSync::SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
                                                 tmpZeroLocalTensor, INT32_COUNT_PER_BLOCK);
         }
-        if constexpr (!(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-            return ;
-        }
         if (aivIdx == aiCoreGroupNum * subBlockNum - 1) {
             AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
             groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET));
@@ -1338,22 +1322,20 @@ public:
     void operator()<AscendC::AIV>(Params const &params) {
         AscendC::SetCtrlSpr<60, 60>(0);
         AivInitParams(params);
-        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            AivInitState();
-            if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-                if (isShareQuantCore) {
-                    shareQuantCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmShareSmoothScales,
-                                        (GM_ADDR)params.ptrShareA, (GM_ADDR)params.ptrShareMxScaleA);
-                }
+        AivInitState();
+        if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
+            if (isShareQuantCore) {
+                shareQuantCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmShareSmoothScales,
+                                    (GM_ADDR)params.ptrShareA, (GM_ADDR)params.ptrShareMxScaleA);
             }
-            if (isSendCore) {
-                SendCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpertIds, (GM_ADDR)params.gmMoeSmoothScales,
-                            (GM_ADDR)params.gmExpandIdx,
-                            (GM_ADDR)params.gmXActiveMask);
-            }
-            if (isRecvCore) {
-                RecvCoreFunc((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrMxScaleA, (GM_ADDR)params.gmEpSendCount);
-            }
+        }
+        if (isSendCore) {
+            SendCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmExpertIds, (GM_ADDR)params.gmMoeSmoothScales,
+                        (GM_ADDR)params.gmExpandIdx,
+                        (GM_ADDR)params.gmXActiveMask);
+        }
+        if (isRecvCore) {
+            RecvCoreFunc((GM_ADDR)params.ptrA, (GM_ADDR)params.ptrMxScaleA, (GM_ADDR)params.gmEpSendCount);
         }
 
         uint32_t totalTokenNum = 0;
@@ -1414,26 +1396,18 @@ public:
             uint32_t coreNumPerGroup = recvCoreNum;
             gmC.SetGlobalBuffer(params.ptrC);
             gmSwigluOutTensor.SetGlobalBuffer(params.gmSwigluOut);
-            AscendC::GlobalTensor<ElementGroupList> groupList;
-            groupList.SetGlobalBuffer(params.ptrGroupList);
-
             auto tensorC = tla::MakeTensor(gmC, params.layoutC, Arch::PositionGM{});
             auto tensorD = tla::MakeTensor(gmSwigluOutTensor, params.layoutC, Arch::PositionGM{});
             AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
 
             for (uint32_t groupIdx = 0; groupIdx < params.problemCount; ++groupIdx) {
-                if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                    groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)
-                                                            (statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) +
-                                                            groupIdx * GROUP_INFO_SIZE);
-                    CheckSyncFlag(reinterpret_cast<__gm__ int32_t*>(statusDataSpaceGm + SOFT_SYNC_OFFSET),
-                                  static_cast<int32_t>(compCoreIdx), target);
-                    target += 1;
-                    currentM = FlushAndGetValue<int32_t>(groupTokenNumStateTensor, GROUP_TOKEN_COUNT);
-                } else {
-                    currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
-                                                : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
-                }
+                groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)
+                                                        (statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) +
+                                                        groupIdx * GROUP_INFO_SIZE);
+                CheckSyncFlag(reinterpret_cast<__gm__ int32_t*>(statusDataSpaceGm + SOFT_SYNC_OFFSET),
+                              static_cast<int32_t>(compCoreIdx), target);
+                target += 1;
+                currentM = FlushAndGetValue<int32_t>(groupTokenNumStateTensor, GROUP_TOKEN_COUNT);
                 totalTokenNum += currentM;
                 GemmCoord inGroupProblemShape{currentM, params.problemShape.n(), params.problemShape.k()};
                 BlockScheduler matmulBlockScheduler(inGroupProblemShape, MakeCoord(L1_TILE_M, L1_TILE_N));

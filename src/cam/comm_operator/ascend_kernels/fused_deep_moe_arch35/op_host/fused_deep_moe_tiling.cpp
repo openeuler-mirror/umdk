@@ -807,8 +807,8 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     if (calShareExpert) {
         tilingKey |= EXEC_FLAG_SHARED_EXPERT;
     }
-    if (tilingData->fusedDeepMoeInfo.moeExpertNumPerRank != 1) {
-        tilingKey |= EXEC_FLAG_DEEP_FUSE;
+    if (true) {
+        tilingKey |= EXEC_FLAG_DEEP_FUSE; // always enable deep fuse now
     }
     if (tilingData->fusedDeepMoeInfo.isTensorList) {
         tilingKey |= EXEC_FLAG_TENSOR_LIST;

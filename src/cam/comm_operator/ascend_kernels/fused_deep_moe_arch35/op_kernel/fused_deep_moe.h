@@ -28,7 +28,6 @@
 #include "fused_deep_moe/epilogue/dispatch_policy.h"
 
 #include "fused_deep_moe_tiling.h"
-#include "fused_deep_moe/raw_distributed/cam_moe_distribute_dispatch.h"
 #include "fused_deep_moe_base.h"
 
 using namespace Cam;
@@ -69,7 +68,7 @@ CATLASS_DEVICE void DispatchMxGmm1SwigluQuantFunc(
     Catlass::GemmCoord sharedProblemShape,
     GM_ADDR gmShareA, GM_ADDR gmShareB, GM_ADDR gmShareAScale, GM_ADDR gmShareBScale, GM_ADDR gmShareSwapSpace,
         GM_ADDR gmShareSwigluOut, GM_ADDR gmShareD, GM_ADDR gmShareDScale,
-    // dispatch and quant, when EXEC_FLAG_DEEP_FUSE.
+    // dispatch and quant
     GM_ADDR gmX, GM_ADDR gmExpertIds, GM_ADDR xActiveMask, GM_ADDR gmMoeSmoothScales, GM_ADDR gmShareSmoothScales,
         GM_ADDR gmExpandIdx, GM_ADDR gmEpSendCount, GM_ADDR gmExpertTokenNums,
     const FusedDeepMoeInfo &fusedDeepMoeInfo)
@@ -357,28 +356,6 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmEpSendCount = workspaceGM_ + tilingData_->workSpaceOffset.epSendCountOffset;
     GM_ADDR gmReserved = workspaceGM_ + tilingData_->workSpaceOffset.reservedOffset;
 
-    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-        if constexpr (g_coreType == AscendC::AIV) {
-            AscendC::TPipe tpipe;
-            MoeDistributeDispatchImpl::CamMoeDistributeDispatch<ExpandXType, int8_t, false, true,
-                                static_cast<bool>(EXEC_FLAG & EXEC_FLAG_SMOOTH_QUANT), false, EXEC_FLAG> dispatcher;
-            dispatcher.Init(gmX_, gmexpertIds_, gmSmoothScales_, gmShareSmoothScales_, xActiveMask_, gmShareX1, gmX1,
-                            gmShareX1Scale, gmX1Scale, gmExpandIdx, gmGroupList, gmEpSendCount, gmExpertTokenNums_,
-                            nullptr, nullptr, &tpipe, tilingData_);
-            dispatcher.Process();
-            tpipe.Destroy();
-            icache_preload(8);
-        }
-
-        AscendC::PipeBarrier<PIPE_ALL>();
-        Arch::CrossCoreFlag gmm1AivFinished{0};
-        if constexpr (g_coreType == AscendC::AIV) {
-            Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
-            Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1AivFinished);
-        } else {
-            Arch::CrossCoreWaitFlag(gmm1AivFinished);
-        }
-    }
     DispatchMxGmm1SwigluQuantFunc<TemplateMC2TypeFunc, ElementA, ElementB, Gmm1L1TileShape, Gmm1L0TileShape,
         Gmm1EpilogueTileShape, Gmm1BlockScheduler>(
         gmm1ProblemShape, groupCount_, gmGroupList,

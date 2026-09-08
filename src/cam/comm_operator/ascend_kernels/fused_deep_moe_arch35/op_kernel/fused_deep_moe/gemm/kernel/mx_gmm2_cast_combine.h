@@ -362,10 +362,8 @@ public:
         gmD.SetGlobalBuffer(params.ptrD);
 
         do {
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                if (AscendC::GetSubBlockIdx() == 0) {
-                    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
-                }
+            if (AscendC::GetSubBlockIdx() == 0) {
+                AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
             }
             BlockEpilogue blockEpilogue(resource, combiner->GetCalcInfo());
             uint32_t target = 1;
@@ -421,9 +419,6 @@ public:
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
                 if (AscendC::GetSubBlockIdx() == 0) {
                     AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
-                    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-                        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
-                    }
                     // Must reassign; otherwise routed-expert data is still used below
                     gmC.SetGlobalBuffer(params.ptrSharedC);
                     gmD.SetGlobalBuffer(params.ptrSharedD);
@@ -474,7 +469,7 @@ public:
                 combiner->TPipeSet(nullptr);
                 resource.pipe.Destroy();
             }
-        } else if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+        } else {
             if (AscendC::GetSubBlockIdx() == 0) {
                 resource.pipe.Init();
                 combiner->TPipeSet(&resource.pipe);
@@ -488,12 +483,6 @@ public:
                 combiner->TPipeSet(nullptr);
                 resource.pipe.Destroy();
             }
-        } else {
-            resource.pipe.Init();
-            combiner->TPipeSet(&resource.pipe);
-            combiner->Process();
-            combiner->TPipeSet(nullptr);
-            resource.pipe.Destroy();
         }
         if (AscendC::GetSubBlockIdx() == 0) {
             AscendC::GlobalTensor<int32_t> softSyncTensor;

@@ -109,21 +109,19 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventUbCVMTE2List[i]);
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(eventUbDMTE3VList[i]);
         }
-        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            AlignUbOffset();
-            epSendCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-            ubOffset += calcInfo.moeSendNum_ * sizeof(int32_t);
-            AlignUbOffset();
-            AscendC::GlobalTensor<int32_t> epSendCountGM;
-            epSendCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.epSendCount_);
-            uint32_t epSendCountSize = calcInfo.moeSendNum_;
-            AscendC::DataCopyExtParams epSendCntParams = {1U, static_cast<uint32_t>(epSendCountSize * sizeof(uint32_t)),
-                                                          0U, 0U, 0U};
-            AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
-            AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM, epSendCntParams, copyPadParams);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-        }
+        AlignUbOffset();
+        epSendCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += calcInfo.moeSendNum_ * sizeof(int32_t);
+        AlignUbOffset();
+        AscendC::GlobalTensor<int32_t> epSendCountGM;
+        epSendCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.epSendCount_);
+        uint32_t epSendCountSize = calcInfo.moeSendNum_;
+        AscendC::DataCopyExtParams epSendCntParams = {1U, static_cast<uint32_t>(epSendCountSize * sizeof(uint32_t)),
+                                                      0U, 0U, 0U};
+        AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
+        AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM, epSendCntParams, copyPadParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
     }
 
     CATLASS_DEVICE
@@ -194,9 +192,7 @@ public:
         if (actualBlockShapeMNK.k() == 0) {
             return;
         }
-        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            expertOffset = expertIdx * calcInfo.epWorldSize_;
-        }
+        expertOffset = expertIdx * calcInfo.epWorldSize_;
         MatrixCoord actualBlockShape = actualBlockShapeMNK.GetCoordMN();
 
         auto ubTileStride = static_cast<uint32_t>(TileShape::COLUMN);
@@ -252,15 +248,11 @@ public:
             CopyUbToGmD copyUbToGmD;
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(eventUbDVMTE3List[ubListId]);
 
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                if (expertIdx == UINT32_MAX) {
-                    copyUbToGmD(tensorSubBlockD, tensorUbD);
-                } else {
-                    DoCombineSend(ubD, expertIdx, tokenIdx + loopIdx * TileShape::ROW, tokenOffset, actualTileShape[0],
-                        tla::get<0>(tensorBlockD.stride()), TileShape::COLUMN);
-                }
-            } else {
+            if (expertIdx == UINT32_MAX) {
                 copyUbToGmD(tensorSubBlockD, tensorUbD);
+            } else {
+                DoCombineSend(ubD, expertIdx, tokenIdx + loopIdx * TileShape::ROW, tokenOffset, actualTileShape[0],
+                    tla::get<0>(tensorBlockD.stride()), TileShape::COLUMN);
             }
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(eventUbDMTE3VList[ubListId]);
 

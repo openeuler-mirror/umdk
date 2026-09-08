@@ -62,7 +62,6 @@ public:
     __aicore__ inline void Init(GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount,
                                 GM_ADDR tpSendCount, GM_ADDR scales, GM_ADDR xActiveMask, GM_ADDR XOut,
                                 GM_ADDR workspaceGM, TPipe *pipe, const FusedDeepMoeTilingData *tilingData);
-    __aicore__ inline void Process();
     __aicore__ inline void AllToAllSend();
     __aicore__ inline void ReducePermute();
     __aicore__ inline void ProcessCombine();
@@ -250,11 +249,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->fusedDeepMoeInfo.h;
     axisK_ = tilingData->fusedDeepMoeInfo.k;
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
-    } else {
-        aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
-    }
+    aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
     ubSize_ = tilingData->fusedDeepMoeInfo.totalUbSize;
     moeExpertNum_ = tilingData->fusedDeepMoeInfo.moeExpertNum;
     moeExpertPerRankNum_ = tilingData->fusedDeepMoeInfo.moeExpertNumPerRank;
@@ -290,9 +285,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     }
 
     InitStatusTargetSum();
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
-    }
+    coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
     SplitCoreCal();
 
     calcInfo_.epRankId_ = epRankId_;
@@ -704,24 +697,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindow
 }
 
 template <TemplateMC2TypeClass>
-__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Process()
-{
-    SyncAll<true>();
-    if constexpr (IsNeedReduceScatter) {
-        tpipe_->InitBuffer(moeQueue_, BUFFER_NUM, axisHExpandXTypeSize_);
-        ReduceScatterTrans();
-    }
-    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-        BuffInit();
-        SetWaitTpStatusAndDisPatch();
-    }
-    AlltoAllBuffInit();
-    SetStatus();
-    WaitDispatch();
-    LocalWindowCopy();
-}
-
-template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AllToAllSend()
 {
     if constexpr (IsNeedReduceScatter) {
@@ -729,40 +704,22 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AllToAllSen
         ReduceScatterTrans();
     }
     BuffInit();
-    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-        SetWaitTpStatusAndDisPatch();
-        AlltoAllBuffInit();
-    }
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
-        AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
-    } else {
-        SyncAll<true>();
-    }
+    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
+    AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
     SetStatus();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
-    } else {
-        SyncAll<true>();
-    }
+    AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
 }
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermute()
 {
     AlltoAllBuffInit();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
-    } else {
-        SyncAll<true>();
-    }
+    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
 
     WaitDispatch();
     LocalWindowCopy();
 
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
-    }
+    AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
 }
 
 template <TemplateMC2TypeClass>
@@ -770,10 +727,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ProcessComb
 {
     AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
     AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
-    if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-        BuffInit();
-        SetWaitTpStatusAndDisPatch();
-    }
     AlltoAllBuffInit();
     SetStatus();
     WaitDispatch();
