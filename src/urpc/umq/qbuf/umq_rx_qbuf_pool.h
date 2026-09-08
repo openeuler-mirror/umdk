@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 #define UMQ_RX_QBUF_BLOCK_SIZE (4096U)
-#define UMQ_RX_QBUF_POOL_MAX_SIZE (256ULL * 1024ULL * 1024ULL)
+#define UMQ_RX_QBUF_POOL_DEFAULT_SIZE ((uint64_t)UMQ_DEFAULT_RX_DEPTH * 4ULL * UMQ_RX_QBUF_BLOCK_SIZE)
 
 /*
  * Independent RX qbuf pool: 4KB-only, single size class.
@@ -40,6 +40,7 @@ void *umq_rx_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size);
 void umq_rx_io_buf_free(void);
 void *umq_rx_io_buf_addr(void);
 uint64_t umq_rx_io_buf_size(void);
+void umq_rx_io_buf_set_buffer(void *addr, uint64_t size);
 
 int umq_rx_qbuf_register_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
@@ -47,6 +48,11 @@ void umq_rx_qbuf_unregister_seg(uint8_t *ctx, mempool_segment_ops_t *ops);
 void umq_rx_qbuf_pool_depth_get(uint64_t *total_size, uint32_t *block_size, uint32_t *depth,
                                 uint64_t *free_depth);
 void umq_rx_qbuf_pool_alloc_free_count_get(uint64_t *alloc_count, uint64_t *free_count);
+uint64_t umq_rx_qbuf_pool_fallback_count_get(void);
+uint64_t umq_rx_qbuf_pool_fallback_outstanding_get(void);
+uint64_t umq_rx_qbuf_pool_fallback_outstanding_max_get(void);
+uint64_t umq_rx_qbuf_pool_outstanding_max_get(void);
+extern uint64_t g_rx_fallback_outstanding;
 
 #ifdef __cplusplus
 }

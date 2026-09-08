@@ -20,7 +20,6 @@
 extern "C" {
 #endif
 
-
 typedef struct umq_perftest_config {
     perftest_config_t config;
     umq_port_id_t port_id;

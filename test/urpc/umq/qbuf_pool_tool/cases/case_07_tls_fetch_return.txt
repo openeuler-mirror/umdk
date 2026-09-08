@@ -6,7 +6,7 @@
 #      (remaining/4 >= 64 threshold), returning excess TLS bufs to global pool
 #
 # Note: alloc num=300 prints 300 buf#<orig_idx> lines; focus on the 3 status snapshots.
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=1
 
 # stage 1: fetch — alloc 300 sc0 bufs. fetch_from_global pulls 5 batches of 64
 # (320 bufs) into TLS; alloc consumes 300, TLS retains 20.

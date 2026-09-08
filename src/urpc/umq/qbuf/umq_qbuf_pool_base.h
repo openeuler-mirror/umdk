@@ -65,9 +65,11 @@ extern "C" {
 #define QBUF_POOL_MIDDLE_SIZE_CLASS_ID     (1)
 #define QBUF_POOL_LARGE_SIZE_CLASS_ID_MIN  (2)
 #define QBUF_POOL_DEFAULT_EXPANSION_SIZE (32ULL * 1024 * 1024)
+#define QBUF_POOL_MIN_EXPANSION_SIZE (2ULL * 1024 * 1024)
+#define QBUF_POOL_MAX_EXPANSION_SIZE (128ULL * 1024 * 1024)
 #define QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD (30)
 #define QBUF_POOL_EXPANSION_THRESHOLD_MIN (1)
-#define QBUF_POOL_EXPANSION_THRESHOLD_MAX (100)
+#define QBUF_POOL_EXPANSION_THRESHOLD_MAX (50)
 #define QBUF_POOL_DEFAULT_BASE_BLOCK_SIZE (4096)
 // Lazy SCs now controlled by per_sc_block_counts[sc]==0 (no reserve, expansion pool only)
 
@@ -96,6 +98,25 @@ extern "C" {
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
+
+/*
+ * Touch one byte per 2MB-aligned huge page to trigger page fault and force
+ * kernel to back the region with 2MB transparent huge pages. Replaces full
+ * memset(0) which is O(total_size) with O(total_size / 2MB).
+ * buf must be 2MB-aligned (from memalign(QBUF_MEMALIGN_SIZE, ...)).
+ */
+static ALWAYS_INLINE void qbuf_touch_huge_pages(void *buf, uint64_t total_size)
+{
+    char *p = (char *)buf;
+    uint64_t full_pages = total_size / QBUF_MEMALIGN_SIZE;
+    uint64_t remainder = total_size % QBUF_MEMALIGN_SIZE;
+    for (uint64_t i = 0; i < full_pages; i++) {
+        p[i * QBUF_MEMALIGN_SIZE] = 0;
+    }
+    if (remainder > 0) {
+        memset(p + full_pages * QBUF_MEMALIGN_SIZE, 0, remainder);
+    }
+}
 #define QBUF_POOL_MAX_BLOCK_SIZE (1024U * 1024U)
 #define QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA (4 * 1024 * 1024)
 
@@ -380,7 +401,7 @@ static ALWAYS_INLINE uint32_t qbuf_tls_round_batch(uint32_t needed, uint32_t bat
 
 // Expansion pool functions (implemented in umq_qbuf_pool.c for normal pool).
 // sc: size_class index (0..UMQ_QBUF_SIZE_CLASS_MAX). UMQ_QBUF_SIZE_CLASS_MAX means without_data.
-int expand_global_pool(bool with_data, uint32_t sc);
+int expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
 #ifdef UMQ_QBUF_DEBUG
 // 线程局部标志: 当fetch_from_global走expansion pool或mmap扩容时置true
 // 用于umq_normal_qbuf_alloc区分_lc=1(fetch_global) vs _lc=2(fetch_expansion)
@@ -517,7 +538,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
                 continue;
             }
         }
-        int ret = expand_global_pool(with_data, sc);
+        int ret = expand_global_pool(with_data, sc, *info.global_buf_cnt);
         if (ret == -UMQ_ERR_EBUSY) {
             continue;
         }

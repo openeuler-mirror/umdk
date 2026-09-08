@@ -2,7 +2,7 @@
 # Verifies memory bounded under sustained burst load (high-water mark fix).
 # Before fix: expansion memory grows monotonically (each burst leaves residual).
 # After fix: expansion memory stabilizes (cap doesn't inflate, slots shrink).
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=1
 
 # Bootstrap TLS cache
 thread_0 alloc 65536 100

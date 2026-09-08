@@ -14,7 +14,7 @@
 #
 # Note: do NOT insert status inside the repeat block (forbidden by the
 # parser; conservation must be checked after repeat completes).
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Bootstrap each worker's TLS so the first repeat iter has self_shrink
 # to perform (otherwise iter 1 just does cold fetch_from_global).

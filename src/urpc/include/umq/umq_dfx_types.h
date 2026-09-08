@@ -130,7 +130,7 @@ typedef struct umq_qbuf_pool_config {
     uint8_t disable_scale_cap;           // expansion/shrink switch (1 = disabled)
     uint8_t disable_malloc_escape;       // escape mechanism switch (1 = disabled)
     uint64_t expansion_size;             // per-expansion memory size
-    uint32_t expansion_threshold;        // water level % triggering expansion (1-100)
+    uint32_t expansion_threshold;        // water level % triggering expansion (1-50)
     uint64_t expansion_mem_size_max;     // cap on expansion memory
     uint64_t exp_total_mem_pool_size;    // current total expansion pool memory
     uint64_t tls_expand_qbuf_pool_depth; // per-thread TLS depth cap (default 1/2 of tls_qbuf_pool_depth)
@@ -202,12 +202,19 @@ typedef struct umq_qbuf_pool_alloc_stats {
     /* per-SC with_data: matches sc_info[sc] by index */
     uint64_t sc_alloc_count[UMQ_SIZE_CLASS_MAX];  // per-SC cumulative with_data alloc count
     uint64_t sc_free_count[UMQ_SIZE_CLASS_MAX];   // per-SC cumulative with_data free count
+    uint64_t sc_outstanding_max[UMQ_SIZE_CLASS_MAX]; // per-SC historical max outstanding
     /* without_data: single pool, no per-SC split */
     uint64_t nodata_alloc_count;                   // cumulative without_data alloc count
     uint64_t nodata_free_count;                    // cumulative without_data free count
+    uint64_t nodata_outstanding_max;               // without_data historical max outstanding
     /* rx pool: independent 4K-only recv pool */
     uint64_t rx_pool_alloc_count;                  // RX recv pool cumulative alloc count
     uint64_t rx_pool_free_count;                   // RX recv pool cumulative free count
+    uint64_t rx_pool_outstanding_max;              // RX recv pool historical max outstanding
+    /* tiny pool: independent small-block pool */
+    uint64_t tiny_alloc_count;                     // tiny pool cumulative alloc count
+    uint64_t tiny_free_count;                      // tiny pool cumulative free count
+    uint64_t tiny_outstanding_max;                 // tiny pool historical max outstanding
 } umq_qbuf_pool_alloc_stats_t;
 
 typedef struct umq_qbuf_pool_info {

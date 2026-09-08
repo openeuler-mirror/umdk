@@ -2,7 +2,7 @@
 # 8 workers: 0-3 alloc 4K, 4-5 alloc 64K, 6-7 alloc 1M
 # Verifies per-sc expansion isolation.
 # blockCounts=24000,1500,0 — sc2 (1M) is lazy (0 initial blocks).
-init count=3 blockSizes=4K,64K,1M mode=split scaleCap=on totalSz=200M expSlotSz=4M blockCounts=24000,1500,0 threads=8
+init count=3 blockSizes=4K,64K,1M mode=split scaleCap=on expSlotSz=4M blockCounts=24000,1500,0 threads=8
 
 parallel
   thread_0 alloc 4096 20

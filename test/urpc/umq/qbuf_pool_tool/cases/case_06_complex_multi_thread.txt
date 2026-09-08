@@ -4,7 +4,7 @@
 #  - conservation per sc (global + tls + alloced constant throughout)
 #  - held-allocs per-worker with [tK] prefix
 #  - leak NOTE on exit (thread 2 leaves bufs unfreed)
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=3
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=3
 
 # t0: alloc across both sc (4K->sc0, 32K->sc1) on one thread
 thread_0 alloc 4096      # t0 idx0 sc0
