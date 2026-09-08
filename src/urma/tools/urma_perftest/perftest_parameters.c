@@ -134,7 +134,7 @@ static void usage(const char *argv0)
         "  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.\n"
         "  -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.\n"
         "  -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).\n"
-        "  -s, --size <size>           Size of message to exchange (default 2).\n"
+        "  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).\n"
         "  -S, --server <addr>         TCP mode: server ip for bind or connect, default: 127.0.0.1.\n"
         "                              UB mode: server mgmt eid (required for client).\n"
         "  -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n"

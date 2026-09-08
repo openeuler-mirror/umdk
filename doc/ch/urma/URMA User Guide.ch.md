@@ -1689,7 +1689,7 @@ Options:
   -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.
   -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.
   -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).
-  -s, --size <size>           Size of message to exchange (default 2).
+  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).
   -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .
   -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).
   -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.
