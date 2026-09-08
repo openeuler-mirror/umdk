@@ -886,7 +886,7 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     return urpc_tlv_get_total_len(info_tlv_head);
 }
 
-int umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
+static uint32_t umq_ub_rjetty_get(urma_rjetty_t *dst_rjetty, ub_queue_jetty_index_t index,
     uint32_t left_buf_size, ub_queue_t *queue, urma_jetty_t *jetty)
 {
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
