@@ -8,7 +8,7 @@
 #     and the same for sc1 (each sc is independent)
 #   - Multi-level size_class routing: alloc 4K->sc0, alloc 64K->sc1,
 #     alloc 70000->sc1 (multi-block: 64K + 6472 = 2 bufs sc1)
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Stage 1: sc0 (4K) and sc1 (64K) in parallel. Workers 0-3 alloc sc0,
 # workers 4-7 alloc sc1. Different spinlocks => no contention expected.

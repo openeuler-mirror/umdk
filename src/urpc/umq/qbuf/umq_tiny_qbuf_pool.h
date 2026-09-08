@@ -24,6 +24,7 @@ void *umq_tiny_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size);
 void umq_tiny_io_buf_free(void);
 void *umq_tiny_io_buf_addr(void);
 uint64_t umq_tiny_io_buf_size(void);
+void umq_tiny_io_buf_set_buffer(void *addr, uint64_t size);
 bool umq_tiny_qbuf_can_alloc(uint32_t request_size, uint32_t effective_size);
 
 int umq_tiny_qbuf_pool_init(qbuf_pool_cfg_t *cfg);

@@ -28,6 +28,13 @@ get_filename_component(UMDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOL
 #   info_get + multi-level size_class state). Compiled into the tool target
 #   (replaces the previous #include "umq_qbuf_pool.c" approach in core.cpp so
 #   the tool no longer reaches into production static state).
+# - umq_qbuf_pool_cfg.c: umq_qbuf_pool_cfg_check — config validation +
+#   normal_io_buf_size computation. Required so the tool can use the standard
+#   API init chain (umq_qbuf_pool_cfg_check -> umq_io_buf_malloc -> umq_qbuf_pool_init)
+#   instead of bypassing cfg_check with a self-allocated memalign buffer.
+# - util_lock.c: util_mutex_lock_create/lock/unlock/destroy — required by
+#   escape_registry_init/uninit/insert/remove/lookup in umq_qbuf_pool.c
+#   (escape buf address registry, added in commit b2c0c6de/ddbefc93).
 add_executable(qbuf_pool_tool
     stubs.cpp
     utils.cpp
@@ -36,6 +43,7 @@ add_executable(qbuf_pool_tool
     ${UMDK_ROOT}/src/urpc/umq/umq_dfx_api_str.c
     ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool.c
     ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool_base.c
+    ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_qbuf_pool_cfg.c
     ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_rx_qbuf_pool.c
     ${UMDK_ROOT}/src/urpc/umq/qbuf/umq_tiny_qbuf_pool.c
     ${UMDK_ROOT}/src/urpc/util/urpc_thread_closure.cpp

@@ -8,6 +8,8 @@
  */
 
 #include "umq_qbuf_pool_helper.h"
+#include <malloc.h>
+#include <sys/mman.h>
 #include "umq_errno.h"
 #include "umq_huge_qbuf_pool.h"
 #include "umq_rx_qbuf_pool.h"
@@ -74,4 +76,61 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     }
 
     return umq_qbuf_alloc_from_pool(pool_type, request_size, num, option, list);
+}
+
+static inline uint64_t align_up_u64(uint64_t v, uint32_t align)
+{
+    return (v + align - 1) & ~((uint64_t)align - 1);
+}
+
+void *umq_qbuf_unified_io_buf_malloc(umq_buf_mode_t mode, const umq_qbuf_pool_plan_t *plan)
+{
+    if (plan == NULL) {
+        return NULL;
+    }
+
+    uint64_t total_size = plan->normal_io_buf_size;
+    uint64_t rx_offset = 0;
+    uint64_t tiny_offset = 0;
+
+    if (plan->rx_block_count > 0) {
+        rx_offset = align_up_u64(total_size, UMQ_RX_QBUF_BLOCK_SIZE);
+        total_size = rx_offset + plan->rx_io_buf_size;
+    }
+    if (plan->tiny_io_buf_size > 0) {
+        uint32_t tiny_align = plan->tiny_block_size > 0 ? plan->tiny_block_size : UMQ_TINY_QBUF_BLOCK_SIZE;
+        tiny_offset = align_up_u64(total_size, tiny_align);
+        total_size = tiny_offset + plan->tiny_io_buf_size;
+    }
+
+    void *buf = (void *)memalign(QBUF_MEMALIGN_SIZE, total_size);
+    if (buf == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "unified io buf malloc failed, total_size %llu, errno %d\n",
+                     (unsigned long long)total_size, errno);
+        return NULL;
+    }
+    madvise(buf, total_size, MADV_HUGEPAGE);
+    qbuf_touch_huge_pages(buf, total_size);
+    UMQ_VLOG_INFO(VLOG_UMQ, "malloc unified io buf %llu bytes (normal %llu + rx %llu + tiny %llu)\n",
+                  (unsigned long long)total_size, (unsigned long long)plan->normal_io_buf_size,
+                  (unsigned long long)plan->rx_io_buf_size, (unsigned long long)plan->tiny_io_buf_size);
+
+    char *base = (char *)buf;
+    umq_io_buf_set_buffer(base, plan->normal_io_buf_size);
+
+    if (plan->rx_block_count > 0) {
+        umq_rx_io_buf_set_buffer(base + rx_offset, plan->rx_io_buf_size);
+    }
+    if (plan->tiny_io_buf_size > 0) {
+        umq_tiny_io_buf_set_buffer(base + tiny_offset, plan->tiny_io_buf_size);
+    }
+
+    return buf;
+}
+
+void umq_qbuf_unified_io_buf_free(void)
+{
+    umq_io_buf_free();
+    umq_rx_io_buf_set_buffer(NULL, 0);
+    umq_tiny_io_buf_set_buffer(NULL, 0);
 }

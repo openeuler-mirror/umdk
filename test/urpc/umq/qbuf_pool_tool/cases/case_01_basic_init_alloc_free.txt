@@ -1,5 +1,5 @@
 # case 1: init + info + cross-sc alloc + free (single worker, threads=1)
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=1
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=1
 info
 thread_0 alloc 4096
 thread_0 alloc 65536

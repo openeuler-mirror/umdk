@@ -32,6 +32,7 @@ void *umq_io_buf_malloc(umq_buf_mode_t buf_mode, uint64_t size);
 void umq_io_buf_free(void);
 void *umq_io_buf_addr(void);
 uint64_t umq_io_buf_size(void);
+void umq_io_buf_set_buffer(void *addr, uint64_t size);
 int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
 
 /*
@@ -43,6 +44,12 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg);
  * uninit qbuf pool
  */
 void umq_qbuf_pool_uninit(void);
+
+/*
+ * Print final DFX report and stop the periodic DFX thread.
+ * Must be called before any pool uninit to capture full state.
+ */
+void umq_qbuf_dfx_print_final(void);
 
 /*
  * alloc memory from qbuf pool.

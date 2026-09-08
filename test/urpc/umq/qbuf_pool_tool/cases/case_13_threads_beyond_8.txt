@@ -12,7 +12,7 @@
 #   - status per-thread TLS section lists 16 distinct tids
 #   - cross-sc: half workers on sc0 (4K), half on sc1 (64K) — exercises
 #     both per-sc spinlocks concurrently
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=16
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=16
 
 # Stage 1: 16 workers concurrent alloc — even-indexed on sc0 (4K x 30),
 # odd-indexed on sc1 (64K x 3). Different sc => different spinlock, but

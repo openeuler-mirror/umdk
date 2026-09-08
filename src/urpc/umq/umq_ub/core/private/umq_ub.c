@@ -209,7 +209,7 @@ static urma_target_seg_t *import_mem(urma_context_t *urma_ctx, urma_seg_t *seg,
                                      uint32_t seg_size, uint32_t token_value)
 {
     if (urma_ctx == NULL || seg == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "import_mem invalid param, seg=%p, seg_size=%u\n", seg, seg_size);
+        UMQ_VLOG_ERR(VLOG_UMQ, "import_mem invalid param, seg_size=%u\n", seg_size);
         return NULL;
     }
 
@@ -238,7 +238,7 @@ uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint3
                              uint32_t version, ub_import_mempool_info_t *out, uint32_t out_cap)
 {
     if (tseg == NULL || out == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "fill_seg_ctx invalid param, tseg=%p, out=%p\n", tseg, out);
+        UMQ_VLOG_ERR(VLOG_UMQ, "fill_seg_ctx invalid param\n");
         return 0;
     }
 
@@ -248,8 +248,8 @@ uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint3
     urma_status_t status = umq_symbol_urma()->urma_get_seg_ctx(tseg, &seg, &seg_size);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_SEG_CTX_GET, start_timestamp);
     if (status != URMA_SUCCESS || seg == NULL || seg_size < sizeof(urma_seg_t)) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_seg_ctx failed, status: %d, seg=%p, seg_size=%u\n",
-                     (int)status, seg, seg_size);
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_seg_ctx failed, status: %d, seg_size=%u\n",
+                     (int)status, seg_size);
         if (seg != NULL) {
             umq_symbol_urma()->urma_put_seg_ctx(seg);
         }
@@ -834,8 +834,8 @@ static ALWAYS_INLINE uint32_t umq_ub_dev_info_serialize(
     uint32_t seg_size = 0;
     urma_status_t status = umq_symbol_urma()->urma_get_seg_ctx(tseg, &seg, &seg_size);
     if (status != URMA_SUCCESS || seg == NULL || seg_size < sizeof(urma_seg_t)) {
-        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_seg_ctx failed, status: %d, seg=%p, seg_size=%u\n",
-                     (int)status, seg, seg_size);
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_seg_ctx failed, status: %d, seg_size=%u\n",
+                     (int)status, seg_size);
         if (seg != NULL) {
             umq_symbol_urma()->urma_put_seg_ctx(seg);
         }

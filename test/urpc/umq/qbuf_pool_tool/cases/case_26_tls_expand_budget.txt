@@ -12,7 +12,7 @@
 # This case sets tlsBudget=96M (default global cap) but tlsExpandBudget=1M,
 # so each thread's TLS is capped at 1M instead of the default 84M (7/8 * 96M).
 # After alloc, info 段5 Per-Thread TLS: each thread CurCap ≤ 1M.
-init count=1 blockSizes=4K mode=split scaleCap=on totalSz=200M tlsBudget=96M tlsExpandBudget=1M threads=2
+init count=1 blockSizes=4K mode=split scaleCap=on tlsBudget=96M tlsExpandBudget=1M threads=2
 
 # Verify init: info 段2 should show tls_expand_mem_budget=1048576
 info

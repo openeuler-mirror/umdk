@@ -10,7 +10,7 @@
 #     (alloc N then free all each iter)
 #   - TLS self_shrink under repeated alloc/free cycles (fetch budget grows,
 #     later iterations trigger self_shrink return-to-global)
-init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M threads=8
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=8
 
 # Bootstrap: each worker needs at least one prior alloc so its TLS has
 # fetch bytes; subsequent repeat iterations will exercise self_shrink
