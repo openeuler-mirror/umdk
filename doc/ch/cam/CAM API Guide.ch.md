@@ -94,3 +94,75 @@ fused_deep_moe(
  - 需要满足: HCCL_BUFFSIZE环境变量配置应不小于[ep_rank_size * max_batch_size * moe_expert_num_per_rank * (total_length * 1 + 512) / 1024 / 1024]向上取整
  - 需要满足: 若要进行内置共享专家计算，则共享专家所需的share_gmm1_weight、share_gmm1_weight_scale、share_gmm2_weight、share_gmm2_weight_scale需同时存在
  - 需要满足: 若要进行smooth quant，需传入expert_smooth_scales，若同时进行内置共享专家计算则share_smooth_scales也必须存在
+
+### 2. KVCache Offload
+CAM 在 umdk_cam_op_lib 库中提供 KVCache Offload 相关接口：Full KV Cache 保存在 Host memory，Selected KV Cache 保存在 HBM；根据 sparse attention 选择结果，仅搬运需要参与计算的 KV。
+
+ #### 2.1.1 gather_selection_kv_cache ▶
+##### 2.1.1.1 接口原型
+```python
+umdk_cam_op_lib.gather_selection_kv_cache(
+    Tensor selection_k_rope,
+    Tensor selection_kv_cache,
+    Tensor selection_kv_block_table,
+    Tensor selection_kv_block_status,
+    Tensor selection_topk_indices,
+    Tensor full_k_rope,
+    Tensor full_kv_cache,
+    Tensor full_kv_block_table,
+    Tensor full_kv_actual_seq,
+    Tensor full_q_actual_seq,
+    int selection_topk_block_size=1
+) -> output: Tensor
+```
+##### 2.1.1.2 接口描述
+该接口用于 KVCache Offload 场景：
+- Full KV Cache 保存在 Host memory；
+- Selected KV Cache 保存在 HBM；
+- 根据当前 sparse attention 选择结果，仅搬运需要参与计算的 KV。
+
+根据 `selection_topk_indices` 指定的 TopK 索引，从 Host 侧 full KV Cache 中 gather 对应 KV 数据到 HBM 侧 selected KV workspace，并更新 selected 侧 block table、block status 等元数据。
+##### 2.1.1.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|selection_k_rope|Tensor|必选|形状：`[S_BLOCK_NUM, BLOCK_SIZE, K_ROPE]`，数据类型支持 bf16/fp16/int8；int8 场景为空 Tensor（shape `[0]`，无 RoPE）|HBM 侧 Selected RoPE 写缓冲，原地更新|
+|selection_kv_cache|Tensor|必选|形状：`[S_BLOCK_NUM, BLOCK_SIZE, KV_CACHE]`，数据类型支持 bf16/fp16/int8|HBM 侧 Selected KV 写缓冲，原地更新|
+|selection_kv_block_table|Tensor|必选|形状：`[B*S*H, S_MAX_BLOCK_NUM]`，数据类型 int32；空闲位置为 -1|HBM 侧 Selected 逻辑 block 到物理 block ID 的映射表，原地更新|
+|selection_kv_block_status|Tensor|必选|数据类型 int32；支持 BSND `[B, S, H, TOPK+1]` 或 TND `[B*S, H, TOPK+1]`|HBM 侧 Selected block 状态信息，原地更新|
+|selection_topk_indices|Tensor|必选|数据类型 int32；full KV 坐标系；支持 BSND `[B, S, H, TOPK]` 或 TND `[B*S, H, TOPK]`|HBM 侧当前 sparse attention 选择的 TopK 索引|
+|full_k_rope|Tensor|必选|形状：`[F_BLOCK_NUM, BLOCK_SIZE, K_ROPE]`，数据类型与 selected 侧一致；int8 场景为空 Tensor（shape `[0]`）|Host 侧全量 k_rope，作为 gather 读源；通过 `empty_with_swapped_memory` 分配，物理位于 Host DRAM，逻辑 device=npu|
+|full_kv_cache|Tensor|必选|形状：`[F_BLOCK_NUM, BLOCK_SIZE, KV_CACHE]`，数据类型与 selected 侧一致|Host 侧全量 kv_cache，作为 gather 读源；通过 `empty_with_swapped_memory` 分配，物理位于 Host DRAM，逻辑 device=npu|
+|full_kv_block_table|Tensor|必选|形状：`[B, F_MAX_BLOCK_NUM]`，数据类型 int32，必须为 2D 且 dim0 = B|HBM 侧 Full KV block index 映射表|
+|full_kv_actual_seq|Tensor|必选|形状：`[B]`，数据类型 int32|HBM 侧各 batch full KV 有效长度（已缓存 Full KV token 数）|
+|full_q_actual_seq|Tensor|必选|形状：`[B]`，数据类型 int32|HBM 侧各 batch query 有效长度（一般为 1）|
+|selection_topk_block_size|int|可选|默认值 1；当前仅支持取 1|每个 TopK 索引覆盖的 token 数（每次搬运 KV 数）|
+##### 2.1.1.4 返回值
+函数返回 `selection_kv_actual_seq`。
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|selection_kv_actual_seq|Tensor|形状：`[B*S*H]`，数据类型 int32|参与 SFA 计算的 KV 有效数量，供后续 SFA `actual_seq_lengths_kv` 使用|
+##### 2.1.1.5 约束和注意事项 ⚠️
+1. 需要满足：`32 < TOPK ≤ 2048`。
+2. 需要满足：`S`、`H` 仅支持 1。
+3. 需要满足：`selection_topk_block_size = 1`。
+4. 需要满足：`S_BLOCK_NUM ≥ B*S*H*S_MAX_BLOCK_NUM`。
+5. 当前接口仅支持 Ascend910 A3 环境调用。
+6. 需要满足：`2 < B < 256`。
+7. 需要满足：`K_ROPE ≤ 64`；`KV_CACHE ≤ 656`。
+8. int8 时 `selection_k_rope` / `full_k_rope` 须为 shape `[0]` 的空 Tensor。
+9. `full_kv_cache` 的 `BLOCK_SIZE` 必须与 `selection_kv_cache` 一致。
+10. `full_kv_block_table` 必须为 2D，且 dim0 = B。
+##### 2.1.1.6 符号说明
+| **符号** | **含义** |
+|----------|----------|
+|B|Batch size|
+|S|本步 query 序列长度（首版约束 S=1）|
+|H|Attention head 数（当前仅支持 H=1，对应 MLA sparse head）|
+|TOPK|本步 sparse 选择的 token（或 token 组）数量|
+|BLOCK_SIZE|Paged KV 单个物理 block 可容纳的 token 数；selected / full 通常保持一致，例如 128|
+|S_BLOCK_NUM|Selected 侧物理 block pool 大小，即 `selection_*` tensor 的 dim0|
+|F_BLOCK_NUM|Full 侧物理 block pool 大小，即 Host 全量 KV cache 的 dim0|
+|S_MAX_BLOCK_NUM|单个 `(B,S,H)` 逻辑序列在 selected 侧最多挂载的逻辑 block 数，即 `selection_kv_block_table` 列数|
+|F_MAX_BLOCK_NUM|单个 batch 在 full 侧最多挂载的逻辑 block 数，即 `full_kv_block_table` 列数|
+|K_ROPE|RoPE 维度，对应 `qk_rope_head_dim`；非 int8 场景独立存储|
+|KV_CACHE|KV / NoPE 最后一维长度；非 int8 时约等于 `kv_lora_rank`，int8 时为 NoPE + RoPE + scale 拼接后的长度|

@@ -95,3 +95,75 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
  - Required: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale should be in the same mode
  - Required: share_gmm1_weight, share_gmm1_weight_scale, share_gmm2_weight, share_gmm2_weight_scale must exist at the same time if shared expert computation is enabled
  - Required: expert_smooth_scales must exist if routed expert smooth quantization is enabled, furthermore, share_smooth_scales must exist if shared expert computation is enabled
+
+### 2. KVCache Offload
+UMDK provides KVCache Offload interfaces via "umdk_cam_op_lib": the Full KV Cache resides in Host memory, while the Selected KV Cache resides in HBM. Based on sparse-attention selection results, only the KV required for computation is transferred.
+
+ #### 2.1.1 gather_selection_kv_cache ▶
+##### 2.1.1.1 Prototype
+```python
+umdk_cam_op_lib.gather_selection_kv_cache(
+    Tensor selection_k_rope,
+    Tensor selection_kv_cache,
+    Tensor selection_kv_block_table,
+    Tensor selection_kv_block_status,
+    Tensor selection_topk_indices,
+    Tensor full_k_rope,
+    Tensor full_kv_cache,
+    Tensor full_kv_block_table,
+    Tensor full_kv_actual_seq,
+    Tensor full_q_actual_seq,
+    int selection_topk_block_size=1
+) -> output: Tensor
+```
+##### 2.1.1.2 Interface Description
+This interface is used in the KVCache Offload scenario:
+- The Full KV Cache is stored in Host memory;
+- The Selected KV Cache is stored in HBM;
+- Based on the current sparse-attention selection result, only the KV required for computation is transferred.
+
+According to the TopK indices specified by `selection_topk_indices`, gather the corresponding KV data from the Host-side full KV Cache into the HBM-side selected KV workspace, and update selected-side metadata such as the block table and block status.
+##### 2.1.1.3 Input Parameters
+| **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|selection_k_rope|Tensor|Required|Shape: `[S_BLOCK_NUM, BLOCK_SIZE, K_ROPE]`; dtype supports bf16/fp16/int8; for int8, pass an empty Tensor with shape `[0]` (no RoPE)|HBM-side Selected RoPE write buffer; updated in-place|
+|selection_kv_cache|Tensor|Required|Shape: `[S_BLOCK_NUM, BLOCK_SIZE, KV_CACHE]`; dtype supports bf16/fp16/int8|HBM-side Selected KV write buffer; updated in-place|
+|selection_kv_block_table|Tensor|Required|Shape: `[B*S*H, S_MAX_BLOCK_NUM]`; int32; free slots are -1|HBM-side mapping from Selected logical blocks to physical block IDs; updated in-place|
+|selection_kv_block_status|Tensor|Required|int32; supports BSND `[B, S, H, TOPK+1]` or TND `[B*S, H, TOPK+1]`|HBM-side Selected block status; updated in-place|
+|selection_topk_indices|Tensor|Required|int32; Full-KV coordinate system; supports BSND `[B, S, H, TOPK]` or TND `[B*S, H, TOPK]`|HBM-side TopK indices selected by the current sparse attention|
+|full_k_rope|Tensor|Required|Shape: `[F_BLOCK_NUM, BLOCK_SIZE, K_ROPE]`; dtype matches the selected side; for int8, pass an empty Tensor with shape `[0]`|Host-side full k_rope used as the gather source; allocated via `empty_with_swapped_memory` (physically in Host DRAM, logically device=npu)|
+|full_kv_cache|Tensor|Required|Shape: `[F_BLOCK_NUM, BLOCK_SIZE, KV_CACHE]`; dtype matches the selected side|Host-side full kv_cache used as the gather source; allocated via `empty_with_swapped_memory` (physically in Host DRAM, logically device=npu)|
+|full_kv_block_table|Tensor|Required|Shape: `[B, F_MAX_BLOCK_NUM]`; int32; must be 2D with dim0 = B|HBM-side Full KV block-index mapping table|
+|full_kv_actual_seq|Tensor|Required|Shape: `[B]`; int32|HBM-side per-batch Full KV valid length (number of cached Full KV tokens)|
+|full_q_actual_seq|Tensor|Required|Shape: `[B]`; int32|HBM-side per-batch query valid length (usually 1)|
+|selection_topk_block_size|int|Optional|Default 1; currently only 1 is supported|Number of tokens covered by each TopK index (KV count transferred per index)|
+##### 2.1.1.4 Return Value
+The function returns `selection_kv_actual_seq`.
+| **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|----------|
+|selection_kv_actual_seq|Tensor|Shape: `[B*S*H]`; int32|Valid KV count for SFA computation; used as subsequent SFA `actual_seq_lengths_kv`|
+##### 2.1.1.5 Constraints and Precautions ⚠️
+1. Required: `32 < TOPK ≤ 2048`.
+2. Required: `S` and `H` only support 1.
+3. Required: `selection_topk_block_size = 1`.
+4. Required: `S_BLOCK_NUM ≥ B*S*H*S_MAX_BLOCK_NUM`.
+5. Current interface supports Ascend910 A3 only.
+6. Required: `2 < B < 256`.
+7. Required: `K_ROPE ≤ 64`; `KV_CACHE ≤ 656`.
+8. For int8, `selection_k_rope` / `full_k_rope` must be empty Tensors with shape `[0]`.
+9. The `BLOCK_SIZE` of `full_kv_cache` must match that of `selection_kv_cache`.
+10. `full_kv_block_table` must be 2D, and dim0 must equal B.
+##### 2.1.1.6 Symbol Definitions
+| **Symbol** | **Meaning** |
+|----------|----------|
+|B|Batch size|
+|S|Query sequence length of the current step (first version constrains S=1)|
+|H|Number of attention heads (currently only H=1 is supported, for MLA sparse head)|
+|TOPK|Number of tokens (or token groups) selected by sparse attention in the current step|
+|BLOCK_SIZE|Number of tokens per physical Paged-KV block; selected / full usually keep the same value, e.g. 128|
+|S_BLOCK_NUM|Selected-side physical block-pool size, i.e. dim0 of `selection_*` tensors|
+|F_BLOCK_NUM|Full-side physical block-pool size, i.e. dim0 of the Host full KV cache|
+|S_MAX_BLOCK_NUM|Maximum number of logical blocks mounted for one `(B,S,H)` sequence on the selected side, i.e. column count of `selection_kv_block_table`|
+|F_MAX_BLOCK_NUM|Maximum number of logical blocks mounted for one batch on the full side, i.e. column count of `full_kv_block_table`|
+|K_ROPE|RoPE dimension, corresponding to `qk_rope_head_dim`; stored separately in non-int8 cases|
+|KV_CACHE|Last-dimension length of KV / NoPE; approximately `kv_lora_rank` for non-int8, and NoPE + RoPE + scale packed length for int8|
