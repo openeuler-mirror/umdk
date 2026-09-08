@@ -35,9 +35,13 @@ typedef struct umq_ub_jetty_node_list {
     jetty_pool_node_t **node_list;
     uint32_t list_len;
     urpc_bitmap_t bitmap;
+    // Compact array of occupied slot ids: append on create, memmove-compact on destroy. Lets the
+    // data-plane poll iterate live nodes in O(valid_cnt) instead of scanning the 64K-bit bitmap.
+    uint16_t *valid_idx;
+    uint32_t valid_cnt;                   // number of entries in valid_idx
     volatile uint32_t ref_cnt;
-    volatile uint32_t next_poll_idx;
-    util_external_mutex_lock *lock;       // serializes bitmap + node_list slot mutation (create/destroy)
+    volatile uint32_t next_poll_idx;      // round-robin cursor in valid_idx space [0, valid_cnt)
+    util_external_mutex_lock *lock;       // serializes bitmap + node_list + valid_idx mutation (create/destroy)
 } umq_ub_jetty_node_list_t;
 
 // Jetty pool configuration
