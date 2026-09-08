@@ -267,10 +267,13 @@ static void *qbuf_dfx_print_callback(void *arg)
 
 static void qbuf_dfx_print_thread_start(void)
 {
+    char *end = NULL;
     const char *env = getenv("UMQ_QBUF_DFX_INTERVAL_S");
     if (env != NULL) {
-        uint32_t val = (uint32_t)atoi(env);
-        if (val > 0) {
+        uint32_t val = (uint32_t)strtol(env, &end, 0);
+        if (end == env || *end != '\0') {
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "env UMQ_QBUF_DFX_INTERVAL_S invalid\n");
+        } else if (val > 0) {
             g_dfx_print_interval_ms = val * QBUF_MS_PER_SEC;
         }
     }
@@ -2462,10 +2465,10 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
                                                                 : QBUF_POOL_MEMPOOL_ID_INVALID);
         if (ret > 0 && !with_data) {
             if (qbuf_debug_on())
-                g_dbg_stats.alloc_nodata_fetch_global += ret;
+                g_dbg_stats.alloc_nodata_fetch_global += (uint64_t)ret;
         } else if (ret > 0 && with_data) {
             if (qbuf_debug_on())
-                g_dbg_stats.alloc_with_data_fetch_global += ret;
+                g_dbg_stats.alloc_with_data_fetch_global += (uint64_t)ret;
         }
         if (ret <= 0) {
             if (!any_escape_buf_exists()) {
