@@ -1401,8 +1401,8 @@ static int bondp_delete_vjetty(bondp_comp_t *bdp_jetty)
 
     ref_cnt = atomic_load(&(bdp_jetty->use_cnt.atomic_cnt));
 
-    URMA_LOG_INFO("bondp delete, v_jetty id is %u, modify_to err is %d, vjetty_use_cnt is %lu.\n",
-                  bdp_jetty->v_jetty.jetty_id.id, bdp_jetty->modify_to_error, ref_cnt);
+    URMA_LOG_DEBUG("Deleting vjetty, jetty_id=%u, modify_to_error=%d, use_cnt=%lu.\n",
+                   bdp_jetty->v_jetty.jetty_id.id, bdp_jetty->modify_to_error, ref_cnt);
     return urma_cmd_delete_jetty(&bdp_jetty->v_jetty);
 }
 
@@ -1414,11 +1414,11 @@ static int bondp_delete_pjetty(bondp_comp_t *bdp_jetty)
             continue;
         }
 
-        URMA_LOG_DEBUG("bondp delete, p_jetty id is %u.\n",
-                       bdp_jetty->p_jetty[i]->jetty_id.id);
+        URMA_LOG_DEBUG("Deleting pjetty, idx=%d, jetty_id=%u.\n",
+                       i, bdp_jetty->p_jetty[i]->jetty_id.id);
         int p_ret = urma_delete_jetty(bdp_jetty->p_jetty[i]);
         if (p_ret != 0) {
-            URMA_LOG_ERR("Failed to delete pjetty %d, ret=%d.\n", i, ret);
+            URMA_LOG_ERR("Failed to delete pjetty, idx=%d, ret=%d.\n", i, p_ret);
             ret = p_ret;
         }
         bdp_jetty->p_jetty[i] = NULL;
@@ -1605,6 +1605,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, base);
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(jetty->urma_ctx, bondp_context_t, v_ctx);
     urma_status_t ret = URMA_SUCCESS;
+    uint32_t jetty_id = jetty->jetty_id.id;
     /* When creating bondp_jetty, jetty_cfg.shared.jfr has been validated and is non-null. */
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jetty->jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
     bondp_jfc_t *bdp_jfc = NULL;
@@ -1628,7 +1629,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     if (use_cnt > retry_task_num) {
         atomic_store(&bdp_jetty->deleting, false);
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
-        URMA_LOG_ERR("Failed to delete jetty[%d], still in use. use_cnt=%lu\n", jetty->jetty_id.id, use_cnt);
+        URMA_LOG_ERR("Failed to delete jetty[%u], still in use. use_cnt=%lu\n", jetty_id, use_cnt);
         return URMA_EAGAIN;
     }
     bondp_del_jetty_p_vjetty_info_without_lock(bdp_jetty);
@@ -1647,16 +1648,16 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     int cancel_ret = bondp_rnr_retry_cancel_all(bdp_jetty);
     if (cancel_ret != 0) {
         URMA_LOG_WARN("Failed to cancel jetty[%u] RNR retry tasks, ret=%d\n",
-                      jetty->jetty_id.id, cancel_ret);
+                      jetty_id, cancel_ret);
     }
     use_cnt = atomic_load(&bdp_jetty->use_cnt.atomic_cnt);
     if (use_cnt > 0) {
-        URMA_LOG_ERR("Failed to delete jetty[%d], RNR retry tasks still in use. use_cnt=%lu\n",
-                     jetty->jetty_id.id, use_cnt);
+        URMA_LOG_ERR("Failed to delete jetty[%u], RNR retry tasks still in use. use_cnt=%lu\n",
+                     jetty_id, use_cnt);
         return URMA_EAGAIN;
     }
 
-    bondp_fb_cancel_tasks(bdp_ctx, jetty->jetty_id.id);
+    bondp_fb_cancel_tasks(bdp_ctx, jetty_id);
     bondp_uninit_connection_table(bdp_jetty);
     /* Drop all outstanding WRs and their target jetty/segment references. */
     bondp_uninit_wr_buf(&bdp_jetty->send_wr_buf);
