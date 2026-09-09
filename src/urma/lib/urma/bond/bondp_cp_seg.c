@@ -540,7 +540,7 @@ static int bondp_unimport_vseg(bondp_import_tseg_t *bdp_tseg)
         return ret;
     }
 
-    URMA_LOG_INFO("Unimported vseg successfully, token_id=%u\n", bdp_tseg->v_tseg.seg.token_id);
+    URMA_LOG_DEBUG("Unimported vseg successfully, token_id=%u\n", bdp_tseg->v_tseg.seg.token_id);
     return URMA_SUCCESS;
 }
 

@@ -1557,11 +1557,14 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         }
 
         if (!comp_ctx->enable_failover) {
-            URMA_LOG_INFO("Path fail: wr_id=%lu, "
-                          "vjetty_id=%u, tjetty_id=%u, path=[%u, %u], cr_status=%d\n",
+            URMA_LOG_INFO("Path switched, resend=no, wr_id=%lu, "
+                          "vjetty_id=%u, vtjetty_id=%u, from=[%u, %u], cr_status=%d, "
+                          "local_eid=" EID_FMT ", remote_eid=" EID_FMT "\n",
                           wr_id, bdp_comp->v_jetty.jetty_id.id,
                           wr_entry->target_vjetty->v_tjetty.id.id,
-                          send_idx, target_idx, cr->status);
+                          send_idx, target_idx, cr->status,
+                          EID_ARGS(bdp_comp->v_jetty.jetty_id.eid),
+                          EID_ARGS(wr_entry->target_vjetty->v_tjetty.id.eid));
             (void)pthread_spin_unlock(&bdp_comp->send_lock);
             goto CONVERT_CR;
         }
@@ -1576,9 +1579,9 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
              * When all ports are invalid and no port is available to resend the wr,
              * this error CQE is returned directly to the upper layer.
              */
-            URMA_LOG_ERR("Failed to find valid port for retransmission, wr_id=%lu, "
-                         "vjetty_id=%u, tjetty_id=%u, path=[%u, %u], cr_status=%d, "
-                         "local veid: " EID_FMT ", remote veid: " EID_FMT ".\n",
+            URMA_LOG_ERR("Path switched failed, no valid path, wr_id=%lu, "
+                         "vjetty_id=%u, vtjetty_id=%u, from=[%u, %u], cr_status=%d, "
+                         "local_eid=" EID_FMT ", remote_eid=" EID_FMT "\n",
                          wr_id, bdp_comp->v_jetty.jetty_id.id,
                          wr_entry->target_vjetty->v_tjetty.id.id,
                          send_idx, target_idx, cr->status,
@@ -1588,10 +1591,14 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
             goto CONVERT_CR;
         }
 
-        URMA_LOG_INFO("Path switched: failover to backup path, wr_id=%lu, vjetty_id=%u, tjetty_id=%u, "
-                      "from=[%u, %u], to=[%d, %d], cr_status=%d\n",
+        URMA_LOG_INFO("Path switched, resend=yes, wr_id=%lu, "
+                      "vjetty_id=%u, vtjetty_id=%u, "
+                      "from=[%u, %u], to=[%d, %d], cr_status=%d, "
+                      "local_eid=" EID_FMT ", remote_eid=" EID_FMT "\n",
                       wr_id, bdp_comp->v_jetty.jetty_id.id, wr_entry->target_vjetty->v_tjetty.id.id,
-                      send_idx, target_idx, new_send_idx, new_target_idx, cr->status);
+                      send_idx, target_idx, new_send_idx, new_target_idx, cr->status,
+                      EID_ARGS(bdp_comp->v_jetty.jetty_id.eid),
+                      EID_ARGS(wr_entry->target_vjetty->v_tjetty.id.eid));
         urma_ubagg_switch_inc();
 
         resend_matched_jfs_wrs(bdp_comp, wr_entry->wr_id, send_idx, target_idx,
