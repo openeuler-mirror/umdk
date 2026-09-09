@@ -107,6 +107,32 @@ at::Tensor gather_selection_kv_cache_custom_npu(
     const at::Tensor& full_q_actual_seq, \
     int64_t selection_topk_block_size);
 
+std::tuple<at::Tensor, at::Tensor> gather_selection_sparse_flash_attention_npu(
+    const at::Tensor &query,
+    at::Tensor &selection_kv_cache,
+    at::Tensor &selection_kv_block_table,
+    at::Tensor &selection_kv_block_status,
+    const at::Tensor &selection_topk_indices,
+    const at::Tensor &full_kv_cache,
+    const at::Tensor &full_kv_block_table,
+    const at::Tensor &actual_seq_lengths_query,
+    const at::Tensor &full_kv_actual_seq,
+    const c10::optional<at::Tensor> &sinks,
+    double scale_value,
+    int64_t key_quant_mode,
+    int64_t value_quant_mode,
+    int64_t sparse_block_size,
+    c10::string_view layout_query,
+    c10::string_view layout_kv,
+    int64_t sparse_mode,
+    int64_t pre_tokens,
+    int64_t next_tokens,
+    int64_t attention_mode,
+    int64_t quant_scale_repo_mode,
+    int64_t tile_size,
+    int64_t rope_head_dim,
+    int64_t selection_topk_block_size);
+
 std::tuple<at::Tensor, at::Tensor> quant_lightning_indexer_npu(
     const at::Tensor &query, const at::Tensor &key, const at::Tensor &weights,
     const at::Tensor &query_dequant_scale, const at::Tensor &key_dequant_scale,

@@ -163,6 +163,7 @@ sources = [
     "./buffer.cpp",
     "./gather_selection_kv_cache.cpp",
     "./gather_selection_kv_cache_custom.cpp",
+    "./gather_selection_sparse_flash_attention.cpp",
     "./quant_lightning_indexer.cpp",
     "./swiglu_clip_quant.cpp",
 ]

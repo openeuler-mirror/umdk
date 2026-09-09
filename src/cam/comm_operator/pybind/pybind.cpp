@@ -36,6 +36,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("gather_selection_kv_cache", &gather_selection_kv_cache_npu, "gather_selection_kv_cache");
     m.def("gather_selection_kv_cache_custom", &gather_selection_kv_cache_custom_npu,
           "gather_selection_kv_cache_custom");
+    m.def("gather_selection_sparse_flash_attention", &gather_selection_sparse_flash_attention_npu,
+          "gather_selection_sparse_flash_attention");
     m.def("quant_lightning_indexer", &quant_lightning_indexer_npu, "quant_lightning_indexer");
     m.def("swiglu_clip_quant", &swiglu_clip_quant_npu, "swiglu_clip_quant");
 }
@@ -76,6 +78,24 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
         Tensor selection_kv_block_table, Tensor selection_kv_block_status, Tensor selection_topk_indices, \
         Tensor full_k_rope, Tensor full_kv_cache, Tensor full_kv_block_table, Tensor full_kv_actual_seq, \
         Tensor full_q_actual_seq, *, int selection_topk_block_size=1) -> (Tensor, Tensor, Tensor, Tensor, Tensor)");
+    m.def("gather_selection_sparse_flash_attention("
+          "Tensor query, Tensor(a!) selection_kv_cache, Tensor(b!) selection_kv_block_table, "
+          "Tensor(c!) selection_kv_block_status, Tensor selection_topk_indices, Tensor full_kv_cache, "
+          "Tensor full_kv_block_table, Tensor actual_seq_lengths_query, Tensor full_kv_actual_seq, *, "
+          "Tensor? sinks=None, float scale_value=1.0, int key_quant_mode=2, int value_quant_mode=2, "
+          "int sparse_block_size=1, str layout_query='TND', str layout_kv='PA_BSND', int sparse_mode=3, "
+          "int pre_tokens=9223372036854775807, int next_tokens=9223372036854775807, int attention_mode=2, "
+          "int quant_scale_repo_mode=1, int tile_size=128, int rope_head_dim=64, "
+          "int selection_topk_block_size=1) -> (Tensor, Tensor)");
+    m.def("gather_selection_sparse_flash_attention_functional("
+          "Tensor query, Tensor selection_kv_cache, Tensor selection_kv_block_table, "
+          "Tensor selection_kv_block_status, Tensor selection_topk_indices, Tensor full_kv_cache, "
+          "Tensor full_kv_block_table, Tensor actual_seq_lengths_query, Tensor full_kv_actual_seq, *, "
+          "Tensor? sinks=None, float scale_value=1.0, int key_quant_mode=2, int value_quant_mode=2, "
+          "int sparse_block_size=1, str layout_query='TND', str layout_kv='PA_BSND', int sparse_mode=3, "
+          "int pre_tokens=9223372036854775807, int next_tokens=9223372036854775807, int attention_mode=2, "
+          "int quant_scale_repo_mode=1, int tile_size=128, int rope_head_dim=64, "
+          "int selection_topk_block_size=1) -> (Tensor, Tensor, Tensor, Tensor, Tensor)");
     m.def("quant_lightning_indexer(Tensor query, Tensor key, Tensor weights, Tensor query_dequant_scale, \
         Tensor key_dequant_scale, int query_quant_mode, int key_quant_mode, *, Tensor? actual_seq_lengths_query=None, \
         Tensor? actual_seq_lengths_key=None, Tensor? block_table=None, Tensor? metadata=None, str layout_query='BSND',\
