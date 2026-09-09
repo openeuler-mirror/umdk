@@ -21,6 +21,10 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Directory containing native libraries (libubswitch.dll/.so).
+             Override with -Dnative.lib.dir=/abs/path to load external native
+             libs instead of the ones bundled in src/main/resources. -->
+        <native.lib.dir>${project.basedir}/src/main/resources</native.lib.dir>
     </properties>
 
     <dependencies>
@@ -95,6 +99,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <jna.library.path>${native.lib.dir}</jna.library.path>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -118,4 +127,5 @@
             </plugin>
         </plugins>
     </build>
+
 </project>

@@ -30,18 +30,38 @@ public final class HashUtils {
         } catch (Throwable t) {
             // Native library unavailable; existing hash methods remain usable.
             // nativeHash will throw IllegalStateException when called.
+            // Surface the underlying JNA/dlopen failure to stderr so that a
+            // load failure (e.g. architecture mismatch) is diagnosable from
+            // the test/build log instead of being silently swallowed.
+            System.err.println("[HashUtils] Failed to load native library '"
+                + NATIVE_LIBRARY_NAME + "': " + t);
+            t.printStackTrace(System.err);
             lib = null;
         }
         LIB = lib;
     }
 
     /**
-     * Returns the platform-appropriate native library name: {@code .dll} on
-     * Windows, {@code .so} elsewhere (Linux).
+     * Returns the platform-appropriate native library file name.
+     *
+     * <p>On Windows returns {@code libubswitch.dll}. On Linux returns the
+     * architecture-specific shared library selected via {@code os.arch}:
+     * {@code libubswitch-aarch64.so} for AArch64, {@code libubswitch-x86_64.so}
+     * for x86-64. This is required because a shared object built for one
+     * architecture cannot be {@code dlopen}'ed on another; shipping both and
+     * selecting at runtime keeps the same resource set portable across
+     * x86-64 and AArch64 build/test hosts.
      */
     private static String detectNativeLibraryName() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        return os.contains("win") ? "libubswitch.dll" : "libubswitch.so";
+        if (os.contains("win")) {
+            return "libubswitch.dll";
+        }
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        if (arch.equals("aarch64") || arch.equals("arm64")) {
+            return "libubswitch-aarch64.so";
+        }
+        return "libubswitch-x86_64.so";
     }
 
     private HashUtils() {
