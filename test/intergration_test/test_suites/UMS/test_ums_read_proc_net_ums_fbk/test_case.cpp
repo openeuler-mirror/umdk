@@ -21,8 +21,13 @@ static int run_test(test_ums_ctx_t *ctx)
     char proc_net_ums[MAX_EXEC_CMD_RET_LEN];
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
     char check_perf[MAX_EXEC_CMD_RET_LEN];
-    
+    int ums_refer_cnt_before = 0;
+    int ums_refer_cnt_after = 0;
+    int ums_refer_cnt_diff = 0;
+
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
+
+    ums_refer_cnt_before = query_ums_reference_count();
     // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(3);
     sync_time("----------------------------0");
@@ -65,6 +70,13 @@ static int run_test(test_ums_ctx_t *ctx)
     exec_cmd(check_perf, MAX_EXEC_CMD_RET_LEN, "ps -ef|grep qperf");
     sync_time("----------------------------5");
     CHKERR_JUMP(ret != TEST_SUCCESS, "ums connection error", EXIT);
+    
+    ums_refer_cnt_after = query_ums_reference_count();
+    ums_refer_cnt_diff = ums_refer_cnt_after - ums_refer_cnt_before;
+    if (ums_refer_cnt_diff != 0) {
+        ret = -1;
+    }
+    CHKERR_JUMP(ret != TEST_SUCCESS, "reference count didn't return to 0", EXIT);
     rc = TEST_SUCCESS;
 EXIT:
     sync_time("----------------------------6");

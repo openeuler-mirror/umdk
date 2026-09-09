@@ -43,3 +43,11 @@ void destroy_test_ums_ctx(test_ums_ctx_t *ctx)
     free_config();
     test_common_deinit();
 }
+
+int query_ums_reference_count()
+{
+    char cmd[1024];
+    exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, "lsmod | grep ums | awk '{print $3}' | head -n 1");
+
+    return atoi(cmd);
+}
