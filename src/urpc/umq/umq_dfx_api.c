@@ -11,6 +11,7 @@
 #include "umq_inner.h"
 #include "umq_qbuf_pool.h"
 #include "umq_tiny_qbuf_pool.h"
+#include "umq_dfx_api.h"
 
 #define UMQ_DFX_EQUALS "=================================================================================="
 #define UMQ_DFX_UNDERLINE "----------------------------------------------------------------------------------"

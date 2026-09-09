@@ -271,21 +271,34 @@ static void qbuf_dfx_log_lines(const char *prefix, const char *buf, int len)
     UMQ_VLOG_INFO(VLOG_UMQ, "\n%s end\n", prefix);
 }
 
+static int qbuf_pool_stats_dump(char *pool_buf, uint32_t size)
+{
+    umq_qbuf_pool_stats_t *pool_stats = (umq_qbuf_pool_stats_t *)malloc(sizeof(umq_qbuf_pool_stats_t));
+    if (pool_stats == NULL) {
+        return -UMQ_ERR_ENOMEM;
+    }
+    memset(pool_stats, 0, sizeof(umq_qbuf_pool_stats_t));
+    umq_qbuf_pool_info_get(pool_stats);
+    umq_tiny_qbuf_pool_info_get(pool_stats);
+    umq_huge_qbuf_pool_info_get(pool_stats);
+
+    int ret = umq_qbuf_pool_stats_to_str(pool_stats, pool_buf, (int)size);
+    free(pool_stats);
+    return ret;
+}
+
 static void qbuf_dfx_print_once(void)
 {
     if (!g_qbuf_pool.inited) {
         return;
     }
-    umq_qbuf_pool_stats_t pool_stats;
-    memset(&pool_stats, 0, sizeof(pool_stats));
-    umq_qbuf_pool_info_get(&pool_stats);
-    umq_tiny_qbuf_pool_info_get(&pool_stats);
-    umq_huge_qbuf_pool_info_get(&pool_stats);
+
     char *pool_buf = (char *)malloc(QBUF_DFX_BUF_SIZE);
     if (pool_buf == NULL) {
         return;
     }
-    int ret = umq_qbuf_pool_stats_to_str(&pool_stats, pool_buf, QBUF_DFX_BUF_SIZE);
+
+    int ret = qbuf_pool_stats_dump(pool_buf, QBUF_DFX_BUF_SIZE);
     if (ret > 0) {
         qbuf_dfx_log_lines("[UMQ DFX] qbuf pool final report", pool_buf, ret);
     }
@@ -657,16 +670,16 @@ static void qbuf_dbg_print_summary(void)
                 qbuf_lc_labels[p], (unsigned long long)cnt, avg, mx);
     }
     {
-        umq_qbuf_pool_stats_t pool_stats;
-        memset(&pool_stats, 0, sizeof(pool_stats));
-        umq_qbuf_pool_info_get(&pool_stats);
-        umq_tiny_qbuf_pool_info_get(&pool_stats);
-        umq_huge_qbuf_pool_info_get(&pool_stats);
-        char pool_buf[QBUF_DFX_BUF_SIZE];
-        int ret = umq_qbuf_pool_stats_to_str(&pool_stats, pool_buf, sizeof(pool_buf));
+        char *pool_buf = (char *)malloc(QBUF_DFX_BUF_SIZE);
+        if (pool_buf == NULL) {
+            return;
+        }
+
+        int ret = qbuf_pool_stats_dump(pool_buf, QBUF_DFX_BUF_SIZE);
         if (ret > 0) {
             (void)fprintf(stderr, "[UMQ TIMING] pool state:\n%s\n", pool_buf);
         }
+        free(pool_buf);
     }
 }
 // ===== NON-POOL POINTER DIAGNOSTIC =====
