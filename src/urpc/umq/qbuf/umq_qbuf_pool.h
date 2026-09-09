@@ -33,7 +33,6 @@ void umq_io_buf_free(void);
 void *umq_io_buf_addr(void);
 uint64_t umq_io_buf_size(void);
 void umq_io_buf_set_buffer(void *addr, uint64_t size);
-int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
 
 /*
  * init qbuf pool
