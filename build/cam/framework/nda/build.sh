@@ -37,6 +37,7 @@ cd ..
 # Override the rdma_backends
 cp -rf ${CAM_NDA_ROOT}/src/* ${SHMEM_ROOT}/src
 cp -rf ${CAM_NDA_ROOT}/include/* ${SHMEM_ROOT}/include
+cp -rf ${CAM_NDA_ROOT}/examples/* ${SHMEM_ROOT}/examples
 
 # Build shmem
 cd shmem
