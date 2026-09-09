@@ -1,0 +1,43 @@
+# case 28: without_data expansion slot fills the whole 4MB floor
+#
+# Verifies the without_data expansion slot sizing fix:
+#   expansion_block_count = QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA(4MB)
+#                           / sizeof(umq_buf_t)(128B) = 32768
+# (umq_qbuf_exp_pool_inner_init without_data branch). Pre-fix the slot held a
+# fixed 8192 headers (1MB) inside the 4MB memalign region — 75% of the
+# expansion budget was wasted and refilling the exhausted 32K global pool
+# needed 4 slots / 4 mempool IDs.
+#
+# Config: scaleCap=on (expansion enabled — unlike case_17 which uses
+# scaleCap=off and never exercises expansion). Global without_data pool is
+# pre-allocated with QBUF_POOL_INITIAL_NODATA_BUF_CNT = 32768 headers.
+#
+# This case:
+#   1. Single thread holds 42000 without_data bufs (42 x alloc 0 1000,
+#      tool caps num<=1000 per command). Deficit past the 32768 global
+#      pool = 9232 headers.
+#   2. status: "exp per-slot" table must show exactly ONE without_data slot
+#      (sc=5 = UMQ_QBUF_SIZE_CLASS_MAX) with:
+#        total  = 32768  (pre-fix: 8192 per slot, deficit ~9232 -> 2 slots)
+#        in_use = ~9232  (42000 - 32768 global; +TLS batch remainder variance)
+#        free   = ~23536
+#      and expansion memory claimed = 4MB (one memalign region).
+#   3. free all returns everything; fully-free slot is eligible for async
+#      shrink (exp_free 32768 >= trigger_shrink 19660) — elastic reclaim.
+#
+# Related trigger change:
+#   trigger_expand = QBUF_POOL_INITIAL_NODATA_BUF_CNT(32768) * 30% = 9830
+#   (was 8192 * 30% = 2457). Not directly printable by the tool; verified by
+#   UT test_qbuf_pool_multi_level (WithoutDataExpansionSlotSizing).
+init count=2 blockSizes=4K,64K mode=split scaleCap=on threads=1
+
+# Stage 1: drain the 32768 global headers and force expansion
+repeat 42
+  thread_0 alloc 0 1000
+end
+
+# Stage 2: verify slot sizing — expect ONE sc=16 slot, total=32768 in_use=9232
+status
+
+# Stage 3: release; slot returns to expansion pool and may shrink (>=19660 free)
+thread_0 free all
