@@ -18,6 +18,7 @@
       "reduce_scatter_detour",
       "gather_selection_kv_cache",
       "gather_selection_kv_cache_custom",
+      "gather_selection_sparse_flash_attention",
       "swiglu_clip_quant"
     ],
     "ascend950": [
