@@ -49,7 +49,6 @@
 #define QBUF_POOL_SHRINK_HYSTERESIS 2  // shrink threshold = expand threshold * this multiplier
 #define QBUF_WALL_TIME_BUF_SIZE 24     // "HH:MM:SS.uuuuuu" + null terminator
 
-#define QBUF_POOL_DEFAULT_EXPANSION_COUNT 8192
 #define QBUF_POOL_DEFAULT_EXPANSION_MEM_SIZE (2ULL * 1024 * 1024 * 1024)
 #define QBUF_POOL_EXPANSION_SIZE_RAMP_0 (8ULL * 1024 * 1024)
 #define QBUF_POOL_MEM_SIZE_MAX (6ULL * 1024 * 1024 * 1024)
@@ -866,11 +865,6 @@ static inline uint32_t blk_size_to_sc(uint32_t blk_size)
         }
     }
     return UMQ_QBUF_SIZE_CLASS_MAX;
-}
-
-static inline uint32_t umq_qbuf_expansion_count(void)
-{
-    return QBUF_POOL_DEFAULT_EXPANSION_COUNT;
 }
 
 static void free_expansion_pool_slot(qbuf_expansion_pool_slot_t *slot)
@@ -1831,8 +1825,10 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
             (exp_pool->expansion_block_count + exp_pool->sub_slot_blk_count - 1) / exp_pool->sub_slot_blk_count;
         exp_pool->sub_slot_data_buf_size = exp_pool->sub_slot_blk_count * blk_size;
     } else {
-        exp_pool->expansion_block_count = umq_qbuf_expansion_count();
-        exp_pool->trigger_expand_block_num = exp_pool->expansion_block_count * g_qbuf_pool.expansion_threshold / 100;
+        exp_pool->expansion_block_count =
+            (uint32_t)(QBUF_POOL_LOW_MEMORY_LIMIT_OF_WITHOUT_DATA / sizeof(umq_buf_t));
+        exp_pool->trigger_expand_block_num =
+            (uint64_t)QBUF_POOL_INITIAL_NODATA_BUF_CNT * g_qbuf_pool.expansion_threshold / 100;
         exp_pool->trigger_shrink_block_num = exp_pool->trigger_expand_block_num * QBUF_POOL_SHRINK_HYSTERESIS;
     }
     urpc_list_init(&exp_pool->slot_list);
