@@ -2380,6 +2380,10 @@ void umq_qbuf_pool_uninit(void)
         return;
     }
 
+    UMQ_VLOG_SUMMARY(VLOG_UMQ, "=== POOL UNINIT ===\n");
+    qbuf_dbg_print_summary();
+    UMQ_VLOG_SUMMARY(VLOG_UMQ, "=== END POOL UNINIT ===\n");
+
     /* Clear dangling TLS nodes left by worker threads that already exited
      * (g_tls_dtors_running fast path skipped urpc_list_remove). These nodes
      * point to freed TLS storage and would cause SEGV if traversed by
@@ -2388,10 +2392,6 @@ void umq_qbuf_pool_uninit(void)
     (void)pthread_spin_lock(&g_tls_stats_lock);
     urpc_list_init(&g_tls_register_head);
     (void)pthread_spin_unlock(&g_tls_stats_lock);
-
-    UMQ_VLOG_SUMMARY(VLOG_UMQ, "=== POOL UNINIT ===\n");
-    qbuf_dbg_print_summary();
-    UMQ_VLOG_SUMMARY(VLOG_UMQ, "=== END POOL UNINIT ===\n");
 
     release_thread_cache(0);
 
