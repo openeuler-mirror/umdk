@@ -2132,10 +2132,6 @@ int urma_cmd_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, urma_je
     }
 
     ret = urma_ioctl_delete_jetty_batch(dev_fd, &arg);
-    for (int i = 0; i < jetty_num; ++i) {
-        jetty = jetty_arr[i];
-        urma_uninit_jetty_cfg(&jetty->jetty_cfg);
-    }
     if (ret != 0) {
         URMA_LOG_ERR("ioctl failed in urma_cmd_delete_jetty_batch , ret=%d, errno=%d.\n", ret, errno);
         if (arg.out.bad_jetty_index >= jetty_num) {
@@ -2145,6 +2141,10 @@ int urma_cmd_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, urma_je
         *bad_jetty = jetty_arr[arg.out.bad_jetty_index];
         free(handle_arr);
         return ret;
+    }
+
+    for (int i = 0; i < jetty_num; ++i) {
+        urma_uninit_jetty_cfg(&jetty_arr[i]->jetty_cfg);
     }
 
     do {

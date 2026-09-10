@@ -884,6 +884,9 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, alloc_jfs);
 
     urma_status_t status = ops->alloc_jfs(urma_ctx, cfg, jfs);
+    if (status != URMA_SUCCESS) {
+        return status;
+    }
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
     (*jfs)->urma_jfs_opt.is_actived = false;
 
@@ -1341,6 +1344,9 @@ urma_status_t urma_alloc_jfr(urma_context_t *urma_ctx, urma_jfr_cfg_t *cfg, urma
      */
 
     urma_status_t status = ops->alloc_jfr(urma_ctx, cfg, jfr);
+    if (status != URMA_SUCCESS) {
+        return status;
+    }
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
     (*jfr)->urma_jfr_opt.is_actived = false;
 
@@ -2476,7 +2482,7 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
     atomic_fetch_add(&urma_ctx->ref.atomic_cnt, 1);
     urma_status_t status = ops->alloc_jetty(urma_ctx, cfg, jetty);
-    if (*jetty == NULL) {
+    if (status != URMA_SUCCESS || *jetty == NULL) {
         atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
         URMA_LOG_ERR("alloc_jetty failed.\n");
         return status;
