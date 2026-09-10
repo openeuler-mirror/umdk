@@ -60,6 +60,39 @@ static const char *umq_dfx_sc_names[] = {"Small", "Medium", "Large", "Huge", "Gi
         (__offset) += __ret;                                                                               \
     } while (0)
 
+/*
+ * Print the three timing stat lines (wait_async_expand/sync_expand/fetch_total)
+ * for one pool in DFX format, prefixed by the pool label.
+ *
+ * @param buf         output buffer
+ * @param max_buf_len total buffer capacity
+ * @param str_size    current write offset (updated in place)
+ * @param pool        pool label at line start ("sc0".."scN" or "WithoutData", %-11s aligned)
+ * @param timing      timing stats of this pool
+ */
+static void dfx_print_timing_stats(char *buf, int max_buf_len, int *str_size,
+                                   const char *pool, const umq_dfx_timing_stats_t *timing)
+{
+    double wait_avg = (timing->wait_async_expand_count > 0) ?
+        (double)timing->wait_async_expand_total_us / timing->wait_async_expand_count : 0;
+    double exp_avg = (timing->sync_expand_count > 0) ?
+        (double)timing->sync_expand_total_us / timing->sync_expand_count : 0;
+    double fetch_avg = (timing->fetch_total_count > 0) ?
+        (double)timing->fetch_total_us / timing->fetch_total_count : 0;
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, *str_size,
+                         "%-11s wait_async_expand: cnt=%llu avg=%.2f max=%llu us\n",
+                         pool, (unsigned long long)timing->wait_async_expand_count, wait_avg,
+                         (unsigned long long)timing->wait_async_expand_max_us);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, *str_size,
+                         "%-11s sync_expand:       cnt=%llu avg=%.2f max=%llu us\n",
+                         pool, (unsigned long long)timing->sync_expand_count, exp_avg,
+                         (unsigned long long)timing->sync_expand_max_us);
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, *str_size,
+                         "%-11s fetch_total:       cnt=%llu avg=%.2f max=%llu us\n",
+                         pool, (unsigned long long)timing->fetch_total_count, fetch_avg,
+                         (unsigned long long)timing->fetch_max_us);
+}
+
 static const char *umq_qbuf_pool_type_name(umq_qbuf_pool_type_t type)
 {
     static const char qbuf_pool_type[UMQ_QBUF_POOL_TYPE_MAX][UMQ_DFX_QBUF_POOL_TYPE_NAME_MAX_LEN] = {
@@ -537,6 +570,27 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "partial_slot_count: WithData=%u WithoutData=%u\n",
                          qbuf_pool_stats->exp_pool_with_data.partial_slot_count,
                          qbuf_pool_stats->exp_pool_without_data.partial_slot_count);
+    // Timing stats per pool: per-SC (with_data) then the single WithoutData pool.
+    // UMQ_QBUF_POOL_TYPE_SMALL is the normal multi-level pool (sc0=Small, sc1=Medium);
+    // other types (tiny/rx/huge) are single-level without expansion, skip them.
+    for (uint32_t i = 0; i < qbuf_pool_stats->num; i++) {
+        const umq_qbuf_pool_info_t *info = &qbuf_pool_stats->qbuf_pool_info[i];
+        if (info->type != UMQ_QBUF_POOL_TYPE_SMALL) {
+            continue;
+        }
+        for (uint32_t sc = 0; sc < info->sc_count; sc++) {
+            const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
+            // skip SC with no expansion activity to avoid printing zeros
+            if (sci->exp_slots == 0 && sci->exp_total_expansion_count == 0) {
+                continue;
+            }
+            char pool_label[UMQ_DFX_LABEL_BUF_SIZE];
+            (void)snprintf(pool_label, sizeof(pool_label), "sc%u", sc);
+            dfx_print_timing_stats(buf, max_buf_len, &str_size, pool_label, &sci->fetch_timing);
+        }
+    }
+    dfx_print_timing_stats(buf, max_buf_len, &str_size, "WithoutData",
+                           &qbuf_pool_stats->exp_pool_without_data.fetch_timing);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                          "rx_pool_fallback_to_normal: alloc=%llu outstanding=%llu outstanding_max=%llu\n",
                          (unsigned long long)umq_rx_qbuf_pool_fallback_count_get(),
@@ -565,7 +619,9 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
                              "exp_free_blk", "exp_expand_cnt", "exp_shrink_cnt");
         for (uint32_t sc = 0; sc < info->sc_count; sc++) {
             const umq_qbuf_sc_info_t *sci = &info->sc_info[sc];
-            if (sci->exp_slots == 0 && sci->exp_total_expansion_count == 0) continue;
+            if (sci->exp_slots == 0 && sci->exp_total_expansion_count == 0) {
+                continue;
+            }
             UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size,
                                  "%-4u %-10u %-10u %-14lu %-14lu %-14lu %-14lu\n",
                                  sc, sci->blk_size, sci->exp_slots,
