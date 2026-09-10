@@ -1700,6 +1700,7 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
     uint64_t total_tls_cap[UMQ_QBUF_SIZE_CLASS_MAX] = {0};
 
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        total_tls_cap[sc] = local_pool->capacity_with_data[sc];
         if (local_pool->head_with_data[sc].first == NULL) {
             continue;
         }
@@ -1711,7 +1712,6 @@ static ALWAYS_INLINE void release_thread_cache(uint64_t id)
         g_thread_cache.stats.tls_return_buf_cnt_with_data += return_buf_cnt;
         g_thread_cache.stats.sc_tls_return_buf_cnt[sc] += return_buf_cnt;
         (void)pthread_spin_unlock(&g_qbuf_pool.block_pool[sc].global_mutex);
-        total_tls_cap[sc] = local_pool->capacity_with_data[sc];
     }
 
     if (local_pool->head_without_data.first != NULL) {
