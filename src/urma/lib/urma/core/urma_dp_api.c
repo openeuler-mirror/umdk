@@ -145,7 +145,7 @@ urma_status_t urma_write(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,      
 
     urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
     urma_sge_t dst_sge = {.addr = dst, .len = len, .tseg = (urma_target_seg_t *)dst_tseg};
-    urma_jfs_wr_t wr;
+    urma_jfs_wr_t wr = {0};
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_WRITE;
     wr.flag = flag;
@@ -173,7 +173,7 @@ urma_status_t urma_read(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,       
 
     urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
     urma_sge_t dst_sge = {.addr = dst, .len = len, .tseg = (urma_target_seg_t *)dst_tseg};
-    urma_jfs_wr_t wr;
+    urma_jfs_wr_t wr = {0};
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_READ;
     wr.flag = flag;
@@ -208,7 +208,7 @@ urma_status_t urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,       
     }
 
     urma_sge_t src_sge = {.addr = src, .len = len, .tseg = (urma_target_seg_t *)src_tseg};
-    urma_jfs_wr_t wr;
+    urma_jfs_wr_t wr = {0};
     urma_jfs_wr_t *bad_wr;
     wr.opcode = URMA_OPC_SEND;
     wr.flag = flag;
@@ -234,7 +234,7 @@ urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg, //
 
     urma_sge_t src_sge = {.addr = buf, .len = len, .tseg = recv_tseg};
 
-    urma_jfr_wr_t wr;
+    urma_jfr_wr_t wr = {0};
     urma_jfr_wr_t *bad_wr;
     wr.user_ctx = user_ctx;
     wr.src.sge = &src_sge;
