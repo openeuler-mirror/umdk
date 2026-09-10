@@ -85,6 +85,18 @@ typedef struct umq_flow_control_stats {
     umq_packet_stats_t packet_stats;         // flow control packet statistics
 } umq_flow_control_stats_t;
 
+typedef struct umq_dfx_timing_stats {
+    uint64_t wait_async_expand_count;    // times sync fetch waited for async expand to finish
+    uint64_t wait_async_expand_total_us; // accumulated wait time in microseconds
+    uint64_t wait_async_expand_max_us;   // max single wait time in microseconds
+    uint64_t sync_expand_count;          // times sync expand was triggered
+    uint64_t sync_expand_total_us;       // accumulated sync expand time in microseconds
+    uint64_t sync_expand_max_us;         // max single sync expand time in microseconds
+    uint64_t fetch_total_count;          // total fetch_from_global invocations
+    uint64_t fetch_total_us;             // accumulated fetch_from_global time in microseconds
+    uint64_t fetch_max_us;               // max single fetch_from_global time in microseconds
+} umq_dfx_timing_stats_t;
+
 typedef struct umq_expansion_pool_stats {
     uint32_t expansion_count;          // number of expansions performed
     uint32_t partial_slot_count;       // slots with 0 < free_block_cnt < total_block_cnt (partial returns)
@@ -96,6 +108,7 @@ typedef struct umq_expansion_pool_stats {
     uint64_t sync_expansion_count;        // expansion in alloc hot path (caller blocked)
     uint64_t async_expansion_count;       // expansion by background prefill    // cumulative number of expansions
     uint64_t total_shrink_count;       // cumulative number of contractions
+    umq_dfx_timing_stats_t fetch_timing;     // timing stats
 } umq_expansion_pool_stats_t;
 
 /* Per-size_class breakdown of a multi-level qbuf pool. Replaces the single-level
@@ -119,6 +132,7 @@ typedef struct umq_qbuf_sc_info {
     uint32_t exp_slots;            // number of expansion pool slots for this sc
     uint64_t exp_free_blk;         // free blocks in expansion pool for this sc
     uint64_t trigger_expand;        // async expansion threshold (exp_pool_with_data[sc].trigger_expand_block_num)
+    umq_dfx_timing_stats_t fetch_timing;      // per-sc timing stats
 } umq_qbuf_sc_info_t;
 
 /* Multi-level size_class pool configuration. These fields were previously hidden
