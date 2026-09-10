@@ -152,6 +152,7 @@ typedef struct expansion_qbuf_pool {
     uint64_t sub_slot_blk_count;
     uint64_t sub_slot_count;
     uint64_t sub_slot_data_buf_size;
+    umq_dfx_timing_stats_t fetch_timing;
 } qbuf_expansion_pool_t;
 
 // FLAT qbuf_pool_t (no base substruct): the test includes this file directly and accesses
@@ -208,16 +209,15 @@ typedef struct qbuf_pool {
 static qbuf_pool_t g_qbuf_pool = {0};
 
 /*
- * Get current wall-clock time as both a human-readable string and a nanosecond
- * timestamp from a single clock_gettime call.
+ * Get current wall-clock time as a human-readable string "HH:MM:SS.uuuuuu".
+ * Uses CLOCK_REALTIME for display purposes only.
  *
- * @param buf  output buffer for formatted time string "HH:MM:SS.uuuuuu"
+ * @param buf  output buffer for formatted time string
  * @param size size of buf, must be >= QBUF_WALL_TIME_BUF_SIZE
- * @return     current time in nanoseconds (CLOCK_REALTIME), for elapsed calculation
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-static uint64_t fmt_wall_time(char *buf, size_t size)
+static void fmt_wall_time(char *buf, size_t size)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -225,9 +225,19 @@ static uint64_t fmt_wall_time(char *buf, size_t size)
     (void)localtime_r(&ts.tv_sec, &tm_val);
     (void)snprintf(buf, size, "%02d:%02d:%02d.%06ld",
                    tm_val.tm_hour, tm_val.tm_min, tm_val.tm_sec, ts.tv_nsec / NS_PER_US);
-    return (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
 }
 #pragma GCC diagnostic pop
+
+/*
+ * Get monotonic time in nanoseconds for elapsed calculation.
+ * CLOCK_MONOTONIC is immune to NTP step/settimeofday adjustments.
+ */
+static uint64_t get_monotonic_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
 
 /* DFX final report on pool uninit */
 #define QBUF_DFX_BUF_SIZE (32 * 1024)
@@ -236,12 +246,11 @@ static uint64_t fmt_wall_time(char *buf, size_t size)
 
 static void qbuf_dfx_log_lines(const char *prefix, const char *buf, int len)
 {
-    UMQ_VLOG_INFO(VLOG_UMQ, "\n%s begin\n", prefix);
+    UMQ_VLOG_INFO(VLOG_UMQ, "\n%s\n", prefix);
     int pos = 0;
     int seg_no = 0;
     char *chunk = (char *)malloc(QBUF_DFX_LINE_MAX + QBUF_DFX_CHUNK_EXTRA);
     if (chunk == NULL) {
-        UMQ_VLOG_INFO(VLOG_UMQ, "\n%s end (alloc failed)\n", prefix);
         return;
     }
     while (pos < len) {
@@ -268,7 +277,6 @@ static void qbuf_dfx_log_lines(const char *prefix, const char *buf, int len)
         UMQ_VLOG_INFO(VLOG_UMQ, "%s [%d]\n%s", prefix, seg_no, chunk + 1);
     }
     free(chunk);
-    UMQ_VLOG_INFO(VLOG_UMQ, "\n%s end\n", prefix);
 }
 
 static int qbuf_pool_stats_dump(char *pool_buf, uint32_t size)
@@ -1017,20 +1025,20 @@ static int slot_with_data_init(uint32_t sc, qbuf_expansion_pool_slot_t *slot)
     uint16_t mempool_id = (uint16_t)(slot->slot_id + QBUF_POOL_EXP_SLOT_ID_MIN);
 
     uint64_t t_start;
-    t_start = fmt_wall_time(NULL, 0);
+    t_start = get_monotonic_ns();
     slot->buffer = (void *)memalign(QBUF_MEMALIGN_SIZE, total_size);
     if (slot->buffer == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to alloc expansion pool memory\n");
         goto ROLLBACK_MEM_SIZE;
     }
     uint64_t t_end;
-    t_end = fmt_wall_time(NULL, 0);
+    t_end = get_monotonic_ns();
     slot->timing_memalign_us = (t_end - t_start) / NS_PER_US;
     madvise(slot->buffer, total_size, MADV_HUGEPAGE);
-    uint64_t t_madvise_end = fmt_wall_time(NULL, 0);
+    uint64_t t_madvise_end = get_monotonic_ns();
     slot->timing_madvise_us = (t_madvise_end - t_end) / NS_PER_US;
     qbuf_touch_huge_pages(slot->buffer, total_size);
-    uint64_t t_touch_end = fmt_wall_time(NULL, 0);
+    uint64_t t_touch_end = get_monotonic_ns();
     slot->timing_touch_us = (t_touch_end - t_madvise_end) / NS_PER_US;
     slot->header_buffer = (void *)((char *)slot->buffer + total_size);
     slot->total_buf_size = total_size;
@@ -1057,9 +1065,9 @@ static int slot_with_data_init(uint32_t sc, qbuf_expansion_pool_slot_t *slot)
     }
 
     if (g_qbuf_pool.seg_ops.register_seg_callback != NULL) {
-        uint64_t t_reg_start = fmt_wall_time(NULL, 0);
+        uint64_t t_reg_start = get_monotonic_ns();
         ret = g_qbuf_pool.seg_ops.register_seg_callback(NULL, mempool_id, slot->buffer, slot->total_buf_size);
-        uint64_t t_reg_end = fmt_wall_time(NULL, 0);
+        uint64_t t_reg_end = get_monotonic_ns();
         slot->timing_urma_reg_us = (t_reg_end - t_reg_start) / NS_PER_US;
         if (ret != UMQ_SUCCESS) {
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "failed to register expansion pool seg, ret: %d\n", ret);
@@ -1258,14 +1266,16 @@ static void *async_shrink_global_pool_callback(void *arg)
             (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
 
             bool shrink_wd = shrink_param->with_data;
-            uint64_t shrink_start_ns = fmt_wall_time(shrink_start_time, sizeof(shrink_start_time));
-            uint64_t t_unreg_start = fmt_wall_time(NULL, 0);
+            fmt_wall_time(shrink_start_time, sizeof(shrink_start_time));
+            uint64_t shrink_start_ns = get_monotonic_ns();
+            uint64_t t_unreg_start = get_monotonic_ns();
             slot_uninit(shrink_wd, slot);
-            uint64_t t_unreg_end = fmt_wall_time(NULL, 0);
+            uint64_t t_unreg_end = get_monotonic_ns();
             free_expansion_pool_slot(slot);
-            uint64_t t_free_end = fmt_wall_time(NULL, 0);
+            uint64_t t_free_end = get_monotonic_ns();
             exp_pool->total_shrink_count++;
-            uint64_t shrink_end_ns = fmt_wall_time(shrink_end_time, sizeof(shrink_end_time));
+            fmt_wall_time(shrink_end_time, sizeof(shrink_end_time));
+            uint64_t shrink_end_ns = get_monotonic_ns();
             uint64_t shrink_elapsed_us = (shrink_end_ns - shrink_start_ns) / NS_PER_US;
             uint64_t unreg_us = (t_unreg_end - t_unreg_start) / NS_PER_US;
             uint64_t free_us = (t_free_end - t_unreg_end) / NS_PER_US;
@@ -2630,7 +2640,8 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
     uint32_t alloc_sc = with_data ? sc : UMQ_QBUF_SIZE_CLASS_MAX;
     char expand_start_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
     char expand_end_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
-    uint64_t expand_start_ns = fmt_wall_time(expand_start_time, sizeof(expand_start_time));
+    fmt_wall_time(expand_start_time, sizeof(expand_start_time));
+    uint64_t expand_start_ns = get_monotonic_ns();
 
     if (!already_locked) {
         uint32_t sync_expand_expected = 0;
@@ -2682,7 +2693,8 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
         exp_pool->sync_expansion_count++;
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
-    uint64_t expand_end_ns = fmt_wall_time(expand_end_time, sizeof(expand_end_time));
+    fmt_wall_time(expand_end_time, sizeof(expand_end_time));
+    uint64_t expand_end_ns = get_monotonic_ns();
     uint64_t expand_elapsed_us = (expand_end_ns - expand_start_ns) / NS_PER_US;
     uint64_t sc_alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED);
     uint64_t sc_free = __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED);
@@ -3666,6 +3678,25 @@ umq_buf_mode_t umq_qbuf_mode_get(void)
     return g_qbuf_pool.mode;
 }
 
+/*
+ * Copy timing stats from a single expansion pool into DFX snapshot via atomic reads.
+ * Works for both umq_expansion_pool_stats_t and umq_qbuf_sc_info_t (same timing sub-struct).
+ *
+ * @param dst DFX snapshot timing field (umq_timing_stats_t*)
+ * @param src source expansion pool (qbuf_expansion_pool_t*)
+ */
+#define DFX_COPY_TIMING(dst, src) do { \
+    (dst)->wait_async_expand_count = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_count, __ATOMIC_RELAXED); \
+    (dst)->wait_async_expand_total_us = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_total_us, __ATOMIC_RELAXED); \
+    (dst)->wait_async_expand_max_us = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_max_us, __ATOMIC_RELAXED); \
+    (dst)->sync_expand_count = __atomic_load_n(&(src)->fetch_timing.sync_expand_count, __ATOMIC_RELAXED); \
+    (dst)->sync_expand_total_us = __atomic_load_n(&(src)->fetch_timing.sync_expand_total_us, __ATOMIC_RELAXED); \
+    (dst)->sync_expand_max_us = __atomic_load_n(&(src)->fetch_timing.sync_expand_max_us, __ATOMIC_RELAXED); \
+    (dst)->fetch_total_count = __atomic_load_n(&(src)->fetch_timing.fetch_total_count, __ATOMIC_RELAXED); \
+    (dst)->fetch_total_us = __atomic_load_n(&(src)->fetch_timing.fetch_total_us, __ATOMIC_RELAXED); \
+    (dst)->fetch_max_us = __atomic_load_n(&(src)->fetch_timing.fetch_max_us, __ATOMIC_RELAXED); \
+} while (0)
+
 int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
     if (!g_qbuf_pool.inited) {
@@ -3783,6 +3814,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         sci->exp_slots = slot_cnt;
         sci->exp_free_blk = exp_free;
         sci->trigger_expand = e->trigger_expand_block_num;
+        DFX_COPY_TIMING(&sci->fetch_timing, e);
     }
 
     uint64_t total_buf_cnt_with_data = 0;
@@ -3884,6 +3916,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num = exp_without_data->exp_total_block_num;
         qbuf_pool_stats->exp_pool_without_data.total_expansion_count = exp_without_data->total_expansion_count;
         qbuf_pool_stats->exp_pool_without_data.total_shrink_count = exp_without_data->total_shrink_count;
+        DFX_COPY_TIMING(&qbuf_pool_stats->exp_pool_without_data.fetch_timing, exp_without_data);
         qbuf_pool_stats->exp_pool_without_data.exp_total_block_num =
             exp_without_data->expansion_count * exp_without_data->expansion_block_count;
         qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size =
@@ -4038,6 +4071,13 @@ bool umq_disable_scale_cap(void)
 
 #define QBUF_POOL_EXPAND_WAIT_SPINS_MAX 4096
 
+bool umq_qbuf_is_expanding(bool with_data, uint32_t sc)
+{
+    qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
+                                                  &g_qbuf_pool.exp_pool_without_date;
+    return __atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) != 0;
+}
+
 bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc)
 {
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
@@ -4051,6 +4091,46 @@ bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc)
     }
     return false;
 }
+
+/*
+ * Record a timing stat: increment count, accumulate total, update max.
+ * @param pool  qbuf_expansion_pool_t pointer
+ * @param cnt   field name for count
+ * @param tot   field name for total_us
+ * @param mx    field name for max_us
+ * @param val   value to record (microseconds)
+ */
+#define RECORD_TIMING_STAT(pool, cnt, tot, mx, val) do { \
+    __atomic_fetch_add(&(pool)->fetch_timing.cnt, 1, __ATOMIC_RELAXED); \
+    __atomic_fetch_add(&(pool)->fetch_timing.tot, val, __ATOMIC_RELAXED); \
+    uint64_t _old_max = __atomic_load_n(&(pool)->fetch_timing.mx, __ATOMIC_RELAXED); \
+    if (val > _old_max) { \
+        __atomic_store_n(&(pool)->fetch_timing.mx, val, __ATOMIC_RELAXED); \
+    } \
+} while (0)
+
+/*
+ * Define a timing stat recording function.
+ * @param name  function name
+ * @param cnt   field name for count
+ * @param tot   field name for total_us
+ * @param mx    field name for max_us
+ * @param val   value parameter name (microseconds)
+ */
+#define DEFINE_RECORD_TIMING_FUNC(name, cnt, tot, mx, val) \
+void umq_qbuf_record_##name(bool with_data, uint32_t sc, uint64_t val) \
+{ \
+    qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] : \
+                                                  &g_qbuf_pool.exp_pool_without_date; \
+    RECORD_TIMING_STAT(exp_pool, cnt, tot, mx, val); \
+}
+
+DEFINE_RECORD_TIMING_FUNC(wait_async_expand, wait_async_expand_count,
+                          wait_async_expand_total_us, wait_async_expand_max_us, wait_us)
+DEFINE_RECORD_TIMING_FUNC(sync_expand, sync_expand_count,
+                          sync_expand_total_us, sync_expand_max_us, expand_us)
+DEFINE_RECORD_TIMING_FUNC(fetch_total, fetch_total_count,
+                          fetch_total_us, fetch_max_us, fetch_us)
 
 void umq_qbuf_set_tls_expand_qbuf_pool_depth(uint32_t pjfr_depth)
 {
