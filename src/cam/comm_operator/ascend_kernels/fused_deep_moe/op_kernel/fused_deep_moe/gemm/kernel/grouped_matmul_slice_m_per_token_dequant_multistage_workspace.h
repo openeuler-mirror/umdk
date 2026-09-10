@@ -198,16 +198,9 @@ public:
             aicWaitFuncList[stageId] = {this, stageId};
             aicSetFuncList[stageId] = {this, stageId};
         }
-        if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-            syncGmAddr = metaInfoGm + statusDataSpaceOffset + GMM2::SOFT_SYNC_OFFSET +
-                         (AscendC::GetBlockIdx() / AscendC::GetSubBlockNum() * GMM2::CORE_NUM_PER_GROUP) *
-                         WORKSPACE_STAGES * GMM2::SOFT_SYNC_SPACE_SIZE;
-        } else {
-            winContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<AscendC::HCCL_GROUP_ID_0>();
-            syncGmAddr = (GM_ADDR)((winContext_)->localWindowsExp) + GMM2::SOFT_SYNC_OFFSET +
-                         (AscendC::GetBlockIdx() / AscendC::GetSubBlockNum() * GMM2::CORE_NUM_PER_GROUP) *
-                         WORKSPACE_STAGES * GMM2::SOFT_SYNC_SPACE_SIZE;
-        }
+        syncGmAddr = metaInfoGm + statusDataSpaceOffset + GMM2::SOFT_SYNC_OFFSET +
+                     (AscendC::GetBlockIdx() / AscendC::GetSubBlockNum() * GMM2::CORE_NUM_PER_GROUP) *
+                     WORKSPACE_STAGES * GMM2::SOFT_SYNC_SPACE_SIZE;
     }
 
     template <int32_t CORE_TYPE = g_coreType>
@@ -603,7 +596,7 @@ public:
                 combiner->TPipeSet(nullptr);
                 resource.pipe.Destroy();
             }
-        } else if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+        } else {
             // Restore the pre-combine receive event issued by the original non-round GMM2 path.
             if (AscendC::GetSubBlockIdx() == 0) {
                 AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
@@ -881,7 +874,6 @@ private:
     AicWaitFunc aicWaitFuncList[WORKSPACE_STAGES];
     AicSetFunc aicSetFuncList[WORKSPACE_STAGES];
     AscendC::GlobalTensor<GM_ADDR> epWinContext_;
-    __gm__ HcclOpResParam *winContext_;
     GM_ADDR syncGmAddr;
     Arch::Resource<ArchTag> resource;
 };

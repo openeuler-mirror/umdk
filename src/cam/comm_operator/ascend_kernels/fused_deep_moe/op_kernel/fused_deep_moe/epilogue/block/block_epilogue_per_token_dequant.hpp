@@ -225,44 +225,40 @@ public:
         ubOffset += TileShape::ROW * BYTE_PER_BLK;
         ubPerTokenMul = ubCFp32;
 
-        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            AlignUbOffset();
-            epSendCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-            ubOffset += calcInfo.moeSendNum_ * sizeof(int32_t);
-            AlignUbOffset();
-            AscendC::GlobalTensor<int32_t> epSendCountGM;
-            epSendCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.epSendCount_);
-            uint32_t epSendCountSize = calcInfo.moeSendNum_;
-            AscendC::DataCopyExtParams epSendCntParams = {1U, static_cast<uint32_t>(epSendCountSize * sizeof(uint32_t)),
-                                                          0U, 0U, 0U};
-            AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
-            AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM, epSendCntParams, copyPadParams);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
+        AlignUbOffset();
+        epSendCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += calcInfo.moeSendNum_ * sizeof(int32_t);
+        AlignUbOffset();
+        AscendC::GlobalTensor<int32_t> epSendCountGM;
+        epSendCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.epSendCount_);
+        uint32_t epSendCountSize = calcInfo.moeSendNum_;
+        AscendC::DataCopyExtParams epSendCntParams = {1U, static_cast<uint32_t>(epSendCountSize * sizeof(uint32_t)),
+                                                      0U, 0U, 0U};
+        AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
+        AscendC::DataCopyPad(epSendCountLocal_, epSendCountGM, epSendCntParams, copyPadParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
 
-            if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-                AlignUbOffset();
-                ShmemCalRecv(ubOffset, calcInfo.allEpRecvCount_, calcInfo.allExpertTokenNums_);
+        AlignUbOffset();
+        ShmemCalRecv(ubOffset, calcInfo.allEpRecvCount_, calcInfo.allExpertTokenNums_);
 
-                AlignUbOffset();
-                allEpRecvCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-                ubOffset += calcInfo.epWorldSize_ * calcInfo.moeExpertNum_ *sizeof(uint32_t);
-                AlignUbOffset();
-                AscendC::GlobalTensor<int32_t> allEpRecvCountGM;
-                allEpRecvCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.allEpRecvCount_);
-                uint32_t allEpRecvCountSize = calcInfo.epWorldSize_ * calcInfo.moeExpertNum_;
-                AscendC::DataCopyExtParams allEpRecvCountParams = {
-                    1U,
-                    static_cast<uint32_t>(allEpRecvCountSize * sizeof(uint32_t)),
-                    0U,
-                    0U,
-                    0U
-                };
-                AscendC::DataCopyPad(allEpRecvCountLocal_, allEpRecvCountGM, allEpRecvCountParams, copyPadParams);
-                AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-                AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
-            }
-        }
+        AlignUbOffset();
+        allEpRecvCountLocal_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += calcInfo.epWorldSize_ * calcInfo.moeExpertNum_ *sizeof(uint32_t);
+        AlignUbOffset();
+        AscendC::GlobalTensor<int32_t> allEpRecvCountGM;
+        allEpRecvCountGM.SetGlobalBuffer((__gm__ int32_t *)calcInfo.allEpRecvCount_);
+        uint32_t allEpRecvCountSize = calcInfo.epWorldSize_ * calcInfo.moeExpertNum_;
+        AscendC::DataCopyExtParams allEpRecvCountParams = {
+            1U,
+            static_cast<uint32_t>(allEpRecvCountSize * sizeof(uint32_t)),
+            0U,
+            0U,
+            0U
+        };
+        AscendC::DataCopyPad(allEpRecvCountLocal_, allEpRecvCountGM, allEpRecvCountParams, copyPadParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(eventMTE2S);
     }
 
     CATLASS_DEVICE
@@ -280,59 +276,6 @@ public:
     void UpdateParams(Params const &params_)
     {
         params = params_;
-    }
-
-    CATLASS_DEVICE GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t expertLocalId = 0U)
-    {
-        return (GM_ADDR)((calcInfo.epRankId_ == rankId) ?
-                             calcInfo.epWinContext_->localWindowsIn :
-                             ((HcclRankRelationResV2 *)(calcInfo.epWinContext_->remoteRes[rankId].nextDevicePtr))
-                                 ->windowsIn) +
-               calcInfo.winDataSizeOffset_ + expertLocalId * calcInfo.expertPerSizeOnWin_ + rankId * OPT_RANK_OFFSET;
-    }
-
-    CATLASS_DEVICE void SetCombineSendEpRank(uint32_t epRank, uint32_t &remoteEpRank, uint32_t &localEpRank)
-    {
-        remoteEpRank = epRank;
-        localEpRank = calcInfo.epRankId_;
-    }
-
-    CATLASS_DEVICE void DoCombineSend(AscendC::LocalTensor<ElementD> &ubD, layout::RowMajor &layoutGmTileD,
-                                      LayoutD &layoutUbD, int64_t groupOffsetD, uint32_t expertIdx,
-                                      uint32_t tileOffsetD)
-    {
-        const uint32_t copyTokenLen = layoutGmTileD.shape(1) * sizeof(ElementD);
-        const uint32_t copyTokenSrcStride =
-            (layoutUbD.stride(0) - layoutUbD.shape(1)) / (BYTE_PER_C0 / sizeof(ElementD));
-        const uint32_t copyTokenDstStride = (layoutGmTileD.stride(0) - layoutGmTileD.shape(1)) * sizeof(ElementD);
-
-        int64_t offsetD = groupOffsetD + tileOffsetD;
-        uint32_t startToken = offsetD / calcInfo.axisH_;
-        uint32_t tokenOffset = offsetD - startToken * calcInfo.axisH_;
-        uint32_t itToken = startToken;
-        uint32_t endToken = startToken + layoutGmTileD.shape(0);
-        constexpr uint32_t epRankStart = 0;
-        uint32_t sendCount =
-            expertIdx == 0 && epRankStart == 0 ? 0 : epSendCountLocal_.GetValue(expertOffset + epRankStart - 1);
-        for (uint32_t epRank = epRankStart; epRank < calcInfo.epWorldSize_ && itToken < endToken; ++epRank) {
-            uint32_t prevSendCount = sendCount;
-            sendCount = epSendCountLocal_.GetValue(expertOffset + epRank);
-            if (prevSendCount <= itToken && itToken < sendCount) {
-                uint32_t copyTokenCount = (sendCount < endToken ? sendCount : endToken) - itToken;
-                AscendC::DataCopyExtParams dataCopyParams(copyTokenCount, copyTokenLen, copyTokenSrcStride,
-                                                          copyTokenDstStride, 0);
-                uint32_t remoteEpRank;
-                uint32_t localEpRank;
-                SetCombineSendEpRank(epRank, remoteEpRank, localEpRank);
-                GM_ADDR rankGM = GetWinAddrByRankId(remoteEpRank, expertIdx) +
-                                 localEpRank * calcInfo.moeExpertPerRankNum_ * calcInfo.expertPerSizeOnWin_;
-                AscendC::GlobalTensor<ElementD> rankWindow;
-                rankWindow.SetGlobalBuffer((__gm__ ElementD *)rankGM);
-                AscendC::DataCopyPad(rankWindow[(itToken - prevSendCount) * calcInfo.axisH_ + tokenOffset],
-                                     ubD[(itToken - startToken) * layoutUbD.stride(0)], dataCopyParams);
-                itToken += copyTokenCount;
-            }
-        }
     }
 
     // tile粒度的发送
@@ -386,9 +329,7 @@ public:
             return;
         }
 
-        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            expertOffset = expertIdx * calcInfo.epWorldSize_;
-        }
+        expertOffset = expertIdx * calcInfo.epWorldSize_;
 
         // W4A8 constants
         constexpr float DEFAULT_MUL_SCALE = 16.0f;
@@ -611,24 +552,17 @@ public:
 
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(eventUbDVMTE3List[ubListId]);
 
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                if (expertIdx == UINT32_MAX) {
-                    auto gmTileD = gmD[tileOffsetD];
-                    copyUbToGmD(gmTileD, ubD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD);
-                } else if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-                    ShmemDoCombineSend(ubD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD,
-                        groupOffsetD, expertIdx, tileOffsetD,
-                        calcInfo.combineSend_);
-                } else {
-                    DoCombineSend(ubD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
-                        (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD,
-                        groupOffsetD, expertIdx, tileOffsetD);
-                }
+            if (expertIdx == UINT32_MAX) {
+                auto gmTileD = gmD[tileOffsetD];
+                copyUbToGmD(gmTileD, ubD,
+                    (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
+                    (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD);
+            } else {
+                ShmemDoCombineSend(ubD,
+                    (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutGmTileD : layoutGmTileD,
+                    (EXEC_FLAG & EXEC_FLAG_W4A8) ? newlayoutUbD : layoutUbD,
+                    groupOffsetD, expertIdx, tileOffsetD,
+                    calcInfo.combineSend_);
             }
 
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(eventUbDMTE3VList[ubListId]);

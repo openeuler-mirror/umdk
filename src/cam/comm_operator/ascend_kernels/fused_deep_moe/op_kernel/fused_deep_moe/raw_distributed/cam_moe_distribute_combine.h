@@ -46,15 +46,12 @@ __aicore__ inline void SyncFunc()
 using namespace AscendC;
 
 struct CombineCalcInfo {
-    uint64_t expertPerSizeOnWin_;
     uint32_t epRankId_;
     uint32_t epWorldSize_;
     uint32_t moeExpertPerRankNum_;
     uint32_t axisH_;
     uint32_t moeSendNum_;
     GM_ADDR epSendCount_;
-    __gm__ HcclOpResParam *epWinContext_;
-    uint64_t winDataSizeOffset_;
     uint32_t aivNum_;
     uint32_t moeExpertNum_;
     GM_ADDR metaInfoGm_;
@@ -92,7 +89,6 @@ private:
     __aicore__ inline void InitStatusTargetSum();
     __aicore__ inline void AlltoAllBuffInit();
     __aicore__ inline void ReduceScatterTrans();
-    __aicore__ inline void LocalWindowCopy();
     __aicore__ inline void LocalShmemCopy();
     __aicore__ inline void BuffInit();
     __aicore__ inline void SplitCoreCal();
@@ -201,7 +197,6 @@ private:
     // 读：reduce copy前的CamMoeDistributeCombine中
     GlobalTensor<ExpandIdxType> allEpRecvCountGM_;
     GM_ADDR workspaceGM_;
-    GM_ADDR epWindowGM_;
     GM_ADDR epStatusSpaceGm_;
     GM_ADDR tpWindowGM_;
     GM_ADDR tpStatusSpaceGm_;
@@ -242,7 +237,6 @@ private:
     uint32_t endIndex_{0};
     __gm__ HcclOpResParam *epWinContext_{nullptr};
     __gm__ HcclOpResParam *tpWinContext_{nullptr};
-    uint32_t epDataOffsetOnWin_{0};
     uint32_t tpDataOffsetOnWin_{0};
     uint32_t epStateOffsetOnWin_{0};
     uint32_t tpStateOffsetOnWin_{0};
@@ -257,7 +251,6 @@ private:
     uint32_t stateOffset_{0};
     uint64_t winDataSizeOffset_{0};
     uint64_t expertPerSizeOnWin_{0};
-    uint64_t totalWinSize_{0};
     // statusDataSpace在metaInfo中的偏移
     uint64_t statusDataSpaceOffset_{0};
     TQueBind<QuePosition::VECIN, QuePosition::VECOUT, 1> moeQueue_;
@@ -299,16 +292,10 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     tpipe_ = pipe;
     coreIdx_ = GetBlockIdx();
     epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
-    auto contextGM0 = AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
     GlobalTensor<int32_t> selfDataStatusTensor;
     GM_ADDR statusDataSpaceGm;
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        metaInfoGm_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.metaInfoPtr);
-        statusDataSpaceGm = metaInfoGm_ + statusDataSpaceOffset;
-    } else {
-        epWinContext_ = (__gm__ HcclOpResParam *)contextGM0;
-        statusDataSpaceGm = (GM_ADDR)epWinContext_->localWindowsExp;
-    }
+    metaInfoGm_ = (GM_ADDR)(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.metaInfoPtr);
+    statusDataSpaceGm = metaInfoGm_ + statusDataSpaceOffset;
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
     __asm__ __volatile__("");
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
@@ -340,11 +327,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.h;
     axisK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
-    } else {
-        aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aivNum;
-    }
+    aivNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
     ubSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalUbSize;
     moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
     moeExpertPerRankNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
@@ -353,20 +336,13 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     moeSendNum_ = epWorldSize_ * moeExpertPerRankNum_;
     tpWorldSize_ = 1;
     tpRankId_ = 0;
-    totalWinSize_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.totalWinSize;
     stateOffset_ = (moeSendNum_ > 512) ? (STATE_OFFSET / 2) : STATE_OFFSET;
     expertPerSizeOnWin_ =
         static_cast<uint64_t>(axisMaxBs_) * static_cast<uint64_t>(axisH_) * static_cast<uint64_t>(sizeof(ExpandXType));
     winDataSizeOffset_ = static_cast<uint64_t>(dataState_) * static_cast<uint64_t>(moeSendNum_) * expertPerSizeOnWin_;
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        statusDataSpaceOffset_ = statusDataSpaceOffset;
-        epStatusSpaceGm_ = GetShmemStateAddrByRankId(epRankId_);
-    } else {
-        epWindowGM_ = GetWinAddrByRankId(epRankId_, EP_DOMAIN);
-        epStatusSpaceGm_ = GetWinStateAddrByRankId(epRankId_, EP_DOMAIN);
-    }
+    statusDataSpaceOffset_ = statusDataSpaceOffset;
+    epStatusSpaceGm_ = GetShmemStateAddrByRankId(epRankId_);
     epStatusSpaceGlobalTensor_.SetGlobalBuffer((__gm__ float *)epStatusSpaceGm_);
-    epDataOffsetOnWin_ = epRankId_ * moeExpertPerRankNum_ * static_cast<uint32_t>(expertPerSizeOnWin_);
     epStateOffsetOnWin_ = epRankId_ * stateOffset_;
     axisHFloatSize_ = axisH_ * sizeof(float);
     axisHExpandXTypeSize_ = axisH_ * sizeof(ExpandXType);
@@ -385,20 +361,15 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     }
 
     InitStatusTargetSum();
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
-        coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum(); // AscendC::GetBlockIdx() / 2;
-    }
+    coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
     SplitCoreCal();
 
     calcInfo_.epRankId_ = epRankId_;
     calcInfo_.epWorldSize_ = epWorldSize_;
-    calcInfo_.expertPerSizeOnWin_ = expertPerSizeOnWin_;
     calcInfo_.moeExpertPerRankNum_ = moeExpertPerRankNum_;
     calcInfo_.axisH_ = axisH_;
     calcInfo_.moeSendNum_ = moeSendNum_;
     calcInfo_.epSendCount_ = epSendCount;
-    calcInfo_.epWinContext_ = epWinContext_;
-    calcInfo_.winDataSizeOffset_ = winDataSizeOffset_;
     calcInfo_.aivNum_ = aivNum_;
     calcInfo_.moeExpertNum_ = moeExpertNum_;
     calcInfo_.metaInfoGm_ = metaInfoGm_;
@@ -482,10 +453,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     }
 
     uint32_t localTokenNum = endIndex_ - beginIndex_;
-    uint32_t bufferTokenNum = localTokenNum;
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        bufferTokenNum = MIN(bufferTokenNum, SHMEM_COMBINE_TOKEN_CHUNK);
-    }
+    uint32_t bufferTokenNum = MIN(localTokenNum, SHMEM_COMBINE_TOKEN_CHUNK);
     uint32_t localBsKSize = bufferTokenNum * axisK_;
     uint32_t localBsKSizeAligned = Ceil(localBsKSize * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;
 
@@ -590,11 +558,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::SetStatus()
     SyncFunc<AscendC::HardEvent::S_MTE3>();
 
     for (uint32_t epIdx = startRankId_; epIdx < endRankId_; epIdx++) {
-        if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-            stateGM_ = GetShmemStateAddrByRankId(epIdx) + epStateOffsetOnWin_;
-        } else {
-            stateGM_ = GetWinStateAddrByRankId(epIdx, EP_DOMAIN) + epStateOffsetOnWin_;
-        }
+        stateGM_ = GetShmemStateAddrByRankId(epIdx) + epStateOffsetOnWin_;
         rankStates_.SetGlobalBuffer((__gm__ int32_t *)stateGM_);
         DataCopy(rankStates_, statusFlagUb, 8);
     }
@@ -638,98 +602,6 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitDispatc
 
     AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(RECV_SYNC_EVENT_ID);
     AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
-}
-
-template <TemplateMC2TypeClass>
-__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindowCopy()
-{
-    if (activeMaskBsCnt_ == 0U) {
-        return;
-    }
-    uint32_t beginIndex = 0;
-    uint32_t endIndex = 0;
-    uint32_t processLen = 0;
-    uint32_t tokenOffset = 0;
-    if (activeMaskBsCnt_ < aivNum_) {
-        uint32_t aivNumPerToken = aivNum_ / activeMaskBsCnt_;  // activeMaskBsCnt_ < aivNum_
-        if (coreIdx_ >= (activeMaskBsCnt_ * aivNumPerToken)) {
-            return;
-        }
-        uint32_t tokenIndex = coreIdx_ / aivNumPerToken;
-        processLen = ((axisH_ / UB_ALIGN) / aivNumPerToken) * UB_ALIGN;
-        tokenOffset = processLen * (coreIdx_ % aivNumPerToken);
-        if ((coreIdx_ % aivNumPerToken) == (aivNumPerToken - 1)) {
-            processLen = axisH_ - ((aivNumPerToken - 1) * processLen);
-        }
-        beginIndex = tokenIndex;
-        endIndex = beginIndex + 1U;
-    } else {
-        uint32_t tokenPerAivNum = activeMaskBsCnt_ / aivNum_;
-        uint32_t remainderToken = activeMaskBsCnt_ % aivNum_;
-        beginIndex = tokenPerAivNum * coreIdx_;
-        if (coreIdx_ < remainderToken) {
-            tokenPerAivNum++;
-            beginIndex = tokenPerAivNum * coreIdx_;
-        } else {
-            beginIndex += remainderToken;
-        }
-        endIndex = beginIndex + tokenPerAivNum;
-        processLen = axisH_;
-    }
-    LocalTensor<ExpandIdxType> expertIdsLocal = expertIdsBuf_.Get<ExpandIdxType>();
-    LocalTensor<float> expandScalesLocal = expandScalesBuf_.Get<float>();
-
-    LocalTensor<float> rowTmpFloatLocal = rowTmpFloatBuf_.Get<float>();
-    LocalTensor<float> mulBufLocal = mulBuf_.Get<float>();
-    LocalTensor<float> sumFloatBufLocal = sumFloatBuf_.Get<float>();
-
-    LocalTensor<ExpandIdxType> indexCountsLocal = indexCountsBuf_.Get<ExpandIdxType>();
-    const DataCopyExtParams bskParams = {1U, static_cast<uint32_t>(bsKNum_ * sizeof(uint32_t)), 0U, 0U, 0U};
-    const DataCopyPadExtParams<ExpandIdxType> copyPadParams{false, 0U, 0U, 0U};
-    const DataCopyPadExtParams<float> copyPadFloatParams{false, 0U, 0U, 0U};
-
-    DataCopyPad(indexCountsLocal, expandIdxGM_, bskParams, copyPadParams);
-    DataCopyPad(expertIdsLocal, expertIdsGM_, bskParams, copyPadParams);
-    DataCopyPad(expandScalesLocal, expandScalesGM_, bskParams, copyPadFloatParams);
-    SyncFunc<AscendC::HardEvent::MTE2_S>();
-
-    for (uint32_t tokenIndex = beginIndex; tokenIndex < endIndex; tokenIndex++) {
-        uint32_t index = tokenIndex * axisK_;
-        SyncFunc<AscendC::HardEvent::MTE3_V>();
-        Duplicate(sumFloatBufLocal, (float)0, axisH_);
-        for (uint32_t i = 0; i < axisK_; i++) {
-            int32_t moeExpert = expertIdsLocal.GetValue(index);
-            if (moeExpert < 0) {
-                index++;
-                continue;
-            }
-            float scaleVal = expandScalesLocal.GetValue(index);
-            GM_ADDR wAddr = (__gm__ uint8_t *)(epWindowGM_) +
-                            expertPerSizeOnWin_ * moeExpert +
-                            indexCountsLocal.GetValue(index) * axisHExpandXTypeSize_ +
-                            tokenOffset * sizeof(ExpandXType);
-            rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)wAddr);
-            ExpandXType val = rowTmpGlobal_.GetValue(0);
-            LocalTensor<ExpandXType> tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
-            DataCopy(tmpUb, rowTmpGlobal_, processLen);
-            moeSumQueue_.EnQue(tmpUb);
-            tmpUb = moeSumQueue_.DeQue<ExpandXType>();
-            Cast(rowTmpFloatLocal, tmpUb, AscendC::RoundMode::CAST_NONE, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Muls(mulBufLocal, rowTmpFloatLocal, scaleVal, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, mulBufLocal, processLen);
-            index++;
-            moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
-        }
-        LocalTensor<ExpandXType> rowTmpLocal = tokenBuf_.Get<ExpandXType>();
-
-        AscendC::PipeBarrier<PIPE_V>();
-        LocalTensor<ExpandXType> sumBufLocal = tokenBuf_.Get<ExpandXType>();
-        Cast(sumBufLocal, sumFloatBufLocal, AscendC::RoundMode::CAST_RINT, processLen);
-        SyncFunc<AscendC::HardEvent::V_MTE3>();
-        DataCopy(expandOutGlobal_[tokenIndex * axisH_ + tokenOffset], sumBufLocal, processLen);
-    }
 }
 
 template <TemplateMC2TypeClass>
@@ -846,17 +718,11 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermu
     AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
 
     WaitDispatch();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        LocalShmemCopy();
-    } else {
-        LocalWindowCopy();
-    }
+    LocalShmemCopy();
 
     AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
 
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        ShmemCleanUp();
-    }
+    ShmemCleanUp();
 }
 
 template <TemplateMC2TypeClass>
@@ -867,15 +733,9 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ProcessComb
     AlltoAllBuffInit();
     SetStatus();
     WaitDispatch();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        LocalShmemCopy();
-    } else {
-        LocalWindowCopy();
-    }
+    LocalShmemCopy();
 
-    if constexpr (EXEC_FLAG & EXEC_FLAG_ZERO_BUFFER) {
-        ShmemCleanUp();
-    }
+    ShmemCleanUp();
 }
 }  // namespace MoeDistributeCombineImpl
 

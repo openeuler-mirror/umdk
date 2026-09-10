@@ -890,17 +890,16 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     if (calShareExpert) {
         tilingKey |= EXEC_FLAG_SHARED_EXPERT;
     }
-    // 只支持深融合：即使 localExpertNum == 1 也走深融合流程
-    tilingKey |= EXEC_FLAG_DEEP_FUSE;
     if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.isTensorList) {
         tilingKey |= EXEC_FLAG_TENSOR_LIST;
     }
     if (expertSmoothScalesExist) {
         tilingKey |= EXEC_FLAG_SMOOTH_QUANT;
     }
-    if (tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr != 0) {
-        tilingKey |= EXEC_FLAG_ZERO_BUFFER;
-    }
+    // ZERO_BUFFER 为唯一支持的模式，默认不支持非 ZERO_BUFFER 的 tiling
+    OPS_ERR_IF(tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shmemWorkspacePtr == 0,
+                    OPS_LOG_E(nodeName, "shmemWorkspacePtr must be non-zero, only ZERO_BUFFER mode is supported."),
+                    return ge::GRAPH_FAILED);
     // W4A8: detect by bias input existence
     if (CheckOptionalInputExist(context, INPUT_GMM1_BIAS_INDEX)) {
         tilingKey |= EXEC_FLAG_W4A8;

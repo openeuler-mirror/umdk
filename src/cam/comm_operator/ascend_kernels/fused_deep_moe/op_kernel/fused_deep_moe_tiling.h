@@ -79,12 +79,10 @@ constexpr uint32_t GMM2_SWIZZLE_DIRECTION = 0;
 
 constexpr uint32_t WORKSPACE_STAGES = 4;
 
-constexpr uint32_t EXEC_FLAG_DEEP_FUSE = (1U << 0);
-constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 1);
-constexpr uint32_t EXEC_FLAG_X_ACTIVE_MASK = (1U << 2);
-constexpr uint32_t EXEC_FLAG_SHARED_EXPERT = (1U << 3);
-constexpr uint32_t EXEC_FLAG_SMOOTH_QUANT = (1U << 4);
-constexpr uint32_t EXEC_FLAG_ZERO_BUFFER = (1U << 5);
-constexpr uint32_t EXEC_FLAG_W4A8 = (1U << 6);
+constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 0);
+constexpr uint32_t EXEC_FLAG_X_ACTIVE_MASK = (1U << 1);
+constexpr uint32_t EXEC_FLAG_SHARED_EXPERT = (1U << 2);
+constexpr uint32_t EXEC_FLAG_SMOOTH_QUANT = (1U << 3);
+constexpr uint32_t EXEC_FLAG_W4A8 = (1U << 4);
 } // namespace Cam
 #endif  // FUSED_DEEP_MOE_TILING_H
