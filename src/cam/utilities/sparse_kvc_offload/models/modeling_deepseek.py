@@ -685,6 +685,19 @@ class _GatherSfaPipelineInputs(NamedTuple):
     q_len: int
 
 
+class _GsfaFusedInputs(NamedTuple):
+    q_nope: torch.Tensor
+    q_pe: torch.Tensor
+    topk_indices: torch.Tensor
+    full_kv_cache: torch.Tensor
+    block_table: torch.Tensor
+    actual_seq_lengths_kv: torch.Tensor
+    actual_seq_qlen: torch.Tensor
+    offload_cache: "OffloadCache"
+    bsz: int
+    q_len: int
+
+
 class DeepseekIndexerAttention(nn.Module):
     def __init__(self, config: DeepseekV3Config, runner_settings: Dict, layer_idx: Optional[int] = None,
                  prefix: Optional[str] = "", **kwargs):
@@ -1358,11 +1371,10 @@ class DeepseekIndexerAttention(nn.Module):
         if self._use_gsfa_fused_offload(is_prefill):
             # GSFA 融合算子: 一次完成 gather(H2D) + KV 量化 SparseFlashAttention
             full_kv_cache = k_nope  # [P, block_size, 1, D_packed]
-            slc_fa_fusion = self._apply_gsfa_fused(
-                q_nope, q_pe, topk_indices,
-                full_kv_cache, block_table,
-                actual_seq_lengths_kv, actual_seq_qlen,
-                offload_cache, bsz, q_len)
+            slc_fa_fusion = self._apply_gsfa_fused(_GsfaFusedInputs(
+                q_nope, q_pe, topk_indices, full_kv_cache,
+                block_table, actual_seq_lengths_kv, actual_seq_qlen,
+                offload_cache, bsz, q_len))
             return slc_fa_fusion.transpose(0, 1)
 
         if self._use_dual_stream_offload(is_prefill):
@@ -1477,19 +1489,7 @@ class DeepseekIndexerAttention(nn.Module):
             and self.kv_cache_quant_mode == "int8"
         )
 
-    def _apply_gsfa_fused(
-        self,
-        q_nope,
-        q_pe,
-        topk_indices,
-        full_kv_cache,
-        block_table,
-        actual_seq_lengths_kv,
-        actual_seq_qlen,
-        offload_cache,
-        bsz,
-        q_len,
-    ):
+    def _apply_gsfa_fused(self, inputs: _GsfaFusedInputs):
         """使用 GSFA 融合算子替代 gather_selection_kv_cache + npu_kv_quant_sparse_flash_attention 两阶段调用。
 
         仅支持 W*A*C8 (kv_cache int8) + offload decode 场景。融合算子内部完成:
@@ -1501,6 +1501,16 @@ class DeepseekIndexerAttention(nn.Module):
 
         与现有非融合分支/双流分支输出形状保持一致 (transpose 前为 TND), 调用方再 .transpose(0,1)。
         """
+        q_nope = inputs.q_nope
+        q_pe = inputs.q_pe
+        topk_indices = inputs.topk_indices
+        full_kv_cache = inputs.full_kv_cache
+        block_table = inputs.block_table
+        actual_seq_lengths_kv = inputs.actual_seq_lengths_kv
+        offload_cache = inputs.offload_cache
+        bsz = inputs.bsz
+        q_len = inputs.q_len
+
         selection_kv_cache = offload_cache.selected_key_values[self.layer_idx][0]
         selection_kv_block_table = offload_cache.selection_kv_block_table[self.layer_idx]
         selection_kv_block_status = offload_cache.selection_kv_block_status[self.layer_idx]
