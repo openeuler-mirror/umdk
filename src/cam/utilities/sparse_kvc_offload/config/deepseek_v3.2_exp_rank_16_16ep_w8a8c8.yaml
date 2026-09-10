@@ -16,6 +16,7 @@ model_config:
   enable_online_split_weight: True # [False, True]
   enable_offload: True
   enable_dual_stream_offload: False # [False, True] offload decode 时 gather(H2D) 与 SFA 计算双流重叠, 仅 eager 生效
+  enable_gsfa_fused_offload: False # [False, True] offload decode 时使用 GSFA 融合算子 (gather + KV量化 SFA), 仅 W*A*C8 生效; 与 dual_stream 互斥
 
 data_config:
   dataset: InfiniteBench
