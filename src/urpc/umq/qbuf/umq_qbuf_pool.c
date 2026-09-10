@@ -3682,20 +3682,21 @@ umq_buf_mode_t umq_qbuf_mode_get(void)
  * Copy timing stats from a single expansion pool into DFX snapshot via atomic reads.
  * Works for both umq_expansion_pool_stats_t and umq_qbuf_sc_info_t (same timing sub-struct).
  *
- * @param dst DFX snapshot timing field (umq_timing_stats_t*)
+ * @param dst DFX snapshot timing field (umq_dfx_timing_stats_t*)
  * @param src source expansion pool (qbuf_expansion_pool_t*)
  */
-#define DFX_COPY_TIMING(dst, src) do { \
-    (dst)->wait_async_expand_count = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_count, __ATOMIC_RELAXED); \
-    (dst)->wait_async_expand_total_us = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_total_us, __ATOMIC_RELAXED); \
-    (dst)->wait_async_expand_max_us = __atomic_load_n(&(src)->fetch_timing.wait_async_expand_max_us, __ATOMIC_RELAXED); \
-    (dst)->sync_expand_count = __atomic_load_n(&(src)->fetch_timing.sync_expand_count, __ATOMIC_RELAXED); \
-    (dst)->sync_expand_total_us = __atomic_load_n(&(src)->fetch_timing.sync_expand_total_us, __ATOMIC_RELAXED); \
-    (dst)->sync_expand_max_us = __atomic_load_n(&(src)->fetch_timing.sync_expand_max_us, __ATOMIC_RELAXED); \
-    (dst)->fetch_total_count = __atomic_load_n(&(src)->fetch_timing.fetch_total_count, __ATOMIC_RELAXED); \
-    (dst)->fetch_total_us = __atomic_load_n(&(src)->fetch_timing.fetch_total_us, __ATOMIC_RELAXED); \
-    (dst)->fetch_max_us = __atomic_load_n(&(src)->fetch_timing.fetch_max_us, __ATOMIC_RELAXED); \
-} while (0)
+static void dfx_copy_timing(umq_dfx_timing_stats_t *dst, qbuf_expansion_pool_t *src)
+{
+    dst->wait_async_expand_count = __atomic_load_n(&src->fetch_timing.wait_async_expand_count, __ATOMIC_RELAXED);
+    dst->wait_async_expand_total_us = __atomic_load_n(&src->fetch_timing.wait_async_expand_total_us, __ATOMIC_RELAXED);
+    dst->wait_async_expand_max_us = __atomic_load_n(&src->fetch_timing.wait_async_expand_max_us, __ATOMIC_RELAXED);
+    dst->sync_expand_count = __atomic_load_n(&src->fetch_timing.sync_expand_count, __ATOMIC_RELAXED);
+    dst->sync_expand_total_us = __atomic_load_n(&src->fetch_timing.sync_expand_total_us, __ATOMIC_RELAXED);
+    dst->sync_expand_max_us = __atomic_load_n(&src->fetch_timing.sync_expand_max_us, __ATOMIC_RELAXED);
+    dst->fetch_total_count = __atomic_load_n(&src->fetch_timing.fetch_total_count, __ATOMIC_RELAXED);
+    dst->fetch_total_us = __atomic_load_n(&src->fetch_timing.fetch_total_us, __ATOMIC_RELAXED);
+    dst->fetch_max_us = __atomic_load_n(&src->fetch_timing.fetch_max_us, __ATOMIC_RELAXED);
+}
 
 int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
@@ -3814,7 +3815,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         sci->exp_slots = slot_cnt;
         sci->exp_free_blk = exp_free;
         sci->trigger_expand = e->trigger_expand_block_num;
-        DFX_COPY_TIMING(&sci->fetch_timing, e);
+        dfx_copy_timing(&sci->fetch_timing, e);
     }
 
     uint64_t total_buf_cnt_with_data = 0;
@@ -3916,7 +3917,7 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
         qbuf_pool_stats->exp_pool_without_data.exp_total_free_block_num = exp_without_data->exp_total_block_num;
         qbuf_pool_stats->exp_pool_without_data.total_expansion_count = exp_without_data->total_expansion_count;
         qbuf_pool_stats->exp_pool_without_data.total_shrink_count = exp_without_data->total_shrink_count;
-        DFX_COPY_TIMING(&qbuf_pool_stats->exp_pool_without_data.fetch_timing, exp_without_data);
+        dfx_copy_timing(&qbuf_pool_stats->exp_pool_without_data.fetch_timing, exp_without_data);
         qbuf_pool_stats->exp_pool_without_data.exp_total_block_num =
             exp_without_data->expansion_count * exp_without_data->expansion_block_count;
         qbuf_pool_stats->exp_pool_without_data.exp_total_mem_size =
@@ -4094,20 +4095,20 @@ bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc)
 
 /*
  * Record a timing stat: increment count, accumulate total, update max.
- * @param pool  qbuf_expansion_pool_t pointer
- * @param cnt   field name for count
- * @param tot   field name for total_us
- * @param mx    field name for max_us
- * @param val   value to record (microseconds)
+ * @param cnt  address of the count field
+ * @param tot  address of the total_us field
+ * @param mx   address of the max_us field
+ * @param val  value to record (microseconds)
  */
-#define RECORD_TIMING_STAT(pool, cnt, tot, mx, val) do { \
-    __atomic_fetch_add(&(pool)->fetch_timing.cnt, 1, __ATOMIC_RELAXED); \
-    __atomic_fetch_add(&(pool)->fetch_timing.tot, val, __ATOMIC_RELAXED); \
-    uint64_t _old_max = __atomic_load_n(&(pool)->fetch_timing.mx, __ATOMIC_RELAXED); \
-    if (val > _old_max) { \
-        __atomic_store_n(&(pool)->fetch_timing.mx, val, __ATOMIC_RELAXED); \
-    } \
-} while (0)
+static void record_timing_stat(uint64_t *cnt, uint64_t *tot, uint64_t *mx, uint64_t val)
+{
+    __atomic_fetch_add(cnt, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(tot, val, __ATOMIC_RELAXED);
+    uint64_t old_max = __atomic_load_n(mx, __ATOMIC_RELAXED);
+    if (val > old_max) {
+        __atomic_store_n(mx, val, __ATOMIC_RELAXED);
+    }
+}
 
 /*
  * Define a timing stat recording function.
@@ -4122,7 +4123,9 @@ void umq_qbuf_record_##name(bool with_data, uint32_t sc, uint64_t val) \
 { \
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] : \
                                                   &g_qbuf_pool.exp_pool_without_date; \
-    RECORD_TIMING_STAT(exp_pool, cnt, tot, mx, val); \
+    record_timing_stat(&exp_pool->fetch_timing.cnt, \
+                       &exp_pool->fetch_timing.tot, \
+                       &exp_pool->fetch_timing.mx, val); \
 }
 
 DEFINE_RECORD_TIMING_FUNC(wait_async_expand, wait_async_expand_count,
