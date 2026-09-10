@@ -685,6 +685,19 @@ class _GatherSfaPipelineInputs(NamedTuple):
     q_len: int
 
 
+class _GsfaFusedInputs(NamedTuple):
+    q_nope: torch.Tensor
+    q_pe: torch.Tensor
+    topk_indices: torch.Tensor
+    full_kv_cache: torch.Tensor
+    block_table: torch.Tensor
+    actual_seq_lengths_kv: torch.Tensor
+    actual_seq_qlen: torch.Tensor
+    offload_cache: "OffloadCache"
+    bsz: int
+    q_len: int
+
+
 class DeepseekIndexerAttention(nn.Module):
     def __init__(self, config: DeepseekV3Config, runner_settings: Dict, layer_idx: Optional[int] = None,
                  prefix: Optional[str] = "", **kwargs):
@@ -855,6 +868,16 @@ class DeepseekIndexerAttention(nn.Module):
         # offload decode 时把 gather(H2D) 与 SFA 计算按 batch 切成双流流水重叠 (仅 eager 生效)
         self.enable_dual_stream_offload = \
             self.runner_settings.get("model_config").get("enable_dual_stream_offload", False)
+        # offload decode 时使用 GSFA 融合算子, 一次完成 gather + KV 量化 SparseFlashAttention
+        # 仅 W*A*C8 (kv_cache int8) 生效; 与 enable_dual_stream_offload 互斥, 打开时 dual_stream 自动失效
+        self.enable_gsfa_fused_offload = \
+            self.runner_settings.get("model_config").get("enable_gsfa_fused_offload", False)
+        if self.enable_gsfa_fused_offload and self.enable_offload \
+                and self.kv_cache_quant_mode != "int8":
+            raise ValueError(
+                "enable_gsfa_fused_offload requires kv_cache int8 quant (W*A*C8), "
+                f"got kv_cache_quant_mode={self.kv_cache_quant_mode}"
+            )
         self.index_topk = self.config.index_topk
         self.last_dim = self.kv_lora_rank + self.qk_rope_head_dim * 2 + 4 * 4 \
             if self.kv_cache_quant_mode == "int8" else self.kv_lora_rank
@@ -1345,6 +1368,15 @@ class DeepseekIndexerAttention(nn.Module):
         q_pe = q_pe.contiguous().view(bsz * q_len, num_heads, -1) # B,S,N,D -> B*S,N,D
         block_table = self.prefill_block_table if is_prefill else self.block_table
 
+        if self._use_gsfa_fused_offload(is_prefill):
+            # GSFA 融合算子: 一次完成 gather(H2D) + KV 量化 SparseFlashAttention
+            full_kv_cache = k_nope  # [P, block_size, 1, D_packed]
+            slc_fa_fusion = self._apply_gsfa_fused(_GsfaFusedInputs(
+                q_nope, q_pe, topk_indices, full_kv_cache,
+                block_table, actual_seq_lengths_kv, actual_seq_qlen,
+                offload_cache, bsz, q_len))
+            return slc_fa_fusion.transpose(0, 1)
+
         if self._use_dual_stream_offload(is_prefill):
             # 双流流水: gather(H2D) 走专用流, 与主流 SFA 计算按 batch 切块重叠
             full_kv_cache = k_nope.squeeze(2)
@@ -1445,7 +1477,87 @@ class DeepseekIndexerAttention(nn.Module):
             and not is_prefill
             and self.enable_dual_stream_offload
             and self.exe_mode == "eager"
+            # GSFA 融合算子内部已完成 gather, 无需再用 dual_stream 与 SFA 重叠
+            and not self.enable_gsfa_fused_offload
         )
+
+    def _use_gsfa_fused_offload(self, is_prefill: bool) -> bool:
+        return (
+            self.enable_offload
+            and not is_prefill
+            and self.enable_gsfa_fused_offload
+            and self.kv_cache_quant_mode == "int8"
+        )
+
+    def _apply_gsfa_fused(self, inputs: _GsfaFusedInputs):
+        """使用 GSFA 融合算子替代 gather_selection_kv_cache + npu_kv_quant_sparse_flash_attention 两阶段调用。
+
+        仅支持 W*A*C8 (kv_cache int8) + offload decode 场景。融合算子内部完成:
+          1) 依据 selection_kv_block_status 与 selection_topk_indices, 从 Host full_kv_cache 中
+             gather 缺失的 KV token 到 device 上的 selection_kv_cache;
+          2) 更新 selection_kv_block_status (in-place, Tensor(a!/b!/c!) 语义) 并输出
+             selection_kv_actual_seq;
+          3) 用 KQSFA 完成稀疏注意力计算, 返回 attention 输出 [T, N, D-rope_head_dim]。
+
+        与现有非融合分支/双流分支输出形状保持一致 (transpose 前为 TND), 调用方再 .transpose(0,1)。
+        """
+        q_nope = inputs.q_nope
+        q_pe = inputs.q_pe
+        topk_indices = inputs.topk_indices
+        full_kv_cache = inputs.full_kv_cache
+        block_table = inputs.block_table
+        actual_seq_lengths_kv = inputs.actual_seq_lengths_kv
+        offload_cache = inputs.offload_cache
+        bsz = inputs.bsz
+        q_len = inputs.q_len
+
+        selection_kv_cache = offload_cache.selected_key_values[self.layer_idx][0]
+        selection_kv_block_table = offload_cache.selection_kv_block_table[self.layer_idx]
+        selection_kv_block_status = offload_cache.selection_kv_block_status[self.layer_idx]
+
+        # GSFA 以 layout_query='TND' 解析 sparse_indices / block_status: 期望 rank-3 [T, N, K(+1)],
+        # 其中 T=bsz*(1+next_n) 与 query 的 T 对齐, N=1 (KV head=1)。若沿用非融合分支的 BSND rank-4,
+        # 会把 GetAxisIdx(K/D, TND)=2 拿到错误的轴, 导致 tiling 报 "status last dim must be topk+1 (1)".
+        t_size = bsz * q_len
+        topk_indices_3d = topk_indices.contiguous().view(t_size, 1, self.index_topk)
+        # status 是 offload_cache 常驻张量, 融合算子会原地更新; 用 .view() 保证共享存储 (torch.full 初始化本身 contiguous)
+        selection_kv_block_status_3d = selection_kv_block_status.view(t_size, 1, self.index_topk + 1)
+
+        # int8 packed 场景下, 拼接 nope+rope 作为 TND 的 D = kv_lora_rank + rope_head_dim = 576
+        q = torch.cat([q_nope, q_pe], dim=-1).contiguous()
+
+        # selection_kv_cache 存储为 3D [P, block_size, D_packed]; GSFA 期望 4D [P, block_size, 1, D_packed]
+        # unsqueeze(2) 返回视图, 共享底层存储, 保证融合算子对 selection_kv_cache 的原地更新可见
+        selection_kv_cache_4d = selection_kv_cache.unsqueeze(2) \
+            if selection_kv_cache.dim() == 3 else selection_kv_cache
+
+        # 参考 test_gather_selection_sparse_flash_attention.py 中 _call_fused 的调用形式:
+        #   - actual_seq_lengths_query: TND 下每个 batch 累积 query 长度; decode 场景一 token/query
+        #   - full_kv_actual_seq: Host 全量 KV 的实际长度 (供内部 gather 定位)
+        attn_out, _selection_actual_seq = torch.ops.umdk_cam_op_lib.gather_selection_sparse_flash_attention(
+            q,
+            selection_kv_cache_4d,
+            selection_kv_block_table,
+            selection_kv_block_status_3d,
+            topk_indices_3d,
+            full_kv_cache,
+            block_table,
+            torch.arange(1, t_size + 1, dtype=torch.int32, device="npu"),
+            actual_seq_lengths_kv.to(torch.int32),
+            scale_value=self.softmax_scale,
+            key_quant_mode=2,
+            value_quant_mode=2,
+            sparse_block_size=1,
+            layout_query='TND',
+            layout_kv='PA_BSND',
+            sparse_mode=3,
+            attention_mode=2,
+            quant_scale_repo_mode=1,
+            tile_size=128,
+            rope_head_dim=self.qk_rope_head_dim,
+            selection_topk_block_size=1,
+        )
+        return attn_out
 
     def _gather_sfa_pipelined(self, inputs: _GatherSfaPipelineInputs):
         """offload decode 双流流水: 把 gather + SFA 按 batch 切成 2 块, gather(H2D) 走专用流,
