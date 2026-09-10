@@ -25,7 +25,7 @@ void dlock_set_log_level(int log_level);
     do {                                                           \
         dlock_log(__FUNCTION__, __LINE__, dbg_level, fmt, ##args); \
         if (!urma_log_drop(static_cast<urma_vlog_level_t>(dbg_level))) { \
-            urma_log(__FUNCTION__, __LINE__, static_cast<urma_vlog_level_t>(dbg_level), fmt, ##args); \
+            urma_log(__FILE_NAME__, __FUNCTION__, __LINE__, static_cast<urma_vlog_level_t>(dbg_level), fmt, ##args); \
         } \
     } while (0)
 

@@ -539,10 +539,6 @@ int ums_listen(struct socket *sock, int backlog)
 
 	inet_csk(ums->clcsock->sk)->icsk_af_ops = &ums->af_ops;
 
-	/* para 0 represents the server */
-	if (ums->ums_fastopen && (ums_clcsock_enable_fastopen(ums, 1) != 0))
-		ums->ums_fastopen = 0; /* rollback when setsockopt failed */
-
 	rc = kernel_listen(ums->clcsock, backlog);
 	if (rc != 0) {
 		write_lock_bh(&ums->clcsock->sk->sk_callback_lock);

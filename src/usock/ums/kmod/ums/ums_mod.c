@@ -312,8 +312,6 @@ static struct sock *ums_sock_alloc(struct net *net, struct socket *sock, int pro
 	init_rwsem(&ums->clcsock_release_lock);
 	ums_init_saved_callbacks(ums);
 
-	/* default behavior from every net namespace */
-	ums->ums_fastopen = 1; /* enable fast open currently */
 	return sk;
 }
 

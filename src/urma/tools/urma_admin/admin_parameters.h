@@ -298,11 +298,6 @@ typedef struct admin_config {
     uint8_t SL;
 } admin_config_t;
 
-int admin_str_to_eid(const char *buf, urma_eid_t *eid);
-int admin_str_to_u8(const char *buf, uint8_t *u8);
-int admin_str_to_u16(const char *buf, uint16_t *u16);
-int admin_str_to_u32(const char *buf, uint32_t *u32);
-int admin_str_to_u64(const char *buf, uint64_t *u64);
 
 int admin_parse_dev_name(char *buf, admin_config_t *cfg);
 int admin_parse_ns(char *buf, admin_config_t *cfg);

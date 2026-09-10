@@ -200,5 +200,10 @@ int check_args(ping_cfg_t *cfg)
         return -EINVAL;
     }
 
+    if (cfg->priority != PING_INVALID_PRIORITY && cfg->priority > URMA_MAX_PRIORITY) {
+        LOG_ERROR("Priority must be in range [0, %d]\n", URMA_MAX_PRIORITY);
+        return -EINVAL;
+    }
+
     return 0;
 }

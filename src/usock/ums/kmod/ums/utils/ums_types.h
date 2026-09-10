@@ -632,8 +632,6 @@ struct ums_sock { /* ums sock container */
 	bool limit_ums_hs;                  /* put constraint on handshake */
 	unsigned int autocorking_size;
 	unsigned int ums_buf_type;
-	/* enable UMS handshake proposal via tcp fastopen */
-	bool ums_fastopen;
 	bool use_fallback;      /* fallback to tcp */
 	int fallback_rsn;       /* fallback reason */
 	u32 peer_diagnosis;     /* decline reason from peer */

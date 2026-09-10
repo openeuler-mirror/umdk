@@ -16,8 +16,10 @@ extern "C" {
 #endif
 
 #define UMQ_PERF_HDR_MAX_PERCENTILE      (100.0)
-#define UMQ_PERF_HDR_DEFAULT_SIG_FIGURES (2)
-#define UMQ_PERF_HDR_DEFAULT_MAX_MS      (1000)
+// sig_figures 1: 6.25% accuracy and 3KB memory usage
+// sig_figures 2: 0.78% accuracy and 21KB memory usage
+#define UMQ_PERF_HDR_DEFAULT_SIG_FIGURES (1)
+#define UMQ_PERF_HDR_DEFAULT_MAX_MS      (100)
 /* ceil(sig * log2(10)) ≈ (sig * 10 + 2) / 3, without libm */
 #define UMQ_PERF_HDR_LOG2_10_NUM         (10)
 #define UMQ_PERF_HDR_LOG2_10_CEIL_BIAS   (2)
@@ -38,7 +40,7 @@ typedef struct umq_perf_hdr {
     uint64_t counts[0];
 } umq_perf_hdr_t;
 
-/* sig_figures is hardcoded to 2 (~0.78% relative error).
+/* sig_figures is hardcoded to 1 (~6.25% relative error).
  * max_value: highest trackable value in the same unit as record values.
  * Returns NULL on invalid params or OOM. */
 umq_perf_hdr_t *umq_perf_hdr_create(uint64_t max_value);

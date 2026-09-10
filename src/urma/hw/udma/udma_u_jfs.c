@@ -94,7 +94,7 @@ static bool udma_check_atomic_len(uint32_t len, uint8_t opcode)
 int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 			  struct udma_create_jetty_resp *resp)
 {
-	if (!sq->dtu_en && (!sq->sq_reserved || sq->cstm))
+	if (sq->cstm || (!sq->dtu_en && !sq->sq_reserved))
 		return 0;
 
 	if (resp->buf_addr == 0) {
@@ -991,7 +991,7 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 
 	if (udma_check_sge_num_and_opcode(wr->opcode, sq, wr, &wqe_info.opcode,
 					  udma_ctx->atomic_add_en)) {
-		UDMA_LOG_ERR("WR SGE number or opcode is invalid.\n");
+		UDMA_LOG_ERR("WR SGE number or opcode: %u is invalid.\n", wr->opcode);
 		return URMA_EINVAL;
 	}
 

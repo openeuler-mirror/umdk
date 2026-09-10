@@ -79,8 +79,8 @@ void util_vlog_output(util_vlog_ctx_t *ctx, util_vlog_level_t level, const char 
         len = snprintf(log_msg, UTIL_VLOG_SIZE, "[%s%s %ld]", ctx->vlog_name, g_log_type_to_str[type],
             syscall(__NR_gettid));
     } else {
-        len = snprintf(log_msg, UTIL_VLOG_SIZE, "[%s%s %ld]|%s[%d]|", ctx->vlog_name, g_log_type_to_str[type],
-            syscall(__NR_gettid), function, line);
+        len = snprintf(log_msg, UTIL_VLOG_SIZE, "[%s%s][%s:%s:%d][%ld][-]", ctx->vlog_name, g_log_type_to_str[type],
+            file, function, line, syscall(__NR_gettid));
     }
 
     if (len < 0 || len >= UTIL_VLOG_SIZE) {

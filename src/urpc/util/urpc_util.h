@@ -155,6 +155,7 @@ static inline uint64_t urpc_get_cpu_hz_aarch64(void)
 static inline uint64_t urpc_get_cpu_cycles(void)
 {
     uint64_t tsc;
+    asm volatile("isb" : : : "memory");
     asm volatile("mrs %0, cntvct_el0" : "=r"(tsc));
     return tsc;
 }

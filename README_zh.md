@@ -120,7 +120,7 @@ cd src/urma
 # x86_64 Release 包构建。
 ./urma_bazel.sh compile --config=release --config=x86_64 --define=build_udma=true
 
-# Debug + AddressSanitizer / LeakSanitizer。
+# Debug + AddressSanitizer / LeakSanitizer / UndefinedBehaviorSanitizer。
 ./urma_bazel.sh compile --config=debug --config=asan --define=build_udma=true
 
 # 开启 ThreadSanitizer，并启用周期性能统计。

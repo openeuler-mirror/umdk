@@ -90,12 +90,15 @@ BuildRoot     : %{_buildirootdir}/%{name}-%{version}-build
 buildArch     : x86_64 aarch64
 
 BuildRequires : rpm-build, make, cmake, gcc, gcc-c++, glibc-devel
+%if %{with asan}
+BuildRequires: libasan, libubsan
+%endif
 %if %{build_all} || %{with ums}
 BuildRequires : %{kernel_devel_pkg}
 %endif
 Requires: glibc, glib2
 %if %{with asan}
-Requires: libasan
+Requires: libasan, libubsan
 %endif
 %if %{with tsan}
 Requires: libtsan
@@ -387,7 +390,6 @@ fi
     %{_includedir}/ub/umdk/urma/uvs_types.h
     %{_includedir}/ub/umdk/urma/uvs_api.h
 %if %{with udma}
-    %{_libdir}/urma/liburma-udma.so
     %dir %{_includedir}/ub/umdk/urma/udma
     %{_includedir}/ub/umdk/urma/udma/udma_u_ctl.h
 %endif

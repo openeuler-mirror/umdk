@@ -148,6 +148,36 @@ static ALWAYS_INLINE uint32_t urpc_list_move_n(urpc_list_t *src, urpc_list_t *ds
     return count;
 }
 
+static ALWAYS_INLINE uint32_t urpc_list_move_n_front(urpc_list_t *src, urpc_list_t *dst, uint32_t n)
+{
+    if (urpc_list_is_empty(src) || n == 0) {
+        return 0;
+    }
+
+    struct urpc_list *last = src;
+    uint32_t count = 0;
+
+    while (last->next != src && count < n) {
+        last = last->next;
+        count++;
+    }
+
+    struct urpc_list *first = src->next;
+    struct urpc_list *node_after_last = last->next;
+    src->next = node_after_last;
+    node_after_last->prev = src;
+
+    if (count > 0) {
+        struct urpc_list *dst_head_next = dst->next;
+        dst->next = first;
+        first->prev = dst;
+        last->next = dst_head_next;
+        dst_head_next->prev = last;
+    }
+
+    return count;
+}
+
 #define URPC_LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
     for (INIT_CONTAINER_PTR(ITER, (LIST)->prev, MEMBER);                    \
          &(ITER)->MEMBER != (LIST);                                         \

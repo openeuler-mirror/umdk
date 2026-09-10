@@ -302,6 +302,7 @@ static void fill_dev_info(urpc_trans_info_t *dev_info, perftest_framework_config
 {
     uint32_t addr;
     dev_info->trans_mode = cfg->trans_mode;
+    int ret = 0;
     if (strlen(cfg->dev_name) != 0) {
         LOG_PRINT("urpc perftest init with dev: %s\n", cfg->dev_name);
         dev_info->assign_mode = DEV_ASSIGN_MODE_DEV;
@@ -313,7 +314,11 @@ static void fill_dev_info(urpc_trans_info_t *dev_info, perftest_framework_config
     } else if (inet_pton(AF_INET, cfg->local_ip, &addr) == 1) {
         LOG_PRINT("urpc perftest init with ipv4: %s\n", cfg->local_ip);
         dev_info->assign_mode = DEV_ASSIGN_MODE_IPV4;
-        memcpy(dev_info->ipv4.ip_addr, cfg->local_ip, strlen(cfg->local_ip));
+        ret = snprintf(dev_info->ipv4.ip_addr, URPC_IPV4_SIZE, "%s", cfg->local_ip);
+        if (ret < 0 || ret >= URPC_IPV4_SIZE) {
+            LOG_PRINT("snprintf ipv4 failed\n");
+            return;
+        }
     } else {
         LOG_PRINT("urpc perftest init with ipv6: %s\n", cfg->local_ip);
         dev_info->assign_mode = DEV_ASSIGN_MODE_IPV6;
@@ -359,7 +364,11 @@ static int urpc_perftest_server_client_start(perftest_framework_config_t *cfg)
         LOG_PRINT("urpc_perftest_server_client_start in ipv4 %s\n", cfg->local_ip);
         cp_cfg.server.server_type = SERVER_TYPE_IPV4;
         cp_cfg.server.ipv4.port = cfg->instance_mode == SERVER ? cfg->tcp_port : cfg->tcp_port - 1;
-        (void)strcpy(cp_cfg.server.ipv4.ip_addr, cfg->local_ip);
+        ret = snprintf(cp_cfg.server.ipv4.ip_addr, URPC_IPV4_SIZE, "%s", cfg->local_ip);
+        if (ret < 0 || ret >= URPC_IPV4_SIZE) {
+            LOG_PRINT("snprintf ipv4 failed\n");
+            return -1;
+        }
     } else {
         LOG_PRINT("urpc_perftest_server_client_start in ipv6 %s\n", cfg->local_ip);
         cp_cfg.server.server_type = SERVER_TYPE_IPV6;

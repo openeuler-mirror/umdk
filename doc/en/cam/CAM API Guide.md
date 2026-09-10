@@ -224,3 +224,148 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
  - Required: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale should be in the same mode
  - Required: share_gmm1_weight, share_gmm1_weight_scale, share_gmm2_weight, share_gmm2_weight_scale must exist at the same time if shared expert computation is enabled
  - Required: expert_smooth_scales must exist if routed expert smooth quantization is enabled, furthermore, share_smooth_scales must exist if shared expert computation is enabled
+
+#### 1.2 Zero-Buffer Dispatch & Combine Interfaces
+Zero-Buffer DeepEP-style Prefill interfaces based on SHMEM, callable in PyTorch eager mode. The logical pipeline is: `get_dispatch_layout_zb` → (internal notify +) `moe_dispatch_normal_zb` → expert compute → `moe_combine_normal_zb`. The recommended public entry on the current library is `umdk_cam_op_lib.ZbBuffer` (wrapping layout / dispatch / combine and managing SHMEM / `comm_meta_ptr`). The interfaces below describe the underlying operator semantics and constraints.
+
+ #### 1.2.1 get_dispatch_layout_zb ▶
+##### 1.2.1.1 Prototype
+```python
+umdk_cam_op_lib.get_dispatch_layout_zb(
+    Tensor topk_idx,
+    int num_experts,
+    int num_ranks
+) -> output: Tuple[Tensor, Tensor]
+```
+##### 1.2.1.2 Interface Description
+`get_dispatch_layout_zb`: on the Zero-Buffer path, counts tokens sent to each expert from each token's topK expert indices, and computes the local send index of each `(token, topk)` from the destination expert's view for subsequent notify / `moe_dispatch_normal_zb`. The underlying call is `aclnnDispatchLayoutZeroBuffer`.
+##### 1.2.1.3 Input Parameters
+| **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|topk_idx|Tensor|Required|Shape: `(batchSize, topK)`, dtype `torch.int64`|Target expert ids|
+|num_experts|int|Required|Number of routed MoE experts|Total expert count|
+|num_ranks|int|Required|Number of ranks in the communication domain|EP world size|
+##### 1.2.1.4 Return Value
+Returns a Tuple of 2 Tensors: `number_tokens_per_expert`, `send_token_idx`.
+| **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|----------|
+|number_tokens_per_expert|Tensor|Shape: `(num_experts,)`, dtype `torch.int`|Number of tokens the current rank sends to each expert|
+|send_token_idx|Tensor|Shape: `(batchSize, topK)`, dtype `torch.int`|For each token sent to an expert, the local receive index from the current rank at that expert|
+##### 1.2.1.5 Constraints and Precautions ⚠️
+1. `num_ranks` range: `[1, 384]`. When `num_ranks=1`, layout can still compute correctly, but subsequent notify / dispatch / combine cannot proceed.
+2. `num_experts` range: `(0, 512]`.
+3. `topk` range: `(0, 16]`.
+4. Values in `topk_idx` must be in `[0, num_experts)`.
+5. `batchSize` range: `[1, 8000]`.
+6. `num_experts % num_ranks == 0`, and `num_experts >= num_ranks`.
+7. A2 is not supported (A3 only).
+8. Outputs must be passed directly to the subsequent ZB pipeline and must not be rewritten by the user.
+
+ #### 1.2.2 moe_dispatch_normal_zb ▶
+##### 1.2.2.1 Prototype
+```python
+umdk_cam_op_lib.moe_dispatch_normal_zb(
+    Tensor x,
+    Tensor topk_idx,
+    Tensor send_token_idx,
+    Tensor num_tokens_per_expert,
+    int ep_world_size,
+    int ep_rank_id,
+    int moe_expert_num,
+    int quant_mode,
+    int global_bs,
+    int comm_meta_ptr
+) -> output: Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+```
+##### 1.2.2.2 Interface Description
+`moe_dispatch_normal_zb`: normal dispatch on the Zero-Buffer path. Sends input `x` to target experts according to `topk_idx`. The communication window is managed by Zero-Buffer / SHMEM metadata pointed to by `comm_meta_ptr`. Semantics align with `moe_dispatch_prefill`. A single Python call performs notify then dispatch, via `aclnnNotifyDispatchZeroBuffer` and `aclnnMoeDispatchNormalZeroBuffer`.
+##### 1.2.2.3 Input Parameters
+| **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|x|Tensor|Required|Shape: `(batchSize, h)`, supports bf16 / float16|Tokens sent by the current rank|
+|topk_idx|Tensor|Required|Shape: `(bs, topK)`, dtype `torch.int32`|TopK expert indices of each token|
+|send_token_idx|Tensor|Required|Shape: `(batchSize, topK)`, dtype `torch.int`|Must be the `send_token_idx` output of `get_dispatch_layout_zb`|
+|num_tokens_per_expert|Tensor|Required|Shape: `(moe_expert_num,)`, dtype `torch.int`; must reside in SHMEM symmetric memory|Must be the `num_tokens_per_expert` output of `get_dispatch_layout_zb`|
+|ep_world_size|int|Required|Number of ranks in the EP domain|EP world size|
+|ep_rank_id|int|Required|Rank id of the current card|`[0, ep_world_size)`|
+|moe_expert_num|int|Required|Number of routed MoE experts|Total expert count|
+|quant_mode|int|Required|`0`: no quant; `2`: dynamic quant|Quantization mode|
+|global_bs|int|Required|Usually `max_batch_size * ep_world_size`; must be positive|Upper bound used to allocate recv buffers without host sync after notify|
+|comm_meta_ptr|int|Required|Meta-region address from Zero-Buffer / SHMEM init|Communication metadata pointer|
+##### 1.2.2.4 Return Value
+Returns a Tuple of 5 Tensors: `recv_x`, `dynamic_scales_out`, `put_offset`, `total_recv_tokens`, `recv_tokens_per_expert`.
+| **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|----------|
+|recv_x|Tensor|Shape: `(global_bs, h)`; `torch.int8` when `quant_mode=2`, otherwise same as `x`; in SHMEM|Tokens received by the current rank; truncate with `total_recv_tokens`|
+|dynamic_scales_out|Tensor|Shape: `(global_bs,)`, dtype `torch.float`|Dynamic quant scales when `quant_mode=2` (SHMEM); meaningless when `quant_mode=0`|
+|put_offset|Tensor|Shape: `(moe_expert_num, ep_world_size)`, dtype `torch.int`|Per-expert write offsets to each rank from internal notify; used as `ep_recv_counts` in combine|
+|total_recv_tokens|Tensor|Shape: `(1,)`, dtype `torch.int`|Actual number of tokens received by this rank; used to truncate `recv_x` / scales|
+|recv_tokens_per_expert|Tensor|Shape: `(moe_expert_num / ep_world_size,)`, dtype `torch.int64`|Actual tokens received by each local expert on this rank|
+##### 1.2.2.5 Constraints and Precautions ⚠️
+1. `batchSize` range: `[1, 8000]`.
+2. `ep_world_size` range: `[2, 384]`.
+3. `ep_rank_id` range: `[0, ep_world_size)`.
+4. `moe_expert_num` range: `(0, 512]`.
+5. `topk` range: `(0, 16]`.
+6. Values in `topk_idx` must be in `[0, moe_expert_num)`.
+7. `h` range: `[1024, 7168]`.
+8. `moe_expert_num % ep_world_size == 0`, and `moe_expert_num >= ep_world_size`.
+9. `global_bs` must be greater than 0.
+10. `send_token_idx` / `num_tokens_per_expert` must come directly from `get_dispatch_layout_zb`.
+11. Zero-Buffer / SHMEM must be initialized before the call so that `comm_meta_ptr` is valid.
+12. Returned `recv_x` / `dynamic_scales_out` are allocated by the `global_bs` upper bound; callers must truncate by `total_recv_tokens` before expert compute and combine.
+13. A2 is not supported (A3 only).
+
+ #### 1.2.3 moe_combine_normal_zb ▶
+##### 1.2.3.1 Prototype
+```python
+umdk_cam_op_lib.moe_combine_normal_zb(
+    Tensor recv_x,
+    Tensor ep_recv_counts,
+    Tensor recv_topk_weights,
+    Tensor topk_idx,
+    Tensor send_token_idx,
+    int comm_meta_ptr,
+    int ep_world_size,
+    int ep_rank_id,
+    int tp_world_size,
+    int tp_rank_id,
+    int moe_expert_num,
+    int global_bs
+) -> combine_x: Tensor
+```
+##### 1.2.3.2 Interface Description
+`moe_combine_normal_zb`: normal combine on the Zero-Buffer path. Collects and merges `recv_x` in the reverse direction of dispatch, weighted by `recv_topk_weights`, into `combine_x`. Semantics align with `moe_combine_prefill`. The underlying call is `aclnnMoeCombineNormalZeroBuffer`.
+##### 1.2.3.3 Input Parameters
+| **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|recv_x|Tensor|Required|Shape: `(recv_token_num, h)`, supports bf16 / float16|Tokens received in dispatch and processed by experts|
+|ep_recv_counts|Tensor|Required|Usually shape `(moe_expert_num, ep_world_size)`, dtype `torch.int`|Per-expert receive counts/offsets across ranks; on the ZB path usually reuse `put_offset` from dispatch notify|
+|recv_topk_weights|Tensor|Required|Shape: `(bs, topK)`, dtype `torch.float32`|TopK expert weights of each token|
+|topk_idx|Tensor|Required|Shape: `(bs, topK)`, dtype `torch.int32`|TopK expert indices of each token|
+|send_token_idx|Tensor|Optional|Shape: `(batchSize, topK)`, dtype `torch.int`; pass `None` if unused|Must be the `send_token_idx` output of `get_dispatch_layout_zb`|
+|comm_meta_ptr|int|Required|Same init result as the dispatch side|Zero-Buffer / SHMEM metadata pointer|
+|ep_world_size|int|Required|Number of ranks in the EP domain|EP world size|
+|ep_rank_id|int|Required|Rank id of the current card|`[0, ep_world_size)`|
+|tp_world_size|int|Required|Usually `1`|TP world size|
+|tp_rank_id|int|Required|Usually `0`|TP rank id|
+|moe_expert_num|int|Required|Number of routed MoE experts|Total expert count|
+|global_bs|int|Required|Global BS size of the EP domain|Global batch upper bound|
+##### 1.2.3.4 Return Value
+| **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|----------|
+|combine_x|Tensor|Shape: `(batchSize, h)`, same dtype as `recv_x`; `batchSize` from `recv_topk_weights.size(0)`|Tokens gathered back and weighted-combined on this rank|
+##### 1.2.3.5 Constraints and Precautions ⚠️
+1. `batchSize` range: `[1, 8000]`.
+2. `ep_world_size` range: `[2, 384]`.
+3. `ep_rank_id` range: `[0, ep_world_size)`.
+4. `moe_expert_num` range: `(0, 512]`.
+5. `topk` range: `(0, 16]`.
+6. Values in `topk_idx` must be in `[0, moe_expert_num)`.
+7. `h` range: `[1024, 7168]`.
+8. `moe_expert_num % ep_world_size == 0`, and `moe_expert_num >= ep_world_size`.
+9. `recv_x` must match the valid receive range of `moe_dispatch_normal_zb` (expert outputs truncated by `total_recv_tokens`).
+10. `ep_recv_counts` must come directly from dispatch notify `put_offset` (or equivalent EP send/recv counts).
+11. If `send_token_idx` is provided, it must come directly from `get_dispatch_layout_zb`.
+12. `comm_meta_ptr` must be valid and from the same communication-domain init as dispatch.
+13. A2 is not supported (A3 only).

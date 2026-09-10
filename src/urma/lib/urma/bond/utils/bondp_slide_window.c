@@ -7,9 +7,12 @@
  * Note:
  * History: 2025-03-05
  */
+
 #include <stdint.h>
+
 #include "ub_bitmap.h"
 #include "urma_log.h"
+
 #include "bondp_slide_window.h"
 
 static bool is_seq_in_loop_range(uint32_t head, uint32_t len, uint32_t max_size, uint32_t seq)
@@ -77,7 +80,7 @@ bool bdp_slide_wnd_has(bdp_slide_wnd_t *wnd, uint32_t seq)
         return false;
     }
     return is_seq_in_loop_range(wnd->head, wnd->window_size, wnd->total_size, seq) &&
-        ub_bitmap_is_set(wnd->bits, seq);
+           ub_bitmap_is_set(wnd->bits, seq);
 }
 
 int bdp_slide_wnd_add(bdp_slide_wnd_t *wnd, uint32_t seq)

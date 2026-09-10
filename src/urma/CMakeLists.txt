@@ -38,7 +38,7 @@ endif()
 
 # ASAN ENABLE
 if("${ASAN}" STREQUAL "enable")
-    set(CMAKE_FLAGS_ASAN "-fsanitize=address -fsanitize-recover=address -fsanitize=leak -fno-omit-frame-pointer")
+    set(CMAKE_FLAGS_ASAN "-fsanitize=address -fsanitize-recover=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer")
     set(CMAKE_FLAGS_PUBILC "${CMAKE_FLAGS_PUBILC} ${CMAKE_FLAGS_ASAN}")
 endif()
 

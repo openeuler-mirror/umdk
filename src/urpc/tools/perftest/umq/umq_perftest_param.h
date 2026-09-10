@@ -20,9 +20,6 @@
 extern "C" {
 #endif
 
-#define UMQ_ENABLE_INLINE_LIMIT_SIZE 32
-#define UMQ_INLINE_ENABLE 1
-
 typedef struct umq_perftest_config {
     perftest_config_t config;
     umq_port_id_t port_id;
@@ -37,6 +34,8 @@ typedef struct umq_perftest_config {
     bool use_atomic_window;
     bool enable_perf;
     uint32_t blk_mode;
+    uint8_t priority;
+    bool share_jfr;        // share jfr: 1 main + 1 sub, sub reuses main's FC jfr_ctx
 } umq_perftest_config_t;
 
 int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *cfg);

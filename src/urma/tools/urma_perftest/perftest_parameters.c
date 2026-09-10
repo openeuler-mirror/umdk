@@ -129,12 +129,14 @@ static void usage(const char *argv0)
         "  -L, --lock_free             Jetty's interior is unlocked.\n"
         "  -O, --priority              set the priority of JFS, ranging from [0, 15].\n"
         "  -p, --trans_mode <mode>     Transport mode: 0 for RM(default), 1 for RC, 2 for UM.\n"
-        "  -P, --port <id>             Server port for bind or connect, default 21115.\n"
+        "  -P, --port <id>             TCP mode: server port, default 21115.\n"
+        "                              UB mode: required server mgmt jetty id, same value on both sides.(less than 1024)\n"
         "  -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.\n"
         "  -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.\n"
         "  -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).\n"
-        "  -s, --size <size>           Size of message to exchange (default 2).\n"
-        "  -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .\n"
+        "  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).\n"
+        "  -S, --server <addr>         TCP mode: server ip for bind or connect, default: 127.0.0.1.\n"
+        "                              UB mode: server mgmt eid (required for client).\n"
         "  -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).\n"
         "  -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required."
         "                                                                            dscp, vlan, sl are optional\n"
@@ -150,7 +152,7 @@ static void usage(const char *argv0)
         "  --burst_size <size>         Set the amount of pkts to send in a burst when using rate limiter.\n"
         "  --order_type <type>         Order type: 0 for default order,"
         "                   1 for OT (target order), 2 for OI(init order), 3 for OL(layer order), 4 for NO(no order).\n"
-        "  --enable_ipv6               enable ipv6 for server ip. default disable.\n"
+        "  --mgmt_proto <tcp|ub>       Management channel protocol, default: tcp.\n"
         "  --enable_credit             enable send credit, default: disable.\n"
         "  --credit_threshold <num>    Exceed the threshold and do not send, default: jfr_depth * 3 / 4.\n"
         "  --credit_notify_cnt <num>   Notify the send side after recv packets, default: jfr_depth / 4.\n"
@@ -158,7 +160,6 @@ static void usage(const char *argv0)
         "  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.\n"
         "  --enable_imm                Enable immediate data for write or send, default: disable.\n"
         "  --enable_err_continue       Enable continue running when cr erros, default: disable.\n"
-        "  --notify_data <value>       enable write_with_notify, value is ensured by hardware.\n"
         "  --enable_notify             Enable write_with_notify, default: disable.\n"
         "  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.\n"
         "  --oor_en                    Enable out of order for user_tp, default: disable.\n"
@@ -186,7 +187,7 @@ static void usage(const char *argv0)
         "                                                default: 1000(1s).\n"
         "  --page_size                 Set page size, default: 4096.\n"
         "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
-        "  --bind_ip <ip>              The ip for bind.\n"
+        "  --mgmt_addr <eid>           UB only: local eid string for mgmt channel (required in UB mode).\n"
         "  --enable_sync_stream        Enable synchronized multi-stream transmission. \n"
         "  --bw_unit <unit>            Set bandwidth display unit: KB, MB, or GB (default: MB).\n"
         "  --va <address>              Allow user to set address for local_buf, (Both decimal and hexadecimal).\n"
@@ -328,14 +329,16 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->enable_ipv6 = false;
     cfg->server_ip = NULL;
     cfg->bind_ip = NULL;
+    cfg->mgmt_addr = NULL;
     cfg->port = PERFTEST_DEF_PORT;
+    cfg->mgmt_type = PERFTEST_MGMT_TCP;
     cfg->jfs_depth = (cfg->type == PERFTEST_BW) ? PERFTEST_DEF_JFS_DEPTH_BW : PERFTEST_DEF_JFS_DEPTH_LAT;
     cfg->trans_mode = URMA_TM_RM;
 
     cfg->uboe = false;
     cfg->uboe_vlan = false;
     cfg->uboe_dscp = false;
-    cfg->uboe_sl = false;
+    cfg->enable_sl = false;
     cfg->uboe_dip = false;
     cfg->uboe_sip = false;
 
@@ -502,6 +505,21 @@ static int parse_bond_level(perftest_config_t *cfg, const char *opt)
     return 0;
 }
 
+static int parse_mgmt_type(perftest_config_t *cfg, const char *opt)
+{
+    if (strcmp(opt, "tcp") == 0) {
+        cfg->mgmt_type = PERFTEST_MGMT_TCP;
+        return 0;
+    }
+    if (strcmp(opt, "ub") == 0) {
+        cfg->mgmt_type = PERFTEST_MGMT_UB;
+        return 0;
+    }
+
+    LOG_ERROR("Management channel only supports tcp or ub.\n");
+    return -1;
+}
+
 static inline int check_value_range(const perftest_value_range_t *value_range)
 {
     if (value_range->value < (uint64_t)value_range->min ||
@@ -642,6 +660,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"rate_units",          required_argument, NULL, PERFTEST_OPT_RATE_UNITS},
         {"burst_size",          required_argument, NULL, PERFTEST_OPT_BURST_SIZE},
         {"order_type",          required_argument, NULL, PERFTEST_OPT_ORDER_TYPE},
+        {"mgmt_proto",          required_argument, NULL, PERFTEST_OPT_MGMT},
+        {"mgmt_addr",           required_argument, NULL, PERFTEST_OPT_MGMT_ADDR},
         {"enable_ipv6",         no_argument,       NULL, PERFTEST_OPT_ENABLE_IPV6},
         {"enable_credit",       no_argument,       NULL, PERFTEST_OPT_ENABLE_CREDIT},
         {"credit_threshold",    required_argument, NULL, PERFTEST_OPT_CREDIT_THRESHOLD},
@@ -898,6 +918,11 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_ORDER_TYPE:
                 (void)ub_str_to_u32(optarg, &cfg->order_type);
                 break;
+            case PERFTEST_OPT_MGMT:
+                if (parse_mgmt_type(cfg, optarg) != 0) {
+                    return -1;
+                }
+                break;
             case PERFTEST_OPT_ENABLE_IPV6:
                 cfg->enable_ipv6 = true;
                 break;
@@ -1032,13 +1057,23 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 (void)ub_str_to_u16(optarg, &cfg->vlan_id);
                 break;
             case PERFTEST_OPT_SL:
-                cfg->uboe_sl = true;
-                (void)ub_str_to_u8(optarg, &cfg->sl);
+                if (ub_str_to_u8(optarg, &cfg->sl) != 0 || cfg->sl > 0x0f) {
+                    LOG_ERROR("SL should be between 0 and 15.\n");
+                    return -1;
+                }
+                cfg->enable_sl = true;
                 break;
             case PERFTEST_OPT_BIND_IP:
                 cfg->bind_ip = strdup(optarg);
                 if (cfg->bind_ip == NULL) {
                     LOG_ERROR("failed to allocate bind ip memory.\n");
+                    return -1;
+                }
+                break;
+            case PERFTEST_OPT_MGMT_ADDR:
+                cfg->mgmt_addr = strdup(optarg);
+                if (cfg->mgmt_addr == NULL) {
+                    LOG_ERROR("failed to allocate mgmt_addr memory.\n");
                     return -1;
                 }
                 break;
@@ -1116,6 +1151,10 @@ void destroy_cfg(perftest_config_t *cfg)
     if (cfg->bind_ip != NULL) {
         free(cfg->bind_ip);
         cfg->bind_ip = NULL;
+    }
+    if (cfg->mgmt_addr != NULL) {
+        free(cfg->mgmt_addr);
+        cfg->mgmt_addr = NULL;
     }
     return;
 }
@@ -1261,6 +1300,21 @@ int check_local_cfg(perftest_config_t *cfg)
 
     if (cfg->tp_type != URMA_TRANSPORT_UB && cfg->token_policy != URMA_TOKEN_NONE) {
         LOG_INFO("Warning: only UB can be configured token_policy.\n");
+    }
+
+    if (cfg->mgmt_type == PERFTEST_MGMT_UB) {
+        if (cfg->enable_ipv6) {
+            LOG_INFO("Warning: enable_ipv6 is only available for tcp management channel.\n");
+            return -1;
+        }
+        if (cfg->bind_ip != NULL) {
+            LOG_ERROR("bind_ip is TCP-only and not supported in UB management mode.\n");
+            return -1;
+        }
+        if (cfg->mgmt_addr == NULL) {
+            LOG_ERROR("--mgmt_addr <eid> is required in UB management mode (provides local EID for mgmt channel).\n");
+            return -1;
+        }
     }
 
     if (cfg->order_type > URMA_NO) {

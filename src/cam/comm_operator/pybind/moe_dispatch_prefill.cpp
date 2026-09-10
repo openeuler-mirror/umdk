@@ -67,8 +67,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> MoeDispat
     TORCH_BIND_ASSERT(numTokensPerExpert.dim() == 1 and numTokensPerExpert.is_contiguous());
     TORCH_BIND_ASSERT(numTokensPerExpert.size(0) % numRanks == 0);
 
-    auto numTokens = static_cast<int>(x.size(0));
-    auto hidden = static_cast<int>(x.size(1));
+    int64_t numTokens = x.size(0);
+    int64_t hidden = x.size(1);
     auto numExperts = static_cast<int64_t>(numTokensPerExpert.size(0));
     auto numLocalExperts = static_cast<int>(numExperts / numRanks);
 

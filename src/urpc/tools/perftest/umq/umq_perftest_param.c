@@ -31,6 +31,7 @@ static struct option g_long_options[] = {
     {"tx-depth", required_argument, NULL, 'U'},
     {"tp-mode", required_argument, NULL, 'M'},
     {"tp-type", required_argument, NULL, 'P'},
+    {"priority", required_argument, NULL, 'O'},
 
     {"buf-mode", required_argument, NULL, 'b'},
     {"interrupt", no_argument, NULL, 'I'},
@@ -40,6 +41,7 @@ static struct option g_long_options[] = {
     {"num", required_argument, NULL, 'n'},
     {"enable-perf", no_argument, NULL, 'F'},
     {"blk-size", required_argument, NULL, 'L'},
+    {"share-jfr", no_argument, NULL, 'j'},
     {NULL, 0, NULL, 0}
 };
 // clang-format on
@@ -67,11 +69,15 @@ static void usage(void)
     (void)printf("      --rx-depth                      set queue rx-depth(default 512).\n");
     (void)printf("      --tp-mode                       set queue umq_tp_mode_t(default UMQ_TM_RC).\n");
     (void)printf("      --tp-type                       set queue umq_tp_type_t(default UMQ_TP_TYPE_CTP).\n");
+    (void)printf("      --priority                      set queue priority(default 4).\n");
     (void)printf("      --eid-index                     set eid index.\n");
     (void)printf("      --use_atomic_window             use atomic window when enable flow control.\n");
     (void)printf("      --num                           set number of iterations.\n");
     (void)printf("      --enable-perf                   enable perf.\n");
     (void)printf("      --blk-size                      set umq_buf_block_size(default:0), 0=BLOCK_SIZE_4K\n");
+    (void)printf("      --share-jfr                     enable shared jfr: create 1 main + 1 sub umq,\n");
+    (void)printf("                                      sub reuses main's FC jfr_ctx (worker bound to sub)\n");
+    (void)printf("                                      requires pro api (-f 1)\n");
     (void)printf("  -h, --help                          show help info.\n\n");
 }
 
@@ -96,6 +102,8 @@ static void init_cfg(umq_perftest_config_t *cfg)
     cfg->test_round = DEFAULT_LAT_TEST_ROUND;
     cfg->blk_mode = 0;
     cfg->tp_type = UMQ_TP_TYPE_CTP;
+    cfg->priority = DEFAULT_PRIORITY;
+    cfg->share_jfr = false;
 }
 
 static int copy_optarg_to_buf(char *dst, size_t dst_size, const char *opt_name, const char *opt_arg)
@@ -209,12 +217,22 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
                 break;
             case 'n':
                 cfg->test_round = (uint32_t)strtoul(optarg, NULL, 0);
+                if (cfg->test_round == 0) {
+                    LOG_PRINT("test_round must be greater than 0\n");
+                    return -1;
+                }
                 break;
             case 'F':
                 cfg->enable_perf = true;
                 break;
             case 'L':
                 cfg->blk_mode = (uint32_t)strtoul(optarg, NULL, 0);
+                break;
+            case 'O':
+                cfg->priority = (uint8_t)strtoul(optarg, NULL, 0);
+                break;
+            case 'j':
+                cfg->share_jfr = true;
                 break;
             default:
                 usage();
@@ -224,6 +242,12 @@ int umq_perftest_parse_arguments(int argc, char **argv, umq_perftest_config_t *c
 
     if (optind < argc) {
         usage();
+        return -1;
+    }
+
+    // share_jfr requires pro api: sub umq IO jetty reuse only supported in pro mode
+    if (cfg->share_jfr && (cfg->feature & UMQ_FEATURE_API_PRO) == 0) {
+        LOG_PRINT("--share-jfr requires pro api (-f 1)\n");
         return -1;
     }
 

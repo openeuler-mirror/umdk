@@ -23,18 +23,39 @@ extern "C" {
 
 typedef struct jetty_pool_node jetty_pool_node_t;
 
+// Callback fired when jetty pool's available count rises.
+typedef void (*umq_ub_jetty_avail_cb_t)(void *user_data);
+typedef struct umq_ub_jetty_avail_cb_node {
+    urpc_list_t node;
+    umq_ub_jetty_avail_cb_t cb;
+    void *user_data;
+} umq_ub_jetty_avail_cb_node_t;
+
 typedef struct umq_ub_jetty_node_list {
     jetty_pool_node_t **node_list;
     uint32_t list_len;
     urpc_bitmap_t bitmap;
+    // Compact array of occupied slot ids: append on create, memmove-compact on destroy. Lets the
+    // data-plane poll iterate live nodes in O(valid_cnt) instead of scanning the 64K-bit bitmap.
+    uint16_t *valid_idx;
+    uint32_t valid_cnt;                   // number of entries in valid_idx
     volatile uint32_t ref_cnt;
-    util_external_mutex_lock *lock;       // serializes bitmap + node_list slot mutation (create/destroy)
+    volatile uint32_t next_poll_idx;      // round-robin cursor in valid_idx space [0, valid_cnt)
+    util_external_mutex_lock *lock;       // serializes bitmap + node_list + valid_idx mutation (create/destroy)
 } umq_ub_jetty_node_list_t;
 
 // Jetty pool configuration
 typedef struct jetty_pool_config {
     uint32_t notify_threshold;     // Notify via eventfd when idle_count >= threshold (0 means use default 16)
 } jetty_pool_config_t;
+
+// Baseline umq config established by the first main+share_transport umq. All such umqs must share the same
+// tx_depth and tx_buf_size because they feed jetty pool nodes consumed by every main umq's sub/logic umq.
+typedef struct baseline_umq_cfg {
+    uint32_t tx_depth;             // tx_depth of the first main+share_transport umq
+    uint32_t tx_buf_size;          // tx_buf_size of the first main+share_transport umq
+    bool inited;                   // Whether the baseline has been established
+} baseline_umq_cfg_t;
 
 // Thread-local jetty cache (linked list based on user config)
 typedef struct thread_local_jetty_cache {
@@ -51,11 +72,25 @@ void umq_ub_jetty_pool_put_free_node(jetty_pool_node_t *node);
 int umq_ub_jetty_node_add(jetty_pool_node_t *node);
 int umq_ub_jetty_node_remove(jetty_pool_node_t *node);
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void);
-int umq_ub_jetty_node_free(jetty_pool_node_t *node);
+int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event);
 int umq_ub_jetty_pool_get_eventfd(void);
+// Register a jetty-availability callback; returns the node (pass to unregister later) or NULL.
+umq_ub_jetty_avail_cb_node_t *umq_ub_jetty_pool_register_avail_cb(umq_ub_jetty_avail_cb_t cb, void *user_data);
+// Unregister and free a callback node. No-op if NULL.
+void umq_ub_jetty_pool_unregister_avail_cb(umq_ub_jetty_avail_cb_node_t *cb_node);
+// Query whether at least one jetty is currently available to borrow (active_count > 0).
+bool umq_ub_jetty_pool_has_avail(void);
 umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
+int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node);
+
+// Enforce that a main umq's tx_depth and tx_buf_size match the jetty pool baseline.
+// The first main+share_transport umq to call establishes the baseline; every subsequent caller must match it
+// exactly (regardless of whether the user explicitly configured the values). Jetty pool nodes are shared, so
+// tx_depth/tx_buf_size must be uniform across all such umqs.
+// Returns UMQ_SUCCESS (baseline established / matched), -UMQ_ERR_EINVAL on mismatch.
+int umq_ub_jetty_pool_align_tx(uint32_t queue_tx_depth, uint32_t queue_tx_buf_size);
 
 // DFX statistics
 typedef struct umq_ub_jetty_pool_stats {
@@ -66,6 +101,7 @@ typedef struct umq_ub_jetty_pool_stats {
     uint64_t err_num;           // Nodes marked is_jetty_err == true
     uint64_t acc_alloc_num;     // Cumulative allocs (nodes borrowed by Logic UMQ)
     uint64_t acc_free_num;      // Cumulative frees (nodes returned to pool)
+    uint64_t acc_miss_num;      // Cumulative allocation misses (no available jetty)
 } umq_ub_jetty_pool_stats_t;
 
 int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats);

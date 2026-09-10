@@ -1,0 +1,75 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: Bond provider health check declarations
+ */
+
+#ifndef BONDP_DP_HEALTH_H
+#define BONDP_DP_HEALTH_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "urma_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct bondp_context;
+struct bondp_target_jetty;
+struct urma_bond_seg_info_out;
+struct urma_bond_id_info_out;
+
+#define BONDP_HC_DEFAULT_PROBE_INTERVAL_MS (1000)
+#define BONDP_HC_DEFAULT_BATCH_NODE_NUM    (8)
+
+typedef struct bondp_hc_cfg {
+    /*
+     * Interval between two health probe batches.
+     * Set to 0 to use BONDP_HC_DEFAULT_PROBE_INTERVAL_MS.
+     */
+    uint64_t probe_interval_ms;
+    /*
+     * Maximum nodes probed in one batch.
+     * Set to 0 to use BONDP_HC_DEFAULT_BATCH_NODE_NUM.
+     */
+    uint32_t batch_node_num;
+} bondp_hc_cfg_t;
+
+int bondp_hc_init(struct bondp_context *bdp_ctx, const bondp_hc_cfg_t *cfg);
+int bondp_hc_start(struct bondp_context *bdp_ctx, uint8_t priority);
+void bondp_hc_uninit(struct bondp_context *bdp_ctx);
+
+/**
+ * Register a target jetty for health path tracking. The peer topo node is
+ * resolved by the target EID. Health check segments are imported at the node
+ * level (hc_tseg) and shared across tjettys targeting the same remote node.
+ */
+int bondp_hc_register_tjetty(struct bondp_context *bdp_ctx,
+                             struct bondp_target_jetty *bdp_tjetty,
+                             const struct urma_bond_id_info_out *rjetty_info);
+
+/**
+ * Unregister a target jetty from health path tracking.
+ * The shared hc_tseg is unimported and re-imported with the backup's
+ * context. On failure, the slot is invalidated for future reclaim.
+ */
+void bondp_hc_unregister_tjetty(struct bondp_context *bdp_ctx,
+                                struct bondp_target_jetty *bdp_tjetty);
+
+int bondp_hc_fill_seg_info(const struct bondp_context *bdp_ctx,
+                           struct urma_bond_seg_info_out *seg_info,
+                           bool *enabled);
+
+/**
+ * Synchronise the health-check node->valid matrix into registered target
+ * jettys.
+ */
+void bondp_hc_tjetty_sync_valid(const struct bondp_target_jetty *bdp_tjetty);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // BONDP_DP_HEALTH_H

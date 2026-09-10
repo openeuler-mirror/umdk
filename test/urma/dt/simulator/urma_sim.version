@@ -1,0 +1,43 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * 链接器版本脚本：被拦截的 libc 函数按当前 liburma 实际引用的版本导出。
+ * 版本必须精确匹配，否则拦不住带版本引用。
+ */
+URMA_SIM_UMMU {
+    global:
+        ummu_allocate_tid;
+        ummu_grant;
+        ummu_ungrant;
+        ummu_ungrant_by_token;
+        ummu_free_tid;
+};
+
+URMA_SIM_API {
+    global:
+        urma_sim_ipc_start;
+        urma_sim_ipc_is_local;
+        urma_sim_ipc_read;
+        urma_sim_ipc_write;
+        urma_sim_hw_start;
+};
+
+GLIBC_2.17 {
+    global:
+        open;
+        __open_2;
+        close;
+        opendir;
+        read;
+        ioctl;
+        access;
+        mmap;
+        munmap;
+        realpath;
+};
+
+GLIBC_2.33 {
+    global:
+        stat;
+} GLIBC_2.17;

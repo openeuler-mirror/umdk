@@ -52,6 +52,7 @@ TensorVector FusedDeepMoeImplNpu(
 {
     TORCH_BIND_ASSERT(x.dim() == DIM_TWO);
     TORCH_BIND_ASSERT(expertIds.dim() == DIM_TWO);
+    TORCH_BIND_ASSERT(epRankSize != 0);
     auto xShape = x.sizes();
     auto expertIdsShape = expertIds.sizes();
     int h = xShape[1];
@@ -110,9 +111,12 @@ TensorVector FusedDeepMoeImplMeta(
     int64_t quantMode, \
     int64_t globalBs)
 {
+    TORCH_BIND_ASSERT(x.dim() == DIM_TWO);
+    TORCH_BIND_ASSERT(expertIds.dim() == DIM_TWO);
+    TORCH_BIND_ASSERT(epRankSize != 0);
     auto xShape = x.sizes();
-    int h = xShape[1];
-    int bs = xShape[0];
+    int64_t h = xShape[1];
+    int64_t bs = xShape[0];
     at::Tensor output = at::empty({bs, h}, x.options().device(at::kMeta));
     at::Tensor shareOutput = at::empty({bs, h}, x.options().device(at::kMeta));
 

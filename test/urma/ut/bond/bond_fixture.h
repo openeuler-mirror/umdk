@@ -20,25 +20,22 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#include <netlink/handlers.h>
-#include <netlink/errno.h>
-#include <netlink/msg.h>
-
 #include <gtest/gtest.h>
 
 #include "bondp_api.h"
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
+#include "bondp_cp_user_ctl.h"
 #include "bondp_datapath.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
+#include "bondp_dp_failback.h"
+#include "bondp_dp_health.h"
+#include "bondp_dp_interrupt.h"
 #include "bondp_hash_table.h"
-#include "bondp_health_check.h"
-#include "bondp_failback.h"
-#include "bondp_link_recovery.h"
-#include "bondp_netlink.h"
 #include "bondp_provider_ops.h"
-#include "bondp_segment.h"
 #include "bondp_slide_window.h"
 #include "bondp_timewheel.h"
 #include "bondp_types.h"
@@ -69,21 +66,11 @@ extern bool g_mockCreateContextFail;
 extern bool g_mockCreateContextBadFd;
 extern bool g_mockDeleteContextFail;
 extern bool g_mockUserCtlFail;
-extern bool g_mockNetlink;
-extern bool g_mockNetlinkAllocFail;
-extern bool g_mockNetlinkConnectFail;
-extern bool g_mockNetlinkResolveFail;
-extern struct nl_sock *g_mockNetlinkSock;
-extern int g_mockNetlinkFd;
-extern int g_mockNetlinkRecvReturn;
-extern int g_mockNetlinkRecvCount;
 extern size_t g_mockCallocFailNmemb;
-
-void ResetMockNetlinkCallback();
-int InvokeMockNetlinkMsg(bondp_nl_cmd_t cmd, const void *payload, size_t payloadLen);
+extern size_t g_mockCallocFailSize;
 
 struct BondProviderMockGuard {
-    bondp_global_context_t *savedGlobalCtx;
+    bondp_env_t savedEnv;
     urma_device_t *savedNamedDevice;
     urma_ops_t *savedCreateContextOps;
     int savedCreateContextCount;
@@ -96,17 +83,11 @@ struct BondProviderMockGuard {
     bool savedCreateContextBadFd;
     bool savedDeleteContextFail;
     bool savedUserCtlFail;
-    bool savedNetlink;
-    bool savedNetlinkAllocFail;
-    bool savedNetlinkConnectFail;
-    bool savedNetlinkResolveFail;
-    int savedNetlinkFd;
-    int savedNetlinkRecvReturn;
-    int savedNetlinkRecvCount;
     size_t savedCallocFailNmemb;
+    size_t savedCallocFailSize;
 
-    BondProviderMockGuard(bondp_global_context_t *globalCtx, urma_device_t *namedDevice, urma_ops_t *createContextOps)
-        : savedGlobalCtx(g_bondp_global_ctx),
+    BondProviderMockGuard(bondp_env_t *env, urma_device_t *namedDevice, urma_ops_t *createContextOps)
+        : savedEnv(g_bondp_env),
           savedNamedDevice(g_mockNamedDevice),
           savedCreateContextOps(g_mockCreateContextOps),
           savedCreateContextCount(g_mockCreateContextCount),
@@ -119,16 +100,10 @@ struct BondProviderMockGuard {
           savedCreateContextBadFd(g_mockCreateContextBadFd),
           savedDeleteContextFail(g_mockDeleteContextFail),
           savedUserCtlFail(g_mockUserCtlFail),
-          savedNetlink(g_mockNetlink),
-          savedNetlinkAllocFail(g_mockNetlinkAllocFail),
-          savedNetlinkConnectFail(g_mockNetlinkConnectFail),
-          savedNetlinkResolveFail(g_mockNetlinkResolveFail),
-          savedNetlinkFd(g_mockNetlinkFd),
-          savedNetlinkRecvReturn(g_mockNetlinkRecvReturn),
-          savedNetlinkRecvCount(g_mockNetlinkRecvCount),
-          savedCallocFailNmemb(g_mockCallocFailNmemb)
+          savedCallocFailNmemb(g_mockCallocFailNmemb),
+          savedCallocFailSize(g_mockCallocFailSize)
     {
-        g_bondp_global_ctx = globalCtx;
+        g_bondp_env = *env;
         g_mockNamedDevice = namedDevice;
         g_mockCreateContextOps = createContextOps;
         g_mockCreateContextCount = 0;
@@ -141,20 +116,13 @@ struct BondProviderMockGuard {
         g_mockCreateContextBadFd = false;
         g_mockDeleteContextFail = false;
         g_mockUserCtlFail = false;
-        g_mockNetlink = false;
-        g_mockNetlinkAllocFail = false;
-        g_mockNetlinkConnectFail = false;
-        g_mockNetlinkResolveFail = false;
-        g_mockNetlinkFd = -1;
-        g_mockNetlinkRecvReturn = 0;
-        g_mockNetlinkRecvCount = 0;
         g_mockCallocFailNmemb = 0;
-        ResetMockNetlinkCallback();
+        g_mockCallocFailSize = 0;
     }
 
     ~BondProviderMockGuard()
     {
-        g_bondp_global_ctx = savedGlobalCtx;
+        g_bondp_env = savedEnv;
         g_mockNamedDevice = savedNamedDevice;
         g_mockCreateContextOps = savedCreateContextOps;
         g_mockCreateContextCount = savedCreateContextCount;
@@ -167,33 +135,20 @@ struct BondProviderMockGuard {
         g_mockCreateContextBadFd = savedCreateContextBadFd;
         g_mockDeleteContextFail = savedDeleteContextFail;
         g_mockUserCtlFail = savedUserCtlFail;
-        g_mockNetlink = savedNetlink;
-        g_mockNetlinkAllocFail = savedNetlinkAllocFail;
-        g_mockNetlinkConnectFail = savedNetlinkConnectFail;
-        g_mockNetlinkResolveFail = savedNetlinkResolveFail;
-        g_mockNetlinkFd = savedNetlinkFd;
-        g_mockNetlinkRecvReturn = savedNetlinkRecvReturn;
-        g_mockNetlinkRecvCount = savedNetlinkRecvCount;
         g_mockCallocFailNmemb = savedCallocFailNmemb;
-        ResetMockNetlinkCallback();
+        g_mockCallocFailSize = savedCallocFailSize;
     }
 };
 
 struct BondTopoMapCleanup {
-    bondp_global_context_t *globalCtx;
-
-    explicit BondTopoMapCleanup(bondp_global_context_t *ctx) : globalCtx(ctx)
+    BondTopoMapCleanup()
     {
+        bondp_topo_uninit();
     }
 
     ~BondTopoMapCleanup()
     {
-        auto *sentinel = reinterpret_cast<topo_map_t *>(0x1);
-
-        if (globalCtx != nullptr && globalCtx->topo_map != nullptr && globalCtx->topo_map != sentinel) {
-            delete_topo_map(globalCtx->topo_map);
-            globalCtx->topo_map = nullptr;
-        }
+        bondp_topo_uninit();
     }
 };
 
@@ -348,9 +303,6 @@ inline void FillCreateOutput(uint32_t command, urma_cmd_attr_t *attrs, uint32_t 
 }
 
 static const uint32_t BOND_TEST_RECV_BATCH_POST_MAX_NUM = 280;
-static constexpr uint8_t BOND_TEST_FALLBACK_CTRL_REQ = 1;
-static constexpr uint8_t BOND_TEST_FALLBACK_CTRL_RESP = 2;
-
 struct BondPathFixture {
     bondp_context_t ctx = {};
     urma_device_t dev = {};
@@ -370,16 +322,16 @@ struct BondPathFixture {
     urma_target_seg_t remotePhy[2][2] = {};
     urma_sge_t srcSge[1] = {};
     urma_sge_t dstSge[1] = {};
-    bondp_global_context_t globalCtx = {};
-    bondp_global_context_t *savedGlobalCtx = nullptr;
+    bondp_env_t env = {};
+    bondp_env_t savedEnv = {};
 
     BondPathFixture()
     {
         urma_test::ResetHwMockState();
         /* Build a two-path virtual topology without creating real URMA devices. */
-        savedGlobalCtx = g_bondp_global_ctx;
-        g_bondp_global_ctx = &globalCtx;
-        globalCtx.enable_failover = true;
+        savedEnv = g_bondp_env;
+        g_bondp_env = env;
+        g_bondp_env.enable_failover = true;
         std::snprintf(dev.name, sizeof(dev.name), "bond_path_ut");
         sysfsDev.dev_attr.dev_cap.max_jfc_depth = 8;
         sysfsDev.dev_attr.dev_cap.max_jfs_depth = 8;
@@ -442,8 +394,8 @@ struct BondPathFixture {
         target.active_count = 2;
         target.active_indices[0] = 0;
         target.active_indices[1] = 1;
-        target.valid[0] = true;
-        target.valid[1] = true;
+        target.valid[0][0] = true;
+        target.valid[1][1] = true;
         target.p_tjetty[0][0] = &phyTarget[0][0];
         target.p_tjetty[1][1] = &phyTarget[1][1];
         comp.p_jetty[0]->remote_jetty = &phyTarget[0][0];
@@ -466,7 +418,7 @@ struct BondPathFixture {
 
     ~BondPathFixture()
     {
-        g_bondp_global_ctx = savedGlobalCtx;
+        g_bondp_env = savedEnv;
     }
 
     urma_jfs_wr_t MakeSendWr(urma_opcode_t opcode)
@@ -1128,11 +1080,13 @@ inline uint32_t HashTableNodeHash(void *key)
     return *static_cast<uint32_t *>(key);
 }
 
-inline void TimewheelCountCallback(void *arg)
+inline void TimewheelCountCallback(tw_task_reason_t reason, void *arg)
 {
     uint32_t *count = static_cast<uint32_t *>(arg);
 
-    (*count)++;
+    if (reason == TW_TASK_EXECUTED) {
+        (*count)++;
+    }
 }
 
 inline urma_jetty_id_t MakeJettyId(uint32_t id)
@@ -1153,28 +1107,6 @@ inline urma_eid_t MakeEid(uint32_t id)
     eid.in6.subnet_prefix = 0x30000000ULL + id;
     eid.in6.interface_id = 0x40000000ULL + id;
     return eid;
-}
-
-inline uint64_t MakeHealthUserCtx(uint32_t vjettyId, uint32_t localIdx, uint32_t targetIdx)
-{
-    constexpr uint64_t healthMagic = 0xFF12000000000000ULL;
-    constexpr uint32_t healthIdxMask = 0xFFFF;
-    constexpr uint32_t vjettyIdShift = 32;
-    constexpr uint32_t localIdxShift = 16;
-
-    return healthMagic | ((static_cast<uint64_t>(vjettyId & healthIdxMask)) << vjettyIdShift) |
-        ((static_cast<uint64_t>(localIdx & healthIdxMask)) << localIdxShift) |
-        static_cast<uint64_t>(targetIdx & healthIdxMask);
-}
-
-inline bondp_health_task_t *FindFirstHealthTask(bondp_heath_check_ctx_t *health)
-{
-    bondp_health_task_t *task = nullptr;
-
-    HMAP_FOR_EACH(task, hmap_node, &health->task_table.hmap) {
-        return task;
-    }
-    return nullptr;
 }
 
 inline void CopyEidToTopo(char dst[EID_LEN], const urma_eid_t &eid)
@@ -1224,11 +1156,13 @@ struct EnvGuard {
     }
 };
 
-inline void CountWorkerTask(void *arg)
+inline void CountWorkerTask(tw_task_reason_t reason, void *arg)
 {
     WorkerCounter *counter = static_cast<WorkerCounter *>(arg);
 
-    counter->count.fetch_add(1);
+    if (reason == TW_TASK_EXECUTED) {
+        counter->count.fetch_add(1);
+    }
 }
 
 inline void CountReadableFd(void *arg)

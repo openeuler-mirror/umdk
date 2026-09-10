@@ -117,7 +117,7 @@ cd src/urma
 # Release package for x86_64.
 ./urma_bazel.sh compile --config=release --config=x86_64 --define=build_udma=true
 
-# Debug + AddressSanitizer / LeakSanitizer.
+# Debug + AddressSanitizer / LeakSanitizer / UndefinedBehaviorSanitizer.
 ./urma_bazel.sh compile --config=debug --config=asan --define=build_udma=true
 
 # ThreadSanitizer with cycle profiling enabled.

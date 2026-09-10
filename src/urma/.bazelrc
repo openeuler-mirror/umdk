@@ -40,9 +40,11 @@ build:asan --strip=never
 build:asan --copt=-fsanitize=address
 build:asan --copt=-fsanitize-recover=address
 build:asan --copt=-fsanitize=leak
+build:asan --copt=-fsanitize=undefined
 build:asan --copt=-fno-omit-frame-pointer
 build:asan --linkopt=-fsanitize=address
 build:asan --linkopt=-fsanitize=leak
+build:asan --linkopt=-fsanitize=undefined
 
 build:tsan --strip=never
 build:tsan --copt=-fsanitize=thread

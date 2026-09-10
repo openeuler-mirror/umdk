@@ -161,6 +161,8 @@ enum perftest_opts {
     PERFTEST_OPT_BURST_SIZE,
     PERFTEST_OPT_RATE_UNITS,
     PERFTEST_OPT_ORDER_TYPE,
+    PERFTEST_OPT_MGMT,
+    PERFTEST_OPT_MGMT_ADDR,
     PERFTEST_OPT_ENABLE_IPV6,
     PERFTEST_OPT_ENABLE_CREDIT,
     PERFTEST_OPT_CREDIT_THRESHOLD,
@@ -284,7 +286,7 @@ typedef struct perftest_config {
 
     struct {
         char *server_ip;
-        char *bind_ip;
+        char *bind_ip;   /* TCP only: local ip for bind. NULL = default 0.0.0.0. */
         bool enable_ipv6;
         uint16_t port;          /* Server port for bind or connect, default 21115. */
         int reserved_listen_fd; /* Unused, kept only for forward compatibility. */
@@ -351,10 +353,12 @@ typedef struct perftest_config {
     uint8_t dscp;
     bool uboe_dscp;
     uint8_t sl;
-    bool uboe_sl;
+    bool enable_sl;
     bool enable_va;
     uint64_t v_address;
     bool share_jfs;
+    perftest_mgmt_type_t mgmt_type;
+    char *mgmt_addr; /* UB only: local eid string for mgmt channel. Required in UB mode. */
 } perftest_config_t;
 
 typedef struct perftest_value_range {

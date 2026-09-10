@@ -242,6 +242,7 @@ static int cmd_perf_start(admin_config_t *cfg)
     }
 
     int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
     if (ret != 0) {
         printf("Failed to start perf, ret: %d\n", ret);
         return ret;
@@ -261,6 +262,7 @@ static int cmd_perf_stop(admin_config_t *cfg)
     }
 
     int ret = admin_nl_send_recv_msg_default(msg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
     if (ret != 0) {
         printf("Failed to stop perf, ret: %d\n", ret);
         return ret;

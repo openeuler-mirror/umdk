@@ -79,7 +79,7 @@
         - [9.1.3 权限分配流程](#913-权限分配流程)
         - [9.1.4 权限无效化流程](#914-权限无效化流程)
     - [9.2 内存访问控制](#92-内存访问控制)
-
+- [10 URMA 生态迁移 skill](#10-urma-生态迁移-skill)
 # 1 UMDK综述
 
 1.  
@@ -510,6 +510,8 @@ urma_token_t *token_value);
 urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 ```
 
+若已通过 `BONDP_USER_CTL_SET_BONDING_PORT` 在上下文上配置了端口子集，则 Jetty 与 JFR 的导入仅经该端口子集建立物理 target 连接。每个已配置的本地端口与每个远端目标至多参与一条选定的物理路径（一对一配对），因此导入的物理路径数不超过本地配置端口数与远端目标数中的较小者。该端口子集必须包含与对端拓扑连通的端口，否则导入将因无可建链路径而失败。
+
 用户关注基于不感知传输层的URMA API使用流程。
 
 ## 5.2 控制面
@@ -549,6 +551,7 @@ typedef struct urma_context {
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
     struct urma_ref ref; /* [Private] reference count of urma context. */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
@@ -569,6 +572,8 @@ typedef struct urma_context {
 8.  uint32_t uasid: 这也是一个无符号32位整数，表示当前进程的 User Assisted Segment Identifier (UASID)。
 
 9.  struct urma_ref ref: 这是一个 urma_ref 结构体的实例，用于跟踪 urma_context_t 的引用计数。
+
+10.  urma_context_aggr_mode_t aggr_mode: 这是一个公开字段，表示 URMA 上下文的聚合模式，可取 URMA_AGGR_MODE_STANDALONE、URMA_AGGR_MODE_ACTIVE_BACKUP 或 URMA_AGGR_MODE_BALANCE。
 
 ### 5.2.2 Jetty管理
 
@@ -754,6 +759,8 @@ urma异常场景
 3.  注意事项
 
 应用删除某个对象（例如JFS，JFR，JFC，Jetty）之前，如果获得过该对象产生的异常事件时，必须调用确认异常接口（urma_ack_async_event），然后才能删除该对象。
+
+> **UDMA 资源销毁限制**：当前不支持在数据面通信仍在进行时删除 Jetty、注销 Segment 或复位 UDMA 设备。执行上述操作前，必须停止相关数据面通信，并确认所有相关传输操作均已完成。
 
 4.  使用说明
 
@@ -1038,7 +1045,7 @@ UMDK支持向接收端发送立即数，见urma_post_jfs_wr接口，所发送的
 
 - **urma_recv**：接收方使用这个函数从远程内存接收数据。
 
-- **urma_send**：发送方使用这个函数向远程内存发送数据，支持携带IMM数据，并且可以设置为with invalid，这意味着即使目标地址无效，操作也会继续执行。![](figures/urma-arch-data-two-sided-01.png)
+- **urma_send**：发送方使用这个函数向远程内存发送数据，支持携带IMM数据，并且可以设置为with invalidate，此时发送操作会使指定的目标段（tseg）失效。![](figures/urma-arch-data-two-sided-01.png)
 
 ### 5.3.3 完成记录
 
@@ -1520,7 +1527,11 @@ bonding设备不感知TP。
 
 3\. 不同 jetty 的单路径、多路径模式以及传输模式可以支持的能力有所差异；
 
-4\. 在使用聚合设备的场景下，传输层使用 TP/CTP 的选择仅和创建 jetty 和 jfs/jfr 的时候设定的参数有关，urma_import_jetty 中传入的 rjetty flag 中的 CTP 参数会被忽略。
+4\. 在使用聚合设备的场景下，传输层使用 TP/CTP 的选择仅和创建 jetty 和 jfs/jfr 的时候设定的参数有关，urma_import_jetty 中传入的 rjetty 的 tp_type 参数会被忽略。
+
+5\. 健康检查与故障回切（failback）仅支持 Jetty，不支持 JFR、JFS。健康检查通过为每条路径创建带外探测 Jetty（复用 JFR 接收资源）实现对链路状态的周期性探测；故障回切在探测恢复后通过重建 Jetty 将流量切回主路径。上述两条路径均依赖 Jetty 对象，独立创建的 JFR、JFS 不具备健康检查与故障回切能力。
+
+6\. 聚合设备故障回切方案要求用户的收发 Jetty 隔离。用于发送的 Jetty 不能作为对端可 import 的接收资源对外暴露，也不能被其他进程 import 后用于接收；如需被对端 import 并承载接收，应使用独立的接收 Jetty，避免回切重建过程中发送侧资源被外部引用。
 
 - 聚合设备的特性列表
 
@@ -1654,7 +1665,7 @@ Options:
   -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.
   -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).
   -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.
-  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.
+  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 512 for lat.
   -d, --dev <dev_name>        The name of ubep device.
   -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.
   -e, --use_jfce              use jfc event.
@@ -1678,7 +1689,7 @@ Options:
   -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.
   -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.
   -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).
-  -s, --size <size>           Size of message to exchange (default 2).
+  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).
   -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .
   -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).
   -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.
@@ -2090,6 +2101,14 @@ URMA DFX能力主要包括URMA日志，此外urma_admin也具备部分维测能�
 ### 6.5.1 URMA日志
 
 URMA整体使用OS自带的rsyslog工具来实现日志重定向打印特性，对应配置路径为/etc/rsyslog.d/*.conf；日志按大小切割、压缩和保留依赖OS自带的logrotate工具，对应配置路径为/etc/logrotate.d/**。产品可以按照需要修改配置文件达到不同的需要。
+
+用户态日志头格式如下：
+
+```
+[URMA][<file>:<function>:<line>][<tid>][<thread_tag>][liburma]<message>
+[URMA][<file>:<function>:<line>][<tid>][<process_name>][work_<idx>|-][libuvs]<message>
+[URMA][<file>:<function>:<line>][<tid>][-][urma_admin]<message>
+```
 
 ![](figures/urma_caution.png)
 
@@ -2516,3 +2535,7 @@ URMA北向接口内存权限配置与UB协议定义保持一致，采用如下�
 2、URMA_ACCESS_LOCAL_ONLY置位0，则除 本地访问具备所有权限之外，外部访问权限配置由后面三个类型决定，按照用户配置的READ、WRITE、ATOMIC组合生效；
 
 3、Write需要Read权限，Atomic需要Write+Read权限。
+
+# 10 URMA 生态迁移 skill
+
+**verbs-to-urma-converter** 用于对基于 RDMA verbs (libibverbs) 的项目源码进行系统迁移改造，将其转换为 URMA API 实现。改造内容包括 API 替换、结构体字段更新、连接建立流程改造等，并通过单文件与项目级双层验证机制确保资源生命周期完整、语义正确。详见 [/skills/verbs-to-urma-converter](../../../skills/verbs-to-urma-converter/README.md)。

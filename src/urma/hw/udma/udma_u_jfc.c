@@ -647,25 +647,25 @@ static bool udma_u_update_jfr_idx(struct udma_u_context *udma_ctx,
 		if (udma_ctx->jetty_table[table_id].refcnt) {
 			jetty = (struct udma_u_jetty *)udma_ctx->jetty_table[table_id].jetty_array[jetty_id & mask];
 			if (!jetty) {
-				UDMA_LOG_INFO("JETTY not found, JETTY 0x%x has been destroyed.\n", jetty_id);
+				UDMA_LOG_WARN("JETTY not found, JETTY 0x%x has been destroyed.\n", jetty_id);
 				return true;
 			}
 			cr->user_data = (uintptr_t)&jetty->base;
 			jfr = jetty->jfr;
 		} else {
-			UDMA_LOG_INFO("JFC not polled, JETTY 0x%x has been destroyed.\n", jetty_id);
+			UDMA_LOG_WARN("JFC not polled, JETTY 0x%x has been destroyed.\n", jetty_id);
 			return true;
 		}
 	} else {
 		if (udma_ctx->jfr_table[table_id].refcnt) {
 			jfr = (struct udma_u_jfr *)udma_ctx->jfr_table[table_id].jfr_array[jetty_id & mask];
 			if (!jfr) {
-				UDMA_LOG_INFO("JETTY not found, JETTY 0x%x has been destroyed.\n", jetty_id);
+				UDMA_LOG_WARN("JETTY not found, JETTY 0x%x has been destroyed.\n", jetty_id);
 				return true;
 			}
 			cr->user_data = (uintptr_t)&jfr->base;
 		} else {
-			UDMA_LOG_INFO("JFC not polled, JFR 0x%x has been destroyed.\n", jetty_id);
+			UDMA_LOG_WARN("JFC not polled, JFR 0x%x has been destroyed.\n", jetty_id);
 			return true;
 		}
 	}

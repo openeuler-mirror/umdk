@@ -228,6 +228,14 @@ static inline void update_duration_state(perftest_context_t *ctx, perftest_confi
     (void)alarm(g_duration_ctx->duration / PERFTEST_DEF_WARMUP_TIME);
 }
 
+static inline uint64_t get_remote_seg_va(const perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t i)
+{
+    if (ctx->remote_seg_duplex != NULL) {
+        return ctx->remote_seg_duplex[i]->ubva.va;
+    }
+    return ctx->remote_seg[i].ubva.va;
+}
+
 static int poll_jfc_until_expected_cqe(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id, urma_cr_t *cr)
 {
     if (cfg->use_jfce == true) {
@@ -485,7 +493,7 @@ static void *run_send_lat_simplex(void *arg)
     uint32_t rqe_multiple = get_rqe_prefill_multiple_simplex(cfg, ctx->urma_ctx, ctx->jfr[id]);
     if (rqe_multiple == 0) {
         LOG_ERROR("Failed query port for bonding device\n");
-        return NULL;
+        goto free_cr;
     }
 
     uint32_t recv_inflight_baseline =
@@ -544,7 +552,8 @@ static void *run_send_lat_simplex(void *arg)
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
                         (cfg->time_type.bs.duration == 1 ||
-                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
+                         rcnt + recv_inflight_baseline - used_recv_wr <
+                         cfg->iters + (uint64_t)recv_inflight_baseline)) {
                         if (send_lat_post_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -841,8 +850,8 @@ static void init_read_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, perf
                        ? (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size
                        : (uint64_t)ctx->local_buf[i] + ctx->buf_size; // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false)
-                       ? (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size
-                       : (uint64_t)ctx->remote_seg[i].ubva.va;
+                       ? get_remote_seg_va(ctx, cfg, 0) + i * ctx->buf_size
+                       : get_remote_seg_va(ctx, cfg, i);
 
     uint32_t local_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num + cfg->sge_num;
     uint32_t remote_sge_idx = (i * cfg->jfs_post_list + j) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num;
@@ -899,8 +908,8 @@ static void init_write_jfs_wr_sg(urma_jfs_wr_t *wr, perftest_context_t *ctx, per
                        ? (uint64_t)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size
                        : (uint64_t)ctx->local_buf[i] + ctx->buf_size; // Second half for local memory
     uint64_t rva = (cfg->seg_pre_jetty == false)
-                       ? (uint64_t)ctx->remote_seg[0].ubva.va + i * ctx->buf_size
-                       : (uint64_t)ctx->remote_seg[i].ubva.va;
+                       ? get_remote_seg_va(ctx, cfg, 0) + i * ctx->buf_size
+                       : get_remote_seg_va(ctx, cfg, i);
 
     uint32_t sge_block_idx = (i * cfg->jfs_post_list + j) * (PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num +
                                                              (cfg->enable_notify ? 1 : 0));
@@ -1020,8 +1029,8 @@ static void init_atomic_jfs_wr(urma_jfs_wr_t *wr, perftest_context_t *ctx, perft
                        ? (uint8_t *)ctx->local_buf[0] + (cfg->jettys + i) * ctx->buf_size + remainder * align_size
                        : (uint8_t *)ctx->local_buf[i] + ctx->buf_size + remainder * align_size;
     uint8_t *rva = (cfg->seg_pre_jetty == false)
-                       ? (uint8_t *)ctx->remote_seg[i].ubva.va + i * ctx->buf_size + remainder * align_size
-                       : (uint8_t *)ctx->remote_seg[i].ubva.va + remainder * align_size;
+                       ? (uint8_t *)get_remote_seg_va(ctx, cfg, i) + i * ctx->buf_size + remainder * align_size
+                       : (uint8_t *)get_remote_seg_va(ctx, cfg, i) + remainder * align_size;
 
     urma_sge_t *local_sge = &run_ctx->jfs_sge[local_sge_idx];
     urma_sge_t *remote_sge = &run_ctx->jfs_sge[remote_sge_idx];
@@ -1646,7 +1655,7 @@ static void *run_send_lat_duplex(void *arg)
     uint32_t rqe_multiple = get_rqe_prefill_multiple_duplex(cfg, ctx->urma_ctx, ctx->jetty[id]);
     if (rqe_multiple == 0) {
         LOG_ERROR("Failed query port for bonding device\n");
-        return NULL;
+        goto free_cr;
     }
 
     uint32_t recv_inflight_baseline =
@@ -1705,7 +1714,8 @@ static void *run_send_lat_duplex(void *arg)
                     used_recv_wr += (uint64_t)cqe_cnt;
                     if (used_recv_wr >= cfg->jfr_post_list &&
                         (cfg->time_type.bs.duration == 1 ||
-                         rcnt + recv_inflight_baseline - used_recv_wr < cfg->iters)) {
+                         rcnt + recv_inflight_baseline - used_recv_wr <
+                         cfg->iters + (uint64_t)recv_inflight_baseline)) {
                         if (send_lat_post_jetty_recv(ctx, cfg, id, used_recv_wr / cfg->jfr_post_list) != 0) {
                             goto free_cr;
                         }
@@ -1933,7 +1943,7 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         urma_sge_t *remote_sge =
                             &run_ctx->jfs_sge[(index * cfg->jfs_post_list) * PERFTEST_SGE_NUM_PRE_WR * cfg->sge_num];
                         increase_loc_addr(remote_sge, cfg->size, run_ctx->scnt[index],
-                                          (uint64_t)ctx->remote_seg[index].ubva.va,
+                                          get_remote_seg_va(ctx, cfg, index),
                                           cfg->cache_line_size, ctx->page_size);
                     }
                 }
@@ -2168,7 +2178,7 @@ static int run_once_bw_recv(perftest_context_t *ctx, perftest_config_t *cfg)
                         cfg->iters++;
                     }
                     if ((cfg->time_type.bs.duration == 1 ||
-                         posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters) &&
+                         posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters + (uint64_t)run_ctx->rposted) &&
                         unused_recv_pre_jetty[cr_id] >= cfg->jfr_post_list) {
                         if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
                             status = urma_post_jfr_wr(ctx->jfr[cr_id],
@@ -2472,7 +2482,7 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 }
 
                 if ((cfg->time_type.bs.duration == 1 ||
-                     posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters) &&
+                     posted_per_jetty[cr_id] + cfg->jfr_post_list <= cfg->iters + (uint64_t)run_ctx->rposted) &&
                     unused_recv_for_jetty[cr_id] >= cfg->jfr_post_list) {
                     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
                         status = urma_post_jfr_wr(ctx->jfr[cr_id], &run_ctx->jfr_wr[cr_id * cfg->jfr_post_list],
@@ -2850,7 +2860,8 @@ static void *infinite_print_thread(void *duration)
                 request_exit();
                 break;
             }
-            continue;
+            /* Keep normal synchronization data for the main thread. */
+            (void)usleep((uint32_t)poll_slice_ms * PERFTEST_MSEC_TO_USEC);
         }
         elapsed_ms += (uint32_t)poll_slice_ms;
         if (elapsed_ms >= *inf_duration) {
@@ -3342,7 +3353,10 @@ static int run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg)
             (void)signal(SIGINT, SIG_DFL);
             return -1;
         }
-        notify_peer_exit();
+        /* A completed duration test must keep the management channel available for final synchronization. */
+        if (g_exit_flag) {
+            notify_peer_exit();
+        }
         (void)signal(SIGINT, SIG_DFL);
     } else {
         if (prepare_run_bw_once(ctx, cfg, &local_bw_report, &remote_bw_report) != 0) {
@@ -3518,7 +3532,10 @@ static int run_send_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
         }
     }
 
-    notify_peer_exit();
+    /* A completed duration test must keep the management channel available for final synchronization. */
+    if (ret != 0 || g_exit_flag) {
+        notify_peer_exit();
+    }
     (void)signal(SIGINT, SIG_DFL);
 
     return ret;

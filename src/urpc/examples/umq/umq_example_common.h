@@ -22,6 +22,7 @@ extern "C" {
 
 #define PORT_MAX                  65535
 #define DEFAULT_PORT              19875
+#define DEFAULT_PRIORITY          4
 #define TIME_SIZE                 35
 #define UMQ_MAX_BIND_INFO_SIZE    512
 #define EXAMPLE_MAX_DEV_NUM       10
@@ -61,6 +62,7 @@ struct urpc_example_config {
     int16_t eid_idx;
     umq_tp_mode_t tp_mode;
     umq_tp_type_t tp_type;
+    uint8_t priority;
     uint32_t queue_num;
     int thread_poll_size;
     char m_dev_name[EXAMPLE_MAX_DEV_NUM][EXAMPLE_DEV_NAME_LEN];

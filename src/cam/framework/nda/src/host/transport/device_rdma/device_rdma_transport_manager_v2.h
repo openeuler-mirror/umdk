@@ -21,6 +21,7 @@
 #include "mem_entity_def.h"
 #include "transport_manager.h"
 #include "device_rdma_common.h"
+#include "hcomm_entity_compat.h"
 #include "dl_hcomm_def.h"
 
 namespace shm {
@@ -69,13 +70,6 @@ private:
     void FillQpPreSettingCopyInfo(AiQpRMAQueueInfo*& copyInfo);
     void FillQpPostSettingCopyInfo(AiQpRMAQueueInfo*& copyInfo);
     Result GetRdmaInfoFromChannelEntity(AiQpRMAQueueInfo* copyInfo, const std::vector<ChannelHandle>& channelPtrs);
-    Result ReadLocalBufferInfo(AiQpRMAQueueInfo *copyInfo, const std::vector<ChannelHandle> &channelPtrs);
-    Result ReadRemoteBufferInfo(AiQpRMAQueueInfo *copyInfo, const std::vector<ChannelHandle> &channelPtrs);
-    Result ReadSingleRemoteRank(AiQpRMAQueueInfo *copyInfo, const std::vector<ChannelHandle> &channelPtrs,
-                                uint32_t rankId);
-    void FillSqCqAtomicInfo(AiQpRMAQueueInfo *copyInfo, const ChannelEntity &hostEntity, uint32_t rankId);
-    Result PrepareChannelDescs(std::vector<HcommChannelDesc> &channelDescs, uint8_t roceTc, uint8_t roceSl);
-    Result CreateChannelsAndFillInfo(std::vector<HcommChannelDesc> &channelDescs, uint32_t channelNum);
 
 private:
     uint32_t rankId_{0};
@@ -94,9 +88,14 @@ private:
     void* atomicSharedMemory_{nullptr};
     HcommMemHandle atomicMemHandle_{nullptr};
     uint32_t atomicLkey_{0};
+    uint32_t cqAttrFlags_{0}; // 默认不启用 cq overrun 功能
+
+private:
+    static constexpr uint32_t SHMEM_IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN = 2; // IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN = 1 << 1
 };
 } // namespace device
 } // namespace transport
 } // namespace shm
 
 #endif // MF_HYBRID_DEVICE_RDMA_TRANSPORT_MANAGER_V2_H
+

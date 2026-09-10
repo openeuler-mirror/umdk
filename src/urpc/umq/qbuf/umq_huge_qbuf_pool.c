@@ -207,11 +207,11 @@ int umq_huge_qbuf_config_init(huge_qbuf_pool_cfg_t *cfg)
     }
 
     if (cfg->mode != UMQ_BUF_SPLIT && cfg->mode != UMQ_BUF_COMBINE) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool mode: %d is invalid\n", cfg->mode);
+        UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool mode: %u is invalid\n", cfg->mode);
         return -UMQ_ERR_EINVAL;
     }
 
-    if (cfg->type < 0 || cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
+    if (cfg->type >= HUGE_QBUF_POOL_SIZE_TYPE_MAX) {
         UMQ_VLOG_ERR(VLOG_UMQ, "huge qbuf pool type: %d is invalid\n", cfg->type);
         return -UMQ_ERR_EINVAL;
     }
@@ -378,12 +378,16 @@ int umq_huge_qbuf_alloc(huge_qbuf_pool_size_type_t type, uint32_t request_size, 
         align_size -= (uint64_t)sizeof(umq_buf_t);
         actual_buf_count = num * ((request_size + headroom_size + align_size - 1) / (align_size));
     }
-
+    if (UMQ_MAX_SGE_NUM == 1 && actual_buf_count != num) {
+        (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "only one qbuf can be allocated when UMQ_MAX_SGE_NUM equals 1\n");
+        return -UMQ_ERR_EINVAL;
+    }
     while (pool->block_pool.buf_cnt_with_data < actual_buf_count) {
         int ret = umq_huge_qbuf_pool_init(type, pool);
         if (ret != UMQ_SUCCESS) {
             (void)pthread_spin_unlock(&pool->block_pool.global_mutex);
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %u, status: %d\n",
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "buffer not enough, rest count: %lu, status: %d\n",
                 pool->block_pool.buf_cnt_with_data, ret);
             return -UMQ_ERR_ENOMEM;
         }
@@ -415,6 +419,9 @@ void umq_huge_qbuf_free(umq_buf_list_t *list)
 {
     if (!g_huge_pool_ctx.inited) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "huge qbuf pool has not been inited\n");
+        return;
+    }
+    if (list == NULL || QBUF_LIST_FIRST(list) == NULL) {
         return;
     }
 
@@ -502,7 +509,6 @@ int umq_huge_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
      * If it is not initialized, no statistics are returned, yet the operation itself returns successfully
      */
     if (!g_huge_pool_ctx.inited) {
-        UMQ_VLOG_DEBUG(VLOG_UMQ, "huge qbuf pool has not been inited\n");
         return UMQ_SUCCESS;
     }
 

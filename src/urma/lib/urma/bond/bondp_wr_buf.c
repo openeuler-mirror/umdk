@@ -8,22 +8,120 @@
  * History: 2026-03-17  Create file
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
+#include "ub_util.h"
 #include "urma_log.h"
-#include "bondp_datapath_convert.h"
+
+#include "bondp_cp_seg.h"
+#include "bondp_cp_tjetty.h"
+
 #include "bondp_wr_buf.h"
 
-int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
+void jfs_wr_get_refs(urma_jfs_wr_t *wr)
 {
-    if (buf == NULL || max_wr_num == 0) {
+    if (wr->tjetty != NULL) {
+        bondp_tjetty_get(wr->tjetty);
+    }
+
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            if (wr->send.src.sge != NULL) {
+                for (int i = 0; i < wr->send.src.num_sge; ++i) {
+                    /* tseg is NULL for import-free SGEs (user_tseg path). */
+                    if (wr->send.src.sge[i].tseg != NULL) {
+                        bondp_tseg_get(wr->send.src.sge[i].tseg);
+                    }
+                }
+            }
+            return;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
+                if (wr->rw.src.sge[i].tseg != NULL) {
+                    bondp_tseg_get(wr->rw.src.sge[i].tseg);
+                }
+            }
+            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
+                if (wr->rw.dst.sge[i].tseg != NULL) {
+                    bondp_tseg_get(wr->rw.dst.sge[i].tseg);
+                }
+            }
+            return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_get(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_get(wr->cas.dst->tseg);
+            }
+            return;
+        default:
+            return;
+    }
+}
+
+void jfs_wr_put_refs(urma_jfs_wr_t *wr)
+{
+    if (wr->tjetty != NULL) {
+        bondp_tjetty_put(wr->tjetty);
+    }
+
+    switch (wr->opcode) {
+        case URMA_OPC_SEND:
+        case URMA_OPC_SEND_IMM:
+        case URMA_OPC_SEND_INVALIDATE:
+            if (wr->send.src.sge != NULL) {
+                for (int i = 0; i < wr->send.src.num_sge; ++i) {
+                    if (wr->send.src.sge[i].tseg != NULL) {
+                        bondp_tseg_put(wr->send.src.sge[i].tseg);
+                    }
+                }
+            }
+            return;
+        case URMA_OPC_WRITE:
+        case URMA_OPC_WRITE_IMM:
+        case URMA_OPC_WRITE_NOTIFY:
+        case URMA_OPC_READ:
+            for (int i = 0; i < wr->rw.src.num_sge; ++i) {
+                if (wr->rw.src.sge[i].tseg != NULL) {
+                    bondp_tseg_put(wr->rw.src.sge[i].tseg);
+                }
+            }
+            for (int i = 0; i < wr->rw.dst.num_sge; ++i) {
+                if (wr->rw.dst.sge[i].tseg != NULL) {
+                    bondp_tseg_put(wr->rw.dst.sge[i].tseg);
+                }
+            }
+            return;
+        case URMA_OPC_CAS:
+        case URMA_OPC_FADD:
+            if (wr->cas.src != NULL && wr->cas.src->tseg != NULL) {
+                bondp_tseg_put(wr->cas.src->tseg);
+            }
+            if (wr->cas.dst != NULL && wr->cas.dst->tseg != NULL) {
+                bondp_tseg_put(wr->cas.dst->tseg);
+            }
+            return;
+        default:
+            return;
+    }
+}
+
+static int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t entry_size)
+{
+    if (buf == NULL || max_wr_num == 0 || entry_size == 0) {
         return -EINVAL;
     }
 
-    const uint32_t max_entry_size = MAX(sizeof(jfs_wr_entry_t), sizeof(jfr_wr_entry_t));
-    buf->entries = calloc(max_wr_num, max_entry_size);
+    buf->entries = calloc(max_wr_num, entry_size);
     if (buf->entries == NULL) {
         goto WR_BUF_FAIL;
     }
@@ -38,7 +136,7 @@ int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num)
     }
 
     buf->max_wr_num = max_wr_num;
-    buf->wr_entry_size = max_entry_size;
+    buf->wr_entry_size = entry_size;
     buf->latest_used = max_wr_num - 1;
 
     /* Build single free list: 0 -> 1 -> 2 -> ... -> max_wr_num-1 -> UINT32_MAX */
@@ -59,6 +157,31 @@ WR_BUF_FAIL:
     return -ENOMEM;
 }
 
+int jfs_wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge, uint32_t max_rsge)
+{
+    if (max_sge == 0 || max_rsge == 0) {
+        return -EINVAL;
+    }
+
+    /* sge_data + import-free user_tseg scratch regions (see bondp_wr_buf.h). */
+    uint32_t n = max_sge + max_rsge;
+    uint32_t entry_size = sizeof(jfs_wr_entry_t) +
+                          n * (sizeof(urma_sge_t) + BONDP_USER_TSEG_SLOT_STRIDE +
+                               sizeof(urma_user_tseg_t) + sizeof(urma_user_tseg_t *));
+    entry_size = (entry_size + 7u) & ~7u; /* keep every entry 8-byte aligned */
+    return wr_buf_init(buf, max_wr_num, entry_size);
+}
+
+int jfr_wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t max_sge)
+{
+    if (max_sge == 0) {
+        return -EINVAL;
+    }
+
+    uint32_t entry_size = sizeof(jfr_wr_entry_t) + max_sge * sizeof(urma_sge_t);
+    return wr_buf_init(buf, max_wr_num, entry_size);
+}
+
 void wr_buf_uninit(wr_buf_t *buf)
 {
     if (buf == NULL || buf->entries == NULL) {
@@ -73,8 +196,7 @@ void wr_buf_uninit(wr_buf_t *buf)
 
         if (entry_hdr->entry_type == WR_BUF_ENTRY_JFS) {
             jfs_wr_entry_t *entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, idx);
-            convert_jfs_pwr_to_vwr_resend(&entry->wr, &entry->target_vjetty->v_tjetty);
-            release_vwr_use_cnt(&entry->wr);
+            jfs_wr_put_refs(&entry->wr);
         } else if (entry_hdr->entry_type == WR_BUF_ENTRY_JFR) {
             /* sge is embedded in jfr_wr_entry_t, no need to free */
         }
@@ -83,9 +205,7 @@ void wr_buf_uninit(wr_buf_t *buf)
     pthread_spin_destroy(&buf->lock);
     free(buf->next_free);
     buf->next_free = NULL;
-    const uint32_t max_entry_size = MAX(sizeof(jfs_wr_entry_t),
-        sizeof(jfr_wr_entry_t));
-    memset(buf->entries, 0, buf->max_wr_num * max_entry_size);
+    memset(buf->entries, 0, buf->max_wr_num * buf->wr_entry_size);
     free(buf->entries);
     buf->entries = NULL;
     buf->max_wr_num = 0;
@@ -131,7 +251,7 @@ jfr_wr_entry_t *jfr_wr_buf_alloc(wr_buf_t *buf)
  * Note: entry_type is NOT set here.
  */
 static uint32_t wr_buf_alloc_batch(wr_buf_t *buf,
-    char **entries, uint32_t count)
+                                   char **entries, uint32_t count)
 {
     if (count == 0) {
         return 0;
@@ -225,7 +345,7 @@ void jfs_wr_buf_release_batch(wr_buf_t *buf, jfs_wr_entry_t **entries, uint32_t 
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("JFS WR buf release failed: count = %u, limit = %u",
-            count, BONDP_BATCH_POST_MAX_NUM);
+                     count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {
@@ -242,7 +362,7 @@ void jfr_wr_buf_release_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_t 
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("JFR WR buf release failed: count = %u, limit = %u",
-            count, BONDP_BATCH_POST_MAX_NUM);
+                     count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {

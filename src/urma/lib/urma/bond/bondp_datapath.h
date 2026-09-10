@@ -17,6 +17,12 @@
 extern "C" {
 #endif
 
+struct bondp_comp;
+struct jfs_wr_entry;
+
+int bondp_resend_jfs_wr(struct bondp_comp *bdp_comp, struct jfs_wr_entry *wr_entry,
+                        int send_idx, int target_idx);
+
 urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
 

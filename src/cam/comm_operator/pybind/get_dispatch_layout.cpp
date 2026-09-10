@@ -40,8 +40,8 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImplNpu(const at::Tensor &to
     TORCH_BIND_ASSERT(topkIdxInt64.is_contiguous());
     TORCH_BIND_ASSERT(numExperts > 0);
 
-    const int numTokens = topkIdxInt64.size(0);
-    const int numTopk = topkIdxInt64.size(1);
+    const int64_t numTokens = topkIdxInt64.size(0);
+    const int64_t numTopk = topkIdxInt64.size(1);
     const int localRanksize = LOCAL_RANK_SIZE;
     auto serverNum = numRanks / localRanksize;
 
@@ -49,7 +49,7 @@ std::tuple<at::Tensor, at::Tensor> GetDispatchLayoutImplNpu(const at::Tensor &to
     auto numTokensPerExpert = at::zeros({numExperts}, at::dtype(at::kInt).device(device));
     auto numTokensPerRank = at::zeros({numRanks}, at::dtype(at::kInt).device(device));
     auto isTokenInRank = at::zeros({numTokens, numRanks}, at::dtype(at::kInt).device(device));
-    const int notifySendDataSize =
+    const int64_t notifySendDataSize =
         numExperts * EXPERT_DATA_SIZE + serverNum + MAX_BATCH_SIZE * (1 + 2 * serverNum + numExperts);
     auto sendTokenIdxSmall = at::zeros({numTokens, numTopk}, at::dtype(at::kInt).device(device));
     auto notifySendData = at::zeros({notifySendDataSize}, at::dtype(at::kInt).device(device));

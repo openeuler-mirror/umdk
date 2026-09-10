@@ -178,14 +178,14 @@ static inline uint32_t get_max_sge_num(uint8_t max_sge, uint32_t max_inline_size
 }
 
 static inline bool is_support_wqe_lock_buffer_jetty(struct udma_u_context *udma_ctx,
-						    uint32_t id, bool is_jetty)
+						    uint32_t id)
 {
 	bool is_ccu_jetty;
 
 	is_ccu_jetty = udma_ctx->ccu_jetty_max_cnt &&
 		       id >= udma_ctx->ccu_jetty_start_id &&
 		       id < (udma_ctx->ccu_jetty_start_id + udma_ctx->ccu_jetty_max_cnt);
-	return is_jetty && is_ccu_jetty && udma_ctx->lock_buffer_en;
+	return is_ccu_jetty && udma_ctx->lock_buffer_en;
 }
 
 urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,

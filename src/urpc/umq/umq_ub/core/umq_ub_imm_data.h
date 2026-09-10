@@ -17,6 +17,12 @@ extern "C" {
 #define UMQ_UB_IMM_BITS (0xFFFFFFFFFFFFFFFF)
 #define UMQ_UB_IMM_IN_USER_BUF 1  // user buffer with umq defined imm data
 
+/* io_imm.rsvd1 occupies bits 20-39 (20 bits): reserved for the umq backend, never
+ * touched by type(0-1)/umq_id(2-19)/user_data(40-63). Callers may stash
+ * ubsocket-level markers here (e.g. UBS_IMM_BIG_CTRL_BIT at bit 20); umq_ub_fill_wr
+ * propagates this window into the wire imm so receivers can read it back. */
+#define UMQ_UB_IMM_RSV1_MASK (0xFFFFF00000ULL)
+
 typedef enum umq_ub_fc_credit_type {
     IMM_TYPE_FC_CREDIT_INIT = 0,
     IMM_TYPE_FC_CREDIT_REQ,

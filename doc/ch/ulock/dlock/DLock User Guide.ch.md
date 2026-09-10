@@ -204,7 +204,7 @@ DLock数据面支持分布式状态对象Atomic FAA/CAS、获取对象快照等�
 
 #### 使用说明:
 （1）客户端获取分布式状态对象后，可调用umo_atomic64_faa接口，向服务端请求对该对象做原子Fetch and Add操作，返回原值；
-（2）客户端获取分布式状态对象后，可调用umo_atomic64_cas接口，向服务端请求对该对象做原子Compare and Swap操作，返回修改后的新值；
+（2）客户端获取分布式状态对象后，可调用umo_atomic64_cas接口，向服务端请求对该对象做原子Compare and Swap操作；
 （3）客户端获取分布式状态对象后，可调用umo_atomic64_get_snapshot接口，向服务端请求获取该对象当前值。
 
 ## 9. 心跳检测

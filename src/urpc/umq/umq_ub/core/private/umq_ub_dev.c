@@ -52,7 +52,7 @@ int umq_ub_dev_str_get(umq_dev_assign_t *dev_info, char *dev_str, int dev_str_le
             }
             break;
         default:
-            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %d not supported\n", dev_info->assign_mode);
+            UMQ_VLOG_ERR(VLOG_UMQ, "assign mode: %u not supported\n", dev_info->assign_mode);
             return -UMQ_ERR_EINVAL;
     }
 

@@ -46,6 +46,25 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
 
 /**
  * Thread safety function
+ * Get normal qbuf pool statistical results (global pool, no umq handle needed).
+ * Appends one pool info entry to qbuf_pool_stats->qbuf_pool_info[num].
+ * @param[out] qbuf_pool_stats: qbuf pool statistical results
+ * Return 0 on success, error code on failure
+ */
+int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
+
+/**
+ * Thread safety function
+ * Get tiny qbuf pool statistical results (global pool, no umq handle needed).
+ * Appends one pool info entry to qbuf_pool_stats->qbuf_pool_info[num].
+ * Returns success without filling data when the tiny pool is not initialized.
+ * @param[out] qbuf_pool_stats: qbuf pool statistical results
+ * Return 0 on success, error code on failure
+ */
+int umq_tiny_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats);
+
+/**
+ * Thread safety function
  * Convert qbuf pool statistical results to string.
  * @param[in] qbuf_pool_stats: qbuf pool statistical results
  * @param[out] buf: buffer to store the string

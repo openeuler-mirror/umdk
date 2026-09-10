@@ -101,7 +101,7 @@ git_repository(
 )
 
 new_local_repository(
-    name = "urma",
-    build_file = "//third_party/urma:BUILD.bazel",
-    path = "/usr",
+     name = "urma",
+     build_file = "//third_party/urma:BUILD.bazel",
+     path = "/usr",
 )

@@ -4,6 +4,7 @@
 
 | 修订时间 | 修订章节 | 修订内容简介 | 修复问题单连接或问题背景 | 修订人员 |
 | --- | --- | --- | --- | --- |
+| 2026.6.25 | 2.3.1.5、2.3.1.6、2.3.2、2.4.4、2.5.2 | 对齐用户态API函数原型和缺失辅助接口，与当前代码保持一致 | | @Codex |
 | 2026.2.12 | ALL | 文档基线 | | @qianguoxin、@jerry_lilijun、@wuyuyan_98、@pinchen2025、@autoreconf、@heyu_1014、@wdmmsyf |
 
 ---
@@ -105,14 +106,16 @@
                 - [2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)
                 - [2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty)
                 - [2.3.1.6.14 urma_flush_jetty](#231614-urma_flush_jetty)
-                - [2.3.1.6.15 urma_import_jetty_async](#231615-urma_import_jetty_async)
-                - [2.3.1.6.16 urma_unimport_jetty_async](#231616-urma_unimport_jetty_async)
-                - [2.3.1.6.17 urma_bind_jetty_async](#231617-urma_bind_jetty_async)
-                - [2.3.1.6.18 urma_unbind_jetty_async](#231618-urma_unbind_jetty_async)
-                - [2.3.1.6.19 urma_create_notifier](#231619-urma_create_notifier)
-                - [2.3.1.6.20 urma_delete_notifier](#231620-urma_delete_notifier)
-                - [2.3.1.6.21 urma_wait_notify](#231621-urma_wait_notify)
-                - [2.3.1.6.22 urma_ack_notify](#231622-urma_ack_notify)
+                - [2.3.1.6.15 urma_get_rjetty](#231615-urma_get_rjetty)
+                - [2.3.1.6.16 urma_put_rjetty](#231616-urma_put_rjetty)
+                - [2.3.1.6.17 urma_import_jetty_async](#231617-urma_import_jetty_async)
+                - [2.3.1.6.18 urma_unimport_jetty_async](#231618-urma_unimport_jetty_async)
+                - [2.3.1.6.19 urma_bind_jetty_async](#231619-urma_bind_jetty_async)
+                - [2.3.1.6.20 urma_unbind_jetty_async](#231620-urma_unbind_jetty_async)
+                - [2.3.1.6.21 urma_create_notifier](#231621-urma_create_notifier)
+                - [2.3.1.6.22 urma_delete_notifier](#231622-urma_delete_notifier)
+                - [2.3.1.6.23 urma_wait_notify](#231623-urma_wait_notify)
+                - [2.3.1.6.24 urma_ack_notify](#231624-urma_ack_notify)
             - [2.3.1.7 Jetty Group](#2317-jetty-group)
                 - [2.3.1.7.1 urma_create_jetty_grp](#23171-urma_create_jetty_grp)
                 - [2.3.1.7.2 urma_delete_jetty_grp](#23172-urma_delete_jetty_grp)
@@ -129,6 +132,8 @@
             - [2.3.2.3 urma_import_seg](#2323-urma_import_seg)
                 - [2.3.2.3.1 urma_import_seg_flag_t](#23231-urma_import_seg_flag_t)
             - [2.3.2.4 urma_unimport_seg](#2324-urma_unimport_seg)
+            - [2.3.2.5 urma_get_seg_ctx](#2325-urma_get_seg_ctx)
+            - [2.3.2.6 urma_put_seg_ctx](#2326-urma_put_seg_ctx)
         - [2.3.3 TP Channel](#233-tp-channel)
             - [2.3.3.1 urma_get_tpn](#2331-urma_get_tpn)
             - [2.3.3.2 urma_modify_tp](#2332-urma_modify_tp)
@@ -1090,7 +1095,7 @@ Return: 0 on success, other value on error.
 
 ##### 2.2.1.1.1 urma_init_attr_t
 
-定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
 ```c
 typedef struct urma_init_attr {
@@ -1129,7 +1134,7 @@ typedef int urma_status_t;
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_uninit(void);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -1204,12 +1209,12 @@ typedef enum urma_transport_type {
 
 9.  [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
 ```c
 typedef struct urma_provider_ops {
     const char *name;
-    urma_device_attr_t attr;
+    urma_provider_attr_t attr;
     urma_match_entry_t *match_table;
     urma_status_t (*init)(urma_init_attr_t *conf);
     urma_status_t (*uninit)(void);
@@ -1218,6 +1223,9 @@ typedef struct urma_provider_ops {
     urma_context_t *(*create_context)(urma_device_t *dev, uint32_t eid_index, int dev_fd);
     urma_status_t (*delete_context)(urma_context_t *ctx);
     urma_status_t (*get_uasid)(uint32_t *uasid); /* obsolete */
+    /* Log Ops */
+    urma_status_t (*register_log_func)(urma_log_cb_t func);
+    urma_status_t (*unregister_log_func)(void);
 } urma_provider_ops_t;
 ```
 
@@ -1234,7 +1242,7 @@ typedef struct urma_match_entry {
 
 11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_private.h](../../../src/urma/lib/urma/core/urma_private.h)
 
 ```c
 typedef struct urma_sysfs_dev {
@@ -1257,7 +1265,7 @@ typedef struct urma_sysfs_dev {
 
 ```c
 typedef struct urma_driver {
-    struct urma_provider_ops_t *ops;
+    struct urma_provider_ops *ops;
     struct ub_list node; /* Add to driver list */
 } urma_driver_t;
 ```
@@ -1473,7 +1481,10 @@ typedef union urma_device_feature {
         uint32_t mn : 1; /* [Public] for user tp */
         uint32_t clan : 1; /* [Public] for user tp */
         uint32_t muti_seg_per_token_id : 1;
-        uint32_t reserved : 15;
+        uint32_t ipourma_en : 1;
+        uint32_t ctp_en : 1;
+        uint32_t uboe : 1;
+        uint32_t reserved : 12;
     } bs;
     uint32_t value;
 } urma_device_feature_t;
@@ -1919,22 +1930,22 @@ Return: urma context pointer on success, NULL on error.
 
 ```c
 typedef struct urma_context {
-    struct urma_device_t *dev; /* [Private] point to the corresponding urma device. */
-    struct urma_ops_t *ops; /* [Private] operation of urma device. */
+    struct urma_device *dev; /* [Private] point to the corresponding urma device. */
+    struct urma_ops *ops; /* [Private] operation of urma device. */
     int dev_fd; /* [Private] fd of urma device's sysfs file. */
     int async_fd; /* [Private] fd of urma device's async event file. */
     pthread_mutex_t mutex; /* [Private] mutex of urma context. */
     urma_eid_t eid; /* [Public] eid of urma device. */
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
-    struct urma_ref_t ref; /* [Private] reference count of urma context. */
+    struct urma_ref ref; /* [Private] reference count of urma context. */
     urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
 7.  [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
 ```c
 typedef struct urma_ops {
@@ -2035,6 +2046,10 @@ typedef struct urma_ops {
     urma_status_t (*delete_notifier)(urma_notifier_t *notifier);
     int (*wait_notify)(urma_notifier_t *notifier, uint32_t cnt, urma_notify_t *notify, int timeout);
     void (*ack_notify)(uint32_t cnt, urma_notify_t *notify);
+    urma_status_t (*get_eid_by_ip)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, urma_eid_t *eid);
+    urma_status_t (*get_ip_by_eid)(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
+    urma_status_t (*get_smac)(const urma_context_t *ctx, uint8_t *mac);
+    urma_status_t (*get_dmac)(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 } urma_ops_t;
 ```
 
@@ -2277,7 +2292,7 @@ typedef union urma_token_id_flag {
 
 [3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -2349,7 +2364,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_caution.png)
 
-正常时，JFC的队列深度配置不足，可能会影响应用的正常运行。异常时，硬件可能构造错误CR通知应用Jetty或JFS的状态发生了变化，构造的错误CR类型包括URMA_CR_WR_FLUSH_ERR_DONE和URMA_CR_WR_SUSPEND_ERR_DONE，也应为JFC预留足够的空间来存放硬件构造的CR，否则JFC会发生溢出。故推荐按照JFC队列深度 \>= 关联jetty的队列深度总和 / 每多少个WR生成一个CR来配置（默认为1）+ 关联jetty数。
+正常时，JFC的队列深度配置不足，可能会影响应用的正常运行。异常时，硬件可能构造错误CR通知应用Jetty或JFS的状态发生了变化，构造的错误CR类型包括URMA_CR_WR_FLUSH_ERR_DONE和URMA_CR_WR_SUSPEND_DONE，也应为JFC预留足够的空间来存放硬件构造的CR，否则JFC会发生溢出。故推荐按照JFC队列深度 \>= 关联jetty的队列深度总和 / 每多少个WR生成一个CR来配置（默认为1）+ 关联jetty数。
 
 5.  返回值
 
@@ -2363,7 +2378,7 @@ Return: the handle of created jfc, not NULL on success; NULL on error.
 typedef struct urma_jfc_cfg {
     uint32_t depth; /* [Required] the depth of jfc, no greater than urma_device_cap_t-\>jfc_depth */
     urma_jfc_flag_t flag; /* [Optional] see urma_jfc_flag_t, set flag.value to be 0 by default */
-    uint32_t ceqn; /* [Optional] event queue id, no greater than urma_device_cap_t-\>ceq_cnt
+    uint32_t ceqn; /* [Optional] event queue id, less than urma_device_cap_t-\>ceq_cnt
     set to 0 by default */
     urma_jfce_t *jfce; /* [Required] the event of jfc */
     uint64_t user_ctx; /* [Optional] private data of jfc, set to NULL by default */
@@ -2379,7 +2394,9 @@ typedef union urma_jfc_flag {
     struct {
         uint32_t lock_free : 1;
         uint32_t jfc_inline : 1;
-        uint32_t reserved : 30;
+        uint32_t non_blocking : 1;
+        uint32_t has_drv_ext : 1;
+        uint32_t reserved : 28;
     } bs;
     uint32_t value;
 } urma_jfc_flag_t;
@@ -2416,7 +2433,7 @@ typedef struct urma_jfc {
 
 10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
+typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
 
 ##### 2.3.1.1.2 urma_modify_jfc
 
@@ -2426,7 +2443,7 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, urma_jfc_attr_t *attr);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2972,9 +2989,11 @@ typedef struct urma_jfs {
 } urma_jfs_t;
 ```
 
+> 说明：上述结构体定义未列出 `urma_jfs_opt` 成员；当前实现会访问 `jfs->urma_jfs_opt.is_actived` 和 `jfs->urma_jfs_opt.jfs_opt_mask`。
+
 10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
+typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
 
 ##### 2.3.1.4.2 urma_modify_jfs
 
@@ -3169,7 +3188,7 @@ urma_status_t urma_alloc_jfs(urma_context_t *urma_ctx, urma_jfs_cfg_t *cfg, urma
 
 4.  参数
 
-@param[in] [Required] ctx: the urma context created before;
+@param[in] [Required] urma_ctx: the urma context created before;
 
 @param[in] [Required] cfg: configuration of jfs;
 
@@ -3446,6 +3465,7 @@ typedef struct urma_jfr {
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
+    urma_jfr_opt_t urma_jfr_opt;
 } urma_jfr_t;
 ```
 
@@ -3630,7 +3650,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 @param[in] [Required] rjfr: the information of remote jfr to import into user node, trans_mode required, trans_mode same to create_jfr trans_mode;
 
-@param[in] [Required] token_value: token_valueto put into output jetty/protection table;
+@param[in] [Required] token_value: token to put into output jetty/protection table;
 
 5.  返回值
 
@@ -3664,7 +3684,10 @@ typedef union urma_import_jetty_flag {
         /* (0x4): UNO, unreliable non ordering */
         uint32_t share_tp : 1; /* 1: shared tp; 0: non-shared tp. When rc mode is not ta dst ordering,
         this flag can only be set to 0. */
-        uint32_t reserved : 20;
+        uint32_t has_drv_ext : 1; /* Driver-defined behavior for import_jetty, such as affinity control. */
+        uint32_t has_user_info : 1; /* 0: no extension data.
+                                       1: extension data is appended after urma_rjetty_t. */
+        uint32_t reserved : 18;
     } bs;
     uint32_t value;
 } urma_import_jetty_flag_t;
@@ -3846,7 +3869,7 @@ Return: 0 on success, other value on error.
 
 3.  描述
 
-构造JFS与远端JFR之间的传输通道。
+构造JFS与远端JFR之间的传输通道。JFS和target JFR必须均为RM传输模式。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3856,7 +3879,7 @@ Return: 0 on success, other value on error.
 
 5.  返回值
 
-Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on error.
+Return: 0 on success, URMA_EEXIST if the jfr has been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ##### 2.3.1.5.10 urma_advise_jfr_async
 
@@ -3872,7 +3895,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 3.  描述
 
-[3.3.1.5.9](#23159-urma_advise_jfr) [urma_advise_jfr](#23159-urma_advise_jfr)的异步版本，构造JFS与远端JFR之间的传输通道。
+[3.3.1.5.9](#23159-urma_advise_jfr) [urma_advise_jfr](#23159-urma_advise_jfr)的异步版本，构造JFS与远端JFR之间的传输通道。JFS和target JFR必须均为RM传输模式，并且属于同一个URMA context。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3886,11 +3909,11 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 5.  返回值
 
-Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on error.
+Return: 0 on success, URMA_EEXIST if the jfr has been advised by the provider, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ![](figures/urma_notice.png)
 
-用户必须定义回调函数处理异步结果，异步响应会调用cb_fun并传入处理结果。
+用户必须定义非NULL的回调函数和回调参数处理异步结果，异步响应会调用cb_fun并传入处理结果。
 
 ##### 2.3.1.5.11 urma_unadvise_jfr
 
@@ -3906,7 +3929,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 3.  描述
 
-断开JFS与远端JFR之间的传输通道，可选优化接口。
+断开JFS与远端JFR之间的传输通道，可选优化接口。对于UB传输设备，本接口不调用provider操作并返回URMA_SUCCESS。
 
 4.  参数
 
@@ -3916,7 +3939,7 @@ Return: 0 on success, URMA_EEXIST if the jfr has been advised, other value on er
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, URMA_EINVAL on invalid parameters or unsupported provider operation, other value on error.
 
 ##### urma_alloc_jfr
 
@@ -4210,18 +4233,18 @@ typedef union urma_jetty_grp_flag {
 11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)
 
 ```c
-struct urma_jetty_grp {
-    urma_context_t *urma_ctx;
-    urma_jetty_id_t jetty_grp_id;
-    urma_jetty_grp_cfg_t cfg;
-    uint32_t jetty_cnt;
-    urma_jetty_t **jetty_list;
-    pthread_mutex_t list_mutex;
-    uint64_t handle; /* use to quickly get uobj of jetty group in kernel module */
+typedef struct urma_jetty {
+    urma_context_t *urma_ctx;          /* [Private] point to urma context. */
+    urma_jetty_id_t jetty_id;          /* [Public] see urma_jetty_id. */
+    urma_target_jetty_t *remote_jetty; /* [Private] Only valid for connection mode Jetty.
+                                          After the bind succeeds, the pointer is not null. */
+    urma_jetty_cfg_t jetty_cfg;        /* [Public] storage jetty config. */
+    uint64_t handle;
     pthread_mutex_t event_mutex;
     pthread_cond_t event_cond;
     uint32_t async_events_acked;
-};
+    urma_jetty_opt_t urma_jetty_opt;
+} urma_jetty_t;
 ```
 
 ##### 2.3.1.6.2 urma_modify_jetty
@@ -4266,7 +4289,7 @@ typedef struct urma_jetty_attr {
 } urma_jetty_attr_t;
 ```
 
-7.  ?.2.urma_jetty_attr_mask_t
+7.  urma_jetty_attr_mask_t
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4465,7 +4488,7 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 6.  [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext)
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
+typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.8 urma_unimport_jetty
 
@@ -4625,7 +4648,7 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 6.  [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext)
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
+typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.13 urma_unbind_jetty
 
@@ -4691,7 +4714,63 @@ Return: the number of CR returned, 0 means no CR returned, -1 on error.
 
 若执行成功，则出参cr status为URMA_CR_WR_FLUSH_ERR。
 
-##### 2.3.1.6.15 urma_import_jetty_async
+##### 2.3.1.6.15 urma_get_rjetty
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_rjetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) **rjetty, uint32_t *length);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+获取本端Jetty对应的远端Jetty上下文副本，用于与对端交换后执行Jetty导入或绑定。对于bonding设备，返回内容可能包含provider扩展数据。
+
+4.  参数
+
+@param[in] [Required] jetty: local Jetty used to build the remote Jetty context;
+
+@param[out] [Required] rjetty: address used to return the allocated remote Jetty context;
+
+@param[out] [Required] length: length of the returned remote Jetty context, including any extension data;
+
+5.  返回值
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+rjetty返回的内存由本接口分配，调用者必须调用[urma_put_rjetty](#231616-urma_put_rjetty)释放。
+
+##### 2.3.1.6.16 urma_put_rjetty
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+void urma_put_rjetty([urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+释放[urma_get_rjetty](#231615-urma_get_rjetty)返回的远端Jetty上下文。
+
+4.  参数
+
+@param[in] [Optional] rjetty: remote Jetty context returned by [urma_get_rjetty](#231615-urma_get_rjetty). If rjetty is NULL, this API returns directly.
+
+5.  返回值
+
+void
+
+##### 2.3.1.6.17 urma_import_jetty_async
 
 1.  头文件
 
@@ -4735,7 +4814,7 @@ typedef struct urma_notifier {
 } urma_notifier_t;
 ```
 
-##### 2.3.1.6.16 urma_unimport_jetty_async
+##### 2.3.1.6.18 urma_unimport_jetty_async
 
 1.  头文件
 
@@ -4759,7 +4838,7 @@ typedef struct urma_notifier {
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.17 urma_bind_jetty_async
+##### 2.3.1.6.19 urma_bind_jetty_async
 
 1.  头文件
 
@@ -4791,7 +4870,7 @@ Return: 0 on success, other value on error.
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-##### 2.3.1.6.18 urma_unbind_jetty_async
+##### 2.3.1.6.20 urma_unbind_jetty_async
 
 1.  头文件
 
@@ -4825,9 +4904,9 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.1](#23161-urma_create_jetty) [urma_create_jetty](#23161-urma_create_jetty)接口返回，tjetty来自[3.3.1.6.16](#231616-urma_unbind_jetty_async) [urma_unbind_jetty_async](#231616-urma_unbind_jetty_async)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+本接口会校验参数jetty及jetty->remote_jetty是否为空；任一为空时返回URMA_EINVAL。
 
-##### 2.3.1.6.19 urma_create_notifier
+##### 2.3.1.6.21 urma_create_notifier
 
 1.  头文件
 
@@ -4851,7 +4930,7 @@ Return: 0 on success, other value on error
 
 Return: the address of urma notifier, not NULL on success, NULL on error.
 
-##### 2.3.1.6.20 urma_delete_notifier
+##### 2.3.1.6.22 urma_delete_notifier
 
 1.  头文件
 
@@ -4873,13 +4952,13 @@ Return: the address of urma notifier, not NULL on success, NULL on error.
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jetty来自[3.3.1.6.17](#231617-urma_create_notifier) [urma_create_notifier](#231617-urma_create_notifier)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+由调用者保证参数notifier来自[3.3.1.6.21](#231621-urma_create_notifier) [urma_create_notifier](#231621-urma_create_notifier)接口返回，参数内部指针等合法性由该接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
 
 5.  返回值
 
 Return: 0 on success, other value on error.
 
-##### 2.3.1.6.21 urma_wait_notify
+##### 2.3.1.6.23 urma_wait_notify
 
 1.  头文件
 
@@ -4936,7 +5015,7 @@ typedef enum urma_notify_type {
 } urma_notify_type_t;
 ```
 
-##### 2.3.1.6.22 urma_ack_notify
+##### 2.3.1.6.24 urma_ack_notify
 
 1.  头文件
 
@@ -4984,7 +5063,7 @@ urma_status_t urma_alloc_jetty(urma_context_t *urma_ctx, urma_jetty_cfg_t *cfg, 
 
 4.  参数
 
-@param[in] [Required] ctx: the urma context created before;
+@param[in] [Required] urma_ctx: the urma context created before;
 
 @param[in] [Required] cfg: configuration of jetty;
 
@@ -5142,7 +5221,7 @@ Jetty group管理API包括创建、删除Jetty group等API。
 
 2.  原型
 
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg)；
+[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg);
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5338,18 +5417,19 @@ typedef union urma_seg_attr {
         uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
         1: URMA_CACHEABLE. */
         uint32_t dsva : 1;
-        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
-        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
-        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
-        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
-        (0x1 << 4): URMA_ACCESS_REMOTE_INVALIDATE. */
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_ONLY.
+        (0x1 << 1): URMA_ACCESS_READ.
+        (0x1 << 2): URMA_ACCESS_WRITE.
+        (0x1 << 3): URMA_ACCESS_ATOMIC. */
         uint32_t non_pin : 1; /* 0: segment pages pinned.
         1: segment pages non-pinned. */
         uint32_t user_iova : 1; /* 0: segment without user iova addr.
         1: segment with user iova addr. */
         uint32_t user_token_id : 1; /* 0: token_id is allocated and should be freed by urma.
         1: token_id is allocated by user in urma_seg_cfg. */
-        uint32_t reserved : 18;
+        uint32_t has_user_info : 1; /* 0: no extension data.
+        1: extension data appended after urma_seg_t. */
+        uint32_t reserved : 17;
     } bs;
     uint32_t value;
 } urma_seg_attr_t;
@@ -5375,7 +5455,7 @@ typedef struct urma_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *target_seg)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -5444,11 +5524,10 @@ typedef union urma_import_seg_flag {
     struct {
         uint32_t cacheable : 1; /* 0: URMA_NON_CACHEABLE.
         1: URMA_CACHEABLE. */
-        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_WRITE.
-        (0x1 << 1): URMA_ACCESS_REMOTE_READ.
-        (0x1 << 2): URMA_ACCESS_REMOTE_WRITE.
-        (0x1 << 3): URMA_ACCESS_REMOTE_ATOMIC.
-        (0x1 << 4)：URMA_ACCESS_REMOTE_INVALIDATE.
+        uint32_t access : 6; /* (0x1): URMA_ACCESS_LOCAL_ONLY.
+        (0x1 << 1): URMA_ACCESS_READ.
+        (0x1 << 2): URMA_ACCESS_WRITE.
+        (0x1 << 3): URMA_ACCESS_ATOMIC.
         */
         uint32_t mapping : 1; /* 0: URMA_SEG_NOMAP/
         1: URMA_SEG_MAPPED. */
@@ -5468,7 +5547,7 @@ typedef union urma_import_seg_flag {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_seg([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -5489,6 +5568,62 @@ Return: 0 on success, other value on error.
 ![](figures/urma_notice.png)
 
 由调用者保证参数tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+
+#### 2.3.2.5 urma_get_seg_ctx
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_seg_ctx([3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *tseg, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) **seg, uint32_t *size);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+从target segment获取segment上下文副本。对于bonding设备，返回内容可能包含provider扩展数据。
+
+4.  参数
+
+@param[in] [Required] tseg: target segment returned by [urma_register_seg](#2321-urma_register_seg) or [urma_import_seg](#2323-urma_import_seg);
+
+@param[out] [Required] seg: address used to return the allocated segment context;
+
+@param[out] [Required] size: length of the returned segment context, including any extension data;
+
+5.  返回值
+
+Return: 0 on success, URMA_EINVAL on invalid parameters, URMA_ENOMEM on allocation failure, URMA_FAIL if the provider cannot return the context, other value on error.
+
+![](figures/urma_notice.png)
+
+seg返回的内存由本接口分配，调用者必须调用[urma_put_seg_ctx](#2326-urma_put_seg_ctx)释放。
+
+#### 2.3.2.6 urma_put_seg_ctx
+
+1.  头文件
+
+#include "urma_api.h"
+
+2.  原型
+
+void urma_put_seg_ctx([3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg);
+
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
+
+3.  描述
+
+释放[urma_get_seg_ctx](#2325-urma_get_seg_ctx)返回的segment上下文。
+
+4.  参数
+
+@param[in] [Required] seg: segment context returned by [urma_get_seg_ctx](#2325-urma_get_seg_ctx).
+
+5.  返回值
+
+void
 
 ### 2.3.3 TP Channel
 
@@ -5690,7 +5825,7 @@ typedef union urma_tp_attr_mask {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -5822,7 +5957,7 @@ typedef struct urma_tp_attr_value {
     uint8_t vlan_en : 1;
     uint8_t dscp : 6; // differentiated services code point
     uint8_t at_times : 5; // ack timeout max times
-    uint8_t sl : 4; // service level
+    uint8_t sl : 4; // service level. Only configurable for RTP/UTP
     uint8_t ttl; // time to live
     uint16_t ack_udp_srcport;
     uint16_t data_udp_srcport;
@@ -5853,6 +5988,12 @@ typedef struct urma_tp_attr_value {
 3.  描述
 
 设置tp属性值。
+
+![](figures/urma_info.png)
+
+约束说明：
+- 对于 CTP 类型 TP，不允许通过本接口设置 `sl` 属性。CTP 的 sl 由设备的 `priority_info` 表根据 priority 反查得出（参见 [urma_admin dev set](#) 命令配置 SL 与 priority 的映射关系）。
+- 对于 RTP/UTP 类型 TP（含 UBoe 模式），可通过本接口显式设置 `sl` 属性。
 
 4.  参数
 
@@ -5998,7 +6139,7 @@ typedef struct urma_faa_wr {
 
 ##### 2.4.1.1.6 urma_opcode_t
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
 ```c
 typedef enum urma_opcode {
@@ -6018,6 +6159,7 @@ typedef enum urma_opcode {
     URMA_OPC_SEND_INVALIDATE = 0x42, // remote JFR/jetty ID and seg token id
     URMA_OPC_NOP = 0x51,
     URMA_OPC_WRITE_ATOMIC = 0x60, // Non-standard definition of OPCODE
+    URMA_OPC_FLUSH_DMA = 0x80,
     URMA_OPC_LAST
 } urma_opcode_t;
 ```
@@ -6032,7 +6174,7 @@ typedef union urma_jfs_wr_flag {
         uint32_t place_order : 2; /* 0: There is no order with other WR
         1: relax order
         2: strong order
-        3: reserve */ /* see urma_order_type_t */
+        3: reserve */ /* see urma_place_order_t */
         uint32_t comp_order : 1; /* 0: There is no completion order with othwe WR.
         1: Completion order with previous WR. */
         uint32_t fence : 1; /* 0: There is not fence.
@@ -6044,8 +6186,9 @@ typedef union urma_jfs_wr_flag {
         uint32_t inline_flag : 1; /* 0: not inline.
         1: inline data. */
         uint32_t db_bypass : 1;
+        uint32_t udf : 1;
         uint32_t has_drv_ext : 1;
-        uint32_t reserved : 23;
+        uint32_t reserved : 22;
     } bs;
     uint32_t value;
 } urma_jfs_wr_flag_t;
@@ -6323,6 +6466,7 @@ typedef enum urma_cr_opcode {
     URMA_CR_OPC_SEND_WITH_IMM,
     URMA_CR_OPC_SEND_WITH_INV,
     URMA_CR_OPC_WRITE_WITH_IMM,
+    URMA_CR_OPC_FLUSH_WRITE,
 } urma_cr_opcode_t;
 ```
 
@@ -6364,7 +6508,7 @@ typedef struct urma_cr_token {
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, bool solicited_only)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6506,7 +6650,7 @@ Return: 0 on success, other value on error
 
 ![](figures/urma_notice.png)
 
-由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，src_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
+由调用者保证参数jfs来自[3.3.1.4.1](#23141-urma_create_jfs) [urma_create_jfs](#23141-urma_create_jfs)接口返回，dst_tseg来自[3.3.2.3](#2323-urma_import_seg) [urma_import_seg](#2323-urma_import_seg)接口返回，src_tseg来自[3.3.2.1](#2321-urma_register_seg) [urma_register_seg](#2321-urma_register_seg)接口返回，否则可能导致调用者进程异常退出。参数内部指针等合法性已由这些接口保证，本接口不再重复进行校验。
 
 #### 2.4.3.2 urma_read
 
@@ -6564,7 +6708,7 @@ Return: 0 on success, other value on error
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3.  描述
 
@@ -6698,6 +6842,50 @@ typedef struct urma_user_ctl_out {
 } urma_user_ctl_out_t;
 ```
 
+##### 2.5.1.1.3 BONDP_USER_CTL_SET_BONDING_PORT
+
+聚合（bonding）设备可通过该 opcode 在创建 JFC、JFS、JFR、Jetty 之前设置统一的物理端口列表，使后续创建的对象仅在该端口子集上建立物理连接，从而减少物理连接数。该 opcode 与输入结构定义在 [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h) 中。
+
+调用方式：
+
+- `in.opcode` 取 `BONDP_USER_CTL_SET_BONDING_PORT`；
+- `in.addr` 指向 `bondp_set_bonding_port_in_t` 结构，`in.len` 为该结构的大小；
+- `out` 不使用（可为 0）。
+
+```c
+typedef struct bondp_set_bonding_port_in {
+    const bondp_port_id_t *port_ids; /* [Required] 物理端口 id 数组 */
+    uint32_t port_count;             /* [Required] 数组元素个数，取值范围 [1, URMA_UBAGG_DEV_MAX_NUM] */
+} bondp_set_bonding_port_in_t;
+```
+
+`bondp_port_id_t` 的语义字段：
+
+- `chip_id`：芯片号，合法取值 [1, CHIP_NUM]；
+- `die_id`：固定为 1；
+- `port_idx`：端口 EID 编号，合法取值 [0, PORT_NUM]；取 `UINT8_MAX` 时表示该芯片的 primary EID。
+
+**重复项约束**：
+
+`port_ids` 中的 `chip_id + port_idx` 组合不得重复；包含重复项时本 opcode 返回错误，liburma 不会做静默去重。
+
+**与创建对象时端口配置的一致性约束**：
+
+调用方在创建 JFC、JFS、JFR、Jetty 时若置位 `has_drv_ext`，其扩展字段传入的 `port_ids` 必须与本配置一致。一致性校验在创建流程中执行，规则如下：
+
+- **chip_id 顺序必须一致**：本配置与创建对象时传入的 `port_ids`，其 chip_id 的排列顺序必须相同。liburma 在设置与创建时均按 port_id 逐项转化为 matrix active index，并保留 chip_id 与 index 的对应关系；顺序不一致会导致配对错位、校验失败。
+- **port_idx 顺序不做要求**：同一 chip 内的 port_idx 出现顺序可以不同，liburma 最终比较的是端口集合。
+- **全量 port 必须一致**：本配置的端口集合与创建对象时传入的端口集合必须完全相同，即包含的 chip_id + port_idx 组合完全一致，不能多也不能少；否则创建对象时校验失败。
+
+约束与时序：
+
+- liburma 内部会拷贝 `port_ids` 数组（含 chip_id），调用返回后调用方可立即释放该缓冲区。
+- `port_ids` 数组的越界问题由调用方自行保证：`urma_user_ctl` 以指针方式传入 `port_ids`，liburma 无法校验指针所指数组的实际长度，调用方须保证数组实际元素个数不小于 `port_count`。
+- 该配置为上下文级，作用于同一 `urma_context_t` 上后续创建的 JFC/JFS/JFR/Jetty。
+- 配置必须在创建任何 JFC/JFS/JFR/Jetty **之前**完成；若上下文已被对象引用（仍有存活对象），再次调用将返回 `URMA_EAGAIN`，调用方需先销毁已有对象再重新设置。
+
+Return: 0 on success, `URMA_EAGAIN` when the context is still referenced by existing objects, other value on error.
+
 ### 2.5.2 日志
 
 #### 2.5.2.1 urma_register_log_func
@@ -6708,9 +6896,9 @@ typedef struct urma_user_ctl_out {
 
 2.  原型
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_register_log_func([3.5.2.1.1](#25211-urma_log_cb_t) [urma_log_cb_t](#25211-urma_log_cb_t) func);
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6766,7 +6954,7 @@ Return: 0 on success, other value on error
 
 [3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unregister_log_func(void)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -6830,7 +7018,7 @@ typedef enum urma_vlog_level {
 
 void urma_log_set_level([3.5.2.3.1](#25231-urma_vlog_level_t) [urma_vlog_level_t](#25231-urma_vlog_level_t) level)
 
-定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
+定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3.  描述
 
@@ -10784,7 +10972,7 @@ Return: 0 on success, other value on error
 
 2.  原型
 
-int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **jetty_arr, int jetty_num, int *bad_jetty_index);
+int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **jetty_arr, int jetty_num, [4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-ubcore_jetty) **bad_jetty);
 
 3.  描述
 
@@ -10796,7 +10984,7 @@ int ubcore_delete_jetty_batch([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#3
 
 @param[in] jetty_num: jetty array length;
 
-@param[out] bad_jetty_index: when error, return error jetty index in the array;
+@param[out] bad_jetty: when error, return the address of the first failed jetty pointer;
 
 5.  返回值
 

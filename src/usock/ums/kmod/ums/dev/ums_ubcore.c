@@ -229,11 +229,13 @@ int ums_ubcore_find_ub_dev_by_eid(union ubcore_eid *eid, struct ums_init_info *i
 				ini->ub_dev = ums_ub_dev;
 				ini->ub_port = (u8)i;
 				mutex_unlock(&g_ums_ubcore_devices.mutex);
+				ubcore_put_device(ub_dev);
 				return 0;
 			}
 		}
 	}
 	mutex_unlock(&g_ums_ubcore_devices.mutex);
+	ubcore_put_device(ub_dev);
 
 	UMS_LOGE("ubdev is not in ums ubcore devices list or get eid_index failed, dev_name: %s, eid: %pI6c.",
 		ub_dev->dev_name, eid->raw);

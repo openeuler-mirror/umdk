@@ -60,6 +60,6 @@ sequenceDiagram
     Server->>Server: umq_unbind
     Client->>Client: umq_destroy destroys umqh
     Server->>Server: umq_destroy destroys umqh
-    Client->>Client: umq_uninit is used for initialization.
-    Server->>Server: umq_uninit is used for initialization.
+    Client->>Client: umq_uninit is used for uninitialization.
+    Server->>Server: umq_uninit is used for uninitialization.
 ```

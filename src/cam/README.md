@@ -1,6 +1,8 @@
 # CAM
 
- **CAM**  is short for  **C**ommunication  **A**cceleration for  **M**atrix on Ascend NPU. CAM provides EP (Expert Parallelism) communication kernels, high performance KVCache transfer for PD disaggregation and KVC pooling, AFD communication kernels, RL weights transfer and so on. CAM is easily to be run in single kernel mode or integrated into vllm or SGLang framework. 
+ **CAM**  is short for  **C**ommunication  **A**cceleration for  **M**atrix on Ascend NPU. CAM provides EP (Expert Parallelism) communication kernels, high performance KVCache transfer for PD disaggregation and KVC pooling, AFD communication kernels, RL weights transfer and so on. CAM is easily to be run in single kernel mode or integrated into vllm or SGLang framework.
+
+> **Naming note:** In CAM MoE EP paths, **`zb`** is short for **Zero Buffer** (direct write / shared-memory MoE communication without intermediate buffers). Code, APIs, and directory names use the `zb` / `Zb` / `ZB` abbreviation only; the expanded form appears in this README.
 
 # Roadmap
 
@@ -98,11 +100,13 @@ git submodule update --init --recursive
 |`-x`|Extract the run package instead of packing it.|
 |`-t`|Build unit tests only.|
 |`-p`|Build pybind whl only.|
+|`-r`|Build the run package only; skip the whl package. Mutually exclusive with `-p`.|
 
 **Examples:**
 ```bash
 ./build/cam/build.sh -c ascend910_93                                # full set for ascend910_93
 ./build/cam/build.sh -c ascend910_93 -a "moe_dispatch_normal;moe_combine_normal"   # only these two
+./build/cam/build.sh -c ascend910_93 -a "fused_deep_moe" -r         # only fused_deep_moe, run package only
 ./build/cam/build.sh -d                                             # debug, all SOCs
 ```
 
@@ -110,6 +114,7 @@ git submodule update --init --recursive
 - `-a` requires `-c` (specify a SOC generation first); `-a` cannot be used with the default all-SOC build.
 - `-c` must be a registered SOC (`ascend910_93`). Unregistered values (e.g. `ascend910b4`) exit with an error.
 - Each `-a` entry must be in the SOC's support list; unknown names exit with an error.
+- `-p` (whl only) and `-r` (run only) are mutually exclusive; using both exits with an error. By default (neither flag) the run package and whl package are built together.
 - `fused_deep_moe` and `fused_deep_moe_w4a8` are mutually exclusive (they share source filenames); `-q` switches to the w4a8 variant. `fused_deep_moe_fwk` is an independent operator and can always coexist with either. (master currently has only the base variant.)
 - Operators that require SHMEM are automatically skipped when `SHMEM_HOME_PATH` is unset.
 

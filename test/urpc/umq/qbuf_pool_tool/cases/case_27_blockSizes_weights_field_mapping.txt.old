@@ -1,0 +1,27 @@
+# case 27: blockSizes= / weights= field mapping verification
+#
+# Verifies the two new init params added to align with UmqSetting production config
+# (commit 600d24a, umq_backend.cpp:67-72):
+#   blockSizes=4K,64K  -> cfg.explicit_block_sizes = {4096, 65536}
+#                          (= UmqSetting::UMQ_EXPLICIT_BLOCK_SIZES)
+#   weights=2,1        -> cfg.per_sc_weights = {2, 1}
+#                          (= UmqSetting::UMQ_PER_SC_WEIGHTS, 4K gets 2x share)
+#
+# Expectations:
+#   1. init succeeds (cfg fields accepted by umq_qbuf_pool_init)
+#   2. info 段2 (Pool Config) shows explicit_block_sizes=[4096,65536]
+#   3. info 段3 (Per-SizeClass) shows:
+#        sc0 blk_size=4096     with initial_blocks > sc1 (2x weight)
+#        sc1 blk_size=65536    with initial_blocks < sc0
+#      Roughly: sc0_blocks ≈ 2 * (64K/4K) * sc1_blocks = 32 * sc1_blocks
+#   4. cross-sc alloc + free works
+#   5.退出码 0
+init count=2 blockSizes=4K,64K mode=split scaleCap=on totalSz=200M weights=2,1 threads=1
+info
+# Expect 段2: explicit_block_sizes=[4096,65536]
+# Expect 段3: sc0 (4K) initial_blocks ~ 2x*(64K/4K) = 32x sc1 (64K) blocks
+thread_0 alloc 4096 1
+thread_0 alloc 65536 1
+status
+thread_0 free all
+quit

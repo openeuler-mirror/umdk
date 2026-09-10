@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "urma_api.h"
+#include "urma_provider.h"
 #include "urma_types.h"
 
 #include "ping_log.h"
@@ -60,8 +61,8 @@ static void primary_eid_to_main_primary_eid(urma_eid_t *primary_eid, uint32_t ch
     }
 
     bool find_entity_id = false;
-    uint32_t target_entity_id;
-    int target_node_id;
+    uint32_t target_entity_id = 0;
+    int target_node_id = 0;
 
     for (int i = 0; i < (int)topo_map->node_num; i++) {
         for (int j = 0; j < DEV_NUM; j++) {
@@ -240,6 +241,52 @@ static void urma_log_func(int level, char *message)
     LOG_VVERBOSE("%s", message);
 }
 
+static inline bool priority_supports_tp(urma_device_attr_t *attr, uint8_t p, union urma_tp_type_en tp_type)
+{
+    if (p > URMA_MAX_PRIORITY) {
+        return false;
+    }
+    return (attr->dev_cap.priority_info[p].tp_type.value & tp_type.value) != 0;
+}
+
+static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urma_tp_type_en tp_type)
+{
+    for (int i = 0; i <= URMA_MAX_PRIORITY; i++) {
+        if ((dev_attr->dev_cap.priority_info[i].tp_type.value & tp_type.value) != 0) {
+            return i;
+        }
+    }
+    LOG_ERROR("Failed to get sl resources for tp_type=0x%x\n", tp_type.value);
+    return -1;
+}
+
+static int resolve_priority(ping_cfg_t *cfg, urma_context_t *ctx, urma_device_attr_t *dev_attr)
+{
+    union urma_tp_type_en tp_type = {0};
+    tp_type.bs.ctp = 1;
+
+    if (cfg->priority == PING_INVALID_PRIORITY) {
+        if (ctx->ops->import_jetty_ex == NULL) {
+            cfg->priority = 0;
+        } else {
+            int pri = get_jetty_priority_by_tp_type(dev_attr, tp_type);
+            if (pri < 0) {
+                return -EINVAL;
+            }
+            cfg->priority = (uint8_t)pri;
+        }
+        LOG_VERBOSE("Priority auto-selected to %hhu (ctp)\n", cfg->priority);
+    } else {
+        if (ctx->ops->import_jetty_ex != NULL) {
+            if (!priority_supports_tp(dev_attr, cfg->priority, tp_type)) {
+                LOG_ERROR("Priority %hhu is not a valid CTP priority\n", cfg->priority);
+                return -EINVAL;
+            }
+        }
+    }
+    return 0;
+}
+
 static int get_src_and_dst_eid(ping_cfg_t *cfg, urma_eid_t *src_eid, urma_eid_t *dst_eid)
 {
     uint32_t chip_id = 0;
@@ -359,6 +406,11 @@ static int init_urma_resource(ping_cfg_t *cfg, ping_urma_resource_t *res)
         goto uninit_urma;
     }
 
+    ret = resolve_priority(cfg, res->ctx, &dev_attr);
+    if (ret != 0) {
+        goto delete_context;
+    }
+
     res->buf = memalign(getpagesize(), cfg->size);
     if (res->buf == NULL) {
         LOG_ERROR("Failed to alloc memory for ping buffer.\n");
@@ -431,7 +483,7 @@ static int init_urma_resource(ping_cfg_t *cfg, ping_urma_resource_t *res)
         .jfs_cfg = {
             .depth = PING_SEND_DEPTH,
             .trans_mode = URMA_TM_RM,
-            .priority = 6,
+            .priority = cfg->priority,
             .max_sge = 1,
             .rnr_retry = URMA_TYPICAL_RNR_RETRY,
             .err_timeout = URMA_TYPICAL_ERR_TIMEOUT,
@@ -690,6 +742,7 @@ int start_ping(ping_cfg_t *cfg)
     LOG_VERBOSE("Size(bytes) : %u\n", cfg->size);
     LOG_VERBOSE("Deadline(s) : %u\n", cfg->deadline);
     LOG_VERBOSE("Timeout(s)  : %u\n", cfg->timeout);
+    LOG_VERBOSE("Priority    : %hhu\n", cfg->priority);
 
     init_stat();
     (void)signal(SIGINT, signal_handler);

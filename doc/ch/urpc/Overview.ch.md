@@ -9,9 +9,8 @@ URPC是统一远程过程调用协议，其基于UB事务层提供的能力，�
 -   <u>**Server**</u>：URPC的接收端和分配者，接收URPC Request，调用Worker执行，向Client回复URPC Ack和URPC Response；
 -   <u>**Worker**</u>：URPC的执行者，专注执行URPC调用的函数、功能、服务。
 
-*注1：URPC Ack将在之后版本提供服务。* \
-*注2：Caller：基于 URPC 协议发起远程过程调用的用户。* \
-*注3：Callee：URPC 函数的具体实现方，根据需求可以与 Worker 合并。*
+*注1：Caller：基于 URPC 协议发起远程过程调用的用户。* \
+*注2：Callee：URPC 函数的具体实现方，根据需求可以与 Worker 合并。*
 
 **URPC Message类型**
 - **URPC Request**：由 Client 发送给 Server，用于发起函数调用行为；

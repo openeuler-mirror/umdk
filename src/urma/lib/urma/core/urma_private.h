@@ -60,6 +60,13 @@ int urma_init_jetty_cfg(urma_jetty_cfg_t *p, urma_jetty_cfg_t *cfg);
 void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 int urma_open_cdev(char *path);
+
+/* Register a log callback with all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_register_log_func_to_providers(urma_log_cb_t func);
+/* Unregister the log callback from all loaded providers. */
+void urma_unregister_log_func_to_providers(void);
+
 urma_status_t urma_check_opt_valid(void *opt_mask_addr, const opt_map_t *table,
     size_t table_cnt, uint64_t opt, uint32_t len);
 urma_status_t urma_set_options_common(void *obj, const opt_map_t *table,
@@ -90,36 +97,39 @@ urma_status_t urma_get_jfce_cnt_info(urma_jfce_cnt_info_t *info_arr, uint32_t *c
 
 
 /**
- * just for urma perftest profiling
-*/
+ * for urma profiling
+ */
 #define UDMA_PERF_PROFILING_START(type, dev_name) \
     uint64_t __perf_start_##type = 0; \
+    bool __perf_active_##type = false; \
     do { \
         if (urma_perf_is_enabled() && (!urma_is_bonding_dev(dev_name))) { \
             __perf_start_##type = urma_get_perf_timestamp(); \
+            __perf_active_##type = true; \
         } \
     } while (0); \
 
 #define UDMA_PERF_PROFILING_END(type, dev_name) \
     do { \
-        uint64_t perf_end = 0; \
-        if (urma_perf_is_enabled() && (!urma_is_bonding_dev(dev_name))) { \
-            perf_end = urma_get_perf_timestamp(); \
+        if (__perf_active_##type) { \
+            uint64_t perf_end = urma_get_perf_timestamp(); \
             urma_step_perf(type, perf_end - __perf_start_##type); \
         } \
     } while (0); \
 
 #define PERF_PROFILING_START(type) \
     uint64_t __perf_start_##type = 0; \
+    bool __perf_active_##type = false; \
     do { \
         if (urma_perf_is_enabled()) { \
             __perf_start_##type = urma_get_perf_timestamp(); \
+            __perf_active_##type = true; \
         } \
     } while (0)
 
 #define PERF_PROFILING_END(type) \
     do { \
-        if (urma_perf_is_enabled()) { \
+        if (__perf_active_##type) { \
             uint64_t _perf_end = urma_get_perf_timestamp(); \
             urma_step_perf(type, _perf_end - __perf_start_##type); \
         } \

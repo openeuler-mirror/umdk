@@ -45,6 +45,8 @@ typedef struct util_external_rwlock_ops {
 void util_external_mutex_lock_ops_register(const util_external_mutex_lock_ops_t *ops);
 void util_external_rwlock_ops_register(const util_external_rwlock_ops_t *ops);
 
+util_external_mutex_lock_ops_t *util_mutex_lock_default_ops_get(void);
+
 // mutex api
 util_external_mutex_lock *util_mutex_lock_create(int attr);
 int util_mutex_lock_destroy(util_external_mutex_lock *lock);

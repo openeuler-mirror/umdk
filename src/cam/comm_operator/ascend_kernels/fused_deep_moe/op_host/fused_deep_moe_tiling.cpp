@@ -17,6 +17,7 @@
 #include "tiling/platform/platform_ascendc.h"
 #include "tiling/hccl/hccl_tiling.h"
 #include "mc2_tiling_utils.h"
+#include "../op_kernel/fused_deep_moe_tiling_key.h"
 #include "../op_kernel/fused_deep_moe_tiling.h"
 
 using namespace ge;
@@ -786,22 +787,15 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     OPS_ERR_IF(SetWorkSpace(context, nodeName, *tilingData, calShareExpert) != ge::GRAPH_SUCCESS,
         OPS_LOG_E(nodeName, "Tiling set workspace failed."), return ge::GRAPH_FAILED);
     SetHcommCfg(context, *tilingData, groupEp);
-    uint64_t tilingKey = 0;
-    if (xActiveMaskEnable) {
-        tilingKey |= EXEC_FLAG_X_ACTIVE_MASK;
-    }
-    if (calShareExpert) {
-        tilingKey |= EXEC_FLAG_SHARED_EXPERT;
-    }
-    if (tilingData->fusedDeepMoeInfo.moeExpertNumPerRank != 1) {
-        tilingKey |= EXEC_FLAG_DEEP_FUSE;
-    }
-    if (tilingData->fusedDeepMoeInfo.isTensorList) {
-        tilingKey |= EXEC_FLAG_TENSOR_LIST;
-    }
-    if (expertSmoothScalesExist) {
-        tilingKey |= EXEC_FLAG_SMOOTH_QUANT;
-    }
+    // arch code: 910_93 only for now, reserved for multi-SOC
+    uint32_t archCode = SOC_ASCEND910_93;
+    uint64_t tilingKey = GET_TPL_TILING_KEY(
+        static_cast<int64_t>(tilingData->fusedDeepMoeInfo.moeExpertNumPerRank != 1 ? 1 : 0),  // TPL_IS_DEEP_FUSE
+        static_cast<int64_t>(tilingData->fusedDeepMoeInfo.isTensorList ? 1 : 0),               // TPL_IS_TENSOR_LIST
+        static_cast<int64_t>(xActiveMaskEnable ? 1 : 0),                                       // TPL_IS_X_ACTIVE_MASK
+        static_cast<int64_t>(calShareExpert ? 1 : 0),                                          // TPL_IS_SHARED_EXPERT
+        static_cast<int64_t>(expertSmoothScalesExist ? 1 : 0),                                 // TPL_IS_SMOOTH_QUANT
+        static_cast<int64_t>(archCode));                                                       // TPL_ARCH
     context.SetTilingKey(tilingKey);
     context.SetBlockDim(aicNum);
     return ge::GRAPH_SUCCESS;

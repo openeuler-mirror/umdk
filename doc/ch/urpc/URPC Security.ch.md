@@ -6,16 +6,30 @@ URPC Client和URPC Server之间通信时，支持对传输内容进行加密保�
 ## 认证
 URPC支持基于TLS-PSK策略进行控制面安全建链认证，用户通过urpc_ssl_config_set接口配置相关功能，相应配置参数说明如下：
 ```c
-// 是否开启URPC SSL认证加密功能。开启时默认启用URPC认证
-#define URPC_SSL_FLAG_ENABLE  (1U)
+// 开启控制面和数据面的安全能力
+#define URPC_SSL_FLAG_ENABLE                    (1U)
+// 数据面选项：禁用默认开启的URPC负载加密；URPC头加密仍保持开启
+#define URPC_SSL_FLAG_SGE_ENCRYPT_DISABLE       (1U << 1)
+// 数据面选项：禁用默认开启的URPC头加密
+#define URPC_SSL_FLAG_URPC_ENCRYPT_DISABLE      (1U << 2)
+// 两个禁用标志仅在设置URPC_SSL_FLAG_ENABLE时生效；仅支持单独设置
+// URPC_SSL_FLAG_SGE_ENCRYPT_DISABLE，或同时设置两个禁用标志
 // 指定SSL模块控制面安全链接建立方式，目前仅支持PSK
 typedef enum urpc_ssl_mode {
     SSL_MODE_PSK = 0,
+
+    SSL_MODE_MAX,
 } urpc_ssl_mode_t;
 typedef unsigned int (*urpc_ssl_psk_client_cb_func)(void *ssl, const char *hint, char *identity,
     unsigned int max_identity_len, unsigned char *psk, unsigned int max_psk_len);
 typedef unsigned int (*urpc_ssl_psk_server_cb_func)(
     void *ssl, const char *identity, unsigned char *psk, unsigned int max_psk_len);
+typedef enum urpc_tls_version {
+    URPC_TLS_VERSION_1_2 = 0,
+    URPC_TLS_VERSION_1_3,
+
+    URPC_TLS_VERSION_MAX,
+} urpc_tls_version_t;
 // 配置接口入参
 typedef struct urpc_ssl_config {
     uint32_t ssl_flag; // 指示SSL认证加密开关

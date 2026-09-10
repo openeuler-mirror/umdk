@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "urma_types.h"
+#include "uvs_api.h"
 
 // === URMA function pointer types - Device/Init ===
 typedef urma_status_t (*urma_init_t)(urma_init_attr_t *conf);
@@ -65,13 +66,15 @@ typedef urma_status_t (*urma_unregister_seg_t)(urma_target_seg_t *target_seg);
 typedef urma_target_seg_t* (*urma_import_seg_t)(urma_context_t *ctx, urma_seg_t *seg,
     urma_token_t *token_value, uint64_t addr, urma_import_seg_flag_t flag);
 typedef urma_status_t (*urma_unimport_seg_t)(urma_target_seg_t *tseg);
+typedef urma_status_t (*urma_get_seg_ctx_t)(urma_target_seg_t *tseg, urma_seg_t **seg, uint32_t *size);
+typedef void (*urma_put_seg_ctx_t)(urma_seg_t *seg);
 
 // === URMA function pointer types - Async Event ===
 typedef urma_status_t (*urma_get_async_event_t)(urma_context_t *ctx, urma_async_event_t *event);
 typedef void (*urma_ack_async_event_t)(urma_async_event_t *event);
 
 // === URMA function pointer types - Log ===
-typedef urma_status_t (*urma_log_set_level_t)(urma_vlog_level_t level);
+typedef void (*urma_log_set_level_t)(urma_vlog_level_t level);
 typedef urma_status_t (*urma_register_log_func_t)(urma_log_cb_t func);
 typedef urma_status_t (*urma_register_loc_log_func_t)(urma_loc_log_cb func);
 typedef urma_status_t (*urma_unregister_log_func_t)(void);
@@ -83,8 +86,8 @@ typedef urma_status_t (*urma_user_ctl_t)(urma_context_t *ctx, urma_user_ctl_in_t
 typedef int (*urma_str_to_eid_t)(const char *buf, urma_eid_t *eid);
 
 // === UVS function pointer types ===
-typedef int (*uvs_get_path_set_t)(const void *src_bonding_eid, const void *dst_bonding_eid, uint32_t tp_type,
-    bool multi_path, void *path_set);
+typedef int (*uvs_get_path_set_t)(const uvs_eid_t *src_bonding_eid, const uvs_eid_t *dst_bonding_eid,
+    enum uvs_tp_type tp_type, bool iodie_level, uvs_path_set_t *uvs_path_set);
 
 // === DFX perf ===
 typedef urma_status_t (*urma_start_perf_t)(void);
@@ -141,6 +144,8 @@ typedef struct umq_symbol_urma {
     urma_unregister_seg_t urma_unregister_seg;
     urma_import_seg_t urma_import_seg;
     urma_unimport_seg_t urma_unimport_seg;
+    urma_get_seg_ctx_t urma_get_seg_ctx;
+    urma_put_seg_ctx_t urma_put_seg_ctx;
 
     // Async Event
     urma_get_async_event_t urma_get_async_event;

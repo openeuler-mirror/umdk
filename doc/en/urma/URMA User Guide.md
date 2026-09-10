@@ -80,6 +80,8 @@
         - [9.1.4 Permission Invalidation Flow](#914-permission-invalidation-flow)
     - [9.2 Memory Access Control](#92-memory-access-control)
 
+- [10 URMA Ecosystem Migration Skill](#10-urma-ecosystem-migration-skill)
+
 # 1 UMDK Overview
 
 ![](figures/urma-overview-01.png)
@@ -506,6 +508,8 @@ urma_token_t *token_value);
 urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 ```
 
+If a port subset has been configured on the context via `BONDP_USER_CTL_SET_BONDING_PORT`, Jetty and JFR import establish physical target connections only through that subset. Each configured local port and each remote target participate in at most one selected physical path (one-to-one pairing), so the number of imported physical paths does not exceed the smaller of the configured local port count and the remote target count. The configured subset must contain a port connected to the peer topology; otherwise the import fails with no buildable path.
+
 Users should focus on the URMA API usage flow based on transport-layer-unaware connection setup.
 
 ## 5.2 Control Plane
@@ -543,6 +547,7 @@ typedef struct urma_context {
     uint32_t eid_index;
     uint32_t uasid; /* [Public] uasid of current process. */
     struct urma_ref ref; /* [Private] reference count of urma context. */
+    urma_context_aggr_mode_t aggr_mode; /* [Public] aggregated mode of urma context. */
 } urma_context_t;
 ```
 
@@ -563,6 +568,8 @@ typedef struct urma_context {
 8.  **uint32_t uasid**: An unsigned 32-bit integer representing the User Assisted Segment Identifier (UASID) of the current process.
 
 9.  **struct urma_ref ref**: An instance of the urma_ref structure, used to track the reference count of urma_context_t.
+
+10.  **urma_context_aggr_mode_t aggr_mode**: The public aggregated mode of the URMA context. Its values are `URMA_AGGR_MODE_STANDALONE`, `URMA_AGGR_MODE_ACTIVE_BACKUP`, and `URMA_AGGR_MODE_BALANCE`.
 
 ### 5.2.2 Jetty Management
 
@@ -994,7 +1001,7 @@ The message send process is:
 
 - **urma_recv**: The receiver uses this function to receive data from remote memory.
 
-- **urma_send**: The sender uses this function to send data to remote memory. It supports carrying IMM data and can be set to with invalid, meaning the operation will continue even if the target address is invalid.
+- **urma_send**: The sender uses this function to send data to remote memory. It supports carrying IMM data and can be set to send with invalidate, in which case the send operation invalidates the specified target segment (tseg).
 
 ![](figures/urma-arch-data-two-sided-01.png)
 
@@ -1475,6 +1482,10 @@ The bonding device is TP-unaware.
 
 4. When using aggregation devices, the choice of TP/CTP for the transport layer depends only on the parameters set when creating the jetty and jfs/jfr. The CTP parameter in the rjetty flag passed to urma_import_jetty will be ignored.
 
+5. Health check and fault failback are only supported by Jetty, not by JFR or JFS. Health check performs periodic probing of link status by creating an out-of-band probe Jetty for each path (reusing JFR receive resources); fault failback, after a recovery is detected, rebuilds the Jetty to switch traffic back to the primary path. Both paths depend on the Jetty object; independently created JFR or JFS do not provide health check or fault failback capabilities.
+
+6. The aggregation-device fault failback scheme requires the user's send and receive Jetty resources to be isolated. A Jetty used for sending must not be exposed as a receive resource that peers can import, and must not be imported by other processes for receive operations. If a Jetty needs to be imported by a peer and used for receive, use a separate receive Jetty to avoid external references to send-side resources during failback rebuild.
+
 - **Aggregation Device Feature List**
 
   1.  Aggregation Device Feature List
@@ -1607,7 +1618,7 @@ Options:
   -b, --simplex_mode          Run with simplex mode(jfs/jfr), duplex jetty mode for reserved.
   -B, --bidirection           Measure bidirectional bandwidth (default unidirectional).
   -c, --jfc_inline            Enable jfc_inline to upgrade latency performance.
-  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 1 for lat.
+  -C, --jfc_depth <dep>       Size of jfc depth (default 4096 for bw, 1024 for ip bw, 512 for lat.
   -d, --dev <dev_name>        The name of ubep device.
   -D, --duration <second>     Run test for a customized period of seconds, this cfg covers iters.
   -e, --use_jfce              use jfc event.
@@ -1621,7 +1632,7 @@ Options:
   -j, --share_jfr <true/false> share jfr on create jetty.
   -J, --jettys <num of jetty> Num of jettys(default 1).
   -K, --token_policy <policy> default 0: NONE, 1: PLAIN_TEXT, 2: SIGNED, 3: ALL_ENCRYPTED.
-  -n, --iters <iters>         Number of exchanges (at least 5, default 10000).
+  -n, --iters <iters>         Number of exchanges (at least 5, default 10000 for lat, 50000 for bw).
   -N, --no_peak               Cancel peak-bw calculation.
   -l, --jfs_post_list <size>  Post list of send WQEs of <list size> size.
   -L, --lock_free             Jetty's interior is unlocked.
@@ -1631,7 +1642,7 @@ Options:
   -Q, --cq_mod <num>          Generate Cqe only after <--cq_mod> completion.
   -r, --jfr_post_list <size>  Post list of receive WQEs of <list size> size.
   -R, --jfr_depth <dep>       Size of jfr depth (default 512 for BW, 1 for LAT).
-  -s, --size <size>           Size of message to exchange (default 2).
+  -s, --size <size>           Size of message to exchange (default 2 for lat, 65536 for bw).
   -S, --server <ip>           Server ip for bind or connect, default: 127.0.0.1 .
   -T, --jfs_depth <dep>       Size of jfs depth (default 128 for BW, 1 for LAT).
   -u, --uboe                  Enable uboe (default false), the parametre sip, dip are required.
@@ -2013,6 +2024,14 @@ URMA DFX capabilities primarily include URMA logging. Additionally, urma_admin a
 ### 6.5.1 URMA Logging
 
 URMA uses the OS's built-in rsyslog tool to implement log redirection and printing, with the corresponding configuration path at /etc/rsyslog.d/*.conf. Size-based log rotation, compression, and retention depend on the OS's built-in logrotate tool, with the corresponding configuration path at /etc/logrotate.d/**. Products can modify the configuration files as needed to meet different requirements.
+
+User-mode log headers use the following formats:
+
+```
+[URMA][<file>:<function>:<line>][<tid>][<thread_tag>][liburma]<message>
+[URMA][<file>:<function>:<line>][<tid>][<process_name>][work_<idx>|-][libuvs]<message>
+[URMA][<file>:<function>:<line>][<tid>][-][urma_admin]<message>
+```
 
 ![](figures/urma_caution.png)
 
@@ -2396,3 +2415,7 @@ URMA's northbound interface memory permission configuration is consistent with t
 2. When URMA_ACCESS_LOCAL_ONLY is set to 0, in addition to local access having all permissions, external access permissions are determined by the subsequent three flags and take effect according to the user-configured combination of READ, WRITE, and ATOMIC.
 
 3. Write requires Read permission; Atomic requires Write + Read permission.
+
+# 10 URMA Ecosystem Migration Skill
+
+**verbs-to-urma-converter** is used to systematically refactor source code of projects based on RDMA verbs (libibverbs) and convert it to URMA API implementation. The refactoring includes API replacement, struct field updates, connection establishment process redesign, and more, with dual-layer verification at both file and project levels to ensure complete resource lifecycle and semantic correctness. For details, see [/skills/verbs-to-urma-converter](../../../skills/verbs-to-urma-converter/SKILL.md).

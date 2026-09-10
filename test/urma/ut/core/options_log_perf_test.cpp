@@ -79,7 +79,7 @@ TEST(UrmaCoreTest, LogApisHandleCallbacksLevelsTagsAndEnv)
     g_locLogCallbackCount = 0;
     EXPECT_EQ(URMA_EINVAL, urma_register_log_func(nullptr));
     EXPECT_EQ(URMA_SUCCESS, urma_register_log_func(MockLogCallback));
-    urma_log("CoreLogTest", 1, URMA_VLOG_LEVEL_INFO, "plain %d", 1);
+    urma_log("core_test.cpp", "CoreLogTest", 1, URMA_VLOG_LEVEL_INFO, "plain %d", 1);
     EXPECT_EQ(1, g_logCallbackCount);
     EXPECT_EQ(static_cast<int>(URMA_VLOG_LEVEL_INFO), g_lastLogLevel);
 

@@ -9,6 +9,7 @@ add_executable(urma_uvs_ut
 )
 target_link_libraries(urma_uvs_ut PRIVATE urma_test_common ${URMA_TPSA_SO} ${URMA_COMMON_SO}
     GTest::gtest_main nl-genl-3 nl-3 dl rt pthread)
+target_link_options(urma_uvs_ut PRIVATE -Wl,--export-dynamic)
 
 add_test(NAME urma_uvs_ut COMMAND urma_uvs_ut)
 set_tests_properties(urma_uvs_ut PROPERTIES LABELS phase_uvs)

@@ -37,6 +37,8 @@ extern "C" {
 #define UMQ_ERR_ETOOMANYREFS                       (ETOOMANYREFS)
 #define UMQ_ERR_ETSEG_NON_IMPORTED                 (0x0201)
 #define UMQ_ERR_EFLOWCTL                           (0x0202)  /* Umq flow control error */
+#define UMQ_ERR_EFLOWCTL_FATAL                     (0x0203)
+#define UMQ_ERR_EFLOWCTL_EAGAIN                    (0x0204)
 
 typedef enum umq_buf_status {
     UMQ_BUF_SUCCESS = 0,
@@ -57,6 +59,8 @@ typedef enum umq_buf_status {
     UMQ_BUF_LOC_DATA_POISON,            /* Local Data Poison */
     UMQ_BUF_REM_DATA_POISON,            /* Remote Data Poison */
 
+    UMQ_BUF_RNR_RETRY_CNT_EXC = 99,     /* RNR retries: reduce the post frequency and do not free qbuf */
+
     UMQ_BUF_FLOW_CONTROL_UPDATE = 128,  /* Umq flow control window is updated, this is not error case */
     UMQ_MEMPOOL_UPDATE_SUCCESS,
     UMQ_MEMPOOL_UPDATE_FAILED,
@@ -68,6 +72,7 @@ typedef enum umq_buf_status {
     UMQ_FAKE_BUF_FC_MSG,                /* Umq fake flow control received request, this is not error case */
     UMQ_FAKE_BUF_FC_ERR,                /* Umq fake flow control error, CR status is abnormal */
     UMQ_FAKE_BUF_FC_EMLINK,             /* Umq fake flow control error, no available transmission resources */
+    UMQ_FAKE_BUF_FC_ERR_FATAL,          /* Umq fake flow control fatal error */
     UMQ_FAKE_BUF_MAX = 256,
 } umq_buf_status_t;
 

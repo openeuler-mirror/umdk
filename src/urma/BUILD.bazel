@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
-load("//bazel:urma_deps.bzl", "LIBUMMU_ABI_VERSION", "LIBUMMU_RUNTIME_LINKOPTS")
+load("//bazel:urma_deps.bzl", "LIBUMMU_RUNTIME_LINKOPTS")
 load("//bazel:urma_shared.bzl", "urma_dynamic_linkopts", "urma_linklib_inputs", "urma_shared_library", "urma_shared_library_static_dep")
 
 config_setting(
@@ -125,7 +125,7 @@ urma_shared_library(
     includes = ["common/include"],
     copts = URMA_COMMON_COPTS,
     linkopts = URMA_COMMON_LINKOPTS,
-    soname = "liburma_common.so.0",
+    soname = "liburma_common.so",
 )
 
 cc_library(
@@ -158,7 +158,7 @@ urma_shared_library(
     compile_deps = [":urma_common_headers"],
     dynamic_lib_names = ["urma_common"],
     linkopts = ["-ldl", "-lrt"],
-    soname = "liburma.so.0",
+    soname = "liburma.so",
 )
 
 urma_shared_library(
@@ -174,16 +174,13 @@ urma_shared_library(
         "lib/urma/bond/include",
         "lib/urma/bond/utils",
     ],
-    copts = URMA_COMMON_COPTS + [
-        "-I/usr/include/libnl3",
-    ],
+    copts = URMA_COMMON_COPTS,
     compile_deps = [
         ":urma_common_headers",
         ":urma_headers",
     ],
     dynamic_lib_names = ["urma", "urma_common"],
-    linkopts = ["-lnl-genl-3", "-lnl-3"],
-    soname = "liburma_ubagg.so.0",
+    soname = "liburma_ubagg.so",
 )
 
 urma_shared_library_static_dep(
@@ -211,7 +208,7 @@ urma_shared_library_static_dep(
         "-lnl-genl-3",
         "-lnl-3",
     ],
-    soname = "libtpsa.so.0",
+    soname = "libtpsa.so",
 )
 
 cc_library(
@@ -230,7 +227,7 @@ cc_binary(
     deps = ["@libummu//:ummu_internal"],
     linkopts = [
         "-Wl,-z,relro,-z,now",
-        "-Wl,-soname,libummu.so." + LIBUMMU_ABI_VERSION,
+        "-Wl,-soname,libummu.so",
     ] + LIBUMMU_RUNTIME_LINKOPTS,
 )
 
@@ -351,9 +348,19 @@ cc_binary(
         "tools/urma_perftest",
     ],
     copts = URMA_TOOL_COPTS,
-    additional_linker_inputs = urma_linklib_inputs(["urma", "urma_common"]),
+    additional_linker_inputs = urma_linklib_inputs([
+        "urma",
+        "urma_common",
+        "urma_ubagg",
+        "urma-udma",
+    ]),
     linkopts = URMA_TOOL_LINKOPTS + urma_dynamic_linkopts(
-        ["urma", "urma_common"],
+        [
+            "urma",
+            "urma_common",
+            "urma_ubagg",
+            "urma-udma",
+        ],
         extra_libs = [
             "-lpthread",
             "-lm",
@@ -379,9 +386,19 @@ cc_binary(
     copts = URMA_TOOL_COPTS + [
         "-I/usr/include/libnl3",
     ],
-    additional_linker_inputs = urma_linklib_inputs(["urma", "urma_common"]),
+    additional_linker_inputs = urma_linklib_inputs([
+        "urma",
+        "urma_common",
+        "urma_ubagg",
+        "urma-udma",
+    ]),
     linkopts = URMA_TOOL_LINKOPTS + urma_dynamic_linkopts(
-        ["urma", "urma_common"],
+        [
+            "urma",
+            "urma_common",
+            "urma_ubagg",
+            "urma-udma",
+        ],
         extra_libs = [
             "-lm",
             "-lnl-genl-3",

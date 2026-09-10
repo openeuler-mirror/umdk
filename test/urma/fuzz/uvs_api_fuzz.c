@@ -57,7 +57,7 @@ static int RunFuzzCase(const fuzz_case_t *test_case)
     /* LCOV_EXCL_STOP */
 
     if (pid == 0) {
-        (void)alarm(2);
+        (void)alarm(30);
         (void)test_case->entry();
         exit(0);
     }

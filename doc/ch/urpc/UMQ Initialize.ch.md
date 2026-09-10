@@ -29,7 +29,7 @@
 - trans_info_num: 数据面传输设备信息的数量，最多支持128个
 - flow_control: 配置流控参数
 - block_cfg: 配置小型内存池block的大小，支持8K, 16K, 32K, 64K 4种类型。
-- trans_info：数据面传输设备信息，用于初始化对应得设备
+- trans_info：数据面传输设备信息，用于初始化对应的设备
 
 ### 说明
 1.当应用在UB模式下配置UMQ_FEATURE_ENABLE_TOKEN_POLICY参数时，将使能UB token校验能力，umq_bind_info中会携带UB token信息，如果应用需要安全传输该信息，请使用安全通道（如TLS等）交换umq_bind_info。
@@ -55,11 +55,11 @@
         .feature = UMQ_FEATURE_API_PRO,
         .trans_info_num = 2,
     };
-    init_cfg->trans_info[0].trans_mode = UMQ_TRANS_MODE_UB;
-    sprintf(init_cfg->trans_info[0].dev_info.dev.dev_name, "%s", "udma2");
+    init_cfg.trans_info[0].trans_mode = UMQ_TRANS_MODE_UB;
+    sprintf(init_cfg.trans_info[0].dev_info.dev.dev_name, "%s", "udma2");
     init_cfg.trans_info[0].dev_info.dev.eid_idx = 7;
-	init_cfg->trans_info[1].trans_mode = UMQ_TRANS_MODE_UB;
-    sprintf(init_cfg->trans_info[1].dev_info.dev.dev_name, "%s", "udma5");
+    init_cfg.trans_info[1].trans_mode = UMQ_TRANS_MODE_UB;
+    sprintf(init_cfg.trans_info[1].dev_info.dev.dev_name, "%s", "udma5");
     init_cfg.trans_info[1].dev_info.dev.eid_idx = 7;
     umq_init(&init_cfg);
 ```

@@ -16,12 +16,9 @@
 #include "udma_u_log.h"
 
 static struct udma_vlog_level_st g_udma_log_level = {UDMA_VLOG_LEVEL_INFO, PTHREAD_MUTEX_INITIALIZER};
-#define MAX_LOG_LEN 512
-#define UDMA_LOG_TAG "UDMA_LOG_TAG"
-#define UDMA_LOG_ENV_STR "UDMA_LOG_LEVEL"
-#define UDMA_LOG_LEVEL_ENV_MAX_BUF_LEN 32
+static urma_log_cb_t g_udma_log_cb = udma_default_log_func;
 
-static void udma_default_log_func(int level, char *message)
+void udma_default_log_func(int level, char *message)
 {
 	syslog(level, "%s", message);
 }
@@ -81,8 +78,8 @@ int udma_vlog(const char *function, int line, enum udma_vlog_level level, const 
 	char logmsg[MAX_LOG_LEN + 1] = {};
 	int ret;
 
-	/* add log head info, "UDMA_LOG_TAG|function|[line]|format" */
-	ret = snprintf(newformat, MAX_LOG_LEN, "%s|%s[%d]|%s", UDMA_LOG_TAG, function, line, format);
+	/* add log head info, "[UDMA_LOG_TAG][function:line] format" */
+	ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s:%d] %s", UDMA_LOG_TAG, function, line, format);
 	if (ret <= 0 || ret >= (int)sizeof(newformat))
 		return ret;
 
@@ -91,7 +88,7 @@ int udma_vlog(const char *function, int line, enum udma_vlog_level level, const 
 		(void)printf("logmsg size exceeds MAX_LOG_LEN size :%d.\n", MAX_LOG_LEN);
 		return ret;
 	}
-	udma_default_log_func((int)level, logmsg);
+	g_udma_log_cb((int)level, logmsg);
 
 	return ret;
 }
@@ -103,4 +100,52 @@ void udma_log(const char *function, int line, enum udma_vlog_level level, const 
 	va_start(va, format);
 	(void)udma_vlog(function, line, level, format, va);
 	va_end(va);
+}
+
+static void udma_u_try_register_ummu_log_backend(void)
+{
+	ummu_log_backend_t backend = {.emit = g_udma_log_cb};
+	int ret;
+
+	if (!udma_u_ummu_log_supported()) {
+		UDMA_LOG_WARN("libummu log backend not supported, skipping.\n");
+		return;
+	}
+
+	ret = ummu_log_register_backend(&backend);
+	if (ret)
+		UDMA_LOG_ERR("Failed to register ummu log backend, ret=%d.\n", ret);
+}
+
+static void udma_u_try_restore_ummu_log_default(void)
+{
+	if (!udma_u_ummu_log_supported()) {
+		UDMA_LOG_WARN("libummu log restore default not supported, skipping.\n");
+		return;
+	}
+	ummu_log_restore_default();
+}
+
+urma_status_t udma_u_register_log_func(urma_log_cb_t func)
+{
+	if (func == NULL) {
+		UDMA_LOG_ERR("Invalid parameter: log callback func is NULL.\n");
+		return URMA_EINVAL;
+	}
+	g_udma_log_cb = func;
+	UDMA_LOG_INFO("libudma registered log successfully.\n");
+
+	udma_u_try_register_ummu_log_backend();
+
+	return URMA_SUCCESS;
+}
+
+urma_status_t udma_u_unregister_log_func(void)
+{
+	udma_u_try_restore_ummu_log_default();
+
+	UDMA_LOG_INFO("libudma restored to default log output successfully.\n");
+	g_udma_log_cb = udma_default_log_func;
+
+	return URMA_SUCCESS;
 }

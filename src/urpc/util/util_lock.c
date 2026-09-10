@@ -153,6 +153,11 @@ static util_external_rwlock_ops_t g_util_rwlock_ops = {
     .try_write_lock = util_rwlock_trywrlock_impl,
 };
 
+util_external_mutex_lock_ops_t *util_mutex_lock_default_ops_get(void)
+{
+    return &g_util_default_mutex_lock_ops;
+}
+
 // if ops is NULL, reset global ops
 void util_external_mutex_lock_ops_register(const util_external_mutex_lock_ops_t *ops)
 {

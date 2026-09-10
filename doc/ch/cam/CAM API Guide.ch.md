@@ -223,3 +223,148 @@ fused_deep_moe(
  - 需要满足: HCCL_BUFFSIZE环境变量配置应不小于[(ep_rank_size * max_batch_size * moe_expert_num_per_rank * total_length * sizeof(x) * 2) / 1024 / 1024]向上取整
  - 需要满足: 若要进行内置共享专家计算，则共享专家所需的share_gmm1_weight、share_gmm1_weight_scale、share_gmm2_weight、share_gmm2_weight_scale需同时存在
 - 需要满足: 若要进行smooth quant，需传入expert_smooth_scales，若同时进行内置共享专家计算则share_smooth_scales也必须存在
+
+#### 1.2 Zero-Buffer Dispatch & Combine 类接口
+基于 SHMEM 实现的 Zero-Buffer DeepEP 风格 Prefill 接口，可通过 PyTorch eager 模式调用。逻辑链路为：`get_dispatch_layout_zb` →（内部 notify +）`moe_dispatch_normal_zb` → 专家计算 → `moe_combine_normal_zb`。当前库对外推荐入口为 `umdk_cam_op_lib.ZbBuffer`（封装 layout / dispatch / combine，并管理 SHMEM 与 `comm_meta_ptr`）；下列接口描述对应其底层算子语义与约束。
+
+ #### 1.2.1 get_dispatch_layout_zb ▶
+##### 1.2.1.1 接口原型
+```python
+umdk_cam_op_lib.get_dispatch_layout_zb(
+    Tensor topk_idx,
+    int num_experts,
+    int num_ranks
+) -> output: Tuple[Tensor, Tensor]
+```
+##### 1.2.1.2 接口描述
+`get_dispatch_layout_zb`：Zero-Buffer 路径下根据每个 token 的 topK 专家索引，统计发往各专家的 token 数，并计算每个 `(token, topk)` 在目标专家视角下的本地发送序号，供后续 notify / `moe_dispatch_normal_zb` 使用。底层调用 `aclnnDispatchLayoutZeroBuffer`。
+##### 1.2.1.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|topk_idx|Tensor|必选|形状：`(batchSize, topK)`，数据类型 `torch.int64`|目标专家 id|
+|num_experts|int|必选|MOE 路由专家数|专家总数|
+|num_ranks|int|必选|通信域 rank 数|EP 通信域大小|
+##### 1.2.1.4 返回值
+返回由 2 个 Tensor 构成的 Tuple：`number_tokens_per_expert`、`send_token_idx`。
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|number_tokens_per_expert|Tensor|形状：`(num_experts,)`，数据类型 `torch.int`|当前 rank 发给每个专家的 token 个数|
+|send_token_idx|Tensor|形状：`(batchSize, topK)`，数据类型 `torch.int`|当前 rank 发给每个专家的 token，为对应专家从当前 rank 接收的第几个|
+##### 1.2.1.5 约束和注意事项 ⚠️
+1. `num_ranks` 取值范围：`[1, 384]`。`num_ranks=1` 时 layout 可算出正确结果，但无法继续调用后续 notify / dispatch / combine。
+2. `num_experts` 取值范围：`(0, 512]`。
+3. `topk` 取值范围：`(0, 16]`。
+4. `topk_idx` 中数值取值范围：`[0, num_experts)`。
+5. `batchSize` 取值范围：`[1, 8000]`。
+6. `num_experts % num_ranks == 0`，且 `num_experts >= num_ranks`。
+7. 不支持 A2 环境（仅 A3）。
+8. 输出必须直接交给后续 ZB 链路使用，不可自行改写后再传入。
+
+ #### 1.2.2 moe_dispatch_normal_zb ▶
+##### 1.2.2.1 接口原型
+```python
+umdk_cam_op_lib.moe_dispatch_normal_zb(
+    Tensor x,
+    Tensor topk_idx,
+    Tensor send_token_idx,
+    Tensor num_tokens_per_expert,
+    int ep_world_size,
+    int ep_rank_id,
+    int moe_expert_num,
+    int quant_mode,
+    int global_bs,
+    int comm_meta_ptr
+) -> output: Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+```
+##### 1.2.2.2 接口描述
+`moe_dispatch_normal_zb`：Zero-Buffer 路径下的 normal dispatch 算子，将入参 `x` 按 `topk_idx` 规则发送给对应专家；通信窗口由 `comm_meta_ptr` 指向的 Zero-Buffer / SHMEM 元数据管理。语义对齐 `moe_dispatch_prefill`；在单个 Python 接口内依次完成 notify 与 dispatch，底层调用 `aclnnNotifyDispatchZeroBuffer`、`aclnnMoeDispatchNormalZeroBuffer`。
+##### 1.2.2.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|x|Tensor|必选|形状：`(batchSize, h)`，支持 bf16、float16|本卡发送的 token|
+|topk_idx|Tensor|必选|形状：`(bs, topK)`，数据类型 `torch.int32`|每个 token 的 topk 专家索引|
+|send_token_idx|Tensor|必选|形状：`(batchSize, topK)`，数据类型 `torch.int`|必须直接使用 `get_dispatch_layout_zb` 的输出 `send_token_idx`|
+|num_tokens_per_expert|Tensor|必选|形状：`(moe_expert_num,)`，数据类型 `torch.int`；须位于 SHMEM 对称内存|必须直接使用 `get_dispatch_layout_zb` 的输出 `num_tokens_per_expert`|
+|ep_world_size|int|必选|EP 通信域卡数|通信域大小|
+|ep_rank_id|int|必选|本卡 rankId|`[0, ep_world_size)`|
+|moe_expert_num|int|必选|MOE 路由专家数|专家总数|
+|quant_mode|int|必选|`0`：不量化；`2`：动态量化|量化模式|
+|global_bs|int|必选|通常为 `max_batch_size * ep_world_size`，须为正|按上界分配 recv 缓冲，避免 notify 后 host sync|
+|comm_meta_ptr|int|必选|Zero-Buffer / SHMEM 初始化后得到的 meta 区地址指针|通信元数据指针|
+##### 1.2.2.4 返回值
+返回由 5 个 Tensor 构成的 Tuple：`recv_x`、`dynamic_scales_out`、`put_offset`、`total_recv_tokens`、`recv_tokens_per_expert`。
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|recv_x|Tensor|形状：`(global_bs, h)`；`quant_mode=2` 时为 `torch.int8`，否则与 `x` 一致；位于 SHMEM|本卡收到的 token；有效长度需结合 `total_recv_tokens` 截断|
+|dynamic_scales_out|Tensor|形状：`(global_bs,)`，数据类型 `torch.float`|`quant_mode=2` 时为实际量化 scale（SHMEM）；`quant_mode=0` 时无意义|
+|put_offset|Tensor|形状：`(moe_expert_num, ep_world_size)`，数据类型 `torch.int`|各专家对各 rank 的写入偏移，由内部 notify 产生；combine 时作为 `ep_recv_counts` 使用|
+|total_recv_tokens|Tensor|形状：`(1,)`，数据类型 `torch.int`|本卡实际接收 token 数，用于对 `recv_x` / scales 等截断|
+|recv_tokens_per_expert|Tensor|形状：`(moe_expert_num / ep_world_size,)`，数据类型 `torch.int64`|本卡各本地专家实际接收的 token 数|
+##### 1.2.2.5 约束和注意事项 ⚠️
+1. `batchSize` 取值范围：`[1, 8000]`。
+2. `ep_world_size` 取值范围：`[2, 384]`。
+3. `ep_rank_id` 取值范围：`[0, ep_world_size)`。
+4. `moe_expert_num` 取值范围：`(0, 512]`。
+5. `topk` 取值范围：`(0, 16]`。
+6. `topk_idx` 中数值取值范围：`[0, moe_expert_num)`。
+7. `h` 取值范围：`[1024, 7168]`。
+8. `moe_expert_num % ep_world_size == 0`，且 `moe_expert_num >= ep_world_size`。
+9. `global_bs` 必须大于 0。
+10. `send_token_idx` / `num_tokens_per_expert` 必须直接使用 `get_dispatch_layout_zb` 的输出。
+11. 调用前需完成 Zero-Buffer / SHMEM 初始化，保证 `comm_meta_ptr` 有效。
+12. 返回的 `recv_x`、`dynamic_scales_out` 按 `global_bs` 上界分配；业务侧应按实际 `total_recv_tokens` 截断后再做专家计算与 combine。
+13. 不支持 A2 环境（仅 A3）。
+
+ #### 1.2.3 moe_combine_normal_zb ▶
+##### 1.2.3.1 接口原型
+```python
+umdk_cam_op_lib.moe_combine_normal_zb(
+    Tensor recv_x,
+    Tensor ep_recv_counts,
+    Tensor recv_topk_weights,
+    Tensor topk_idx,
+    Tensor send_token_idx,
+    int comm_meta_ptr,
+    int ep_world_size,
+    int ep_rank_id,
+    int tp_world_size,
+    int tp_rank_id,
+    int moe_expert_num,
+    int global_bs
+) -> combine_x: Tensor
+```
+##### 1.2.3.2 接口描述
+`moe_combine_normal_zb`：Zero-Buffer 路径下的 normal combine 算子，将入参 `recv_x` 按与 dispatch 相反的方向、按 `recv_topk_weights` 指定权重收集合并为 `combine_x`。语义对齐 `moe_combine_prefill`，底层调用 `aclnnMoeCombineNormalZeroBuffer`。
+##### 1.2.3.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|recv_x|Tensor|必选|形状：`(recv_token_num, h)`，支持 bf16、float16|本卡 dispatch 阶段接收并经专家计算后的 token|
+|ep_recv_counts|Tensor|必选|形状通常为 `(moe_expert_num, ep_world_size)`，数据类型 `torch.int`|各专家对各 rank 的接收计数/偏移；ZB 链路中通常直接复用 dispatch 内部 notify 产生的 `put_offset`|
+|recv_topk_weights|Tensor|必选|形状：`(bs, topK)`，数据类型 `torch.float32`|每个 token 的 topk 专家权重|
+|topk_idx|Tensor|必选|形状：`(bs, topK)`，数据类型 `torch.int32`|每个 token 的 topk 专家索引|
+|send_token_idx|Tensor|可选|形状：`(batchSize, topK)`，数据类型 `torch.int`；不需要时传 `None`|须为 `get_dispatch_layout_zb` 的出参|
+|comm_meta_ptr|int|必选|与 dispatch 侧同源初始化结果|Zero-Buffer / SHMEM 元数据指针|
+|ep_world_size|int|必选|EP 通信域卡数|通信域大小|
+|ep_rank_id|int|必选|本卡 rankId|`[0, ep_world_size)`|
+|tp_world_size|int|必选|常规传 `1`|TP 域大小|
+|tp_rank_id|int|必选|常规传 `0`|TP rankId|
+|moe_expert_num|int|必选|MOE 路由专家数|专家总数|
+|global_bs|int|必选|EP 通信域全局 BS 大小|全局 batch 上界|
+##### 1.2.3.4 返回值
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|combine_x|Tensor|形状：`(batchSize, h)`，数据类型与 `recv_x` 一致；`batchSize` 取自 `recv_topk_weights.size(0)`|本卡收回并加权合并后的 token|
+##### 1.2.3.5 约束和注意事项 ⚠️
+1. `batchSize` 取值范围：`[1, 8000]`。
+2. `ep_world_size` 取值范围：`[2, 384]`。
+3. `ep_rank_id` 取值范围：`[0, ep_world_size)`。
+4. `moe_expert_num` 取值范围：`(0, 512]`。
+5. `topk` 取值范围：`(0, 16]`。
+6. `topk_idx` 中数值取值范围：`[0, moe_expert_num)`。
+7. `h` 取值范围：`[1024, 7168]`。
+8. `moe_expert_num % ep_world_size == 0`，且 `moe_expert_num >= ep_world_size`。
+9. `recv_x` 应与 `moe_dispatch_normal_zb` 有效接收区间一致（按 `total_recv_tokens` 截断后的专家输出）。
+10. `ep_recv_counts` 必须直接使用 dispatch 内部 notify 的 `put_offset`（或等价 ep send/recv counts）。
+11. `send_token_idx` 若传入，必须直接使用 `get_dispatch_layout_zb` 的出参。
+12. 调用前需保证 `comm_meta_ptr` 有效，且与 dispatch 使用同一通信域初始化结果。
+13. 不支持 A2 环境（仅 A3）。

@@ -65,23 +65,15 @@ static void urma_close_provider(void *handler, const char *file)
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
 static int urma_open_provider(const char file[URMA_MAX_LIB_PATH])
 {
-    int ret;
     char *canonicalized_path = NULL;
 
-    ret = access(file, F_OK | R_OK | X_OK); // Determine permission: exist & read & execute
-    if (ret != 0) {
-        URMA_LOG_ERR("%s doesn't exist or doesn't have permission.\n", file);
-        return -1;
-    }
-
-    /* Resolve symbols only as the code that references them is executed.
-       If the symbol is never referenced, then it is never resolved. */
     canonicalized_path = realpath(file, NULL);
     if (canonicalized_path == NULL) {
-        URMA_LOG_ERR("realpath failed.\n");
+        URMA_LOG_ERR("realpath %s failed, errno=%d.\n", file, errno);
         return -1;
     }
 
+    /* Resolve symbols immediately to report provider dependency issues during load. */
     urma_so_t *so = calloc(1, sizeof(urma_so_t));
     if (so == NULL) {
         free(canonicalized_path);
@@ -138,6 +130,43 @@ int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
     return 0;
 }
 
+/* Register the log callback with all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_register_log_func_to_providers(urma_log_cb_t func)
+{
+    if (func == NULL) {
+        return;
+    }
+    urma_driver_t *driver, *next;
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
+        if (driver->ops == NULL || driver->ops->register_log_func == NULL) {
+            continue;
+        }
+        urma_status_t ret = driver->ops->register_log_func(func);
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Register log func to provider %s failed, ret=%d.\n",
+                         driver->ops->name ? driver->ops->name : "unknown", ret);
+        }
+    }
+}
+
+/* Unregister the log callback from all loaded providers. No-op when g_driver_list
+ * is empty (before urma_init / after urma_uninit). */
+void urma_unregister_log_func_to_providers(void)
+{
+    urma_driver_t *driver, *next;
+    UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
+        if (driver->ops == NULL || driver->ops->unregister_log_func == NULL) {
+            continue;
+        }
+        urma_status_t ret = driver->ops->unregister_log_func();
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Unregister log func from provider %s failed, ret=%d.\n",
+                         driver->ops->name ? driver->ops->name : "unknown", ret);
+        }
+    }
+}
+
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
 static bool urma_validate_driver(struct dirent *dent)
 {
@@ -184,8 +213,8 @@ static int urma_open_drivers(void)
     strcat(dl_dir, "/urma");
     DIR *dir = opendir(dl_dir);
     if (dir == NULL) {
-        URMA_LOG_ERR("Failed to open liburma dir %s\n", dl_dir);
-        return -1;
+        URMA_LOG_WARN("liburma dir %s not exist\n", dl_dir);
+        return 0;
     }
 
     int n_loaded_drivers = 0;
@@ -215,12 +244,12 @@ urma_status_t urma_init(urma_init_attr_t *conf)
 {
     /* g_init_flag is initialized as 0 */
     if (atomic_load(&g_init_flag) > 0) {
-        URMA_LOG_ERR("urma_init has been called before.\n");
+        URMA_LOG_WARN("urma_init has been called before.\n");
         return URMA_EEXIST;
     }
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     /* TODONEXT: call ubcore to allocate uasid */
-    if (urma_open_drivers() <= 0) {
+    if (urma_open_drivers() < 0) {
         URMA_LOG_ERR("None of the providers registered.\n");
         /* we can continue on android platform */
 #if !defined(__ANDROID__) && !defined(SO_LINKED)
@@ -230,6 +259,11 @@ urma_status_t urma_init(urma_init_attr_t *conf)
 #endif
 
     (void)pthread_spin_init(&g_dev_list_lock, PTHREAD_PROCESS_PRIVATE);
+    /* Compensate: a callback registered before init could not be forwarded
+     * (providers not loaded yet); now they are. */
+    if (urma_is_log_func_registered()) {
+        urma_register_log_func_to_providers(urma_get_log_func());
+    }
     urma_driver_t *driver, *next;
     UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
         if (driver->ops->init == NULL || driver->ops->init(conf) != URMA_SUCCESS) {
@@ -729,14 +763,13 @@ static __attribute__((constructor)) void liburma_init(void)
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     urma_discover_sysfs_path();
 #endif
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Start to init liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    /* URMA_LOG_X should be used after the above log operations finish */
+    URMA_LOG_INFO("Start to init liburma.\n");
     return;
 }
 
 static __attribute__((destructor)) void liburma_uninit(void)
 {
-    syslog(LOG_INFO, "URMA|liburma|%ld|-|%s[%d]|Finish to uninit liburma.\n",
-        (long)syscall(__NR_gettid), __func__, __LINE__);
+    URMA_LOG_INFO("Finish to uninit liburma.\n");
     return;
 }
