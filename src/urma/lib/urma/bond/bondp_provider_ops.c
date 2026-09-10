@@ -546,27 +546,30 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
         return -EINVAL;
     }
 
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    int ret = 0;
+
+    (void)pthread_mutex_lock(&ctx->mutex);
     uint64_t cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (cnt > 1) {
         URMA_LOG_WARN("already in use, atomic_cnt=%lu, dev_name=%s.\n",
                       cnt, ctx->dev->name);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return URMA_EAGAIN;
     }
 
     if (bonding_mode < 0 || bonding_mode >= BONDP_BONDING_MODE_MAX) {
         URMA_LOG_ERR("Invalid bonding mode=%d\n", bonding_mode);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return -EINVAL;
     }
 
     if (bonding_level < 0 || bonding_level >= BONDP_BONDING_LEVEL_MAX) {
         URMA_LOG_ERR("Unsupported bonding level=%d\n", bonding_level);
+        (void)pthread_mutex_unlock(&ctx->mutex);
         return -EINVAL;
     }
 
-    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
-    int ret = 0;
-
-    (void)pthread_mutex_lock(&ctx->mutex);
     if (bdp_ctx->bonding_mode == bonding_mode &&
         bdp_ctx->bonding_level == bonding_level) {
         goto EXIT;

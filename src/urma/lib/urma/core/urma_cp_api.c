@@ -364,7 +364,11 @@ urma_status_t urma_free_jfc(urma_jfc_t *jfc)
     URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, free_jfc);
 
     urma_status_t ret = ops->free_jfc(jfc);
-    if (ret == URMA_SUCCESS && jfce != NULL) {
+    if (ret != URMA_SUCCESS) {
+        URMA_LOG_ERR("Failed to free jfc.\n");
+        return ret;
+    }
+    if (jfce != NULL) {
         atomic_fetch_sub(&jfce->ref.atomic_cnt, 1);
     }
     atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
@@ -1820,6 +1824,7 @@ urma_status_t urma_free_jetty(urma_jetty_t *jetty)
     urma_status_t status = ops->free_jetty(jetty);
     if (status != URMA_SUCCESS) {
         (void)urma_add_jetty_to_jetty_grp(jetty, jetty->jetty_cfg.jetty_grp);
+        return status;
     }
     atomic_fetch_sub(&urma_ctx->ref.atomic_cnt, 1);
     return status;
@@ -2573,8 +2578,16 @@ urma_status_t urma_active_jetty(urma_jetty_t *jetty)
         return URMA_EINVAL;
     }
 
-    if (jetty->jetty_cfg.shared.jfr->urma_jfr_opt.is_actived == false ||
-        jetty->jetty_cfg.shared.jfc->urma_jfc_opt.is_actived == false) {
+    if (cfg->flag.bs.share_jfr != URMA_SHARE_JFR) {
+        URMA_LOG_ERR("Jetty is not configured with shared jfr.\n");
+        return URMA_EINVAL;
+    }
+    if (cfg->shared.jfr == NULL || cfg->shared.jfc == NULL) {
+        URMA_LOG_ERR("shared.jfr or shared.jfc is NULL.\n");
+        return URMA_EINVAL;
+    }
+    if (cfg->shared.jfr->urma_jfr_opt.is_actived == false ||
+        cfg->shared.jfc->urma_jfc_opt.is_actived == false) {
         URMA_LOG_ERR("jfc or jfr has not activated.\n");
         return URMA_EINVAL;
     }
@@ -3158,8 +3171,9 @@ urma_status_t urma_unregister_seg(urma_target_seg_t *target_seg)
             (void)urma_free_token_id(token_id);
         }
     } else {
+        uint32_t tid = (token_id != NULL) ? token_id->token_id : 0;
         URMA_LOG_ERR("[DRV_ERR]Unregister seg fail, dev_name=%s, eid_idx=%u, tid=%u, ret=%d.\n",
-            urma_ctx->dev->name, urma_ctx->eid_index, token_id->token_id, ret);
+            urma_ctx->dev->name, urma_ctx->eid_index, tid, ret);
     }
 
     return ret;
