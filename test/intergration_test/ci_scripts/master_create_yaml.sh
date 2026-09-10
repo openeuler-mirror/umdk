@@ -3,7 +3,7 @@ source $(cd $(dirname ${BASH_SOURCE[0]}) && pwd)/master_ci.sh
 
 mkdir -p /var/log/CI/
 exec 6>&1 7>&2
-exec 1>/var/log/CI/$(basename $0)_$(date + "%Y%m%d%H%M%S").log 2>&1
+exec 1>/var/log/CI/$(basename $0)_$(date +"%Y%m%d%H%M%S").log 2>&1
 set -x
 find /var/log/CI/ -type f -mtime +5 | grep "$(basename $0)" | xargs -i rm -rf {}
 
@@ -11,7 +11,7 @@ find /var/log/CI/ -type f -mtime +5 | grep "$(basename $0)" | xargs -i rm -rf {}
 # 生成yaml文件
 ###########################################################################################
 HOST_IPS=${1}
-USER=${2: -"root"}
+USER=${2:-"root"}
 
 arch=$(uname -m)
 IFS=','

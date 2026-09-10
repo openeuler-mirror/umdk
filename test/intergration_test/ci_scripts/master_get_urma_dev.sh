@@ -1,8 +1,9 @@
 #! /bin/bash
 # 查找urma设备和eid
 port=`urma_admin show topo | grep "Connected" | cut -d':' -f1 | head -n1`
-eid=`urma_admin show topo | grep "${port}" | grep "Connected" | head -n1 | awk '${print $3}'`
-dev=`urma_admin show -a | grep "${eid}" | awk '${print $2}'`
+eid=`urma_admin show topo | grep "${port}" | grep "Connected" | head -n1 | awk '{print $3}'`
+dev=`urma_admin show -a | grep "${eid}" | awk '{print $2}'`
+eid_idx=`urma_admin show -a | grep "${eid}" | head -n1 | awk '{print $1}'`
 nic_name=""
 ipv6=$eid
 

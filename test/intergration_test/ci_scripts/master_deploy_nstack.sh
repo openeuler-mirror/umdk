@@ -3,7 +3,7 @@ source $(cd $(dirname ${BASH_SOURCE[0]}) && pwd)/master_ci.sh
 
 mkdir -p /var/log/CI/
 exec 6>&1 7>&2
-exec 1>/var/log/CI/$(basename $0)_$(date + "%Y%m%d%H%M%S").log 2>&1
+exec 1>/var/log/CI/$(basename $0)_$(date +"%Y%m%d%H%M%S").log 2>&1
 set -x
 find /var/log/CI/ -type f -mtime +5 | grep "$(basename $0)" | xargs -i rm -rf {}
 
@@ -19,7 +19,7 @@ function uninstall_umdk() {
     for ip in ${array_mgt_ip[@]}; do
         if [[ ${ip} != ${manage_ip} ]]; then
             echo "[Info] ${ip}: uninstall umdk"
-            ssh -o StrictHostKeyChecking=no root@${ip} 'rpm -qa | grep 'umdk-' | xargs sudo rpm -e --nodeps'
+            ssh -o StrictHostKeyChecking=no root@${ip} "rpm -qa | grep 'umdk-' | xargs sudo rpm -e --nodeps"
         fi
     done
 }

@@ -18,7 +18,7 @@ function download_package() {
         umdk_date=$(cat release_dir)
     fi
 
-    for i in ${seq 1 5}; do
+    for i in $(seq 1 5); do
         echo "[Info] ${manage_ip}: download umdk"
         wget -r -np -nH -e robots=off -A "TongTu_UMDK_*4k*" "${http_ip}/${umdk_branch}/${umdk_date}/software/"
         wget_ret=$?

@@ -3,7 +3,7 @@ source $(cd $(dirname ${BASH_SOURCE[0]}) && pwd)/master_ci.sh
 
 mkdir -p /var/log/CI/
 exec 6>&1 7>&2
-exec 1>/var/log/CI/$(basename $0)_$(date + "%Y%m%d%H%M%S").log 2>&1
+exec 1>/var/log/CI/$(basename $0)_$(date +"%Y%m%d%H%M%S").log 2>&1
 set -x
 find /var/log/CI/ -type f -mtime +5 | grep "$(basename $0)" | xargs -i rm -rf {}
 
@@ -63,7 +63,7 @@ if [ "$IS_FIRST_DEPLOY" == "true" ]; then
     chmod 600 "${CERTS_DIR}/client_rsa_private.pem" "${CERTS_DIR}/server_rsa_private.pem" 2>&1
     echo "证书赋权完成"
 
-    scp -r "${CERTS_DIR}/" "${HOST2}:${UMS_CONFIG_DIR}/"
+    scp -r "${CERTS_DIR}/" "root@${HOST2}:${UMS_CONFIG_DIR}/"
 
     ssh -o StrictHostKeyChecking=no root@${HOST2} \
     "chown root:ums "/etc/ums_agent/certs/ca.crt" "/etc/ums_agent/certs/ca.srl" "/etc/ums_agent/certs/client.crt" "/etc/ums_agent/certs/client.csr" "/etc/ums_agent/certs/server.crt" "/etc/ums_agent/certs/server.csr" "/etc/ums_agent/certs/ca_rsa_private.pem" 2>&1"
@@ -98,7 +98,7 @@ cp -r "${script_dir}/ums_agent.conf" "${UMS_CONFIG_DIR}/ums_agent.conf" 2>&1
 echo "完成配置文件部署"
 
 ssh -o StrictHostKeyChecking=no root@${HOST2} 'rm -rf /etc/ums_agent/ums_agent.conf'
-scp -r "${script_dir}/ums_agent.conf" "${HOST2}:${UMS_CONFIG_DIR}/"
+scp -r "${script_dir}/ums_agent.conf" "root@${HOST2}:${UMS_CONFIG_DIR}/"
 echo "${HOST2}"完成配置文件部署
 
 if [ ! -f "$SERVICE_FILE" ]; then
@@ -115,6 +115,7 @@ if grep -q "StartLimitIntervalSec=0" "$SERVICE_FILE" && grep -q "StartLimitBurst
     echo "修改成功"
 else
     echo "[error]修改未生效"
+fi
 
 echo "正在调整inotify限制"
 sudo sysctl fs.inotify.max_user_instances=1024
