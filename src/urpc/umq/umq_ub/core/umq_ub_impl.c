@@ -3121,7 +3121,8 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     if (qcfg->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_info == NULL ||
-        mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+        mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t) ||
+        mempool_info_len > UMQ_MEMPOOL_INFO_MAX_SIZE) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
