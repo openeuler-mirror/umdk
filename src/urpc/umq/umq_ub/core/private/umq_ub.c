@@ -735,8 +735,6 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
             ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, ret);
         goto RESET_BIND_CTX;
     }
-    queue->bind_ctx = ctx;
-
     ret = umq_ub_remote_tseg_info_get(queue, info, ctx);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), remote umq_id: %u, remote eid: " EID_FMT ", remote jetty_id: %u, "
@@ -745,6 +743,7 @@ int umq_ub_bind_inner_impl(ub_queue_t *queue, umq_ub_bind_info_t *info)
             ctx->tjetty[UB_QUEUE_JETTY_IO]->id.id, info->dev_info->pid, info->dev_info->bind_namespace, ret);
         goto RESET_BIND_CTX;
     }
+    queue->bind_ctx = ctx;
 
     uint32_t max_msg_size = max_msg_size_get(queue);
     queue->remote_rx_buf_size =
