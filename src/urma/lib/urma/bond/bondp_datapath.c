@@ -1542,7 +1542,8 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     if (is_failover_cr(cr) && !bdp_comp->modify_to_error) {
         (void)pthread_spin_lock(&bdp_comp->send_lock);
         atomic_store(&bdp_comp->valid[send_idx], false);
-        if (send_idx >= 0 && (uint32_t)send_idx < URMA_UBAGG_DEV_MAX_NUM) {
+        if (cr->status == URMA_CR_LOC_ACCESS_ERR &&
+            send_idx >= 0 && (uint32_t)send_idx < URMA_UBAGG_DEV_MAX_NUM) {
             atomic_store(&bdp_comp->bondp_ctx->port_status_bad[send_idx], true);
         }
         bondp_target_jetty_t *bdp_tjetty = wr_entry->target_vjetty;
