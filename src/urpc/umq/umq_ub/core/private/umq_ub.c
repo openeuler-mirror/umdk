@@ -1874,8 +1874,9 @@ ERR:
     return -UMQ_ERR_EINVAL;
 }
 
-void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
+int umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
 {
+    int ret = UMQ_SUCCESS;
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     UMQ_VLOG_INFO(VLOG_UMQ, "eid: " EID_FMT ", jfr_id: %u, destroy jfr_ctx\n",
                   EID_ARGS(qcfg->jfr_ctx[jetty_idx]->jfr->jfr_id.eid), qcfg->jfr_ctx[jetty_idx]->jfr->jfr_id.id);
@@ -1884,6 +1885,7 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFR, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfr failed, status: %d\n", (int)status);
+        ret = -UMQ_ERR_EDESTROY_FATAL;
     }
 
     start_timestamp = umq_perf_get_start_timestamp();
@@ -1891,6 +1893,7 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfc failed, status: %d\n", (int)status);
+        ret = -UMQ_ERR_EDESTROY_FATAL;
     }
 
     // only delete the jfce of io and the jfce of sub_umq flow control
@@ -1901,6 +1904,7 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfce failed, status: %d\n", (int)status);
+            ret = -UMQ_ERR_EDESTROY_FATAL;
         }
     }
     if (jetty_idx == UB_QUEUE_JETTY_IO && qcfg->dev_ctx != NULL &&
@@ -1911,17 +1915,18 @@ void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     rx_buf_ctx_list_uninit(&qcfg->jfr_ctx[jetty_idx]->rx_buf_ctx_list);
     free(qcfg->jfr_ctx[jetty_idx]);
     qcfg->jfr_ctx[jetty_idx] = NULL;
+    return ret;
 }
 
-void umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
+int umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
 {
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     uint32_t new_value = __atomic_sub_fetch(&qcfg->jfr_ctx[jetty_idx]->ref_cnt, 1, __ATOMIC_ACQ_REL);
     UMQ_VLOG_DEBUG(VLOG_UMQ, "jfr_ctx ref_cnt %u\n", new_value);
     if (new_value > 0) {
-        return;
+        return UMQ_SUCCESS;
     }
-    umq_ub_jfr_ctx_destroy(queue, jetty_idx);
+    return umq_ub_jfr_ctx_destroy(queue, jetty_idx);
 }
 
 static int umq_ub_rqe_post_factor_query(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, urma_jfr_t *jfr)
