@@ -287,10 +287,12 @@ const urma_bond_user_tseg_ext_v0_t *bondp_user_tseg_get_ext(const urma_user_tseg
     const urma_user_info_ext_hdr_t *ext_hdr =
         (const urma_user_info_ext_hdr_t *)((uintptr_t)ut + sizeof(*ut));
     const urma_bond_user_tseg_ext_v0_t *ext = (const urma_bond_user_tseg_ext_v0_t *)ext_hdr->data;
+    /* Duplicate-peer scan (O(peer_cnt^2)) is NOT done here: this helper runs
+     * inside the send lock from check/map; the scan runs once at clone time
+     * (outside the lock) instead. */
     if (ext_hdr->len < sizeof(*ext) ||
         ext_hdr->len < sizeof(*ext) + (uint64_t)ext->peer_cnt * sizeof(bondp_user_tseg_peer_ctx_t) ||
-        ext->version != 0 || ext->peer_cnt == 0 || ext->peer_cnt > URMA_UBAGG_DEV_MAX_NUM ||
-        !bondp_user_tseg_peer_ctx_valid(ext)) {
+        ext->version != 0 || ext->peer_cnt == 0 || ext->peer_cnt > URMA_UBAGG_DEV_MAX_NUM) {
         return NULL;
     }
     return ext;
@@ -373,6 +375,16 @@ static urma_status_t bondp_clone_sge_user_tseg(urma_sge_t *sge, bool remote, uin
                      ut->attr.value, ut->attr.bs.has_user_info, ut->token_id,
                      raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
                      raw[6], raw[7], raw[8], raw[9], raw[10], raw[11]);
+        return URMA_EINVAL;
+    }
+    /* Full validation (incl. the O(peer_cnt^2) duplicate-peer scan) runs here,
+     * outside the send lock, exactly once per SGE; the locked check/map stages
+     * only re-verify the O(1) header fields via bondp_user_tseg_get_ext. */
+    const urma_bond_user_tseg_ext_v0_t *ext = bondp_user_tseg_get_ext(sge->user_tseg);
+    if (ext == NULL || !bondp_user_tseg_peer_ctx_valid(ext)) {
+        URMA_LOG_ERR("Invalid bonding user_tseg ext (bad header/version/len or "
+                     "peer_idx out of range/duplicated): attr=0x%08x, token_id=%u.\n",
+                     sge->user_tseg->attr.value, sge->user_tseg->token_id);
         return URMA_EINVAL;
     }
     if (*slot_idx >= max_slots) {
@@ -694,12 +706,6 @@ static void map_user_tseg_sge_to_path(urma_sge_t *sge, int target_idx,
     sge->user_tseg = bare;
     sge->tseg = NULL;
     (*slot_idx)++;
-    /* Import-free data path trace: the slave device receives a bare user_tseg
-     * with the per-path token resolved from the bonding extension. DEBUG-level
-     * to keep the post hot path quiet. */
-    URMA_LOG_DEBUG("import-free seg mapped: target_idx=%d, peer_token_id=%u, "
-                   "token_policy=%u.\n", target_idx, peer_token_id,
-                   bare->attr.bs.token_policy);
 }
 
 /* Restore one import-free remote SGE back to the deep-copied extension. */

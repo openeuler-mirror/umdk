@@ -55,6 +55,14 @@ typedef enum bondp_user_ctl_opcode {
     /* Query per-port health status (GOOD/BAD). in: addr=0, len=0;
      * out: bondp_query_port_status_out_t. Only enabled ports are filled. */
     BONDP_USER_CTL_QUERY_PORT_STATUS,
+    /* Fill the import-free user_tseg context (with per-slave token id ext)
+     * into the caller-provided buffer, no allocation inside the provider:
+     * in: addr = urma_target_seg_t*, len = sizeof(urma_target_seg_t);
+     * out: addr = buffer, len = buffer capacity in / blob size out.
+     * Returns -ENOSPC and out->len = required size when the capacity is too
+     * small (a capacity of 0 is allowed for size probing). Appended at the
+     * tail to keep the numbering of the existing opcodes stable. */
+    BONDP_USER_CTL_OPCODE_FILL_USER_TSEG,
 } bondp_user_ctl_opcode_t;
 
 typedef enum bondp_port_status_state {
