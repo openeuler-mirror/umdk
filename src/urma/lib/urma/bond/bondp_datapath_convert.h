@@ -66,7 +66,8 @@ static inline bool jfs_wr_sge_is_remote(const urma_jfs_wr_t *wr, bool is_src)
 }
 
 /* Parse helpers for the bonding user_tseg extension (import-free remote SGE).
- * The buffer must be the whole block produced by urma_get_user_tseg. */
+ * The buffer must be the whole block produced by urma_get_user_tseg /
+ * urma_fill_user_tseg. */
 
 /* Total byte length of a bonding user_tseg buffer; 0 when it has no valid
  * extension or exceeds BONDP_USER_TSEG_MAX_LEN. */
@@ -74,7 +75,8 @@ uint32_t bondp_user_tseg_total_len(const urma_user_tseg_t *ut);
 
 /* Validate and return the bonding extension of @ut, NULL on any violation
  * (has_user_info not set, bad lengths/version/peer_cnt, peer_idx out of
- * range or duplicated). */
+ * range). peer_idx duplication is checked only at clone time (outside the
+ * send lock) to keep the O(peer_cnt^2) scan off the locked check/map path. */
 const urma_bond_user_tseg_ext_v0_t *bondp_user_tseg_get_ext(const urma_user_tseg_t *ut);
 
 /* Find the token_id of peer peer_idx == target_idx; 0 on success, -1 if not found. */
