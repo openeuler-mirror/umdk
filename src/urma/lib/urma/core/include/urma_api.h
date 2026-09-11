@@ -879,6 +879,32 @@ urma_status_t urma_get_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
 void urma_put_user_tseg(urma_user_tseg_t *user_tseg);
 
 /**
+ * Fill the user target segment context for proxy transmission into a
+ * caller-provided buffer, so that the peer can access the segment import-free
+ * by filling it into urma_sge_t.user_tseg. This is the zero-allocation
+ * counterpart of urma_get_user_tseg: urma neither allocates nor frees any
+ * memory, so no urma_put_user_tseg call is needed.
+ * @param[in] [Required] tseg: the locally registered target segment;
+ * @param[in] [Required] token: the token value for remote access check;
+ * @param[in] [Required] user_tseg: caller-provided buffer, at least
+ * 4-byte aligned;
+ * @param[in,out] [Required] size: buffer capacity on input, size of the
+ * encapsulated data structure on output;
+ * Return: 0 on success, other value on error
+ * Note: only locally registered segments are supported. On bonding devices
+ * the buffer carries a bonding extension (attr.bs.has_user_info = 1) with the
+ * per-slave token ids; the peer must pass the whole buffer of @size bytes
+ * as-is into urma_sge_t.user_tseg and must not modify the peer mapping.
+ * A too-small buffer returns URMA_ENOMEM and *size carries the required size,
+ * so the caller may retry with a bigger buffer (a capacity of 0 is allowed
+ * for size probing). Once a WR referencing the buffer has been posted, the
+ * buffer may be reused or freed, because the provider deep-copies it at post
+ * time.
+ */
+urma_status_t urma_fill_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
+                                  urma_user_tseg_t *user_tseg, uint32_t *size);
+
+/**
  * post a request to read, write, atomic or send data.
  * @param[in] jfs: the jfs created before, which is used to put command;
  * @param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.

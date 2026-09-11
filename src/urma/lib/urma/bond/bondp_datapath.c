@@ -597,7 +597,8 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         }
         /* Copy + encode MSN + link.
          * NOTE: send_idx/target_idx/entry_type are NOT set here —
-         * path binding and submit are done inside send_lock below */
+         * path binding/check/convert run before send_lock, the entries are
+         * committed and submitted inside send_lock below */
         urma_jfs_wr_t *cur = wr;
         for (int i = 0; i < wr_total; i++) {
             jfs_wr_entry_t *wr_entry = wr_entries[i];
@@ -660,21 +661,18 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             cur = cur->next;
         }
         int success_node = 0;
-        /*
-         * Critical section: check path, commit entry_type + send_idx/target_idx,
-         * convert, check valid, submit. send_lock ensures mutual exclusion with
-         * failover CR handling in handle_send_cr_with_store.
-         */
-        pthread_spin_lock(&bdp_comp->send_lock);
         /* Validate the path (incl. import-free user_tseg ext) while the WRs
          * are still in virtual form, before committing the entries. Walk the
          * user WR chain in parallel so a failure can report the caller's WR
-         * (wr_entries[] hold copies) via bad_wr. */
+         * (wr_entries[] hold copies) via bad_wr. Runs outside send_lock: the
+         * entries are not yet visible to the CR/failover thread (entry_type
+         * is cleared on release), tseg lifetimes are pinned by
+         * jfs_wr_get_refs, and a path invalidated in between is still caught
+         * by the valid[] re-check inside the lock. */
         urma_jfs_wr_t *user_wr = wr;
         for (int i = 0; i < wr_total; i++) {
             ret = check_jfs_wr_path(&wr_entries[i]->wr, send_idx, target_idx);
             if (ret != URMA_SUCCESS) {
-                pthread_spin_unlock(&bdp_comp->send_lock);
                 URMA_LOG_ERR("Failed to bind WR to path, send_idx=%d, target_idx=%d.\n",
                              send_idx, target_idx);
                 if (bad_wr != NULL) {
@@ -684,11 +682,10 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             }
             user_wr = user_wr->next;
         }
+        /* Convert to the physical form for [send_idx, target_idx] outside the
+         * lock as well: only this thread can touch the entries before their
+         * entry_type is committed below. */
         for (int i = 0; i < wr_total; i++) {
-            wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)wr_entries[i];
-            hdr->entry_type = WR_BUF_ENTRY_JFS;
-            wr_entries[i]->send_idx = send_idx;
-            wr_entries[i]->target_idx = target_idx;
             convert_jfs_vwr_to_pwr(&wr_entries[i]->wr, send_idx, target_idx,
                                    jfs_wr_entry_bare_ut_scratch(wr_entries[i],
                                                                 bdp_comp->max_send_sge,
@@ -696,6 +693,19 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                                    jfs_wr_entry_ut_ext_ptr_save(wr_entries[i],
                                                                 bdp_comp->max_send_sge,
                                                                 bdp_comp->max_send_rsge));
+        }
+        /*
+         * Critical section: commit entry_type + send_idx/target_idx, re-check
+         * valid, submit, restore the virtual form. send_lock ensures mutual
+         * exclusion with failover/RNR CR handling (valid[] clear + entry
+         * resend/release) in handle_send_cr_with_store.
+         */
+        pthread_spin_lock(&bdp_comp->send_lock);
+        for (int i = 0; i < wr_total; i++) {
+            wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)wr_entries[i];
+            hdr->entry_type = WR_BUF_ENTRY_JFS;
+            wr_entries[i]->send_idx = send_idx;
+            wr_entries[i]->target_idx = target_idx;
         }
         if (!atomic_load(&bdp_comp->valid[send_idx])) {
             for (int i = 0; i < wr_total; i++) {
