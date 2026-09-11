@@ -12,19 +12,25 @@ package com.huawei.umdk.snc.route;
 import com.huawei.umdk.snc.SncService;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
+import com.huawei.umdk.snc.entity.NpuPortEntity;
 import com.huawei.umdk.snc.entity.OutPortInfo;
 import com.huawei.umdk.snc.entity.RoutingEntry;
 import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.SwForwardingChip;
+import com.huawei.umdk.snc.entity.SwPortEntity;
 import com.huawei.umdk.snc.entity.SwitchLevel;
 import com.huawei.umdk.snc.log.Logger;
+import com.huawei.umdk.snc.route.topo.template.model.Label;
+import com.huawei.umdk.snc.route.topo.template.model.SncNode;
+import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class RouteInstantiationTest {
@@ -49,43 +55,163 @@ public class RouteInstantiationTest {
     private static void constructSuperNode() {
         superNode.setName("SuperNode1");
 
+        SncTopology rackTopology = topologyMap.get("128_npu_rack");
+        SncTopology interRackTopology = topologyMap.get("128_npu_inter_rack");
+
         Map<String, NpuDevice> npuDevices = new HashMap<>();
+        Map<String, SwDevice> swDevices = new HashMap<>();
+
+        // 1. 创建NPU设备：4个rack × 8个board × 4个NPU = 128个NPU
         for (int rack = 1; rack <= 4; rack++) {
             for (int board = 1; board <= 8; board++) {
                 for (int npuIndex = 1; npuIndex <= 4; npuIndex++) {
-                    String deviceName = getNpuDeviceName(superNode.getName(), rack,
-                        board, npuIndex);
+                    String deviceName = getNpuDeviceName(superNode.getName(), rack, board, npuIndex);
                     Map<Integer, NpuForwardingChip> chips = new HashMap<>();
-                    chips.put(1, new NpuForwardingChip(1));
-                    chips.put(2, new NpuForwardingChip(2));
+                    NpuForwardingChip iodie2 = new NpuForwardingChip(2);
+                    iodie2.setPorts(new LinkedHashMap<>());
+                    chips.put(2, iodie2);
                     NpuDevice npuDevice = new NpuDevice(deviceName, null, String.valueOf(rack),
-                        chips, "os0", null,
-                        board, 0, npuIndex);
+                        chips, "os0", null, board, 0, npuIndex);
                     npuDevices.put(deviceName, npuDevice);
                 }
             }
         }
 
-        Map<String, SwDevice> swDevices = new HashMap<>();
+        // 2. 创建L1 switch设备：4个rack × 4个L1 sw = 16个L1 sw
         for (int rack = 1; rack <= 4; rack++) {
             for (int index = 1; index <= 4; index++) {
                 String deviceName = getL1SwName(superNode.getName(), rack, index);
                 Map<Integer, SwForwardingChip> chips = new HashMap<>();
-                chips.put(1, new SwForwardingChip(1));
+                SwForwardingChip chip1 = new SwForwardingChip(1);
+                chip1.setPorts(new LinkedHashMap<>());
+                chips.put(1, chip1);
                 SwDevice swDevice = new SwDevice(deviceName, null, String.valueOf(rack),
                     chips, SwitchLevel.L1, index);
                 swDevices.put(deviceName, swDevice);
             }
         }
 
+        // 3. 创建L2 switch设备：4个L2 sw，每个含chip 1和chip 2
         for (int index = 1; index <= 4; index++) {
             String deviceName = getL2SwName(superNode.getName(), index);
             Map<Integer, SwForwardingChip> chips = new HashMap<>();
-            chips.put(1, new SwForwardingChip(1));
-            chips.put(2, new SwForwardingChip(2));
+            SwForwardingChip chip1 = new SwForwardingChip(1);
+            chip1.setPorts(new LinkedHashMap<>());
+            SwForwardingChip chip2 = new SwForwardingChip(2);
+            chip2.setPorts(new LinkedHashMap<>());
+            chips.put(1, chip1);
+            chips.put(2, chip2);
             SwDevice swDevice = new SwDevice(deviceName, null, null,
                 chips, SwitchLevel.L2, index);
             swDevices.put(deviceName, swDevice);
+        }
+
+        // 4. 根据框内模板连接 NPU ↔ L1 sw（每框复制一份）
+        for (SncNode npuNode : rackTopology.getNodeMap().values()) {
+            if (!"npu".equals(npuNode.type())) {
+                continue;
+            }
+            int slot = Integer.parseInt(npuNode.getLabel().getNames().get("slot"));
+            int ubpu = Integer.parseInt(npuNode.getLabel().getNames().get("ubpu"));
+            int die = Integer.parseInt(npuNode.getLabel().getNames().get("die"));
+
+            for (int rack = 1; rack <= 4; rack++) {
+                String npuDeviceName = getNpuDeviceName(superNode.getName(), rack, slot, ubpu);
+                NpuDevice npuDevice = npuDevices.get(npuDeviceName);
+                NpuForwardingChip chip = npuDevice.getForwardingChips().get(die);
+                Map<String, NpuPortEntity> ports = chip.getPorts();
+
+                for (SncPort sncPort : npuNode.getPortMap().values()) {
+                    String peerLabel = sncPort.getPeerNodeId();
+                    int peerL1Index = Label.getL1SwIndex(peerLabel);
+                    String l1DeviceName = getL1SwName(superNode.getName(), rack, peerL1Index);
+                    SwDevice l1Sw = swDevices.get(l1DeviceName);
+                    SwForwardingChip l1Chip = l1Sw.getForwardingChips().get(1);
+                    Map<String, SwPortEntity> l1Ports = l1Chip.getPorts();
+
+                    SncNode l1Node = rackTopology.getNodeMap().get(peerLabel);
+                    SncPort peerSncPort = l1Node.getPortMap().get(sncPort.getPeerPortId());
+                    String peerPortName = peerSncPort.getPortName();
+
+                    // NPU侧端口
+                    NpuPortEntity npuPort = new NpuPortEntity();
+                    npuPort.setPortName(sncPort.getPortName());
+                    npuPort.setId(sncPort.getId());
+                    npuPort.setChipIndex(die);
+                    npuPort.setRemoteDevice(l1DeviceName);
+                    npuPort.setRemotePort(peerPortName);
+                    ports.put(sncPort.getPortName(), npuPort);
+
+                    // L1 sw侧端口（NPU-facing）
+                    if (!l1Ports.containsKey(peerPortName)) {
+                        SwPortEntity l1Port = new SwPortEntity();
+                        l1Port.setPortName(peerPortName);
+                        l1Port.setId(peerSncPort.getId());
+                        l1Port.setChipIndex(1);
+                        l1Port.setRemoteDevice(npuDeviceName);
+                        l1Port.setRemotePort(sncPort.getPortName());
+                        l1Ports.put(peerPortName, l1Port);
+                    }
+                }
+            }
+        }
+
+        // 5. 根据框间模板连接 L1 sw ↔ L2 sw
+        //    模板中L1 sw索引1-4对应rack1，5-8对应rack2，9-12对应rack3，13-16对应rack4
+        for (SncNode l1Node : interRackTopology.getNodeMap().values()) {
+            if (!"l1_sw".equals(l1Node.type())) {
+                continue;
+            }
+            int globalL1Index = Label.getL1SwIndex(l1Node.getLabel().toString());
+            int rack = (globalL1Index - 1) / 4 + 1;
+            int localL1Index = (globalL1Index - 1) % 4 + 1;
+
+            String l1DeviceName = getL1SwName(superNode.getName(), rack, localL1Index);
+            SwDevice l1Sw = swDevices.get(l1DeviceName);
+            SwForwardingChip l1Chip = l1Sw.getForwardingChips().get(1);
+            Map<String, SwPortEntity> l1Ports = l1Chip.getPorts();
+
+            for (SncPort sncPort : l1Node.getPortMap().values()) {
+                String peerLabel = sncPort.getPeerNodeId();
+                if (!peerLabel.contains("l2_sw")) {
+                    continue;
+                }
+
+                Label peerL2Label = new Label();
+                peerL2Label.refreshAllNames(peerLabel);
+                int peerL2Index = Integer.parseInt(peerL2Label.getNames().get("index"));
+                int peerL2Chip = Integer.parseInt(peerL2Label.getNames().get("chip"));
+                String l2DeviceName = getL2SwName(superNode.getName(), peerL2Index);
+                SwDevice l2Sw = swDevices.get(l2DeviceName);
+                SwForwardingChip l2Chip = l2Sw.getForwardingChips().get(peerL2Chip);
+                Map<String, SwPortEntity> l2Ports = l2Chip.getPorts();
+
+                SncNode l2Node = interRackTopology.getNodeMap().get(peerLabel);
+                SncPort peerSncPort = l2Node.getPortMap().get(sncPort.getPeerPortId());
+                String peerPortName = peerSncPort.getPortName();
+
+                // L1 sw侧端口（L2-facing）
+                if (!l1Ports.containsKey(sncPort.getPortName())) {
+                    SwPortEntity l1Port = new SwPortEntity();
+                    l1Port.setPortName(sncPort.getPortName());
+                    l1Port.setId(sncPort.getId());
+                    l1Port.setChipIndex(1);
+                    l1Port.setRemoteDevice(l2DeviceName);
+                    l1Port.setRemotePort(peerPortName);
+                    l1Ports.put(sncPort.getPortName(), l1Port);
+                }
+
+                // L2 sw侧端口
+                if (!l2Ports.containsKey(peerPortName)) {
+                    SwPortEntity l2Port = new SwPortEntity();
+                    l2Port.setPortName(peerPortName);
+                    l2Port.setId(peerSncPort.getId());
+                    l2Port.setChipIndex(peerL2Chip);
+                    l2Port.setRemoteDevice(l1DeviceName);
+                    l2Port.setRemotePort(sncPort.getPortName());
+                    l2Ports.put(peerPortName, l2Port);
+                }
+            }
         }
 
         superNode.setNpuDevices(npuDevices);
