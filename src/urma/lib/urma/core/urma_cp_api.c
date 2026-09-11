@@ -26,6 +26,7 @@
 #define BONDP_USER_CTL_GET_RJETTY  9
 #define BONDP_USER_CTL_GET_SEG_CTX 10
 #define BONDP_USER_CTL_GET_USER_TSEG 14
+#define BONDP_USER_CTL_FILL_USER_TSEG 16
 
 #define URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx)                                                                 \
     do {                                                                                                               \
@@ -2103,6 +2104,40 @@ static urma_status_t urma_fetch_bond_user_info(urma_context_t *urma_ctx, uint32_
     return (urma_ctx->ops->user_ctl(urma_ctx, &in, &out) == 0) ? URMA_SUCCESS : URMA_FAIL;
 }
 
+/* Caller-buffer variant of urma_fetch_bond_user_info: the provider fills the
+ * whole user_tseg blob into @buf in place; @cap is the buffer capacity and
+ * *@len receives the blob size. -ENOSPC (capacity too small) is reported as
+ * URMA_ENOMEM with *@len carrying the required size. */
+static urma_status_t urma_fetch_bond_user_tseg(urma_context_t *urma_ctx, urma_target_seg_t *tseg,
+                                               urma_user_tseg_t *buf, uint32_t cap, uint32_t *len)
+{
+    if (urma_ctx->ops->user_ctl == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_user_ctl_in_t in = {
+        .addr = (uint64_t)(uintptr_t)tseg,
+        .len = sizeof(urma_target_seg_t),
+        .opcode = BONDP_USER_CTL_FILL_USER_TSEG,
+    };
+    urma_user_ctl_out_t out = {
+        .addr = (uint64_t)(uintptr_t)buf,
+        .len = cap,
+    };
+
+    int ret = urma_ctx->ops->user_ctl(urma_ctx, &in, &out);
+    if (ret == 0) {
+        *len = out.len;
+        return URMA_SUCCESS;
+    }
+    if (ret == -ENOSPC) {
+        *len = out.len;
+        return URMA_ENOMEM;
+    }
+    return URMA_FAIL;
+}
+
 static uint32_t urma_calc_user_info_total_len(const void *base, uint32_t base_len, bool has_user_info)
 {
     if (!has_user_info) {
@@ -2983,6 +3018,61 @@ void urma_put_user_tseg(urma_user_tseg_t *user_tseg)
     }
 
     free(user_tseg);
+}
+
+urma_status_t urma_fill_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
+                                  urma_user_tseg_t *user_tseg, uint32_t *size)
+{
+    if (tseg == NULL || token == NULL || user_tseg == NULL || size == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        return URMA_EINVAL;
+    }
+    /* Only a locally registered seg carries a stable token id for the owner
+     * to export; imported segs are out of scope. */
+    if (tseg->token_id == NULL) {
+        URMA_LOG_ERR("Only locally registered seg supports fill user tseg.\n");
+        return URMA_EINVAL;
+    }
+
+    urma_context_t *urma_ctx = tseg->urma_ctx;
+    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
+    if (status != URMA_SUCCESS) {
+        return status;
+    }
+
+    bool has_user_info = false;
+    if (urma_is_bonding_dev(urma_ctx->dev->name)) {
+        uint32_t len = 0;
+        status = urma_fetch_bond_user_tseg(urma_ctx, tseg, user_tseg, *size, &len);
+        if (status == URMA_ENOMEM) {
+            /* The buffer is too small; *size carries the required size so the
+             * caller can retry with a bigger buffer. */
+            *size = len;
+            return status;
+        }
+        if (status != URMA_SUCCESS) {
+            return status;
+        }
+        has_user_info = (user_tseg->attr.bs.has_user_info != 0);
+    } else {
+        if (*size < sizeof(urma_user_tseg_t)) {
+            *size = sizeof(urma_user_tseg_t);
+            URMA_LOG_ERR("User tseg buffer too small.\n");
+            return URMA_ENOMEM;
+        }
+    }
+
+    /* Same overwrite dance as urma_get_user_tseg: the provider only needs the
+     * has_user_info bit to survive this overwrite. */
+    user_tseg->attr = tseg->seg.attr;
+    if (has_user_info) {
+        user_tseg->attr.bs.has_user_info = 1;
+    }
+    user_tseg->token_id = tseg->seg.token_id;
+    user_tseg->token_value = *token;
+    *size = urma_calc_user_info_total_len(user_tseg, sizeof(urma_user_tseg_t),
+                                          user_tseg->attr.bs.has_user_info != 0);
+    return URMA_SUCCESS;
 }
 
 urma_token_id_t *urma_alloc_token_id(urma_context_t *ctx)
