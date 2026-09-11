@@ -27,7 +27,12 @@ import java.util.Map;
  *
  * <p>Search order for a given DLL name:
  * <ol>
- *   <li>{@code src/main/java/com/huawei/umdk/snc/util}</li>
+ *   <li>{@code jna.library.path} system property (Maven users set this
+ *       indirectly via {@code -Dnative.lib.dir=...}; surefire bridges it
+ *       to {@code jna.library.path}). This is the primary override for
+ *       loading external native libs instead of the ones bundled in
+ *       {@code src/main/resources}.</li>
+ *   <li>{@code src/main/resources}</li>
  *   <li>current working directory ({@code user.dir})</li>
  *   <li>application directory (location of the JAR or class roots)</li>
  *   <li>{@code target}</li>
@@ -148,6 +153,10 @@ public final class DllLoader {
 
     private static List<String> buildSearchPaths() {
         List<String> paths = new ArrayList<>();
+        String jnaPath = System.getProperty("jna.library.path");
+        if (jnaPath != null && !jnaPath.isEmpty()) {
+            paths.add(jnaPath);
+        }
         paths.add("src/main/resources");
         paths.add(System.getProperty("user.dir"));
         paths.add(getApplicationDir());
