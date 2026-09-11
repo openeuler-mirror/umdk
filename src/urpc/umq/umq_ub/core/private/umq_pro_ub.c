@@ -1220,8 +1220,9 @@ static int umq_ub_fc_msg_retry_dequeue(ub_queue_t *queue, umq_ub_fc_msg_retry_li
         umq_ub_fill_rx_buff_post_process(real_queue, &entry->imm);
         urpc_list_remove(&entry->node);
         urpc_list_push_back(&retry_list->free_list, &entry->node);
+        int ret_fill = umq_ub_fill_fc_buf(real_queue, buf, UMQ_FAKE_BUF_FC_ERR);
         umq_ub_put_real_queue(real_queue, entry->imm.flow_control.umq_id);
-        return umq_ub_fill_fc_buf(real_queue, buf, UMQ_FAKE_BUF_FC_ERR);
+        return ret_fill;
     }
 
     // rollback after failing to reprocess FC messages
@@ -1242,12 +1243,13 @@ static int umq_ub_fc_msg_retry_dequeue(ub_queue_t *queue, umq_ub_fc_msg_retry_li
             umq_ub_fill_rx_buff_post_process(real_queue, &entry->imm);
             urpc_list_remove(&entry->node);
             urpc_list_push_back(&retry_list->free_list, &entry->node);
-            umq_ub_put_real_queue(real_queue, entry->imm.flow_control.umq_id);
             umq_buf_status_t status = UMQ_FAKE_BUF_FC_ERR;
             if (ret == -UMQ_ERR_EFLOWCTL_FATAL) {
                 status = UMQ_FAKE_BUF_FC_ERR_FATAL;
             }
-            return umq_ub_fill_fc_buf(real_queue, buf, status);
+            int ret_fill = umq_ub_fill_fc_buf(real_queue, buf, status);
+            umq_ub_put_real_queue(real_queue, entry->imm.flow_control.umq_id);
+            return ret_fill;
         }
     }
 
