@@ -688,11 +688,11 @@ bool umq_ub_config_bonding_port(umq_ub_ctx_t *dev_ctx, ub_queue_cfg_t *qcfg);
 int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint64_t size);
 void umq_ub_unregister_seg(umq_ub_ctx_t *ctx_list, uint32_t ctx_cnt, uint16_t mempool_id);
 int share_rq_param_reset(ub_queue_t *queue, ub_queue_t *share_rq);
-void umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
+int umq_ub_jfr_ctx_put(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 int umq_ub_jfr_ctx_get(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, umq_create_option_t *option,
                        ub_queue_t *share_queue, ub_queue_jetty_index_t jetty_idx);
 jfr_ctx_t *umq_ub_jfr_ctx_create(ub_queue_t *queue, umq_ub_ctx_t *dev_ctx, ub_queue_jetty_index_t jetty_idx);
-void umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
+int umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx);
 void umq_ub_fc_msg_retry_notify(umq_ub_fc_msg_retry_list_t *retry_list);
 int umq_ub_fc_msg_retry_drain(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count);
 int umq_status_convert(urma_status_t urma_status);

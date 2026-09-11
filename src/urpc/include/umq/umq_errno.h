@@ -39,6 +39,7 @@ extern "C" {
 #define UMQ_ERR_EFLOWCTL                           (0x0202)  /* Umq flow control error */
 #define UMQ_ERR_EFLOWCTL_FATAL                     (0x0203)
 #define UMQ_ERR_EFLOWCTL_EAGAIN                    (0x0204)
+#define UMQ_ERR_EDESTROY_FATAL                     (0x0205)  /* partial resources failed to destroy, do NOT retry */
 
 typedef enum umq_buf_status {
     UMQ_BUF_SUCCESS = 0,
