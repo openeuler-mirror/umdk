@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,13 +131,18 @@ urma_status_t bondp_uninit(void)
 
 static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
 {
+    static pthread_mutex_t topo_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+    int ret = -1;
+
+    (void)pthread_mutex_lock(&topo_init_mutex);
     if (bondp_topo_is_initialized()) {
-        return 0;
+        ret = 0;
+        goto OUT;
     }
     struct ubagg_topo_info_out *info_out = calloc(1, sizeof(*info_out));
     if (info_out == NULL) {
         URMA_LOG_ERR("Failed to alloc topo info buffer\n");
-        return -1;
+        goto OUT;
     }
     urma_user_ctl_in_t in = {
         .opcode = GET_TOPO_INFO,
@@ -149,15 +155,17 @@ static int get_topo_info_from_ko(bondp_context_t *bdp_ctx)
     if (urma_cmd_user_ctl(&bdp_ctx->v_ctx, &in, &out, &data) != 0) {
         URMA_LOG_ERR("Failed to get topo info, change to general mode\n");
         free(info_out);
-        return -1;
+        goto OUT;
     }
-    int ret = bondp_topo_init(info_out->topo_info, info_out->node_num);
+    ret = bondp_topo_init(info_out->topo_info, info_out->node_num);
     free(info_out);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to create topo map\n");
-        return -1;
     }
-    return 0;
+
+OUT:
+    (void)pthread_mutex_unlock(&topo_init_mutex);
+    return ret;
 }
 
 static int bondp_create_vcontext(bondp_context_t *bdp_ctx, urma_device_t *dev, uint32_t eid_index, int dev_fd)
