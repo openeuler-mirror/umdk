@@ -2482,9 +2482,10 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     UMQ_VLOG_INFO(VLOG_UMQ, "  total_size=%llu expansion_mem_max=%llu\n",
                   (unsigned long long)g_qbuf_pool.total_size,
                   (unsigned long long)g_qbuf_pool.expansion_mem_size_max);
-    UMQ_VLOG_INFO(VLOG_UMQ, "  exp_size=%llu exp_threshold=%u\n", (unsigned long long)g_qbuf_pool.expansion_size,
-                  g_qbuf_pool.expansion_threshold);
-    UMQ_VLOG_INFO(VLOG_UMQ, "  tls_qbuf_depth=%llu tls_expand_qbuf_depth=%llu\n",
+    UMQ_VLOG_INFO(VLOG_UMQ, "  exp_size=%llu exp_threshold=%u shrink_threshold=%u shrink_decay_ms=%u\n",
+                  (unsigned long long)g_qbuf_pool.expansion_size, g_qbuf_pool.expansion_threshold,
+                  (uint32_t)QBUF_POOL_SHRINK_FREE_RATIO_PCT, g_qbuf_pool.shrink_decay_ms);
+    UMQ_VLOG_INFO(VLOG_UMQ, "  nd_tls_qbuf_depth=%llu nd_tls_expand_qbuf_depth=%llu\n",
                   (unsigned long long)g_qbuf_pool.tls_qbuf_pool_depth,
                   (unsigned long long)g_qbuf_pool.tls_expand_qbuf_pool_depth);
     UMQ_VLOG_INFO(VLOG_UMQ, "=== END QBUF POOL INIT ===\n");
