@@ -3924,7 +3924,6 @@ int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
             qbuf_pool_stats->exp_pool_without_data.exp_total_block_num * umq_buf_t_size;
     }
 
-    qbuf_pool_stats->local_qbuf_pool_num = 0;
     /* When g_tls_dtors_running is true, some threads have exited and their
      * TLS nodes in g_tls_register_head are dangling (freed memory). Skip
      * per-thread traversal to avoid SEGV. The !pool_iter->inited check
