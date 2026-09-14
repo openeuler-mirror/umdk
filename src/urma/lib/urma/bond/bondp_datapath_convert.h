@@ -153,7 +153,7 @@ static inline bool is_failover_cr(const urma_cr_t *cr)
 
 static inline bool is_need_rebuild_jetty(const urma_cr_t *cr)
 {
-    return cr->status == URMA_CR_ACK_TIMEOUT_ERR;
+    return is_failover_cr(cr);
 }
 
 static inline bool is_rnr_retry_cr(const urma_cr_t *cr)
