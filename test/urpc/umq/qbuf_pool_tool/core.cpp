@@ -580,7 +580,8 @@ int DoInit(const std::vector<std::string> &args)
     bool escapeEnable = true;
     /* expThreshold: expansion trigger water level % (cfg.expansion_threshold,
      * default 30 when 0 — QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD). Controls
-     * trigger_expand_block_num = expansion_block_count * threshold / 100.
+     * trigger_expand_block_num = min((global+expansion capacity) * threshold / 100,
+     * 32MB in blocks), recomputed on every expand/shrink (with_data pools only).
      * Production validates [1, 100] (umq_qbuf_pool.c:1225-1228). */
     uint32_t expThreshold = 0;
     /* tlsExpandBudget: per-thread TLS bytes cap (cfg.tls_expand_qbuf_pool_depth,
