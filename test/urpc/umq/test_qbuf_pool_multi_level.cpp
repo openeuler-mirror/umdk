@@ -1538,34 +1538,45 @@ TEST_F(TestQbufPoolMultiLevel, AllocBranchEscapeDisabledReturnsError)
     EXPECT_FALSE(any_escape_buf_exists());
 }
 
-/* 9.42 async_expand_global_pool: triggered after fetch, completes within 100ms */
+/* 9.42 sync expand on first exhaustion + async prefill after dynamic threshold update */
 TEST_F(TestQbufPoolMultiLevel, SyncExpandGlobalPoolTriggeredWhenGlobalExhausted)
 {
     /* Given: scaleCap=false, pool=128KB (sc=0 has ~15 blocks), expansion=256KB (64 per slot).
      * sc=0 blk_num = per_sc_block_counts[0] / (sizeof(umq_buf_t) + 4K) = 15.
-     * trigger_expand_block_num = 15 * 30 / 100 = 4.
+     * Dynamic threshold at init: min(15 * 30 / 100, 32MB cap) = 4.
      * batch_count for sc=0 = max(256KB/4K, 8) = 64.
      * Since global_buf_cnt(15) < batch_count(64), alloc goes through slow path. */
     InitPool(2, 16, BLOCK_SIZE_4K, UMQ_BUF_SPLIT, false, 128 * 1024, 0, 0, 256 * 1024);
 
     uint64_t totalExpBefore = g_qbuf_pool.exp_pool_with_data[0].total_expansion_count;
-    uint64_t expCountBefore = g_qbuf_pool.exp_pool_with_data[0].expansion_count;
 
     /* When: alloc 1 block -> global pool has 15 blocks < batch_count=64 -> slow path:
      * 1) take all 15 from global (count=15)
      * 2) fetch_from_expansion_pools: no slots yet -> 0
-     * 3) expand_global_pool (SYNC expand slot 1, 64 blocks) -> expansion_count++
+     * 3) expand_global_pool (SYNC expand slot 1, 64 blocks) -> threshold updated
+     *    to min((15+64)*30/100, cap) = 23
      * 4) fetch_from_expansion_pools: take 49 blocks -> count = 15+49 = 64 >= batch_count
-     * After fetch: exp_total_block_num = 64-49 = 15 >= trigger=4 -> async_expand NOT triggered */
+     * After fetch: free = g(0) + e(15) = 15 < threshold(23) -> async_expand launches
+     * slot 2 (64 blocks) -> free = 0 + 79 = 79 >= min((15+128)*30/100, cap) = 42 -> stops. */
     umq_buf_list_t list;
     QBUF_LIST_INIT(&list);
     ASSERT_EQ(umq_qbuf_alloc(1 * 1024, 1, NULL, &list), 0);
 
-    /* Then: exactly 1 sync expansion occurred */
+    /* Poll for async expand completion (<= 200ms) */
+    uint32_t waited = 0;
+    while (__atomic_load_n(&g_qbuf_pool.exp_pool_with_data[0].is_expanding, __ATOMIC_ACQUIRE) != 0) {
+        usleep(1000);
+        waited++;
+        if (waited > 200) {
+            break;
+        }
+    }
+
+    /* Then: exactly 1 sync + 1 async expansion occurred */
     uint64_t totalExpAfter = g_qbuf_pool.exp_pool_with_data[0].total_expansion_count;
-    EXPECT_EQ(totalExpAfter - totalExpBefore, 1u) << "should have exactly 1 sync expansion";
-    EXPECT_EQ(g_qbuf_pool.exp_pool_with_data[0].expansion_count, 1u)
-        << "should have 1 expansion slot after sync expand";
+    EXPECT_EQ(totalExpAfter - totalExpBefore, 2u) << "should have 1 sync + 1 async expansion";
+    EXPECT_EQ(g_qbuf_pool.exp_pool_with_data[0].expansion_count, 2u)
+        << "should have 2 expansion slots after sync + async expand";
 
     umq_qbuf_free(&list);
 }
@@ -2439,7 +2450,7 @@ TEST_F(TestQbufPoolMultiLevel, ExpandGlobalPoolSlotInitFail)
 
     uint64_t saved = g_qbuf_pool.expansion_mem_size_max;
     g_qbuf_pool.expansion_mem_size_max = 1;
-    EXPECT_NE(expand_global_pool(true, 0), UMQ_SUCCESS);
+    EXPECT_NE(expand_global_pool(true, 0, 0), UMQ_SUCCESS);
     g_qbuf_pool.expansion_mem_size_max = saved;
 }
 
@@ -2824,12 +2835,10 @@ TEST_F(TestQbufPoolMultiLevel, LazyInitLargeScZeroInitialBlocks)
     /* Verify lazy SC via per_sc_block_counts[2] == 0 */
     EXPECT_EQ(g_qbuf_pool.per_sc_block_counts[2], 0u);
 
-    /* Verify expansion trigger for lazy SC uses expansion_block_count */
-    uint64_t exp_blk_cnt = g_qbuf_pool.expansion_size / g_qbuf_pool.block_sizes[2];
-    if (exp_blk_cnt == 0)
-        exp_blk_cnt = 1;
-    uint64_t expected_trigger = exp_blk_cnt * g_qbuf_pool.expansion_threshold / 100;
-    EXPECT_EQ(g_qbuf_pool.exp_pool_with_data[2].trigger_expand_block_num, expected_trigger);
+    /* Verify lazy SC (G=0, E=0) starts with a zero dynamic threshold: the
+     * first alloc goes through sync expand and the threshold turns positive
+     * as soon as the first slot exists (updated in expand_global_pool_impl). */
+    EXPECT_EQ(g_qbuf_pool.exp_pool_with_data[2].trigger_expand_block_num, 0u);
 
     /* Alloc from lazy SC triggers expansion and succeeds */
     umq_buf_list_t list;
