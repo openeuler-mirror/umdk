@@ -1343,7 +1343,7 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jfs_opt(jfs, opt, buf, len, &udata);
 		if (ret) {
-			UDMA_LOG_ERR("set JFS option failed, ret = %d.\n", ret);
+			UDMA_LOG_ERR("get JFS option failed, ret = %d.\n", ret);
 			return URMA_FAIL;
 		}
 	}

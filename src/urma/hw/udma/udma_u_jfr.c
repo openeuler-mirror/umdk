@@ -776,7 +776,7 @@ static int udma_u_get_jfr_param(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32
 		*((uint32_t *)buf) = udma_jfr->rq.idx;
 		break;
 	case URMA_JFR_DB_ADDR:
-		*((uint32_t *)buf) = (uint32_t)(uintptr_t)udma_jfr->sw_db;
+		*((uint64_t *)buf) = (uint64_t)(uintptr_t)udma_jfr->sw_db;
 		break;
 	case URMA_JFR_DB_STATUS:
 	case URMA_JFR_PI_TYPE:
