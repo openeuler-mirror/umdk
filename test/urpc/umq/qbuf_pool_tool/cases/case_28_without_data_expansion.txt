@@ -22,8 +22,9 @@
 #        in_use = ~9232  (42000 - 32768 global; +TLS batch remainder variance)
 #        free   = ~23536
 #      and expansion memory claimed = 4MB (one memalign region).
-#   3. free all returns everything; fully-free slot is eligible for async
-#      shrink (exp_free 32768 >= trigger_shrink 19660) — elastic reclaim.
+#   3. free all returns everything; the fully-free slot is admitted for async
+#      shrink by the post-shrink reserve check (g_free 32768 + e_free 32768
+#      - slot 32768 >= expand line 9830) — elastic reclaim.
 #
 # Related trigger change:
 #   trigger_expand = QBUF_POOL_INITIAL_NODATA_BUF_CNT(32768) * 30% = 9830
@@ -39,5 +40,6 @@ end
 # Stage 2: verify slot sizing — expect ONE sc=16 slot, total=32768 in_use=9232
 status
 
-# Stage 3: release; slot returns to expansion pool and may shrink (>=19660 free)
+# Stage 3: release; slot returns to expansion pool and may shrink
+# (post-shrink reserve g+e-S = 32768 >= expand line 9830)
 thread_0 free all
