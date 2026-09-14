@@ -2732,8 +2732,11 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data, uint32_t sc)
             return;
         }
         if (g_thread_cache.block_pool.capacity_without_data == 0 && remaining > 0) {
-            return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, false, 0,
-                             0);
+            uint32_t batch = umq_qbuf_pool_batch_cnt();
+            if (remaining > batch) {
+                return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, false,
+                                 0, (uint32_t)(remaining - batch));
+            }
             g_thread_cache.stats.tls_return_cnt_without_data++;
             if (qbuf_debug_on())
                 g_dbg_stats.self_shrink_without_data++;
@@ -3525,11 +3528,14 @@ void umq_qbuf_free(umq_buf_list_t *list)
         uint32_t cnt = release_batch(list, &local_pool->head_without_data, false);
         (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
 
+        uint32_t batch_cnt = umq_qbuf_pool_batch_cnt();
         uint32_t cap = g_qbuf_pool.disable_scale_cap
                            ? QBUF_POOL_TLS_MAX
                            : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
-        if (local_pool->buf_cnt_without_data > cap) {
-            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
+        uint32_t min_cap = batch_cnt * 2;
+        uint32_t effective_cap = (cap >= min_cap) ? cap : min_cap;
+        if (local_pool->buf_cnt_without_data > effective_cap) {
+            uint32_t threshold = effective_cap - batch_cnt;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
         }
@@ -3611,8 +3617,11 @@ void umq_qbuf_free(umq_buf_list_t *list)
         uint32_t cap = g_qbuf_pool.disable_scale_cap
                            ? QBUF_POOL_TLS_MAX
                            : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
-        if (local_pool->buf_cnt_without_data > cap) {
-            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
+        uint32_t nodata_batch = umq_qbuf_pool_batch_cnt();
+        uint32_t nodata_min_cap = nodata_batch * 2;
+        uint32_t nodata_effective_cap = (cap >= nodata_min_cap) ? cap : nodata_min_cap;
+        if (local_pool->buf_cnt_without_data > nodata_effective_cap) {
+            uint32_t threshold = nodata_effective_cap - nodata_batch;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
         }
@@ -3641,8 +3650,10 @@ void umq_qbuf_free(umq_buf_list_t *list)
                                ? (uint64_t)QBUF_POOL_TLS_MAX
                                : (uint64_t)__atomic_load_n(&local_pool->capacity_with_data[sc], __ATOMIC_RELAXED);
         uint64_t actual_cnt = local_pool->buf_cnt_with_data[sc];
-        if (actual_cnt > cap_cnt) {
-            uint64_t threshold_cnt = (cap_cnt > (uint64_t)batch_cnt) ? cap_cnt - (uint64_t)batch_cnt : 0;
+        uint64_t min_cap = (uint64_t)batch_cnt * 2;
+        uint64_t effective_cap = (cap_cnt >= min_cap) ? cap_cnt : min_cap;
+        if (actual_cnt > effective_cap) {
+            uint64_t threshold_cnt = effective_cap - (uint64_t)batch_cnt;
             return_to_global(&g_qbuf_pool.block_pool[sc], local_pool, &g_thread_cache.stats, true, sc,
                              (uint32_t)threshold_cnt);
             g_thread_cache.stats.tls_return_cnt_with_data++;
