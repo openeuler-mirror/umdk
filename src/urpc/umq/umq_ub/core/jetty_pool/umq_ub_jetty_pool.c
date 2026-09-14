@@ -56,6 +56,8 @@ typedef struct jetty_pool {
 
     // Baseline established by the first main+share_transport umq; all such umqs must match it.
     baseline_umq_cfg_t baseline;
+
+    bool avail_cb_registered;
 } jetty_pool_t;
 
 static __thread thread_local_jetty_cache_t g_thread_jetty_cache = {0};
@@ -260,6 +262,7 @@ int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
         UMQ_VLOG_ERR(VLOG_UMQ, "create avail_cb_lock failed\n");
         goto DESTROY_LOCK;
     }
+    g_jetty_pool.avail_cb_registered = false;
     g_jetty_pool_inited = true;
     return UMQ_SUCCESS;
 
@@ -616,6 +619,9 @@ int umq_ub_jetty_pool_get_eventfd(void)
 
 static void umq_ub_jetty_fire_avail_callbacks(void)
 {
+    if (!__atomic_load_n(&g_jetty_pool.avail_cb_registered, __ATOMIC_RELAXED)) {
+        return;
+    }
     // Try-lock: if another thread is already firing, skip — one wake is enough.
     if (util_mutex_try_lock(g_jetty_pool.avail_cb_lock) != 0) {
         return;
@@ -628,6 +634,8 @@ static void umq_ub_jetty_fire_avail_callbacks(void)
         }
     }
     (void)util_mutex_unlock(g_jetty_pool.avail_cb_lock);
+
+    __atomic_store_n(&g_jetty_pool.avail_cb_registered, false, __ATOMIC_RELEASE);
 }
 
 umq_ub_jetty_avail_cb_node_t *umq_ub_jetty_pool_register_avail_cb(umq_ub_jetty_avail_cb_t cb, void *user_data)
@@ -647,6 +655,7 @@ umq_ub_jetty_avail_cb_node_t *umq_ub_jetty_pool_register_avail_cb(umq_ub_jetty_a
     cb_node->user_data = user_data;
     (void)util_mutex_lock(g_jetty_pool.avail_cb_lock);
     urpc_list_push_back(&g_jetty_pool.avail_cb_list, &cb_node->node);
+    __atomic_store_n(&g_jetty_pool.avail_cb_registered, true, __ATOMIC_RELEASE);
     (void)util_mutex_unlock(g_jetty_pool.avail_cb_lock);
     return cb_node;
 }
