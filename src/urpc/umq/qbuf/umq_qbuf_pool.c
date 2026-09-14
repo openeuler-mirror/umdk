@@ -1486,13 +1486,19 @@ static void *async_shrink_global_pool_callback(void *arg)
             uint64_t cleanup_us = shrink_elapsed_us - unreg_us - free_us;
             uint32_t shrink_sc = shrink_param->sc;
             uint64_t shrink_tls_pool = (shrink_param->with_data) ?
-                __atomic_load_n(&g_total_local_cap_with_data_cnt[shrink_sc], __ATOMIC_RELAXED) : 0;
-            uint64_t shrink_sc_alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[shrink_sc], __ATOMIC_RELAXED);
-            uint64_t shrink_sc_free = __atomic_load_n(&g_qbuf_pool.free_count[shrink_sc], __ATOMIC_RELAXED);
+                __atomic_load_n(&g_total_local_cap_with_data_cnt[shrink_sc], __ATOMIC_RELAXED) :
+                __atomic_load_n(&g_total_local_cap_without_data, __ATOMIC_RELAXED);
+            uint64_t shrink_sc_alloc = shrink_wd ?
+                __atomic_load_n(&g_qbuf_pool.alloc_count[shrink_sc], __ATOMIC_RELAXED) :
+                __atomic_load_n(&g_qbuf_pool.nodata_alloc_count, __ATOMIC_RELAXED);
+            uint64_t shrink_sc_free = shrink_wd ?
+                __atomic_load_n(&g_qbuf_pool.free_count[shrink_sc], __ATOMIC_RELAXED) :
+                __atomic_load_n(&g_qbuf_pool.nodata_free_count, __ATOMIC_RELAXED);
             uint64_t shrink_sc_outstanding = (shrink_sc_alloc > shrink_sc_free) ?
                 (shrink_sc_alloc - shrink_sc_free) : 0;
-            uint64_t shrink_sc_outstanding_max =
-                __atomic_load_n(&g_qbuf_pool.outstanding_max[shrink_sc], __ATOMIC_RELAXED);
+            uint64_t shrink_sc_outstanding_max = shrink_wd ?
+                __atomic_load_n(&g_qbuf_pool.outstanding_max[shrink_sc], __ATOMIC_RELAXED) :
+                __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
             uint32_t shrink_blk_and_hdr = g_qbuf_pool.block_sizes[shrink_sc] + (uint32_t)sizeof(umq_buf_t);
             double shrink_outstanding_mb = (double)(shrink_sc_outstanding * shrink_blk_and_hdr) / QBUF_BYTES_PER_MB;
             double shrink_outstanding_max_mb =
@@ -2936,10 +2942,13 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
     fmt_wall_time(expand_end_time, sizeof(expand_end_time));
     uint64_t expand_end_ns = get_monotonic_ns();
     uint64_t expand_elapsed_us = (expand_end_ns - expand_start_ns) / NS_PER_US;
-    uint64_t sc_alloc = __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED);
-    uint64_t sc_free = __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED);
+    uint64_t sc_alloc = with_data ? __atomic_load_n(&g_qbuf_pool.alloc_count[sc], __ATOMIC_RELAXED)
+                                  : __atomic_load_n(&g_qbuf_pool.nodata_alloc_count, __ATOMIC_RELAXED);
+    uint64_t sc_free = with_data ? __atomic_load_n(&g_qbuf_pool.free_count[sc], __ATOMIC_RELAXED)
+                                 : __atomic_load_n(&g_qbuf_pool.nodata_free_count, __ATOMIC_RELAXED);
     uint64_t sc_outstanding = (sc_alloc > sc_free) ? (sc_alloc - sc_free) : 0;
-    uint64_t sc_outstanding_max = __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED);
+    uint64_t sc_outstanding_max = with_data ? __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED)
+                                           : __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
     uint32_t sc_blk_and_hdr = g_qbuf_pool.block_sizes[sc] + (uint32_t)sizeof(umq_buf_t);
     double sc_outstanding_mb = (double)(sc_outstanding * sc_blk_and_hdr) / QBUF_BYTES_PER_MB;
     double sc_outstanding_max_mb = (double)(sc_outstanding_max * sc_blk_and_hdr) / QBUF_BYTES_PER_MB;
@@ -2959,7 +2968,9 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
         (double)slot->total_buf_size / QBUF_BYTES_PER_MB,
         (unsigned long long)trigger_expand_before,
         (unsigned long long)trigger_expand_after,
-        (unsigned long long)__atomic_load_n(&g_total_local_cap_with_data_cnt[sc], __ATOMIC_RELAXED),
+        (unsigned long long)(with_data
+            ? __atomic_load_n(&g_total_local_cap_with_data_cnt[sc], __ATOMIC_RELAXED)
+            : __atomic_load_n(&g_total_local_cap_without_data, __ATOMIC_RELAXED)),
         (unsigned long long)(g_buf_cnt + exp_pool_blk_before),
         (unsigned long long)(g_buf_cnt + exp_pool_blk_after),
         (unsigned long long)g_buf_cnt,
