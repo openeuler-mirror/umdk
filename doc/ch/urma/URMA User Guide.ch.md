@@ -1895,6 +1895,8 @@ Options:
 
 - 配置\--rate_units P时，\--rate_limit不能配置太小，否者会表现为卡住，brust_size不能大于pps,否则无法进行。
 
+- 申请大页内存时会使用匿名页，如果环境不支持相应大小的匿名页，则\--hugepage_size参数会导致内存申请失败。
+
 - send_imm测试，DPU智能网卡等部分芯片不支持。
 
   1.  示例
