@@ -58,6 +58,7 @@
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 
 #define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
+#define QBUF_POOL_SHRINK_DECAY_SLICE_MS (100) // decay sleep slice: bounds pthread_join wait in uninit
 #define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
 
 // Magic-number replacements (G.CNS.02)
@@ -1275,20 +1276,25 @@ static void *async_shrink_global_pool_callback(void *arg)
             /* Decay delay: keep the slot's memory reserved for a
              * configurable window so a near-term re-alloc can reuse
              * it without going through free+mmap again.
-             * Skip the sleep if the pool is being torn down (inited==false
-             * or stop==true) so pthread_join in uninit is not blocked
-             * for up to shrink_decay_ms. */
+             * Skip the wait if the pool is being torn down (inited==false
+             * or stop==true). Sleep in fixed slices so the stop flag is
+             * noticed within one slice — a single usleep of the whole
+             * window would block pthread_join in uninit for up to
+             * shrink_decay_ms. */
             if (g_qbuf_pool.shrink_decay_ms > 0
                 && exp_pool->inited
                 && !exp_pool->shrink_task_list.stop) {
-                struct timespec decay_ts;
-                clock_gettime(CLOCK_MONOTONIC, &decay_ts);
-                uint64_t now_ns = (uint64_t)decay_ts.tv_sec * NS_PER_SEC + (uint64_t)decay_ts.tv_nsec;
-                uint64_t elapsed_ns = now_ns - shrink_param->push_time_ns;
-                uint64_t decay_ns = (uint64_t)g_qbuf_pool.shrink_decay_ms * NS_PER_MS;
-                if (elapsed_ns < decay_ns) {
-                    uint64_t remaining_us = (decay_ns - elapsed_ns) / 1000ULL;
-                    (void)usleep((useconds_t)remaining_us);
+                const uint64_t slice_ns = (uint64_t)QBUF_POOL_SHRINK_DECAY_SLICE_MS * NS_PER_MS;
+                struct timespec now_ts;
+                clock_gettime(CLOCK_MONOTONIC, &now_ts);
+                uint64_t now_ns = (uint64_t)now_ts.tv_sec * NS_PER_SEC + (uint64_t)now_ts.tv_nsec;
+                uint64_t deadline_ns = shrink_param->push_time_ns
+                                     + (uint64_t)g_qbuf_pool.shrink_decay_ms * NS_PER_MS;
+                while (now_ns < deadline_ns && !exp_pool->shrink_task_list.stop) {
+                    uint64_t remain_ns = deadline_ns - now_ns;
+                    (void)usleep((useconds_t)((remain_ns > slice_ns ? slice_ns : remain_ns) / NS_PER_US));
+                    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+                    now_ns = (uint64_t)now_ts.tv_sec * NS_PER_SEC + (uint64_t)now_ts.tv_nsec;
                 }
             }
 
