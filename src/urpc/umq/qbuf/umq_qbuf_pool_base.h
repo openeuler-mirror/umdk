@@ -537,6 +537,9 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     clock_gettime(CLOCK_MONOTONIC, &_ts);
     uint64_t fetch_start_ns = (uint64_t)_ts.tv_sec * NS_PER_SEC + (uint64_t)_ts.tv_nsec;
     uint64_t wait_total_us = 0;
+    /* Declared before the loop: the goto ROLLBACK below would otherwise jump
+     * over its initialization, which C++ rejects (C only warns). */
+    uint64_t fetch_us = 0;
     while (count < batch_count) {
         // if async expand is in progress, wait for it to finish and accumulate wait time
         if (umq_qbuf_is_expanding(with_data, sc)) {
@@ -588,8 +591,8 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     }
     // record fetch_from_global total latency
     clock_gettime(CLOCK_MONOTONIC, &_ts);
-    uint64_t fetch_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
-                         (uint64_t)_ts.tv_nsec - fetch_start_ns) / NS_PER_US;
+    fetch_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
+                (uint64_t)_ts.tv_nsec - fetch_start_ns) / NS_PER_US;
     umq_qbuf_record_fetch_total(with_data, sc, fetch_us);
     async_expand_global_pool(with_data, sc, global_cnt_snapshot);
     return count;
