@@ -1191,25 +1191,23 @@ umq_buf_t *umq_data_to_head(void *data)
         return NULL;
     }
 
-    umq_buf_t *buf = umq_qbuf_data_to_head(data);
-    if (buf != NULL) {
-        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
-        return buf;
-    }
-
-    buf = umq_tiny_qbuf_data_to_head(data);
-    if (buf != NULL) {
-        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
-        return buf;
-    }
-
-    buf = umq_qbuf_expansion_data_to_head(data);
+    umq_buf_t *buf = umq_tiny_qbuf_data_to_head(data);
     if (buf != NULL) {
         umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
         return buf;
     }
 
     buf = umq_rx_qbuf_data_to_head(data);
+    if (buf != NULL) {
+        umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
+        return buf;
+    }
+
+    /* umq_qbuf_data_to_head already includes the expansion pool / escape
+     * lookup via umq_qbuf_data_to_head_escape internally, so a separate
+     * umq_qbuf_expansion_data_to_head call is redundant and was removed
+     * to avoid a second spinlock acquisition on every miss. */
+    buf = umq_qbuf_data_to_head(data);
     if (buf != NULL) {
         umq_perf_record_write(UMQ_PERF_RECORD_BUF_DATA_TO_HEAD, start_timestamp);
         return buf;
