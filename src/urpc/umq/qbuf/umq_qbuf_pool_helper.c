@@ -98,8 +98,7 @@ void *umq_qbuf_unified_io_buf_malloc(umq_buf_mode_t mode, const umq_qbuf_pool_pl
         total_size = rx_offset + plan->rx_io_buf_size;
     }
     if (plan->tiny_io_buf_size > 0) {
-        uint32_t tiny_align = plan->tiny_block_size > 0 ? plan->tiny_block_size : UMQ_TINY_QBUF_BLOCK_SIZE;
-        tiny_offset = align_up_u64(total_size, tiny_align);
+        tiny_offset = align_up_u64(total_size, UMQ_RX_QBUF_BLOCK_SIZE);
         total_size = tiny_offset + plan->tiny_io_buf_size;
     }
 

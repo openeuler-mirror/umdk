@@ -237,6 +237,83 @@ static uint64_t get_monotonic_ns(void)
     return (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
 }
 
+/* ---------- exp_addr lock-free lookup (per-slot-id atomic entries) ---------- */
+
+#define EXP_ADDR_ARR_CAPACITY QBUF_POOL_EXP_SLOT_TABLE_SIZE
+
+/*
+ * Flat array indexed by slot_id for lock-free data_to_head.
+ *
+ * Zero dynamic allocation — statically embedded (BSS). Zero leak.
+ *
+ * Expand: atomically writes buf_start/buf_end/blk_size/sub_data_size at
+ *   g_exp_addr[slot->slot_id]. No lock needed — the slot_id is freshly
+ *   allocated and not yet visible to any reader.
+ * Shrink: atomically writes buf_start=0 at g_exp_addr[slot_id]. Readers
+ *   see buf_start==0 and skip the entry. The shrink invariant guarantees
+ *   no reader's data pointer falls in the shrunk slot's range.
+ * Lookup: linear scan all entries, atomic-load buf_start; skip if 0;
+ *   atomic-load buf_end, compare. On hit, use embedded blk_size /
+ *   sub_data_size to compute header address — no external lookup needed.
+ *
+ * Each field is independently atomic (uintptr_t / uint64_t are 64-bit
+ * aligned, stores are atomic on aarch64). A reader may see a partially
+ * updated entry during expand, but buf_start is written last (visibility
+ * gate): if buf_start is non-zero, the rest of the entry is fully written.
+ * During shrink, buf_start is cleared first: readers who see non-zero
+ * buf_start still see valid buf_end.
+ */
+typedef struct exp_addr_entry {
+    volatile uintptr_t buf_start;    /* slot->buffer; 0 = empty (shrunk) */
+    volatile uintptr_t buf_end;      /* slot->header_buffer */
+    volatile uint32_t blk_size;      /* block size for this slot's size_class */
+    volatile uint32_t sub_data_size; /* sub_slot_data_buf_size (low 32 bits, see below) */
+} exp_addr_entry_t;
+
+static exp_addr_entry_t g_exp_addr[EXP_ADDR_ARR_CAPACITY];
+
+/* On expand: atomically populate entry at slot_id. */
+static void exp_addr_add(qbuf_expansion_pool_slot_t *slot, uint32_t sc)
+{
+    exp_addr_entry_t *e = &g_exp_addr[slot->slot_id];
+    uint64_t sub_data = g_qbuf_pool.exp_pool_with_data[sc].sub_slot_data_buf_size;
+    e->blk_size = g_qbuf_pool.block_sizes[sc];
+    e->sub_data_size = (uint32_t)sub_data;
+    e->buf_end = (uintptr_t)slot->header_buffer;
+    /* Write buf_start last — non-zero buf_start is the visibility gate */
+    __atomic_store_n(&e->buf_start, (uintptr_t)slot->buffer, __ATOMIC_RELEASE);
+}
+
+/* On shrink: atomically clear entry at slot_id. */
+static void exp_addr_remove(uint32_t slot_id)
+{
+    exp_addr_entry_t *e = &g_exp_addr[slot_id];
+    /* Clear buf_start first — readers seeing 0 will skip this entry */
+    __atomic_store_n(&e->buf_start, 0, __ATOMIC_RELEASE);
+}
+
+/*
+ * Lock-free linear scan: find the slot whose [buf_start, buf_end) contains addr.
+ * Returns true on hit, with blk_size and sub_data_size via out params.
+ */
+static ALWAYS_INLINE bool exp_addr_lookup(uintptr_t addr, uint32_t *out_blk_size,
+                                          uint32_t *out_sub_data_size)
+{
+    for (uint32_t i = 0; i < EXP_ADDR_ARR_CAPACITY; i++) {
+        uintptr_t bs = __atomic_load_n(&g_exp_addr[i].buf_start, __ATOMIC_ACQUIRE);
+        if (bs == 0) {
+            continue;
+        }
+        uintptr_t be = __atomic_load_n(&g_exp_addr[i].buf_end, __ATOMIC_RELAXED);
+        if (addr >= bs && addr < be) {
+            *out_blk_size = g_exp_addr[i].blk_size;
+            *out_sub_data_size = g_exp_addr[i].sub_data_size;
+            return true;
+        }
+    }
+    return false;
+}
+
 /* DFX final report on pool uninit */
 #define QBUF_DFX_BUF_SIZE (32 * 1024)
 #define QBUF_DFX_LINE_MAX 900
@@ -772,6 +849,24 @@ static urpc_id_generator_t g_global_exp_id_gen;
 // Lookup table: expansion slot id -> slot* (indexed by [id - QBUF_POOL_EXP_SLOT_ID_MIN])
 static qbuf_expansion_pool_slot_t *g_exp_slot_table[QBUF_POOL_EXP_SLOT_TABLE_SIZE];
 
+/*
+ * Lock-free expansion slot address registry for data_to_head fast path.
+ *
+ * Each entry records a slot's immutable [buffer, header_buffer) address range.
+ * The array is sorted by buf_start and published atomically so that
+ * umq_qbuf_data_to_head_escape can do a lock-free binary search instead of
+ * taking expansion_pool_lock.
+ *
+ * Writers (expand adds slot, shrink removes slot) rebuild the array while
+ * holding expansion_pool_lock, then atomically swap the pointer+count.
+ * Old arrays are intentionally leaked — expand/shrink are extremely rare
+ * (process lifetime <100 events), and a grace-period-free reclaim would
+ * require RCU or hazard pointers which is out of scope.
+ *
+ * Indexed by size_class [0..UMQ_QBUF_SIZE_CLASS_MAX], where
+ * index UMQ_QBUF_SIZE_CLASS_MAX is the without_data pool.
+ */
+
 static void *g_buffer_addr = NULL;
 static uint64_t g_total_len = 0;
 
@@ -870,10 +965,11 @@ static inline uint32_t blk_size_to_sc(uint32_t blk_size)
 
 static void free_expansion_pool_slot(qbuf_expansion_pool_slot_t *slot)
 {
-    urpc_id_generator_free(&g_global_exp_id_gen, slot->slot_id);
     if (slot->slot_id < QBUF_POOL_EXP_SLOT_TABLE_SIZE) {
         g_exp_slot_table[slot->slot_id] = NULL;
+        exp_addr_remove(slot->slot_id);
     }
+    urpc_id_generator_free(&g_global_exp_id_gen, slot->slot_id);
     if (slot->buffer != NULL) {
         free(slot->buffer);
         slot->buffer = NULL;
@@ -1368,6 +1464,8 @@ static void *async_shrink_global_pool_callback(void *arg)
             uint64_t e_cap_after = exp_pool->exp_total_capacity;
             uint64_t trigger_expand_after = exp_pool->trigger_expand_block_num;
             uint32_t slots_after = exp_pool->expansion_count;
+            /* Clear the slot's address entry for lock-free data_to_head lookup. */
+            exp_addr_remove(shrink_param->slot_id);
             (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
 
             bool shrink_wd = shrink_param->with_data;
@@ -1911,12 +2009,13 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
             uint16_t mempool_id = (uint16_t)(slot->slot_id + QBUF_POOL_EXP_SLOT_ID_MIN);
             g_qbuf_pool.seg_ops.unregister_seg_callback(NULL, mempool_id);
         }
-        if (slot->slot_id < QBUF_POOL_EXP_SLOT_TABLE_SIZE) {
-            g_exp_slot_table[slot->slot_id] = NULL;
-        }
         urpc_id_generator_free(&g_global_exp_id_gen, slot->slot_id);
         if (slot->buffer != NULL) {
             free(slot->buffer);
+        }
+        if (slot->slot_id < QBUF_POOL_EXP_SLOT_TABLE_SIZE) {
+            g_exp_slot_table[slot->slot_id] = NULL;
+            exp_addr_remove(slot->slot_id);
         }
         free(slot);
     }
@@ -2427,6 +2526,7 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
         }
     }
     memset(g_exp_slot_table, 0, sizeof(g_exp_slot_table));
+    memset(g_exp_addr, 0, sizeof(g_exp_addr));
 
     // init block_pool[] array
     for (uint32_t sc = 0; sc < count; sc++) {
@@ -2732,8 +2832,11 @@ static ALWAYS_INLINE void thread_cache_self_shrink(bool with_data, uint32_t sc)
             return;
         }
         if (g_thread_cache.block_pool.capacity_without_data == 0 && remaining > 0) {
-            return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, false, 0,
-                             0);
+            uint32_t batch = umq_qbuf_pool_batch_cnt();
+            if (remaining > batch) {
+                return_to_global(&g_qbuf_pool.block_pool[0], &g_thread_cache.block_pool, &g_thread_cache.stats, false,
+                                 0, (uint32_t)(remaining - batch));
+            }
             g_thread_cache.stats.tls_return_cnt_without_data++;
             if (qbuf_debug_on())
                 g_dbg_stats.self_shrink_without_data++;
@@ -2829,6 +2932,13 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
         exp_pool->async_expansion_count++;
     } else {
         exp_pool->sync_expansion_count++;
+    }
+    /* Publish the slot's address range for lock-free data_to_head lookup.
+     * Only with_data slots need publishing — without_data slots have
+     * header_buffer == buffer (empty [buf_start, buf_end) interval) and
+     * exp_addr_add would index with_data tables with a without_data sc. */
+    if (with_data) {
+        exp_addr_add(slot, sc);
     }
     (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
     fmt_wall_time(expand_end_time, sizeof(expand_end_time));
@@ -3525,11 +3635,14 @@ void umq_qbuf_free(umq_buf_list_t *list)
         uint32_t cnt = release_batch(list, &local_pool->head_without_data, false);
         (void)__atomic_fetch_add(&local_pool->buf_cnt_without_data, cnt, __ATOMIC_RELAXED);
 
+        uint32_t batch_cnt = umq_qbuf_pool_batch_cnt();
         uint32_t cap = g_qbuf_pool.disable_scale_cap
                            ? QBUF_POOL_TLS_MAX
                            : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
-        if (local_pool->buf_cnt_without_data > cap) {
-            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
+        uint32_t min_cap = batch_cnt * 2;
+        uint32_t effective_cap = (cap >= min_cap) ? cap : min_cap;
+        if (local_pool->buf_cnt_without_data > effective_cap) {
+            uint32_t threshold = effective_cap - batch_cnt;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
         }
@@ -3611,8 +3724,11 @@ void umq_qbuf_free(umq_buf_list_t *list)
         uint32_t cap = g_qbuf_pool.disable_scale_cap
                            ? QBUF_POOL_TLS_MAX
                            : (uint32_t)__atomic_load_n(&local_pool->capacity_without_data, __ATOMIC_RELAXED);
-        if (local_pool->buf_cnt_without_data > cap) {
-            uint32_t threshold = cap > umq_qbuf_pool_batch_cnt() ? cap - umq_qbuf_pool_batch_cnt() : 0;
+        uint32_t nodata_batch = umq_qbuf_pool_batch_cnt();
+        uint32_t nodata_min_cap = nodata_batch * 2;
+        uint32_t nodata_effective_cap = (cap >= nodata_min_cap) ? cap : nodata_min_cap;
+        if (local_pool->buf_cnt_without_data > nodata_effective_cap) {
+            uint32_t threshold = nodata_effective_cap - nodata_batch;
             return_to_global(&g_qbuf_pool.block_pool[0], local_pool, &g_thread_cache.stats, false, 0, threshold);
             g_thread_cache.stats.tls_return_cnt_without_data++;
         }
@@ -3641,8 +3757,10 @@ void umq_qbuf_free(umq_buf_list_t *list)
                                ? (uint64_t)QBUF_POOL_TLS_MAX
                                : (uint64_t)__atomic_load_n(&local_pool->capacity_with_data[sc], __ATOMIC_RELAXED);
         uint64_t actual_cnt = local_pool->buf_cnt_with_data[sc];
-        if (actual_cnt > cap_cnt) {
-            uint64_t threshold_cnt = (cap_cnt > (uint64_t)batch_cnt) ? cap_cnt - (uint64_t)batch_cnt : 0;
+        uint64_t min_cap = (uint64_t)batch_cnt * 2;
+        uint64_t effective_cap = (cap_cnt >= min_cap) ? cap_cnt : min_cap;
+        if (actual_cnt > effective_cap) {
+            uint64_t threshold_cnt = effective_cap - (uint64_t)batch_cnt;
             return_to_global(&g_qbuf_pool.block_pool[sc], local_pool, &g_thread_cache.stats, true, sc,
                              (uint32_t)threshold_cnt);
             g_thread_cache.stats.tls_return_cnt_with_data++;
@@ -3685,39 +3803,31 @@ static inline umq_buf_t *escape_data_to_head(void *data)
 
 static ALWAYS_INLINE umq_buf_t *umq_qbuf_data_to_head_escape(void *data)
 {
-    bool find = false;
-    qbuf_expansion_pool_t *found_pool = NULL;
-    qbuf_expansion_pool_slot_t *found_slot = NULL;
+    uintptr_t addr = (uintptr_t)data;
 
-    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count && !find; sc++) {
-        qbuf_expansion_pool_t *exp_pool = &g_qbuf_pool.exp_pool_with_data[sc];
-        (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
-        qbuf_expansion_pool_slot_t *slot;
-        URPC_LIST_FOR_EACH(slot, node, &exp_pool->slot_list)
-        {
-            if (data >= slot->buffer && data < slot->header_buffer) {
-                find = true;
-                found_pool = exp_pool;
-                found_slot = slot;
-                break;
-            }
+    /* Lock-free linear scan over per-slot-id entries.
+     * Each entry is atomically set (expand) or cleared (shrink).
+     * No expansion_pool_lock needed on the read side. */
+    uint32_t blk_size = 0;
+    uint32_t sub_data_size = 0;
+    if (exp_addr_lookup(addr, &blk_size, &sub_data_size)) {
+        if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
+            uint64_t buffer_head = addr & (~(QBUF_MEMALIGN_SIZE - 1));
+            uint64_t id = (addr - buffer_head) / blk_size;
+            return (umq_buf_t *)(uintptr_t)(buffer_head + sub_data_size + id * sizeof(umq_buf_t));
         }
-        (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+        uint64_t buffer_head = addr & (~(QBUF_MEMALIGN_SIZE - 1));
+        uint64_t id = (addr - buffer_head) / blk_size;
+        return (umq_buf_t *)(uintptr_t)(buffer_head + id * blk_size);
     }
 
-    if (!find) {
-        return escape_data_to_head(data);
+    /* Skip escape registry lookup when escape allocation is disabled —
+     * no escape buffers can exist, so the lookup would always return NULL. */
+    if (g_qbuf_pool.disable_malloc_escape) {
+        return NULL;
     }
 
-    uint32_t blk_size = g_qbuf_pool.block_sizes[found_slot->size_class];
-    if (g_qbuf_pool.mode == UMQ_BUF_SPLIT) {
-        uint64_t buffer_head = (uint64_t)(uintptr_t)data & (~(QBUF_MEMALIGN_SIZE - 1));
-        uint64_t id = ((uint64_t)(uintptr_t)data - buffer_head) / blk_size;
-        return (umq_buf_t *)(uintptr_t)(buffer_head + found_pool->sub_slot_data_buf_size + id * sizeof(umq_buf_t));
-    }
-    uint64_t buffer_head = (uint64_t)(uintptr_t)data & (~(QBUF_MEMALIGN_SIZE - 1));
-    uint64_t id = ((uint64_t)(uintptr_t)data - buffer_head) / blk_size;
-    return (umq_buf_t *)(uintptr_t)(buffer_head + id * blk_size);
+    return escape_data_to_head(data);
 }
 umq_buf_t *umq_qbuf_data_to_head(void *data)
 {

@@ -1664,19 +1664,19 @@ OUT:
 
 static void umq_ub_on_tx_done(ub_queue_t *queue, umq_buf_t *buf, bool failed)
 {
+    if (!failed) {
+        return;
+    }
+
     umq_buf_pro_t *buf_pro = (umq_buf_pro_t *)buf->qbuf_ext;
     bool opcode_consume_rqe =
         buf_pro->opcode == UMQ_OPC_SEND || buf_pro->opcode == UMQ_OPC_SEND_IMM || buf_pro->opcode == UMQ_OPC_WRITE_IMM;
-    if (failed && opcode_consume_rqe && buf->buf_ref_id_type == UMQ_BUF_REF_ID_TYPE_UMQ_ID) {
+    if (opcode_consume_rqe && buf->buf_ref_id_type == UMQ_BUF_REF_ID_TYPE_UMQ_ID) {
         ub_queue_t *real_queue = umq_ub_get_real_queue_by_umq_id(queue, buf->buf_ref_id);
         if (real_queue != NULL) {
             umq_ub_window_inc(real_queue->flow_control, 1);
             umq_ub_put_real_queue(queue, buf->buf_ref_id);
         }
-    }
-
-    if (buf_pro->opcode != UMQ_OPC_SEND_IMM) {
-        return;
     }
 }
 
