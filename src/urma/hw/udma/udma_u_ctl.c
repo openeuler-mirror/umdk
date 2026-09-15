@@ -1306,7 +1306,7 @@ static int udma_u_query_ae_aux_info(urma_context_t *ctx, urma_user_ctl_in_t *in,
 
 	ret = urma_cmd_user_ctl(ctx, in, out, &udrv_data);
 	if (ret)
-		UDMA_LOG_ERR("failed to query CQE aux info, ret: %d.\n", ret);
+		UDMA_LOG_ERR("failed to query AE aux info, ret: %d.\n", ret);
 
 	in->opcode = UDMA_U_USER_CTL_QUERY_AE_AUX_INFO;
 
