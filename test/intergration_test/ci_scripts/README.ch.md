@@ -5,23 +5,7 @@
 #### 2. Test Dependencies
 1. Test Environment Requirements
 - You need to prepare 2 test environments.
-- Meanwhile, you need to install the following dependency packages:
-
-```bash
-  yum install -y python3-devel
-  yum install -y python-pip
-  yum install -y gcc
-  yum install -y gcc-c++
-  yum install -y openssl-devel
-  yum install -y glib2-devel
-  yum install -y iperf3
-  pip install pytest==8.0.2
-  pip install pytest-timeout=2.4.0
-  pip install fabric==2.7.1
-  pip install paramiko==3.1.0
-  pip install func_timeout
-  pip install PyYAML
-```
+- Meanwhile, you need to guarantee all the dependencies of UMDK have been installed, see[README](./test/intergration_test/README.ch.md)
 
 #### 3. Running Scripts
 1. Run the master_create_yaml.sh on both sides of host1 and host2
