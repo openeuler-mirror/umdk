@@ -36,12 +36,12 @@ mac_host2=$(ssh -o StrictHostKeyChecking=no ${USER}@${host2} \
 name_dev_eid_porteid_host1=`bash ${script_dir}/master_get_urma_dev.sh`
 name_dev_eid_porteid_host2=$(ssh -o StrictHostKeyChecking=no ${USER}@${host2} "bash ${script_dir}/master_get_urma_dev.sh")
 name_host1=`echo $name_dev_eid_porteid_host1 | awk '{print $1}'`
-dev_host1=`echo $name_dev_eid_porteid_host1 | awk '{print $2}'`
+bond_dev_host1=`echo $name_dev_eid_porteid_host1 | awk '{print $2}'`
 eid_host1=`echo $name_dev_eid_porteid_host1 | awk '{print $3}'`
 ipv6_host1=`echo $name_dev_eid_porteid_host1 | awk '{print $4}'`
 
 name_host2=`echo $name_dev_eid_porteid_host2 | awk '{print $1}'`
-dev_host2=`echo $name_dev_eid_porteid_host2 | awk '{print $2}'`
+bond_dev_host2=`echo $name_dev_eid_porteid_host2 | awk '{print $2}'`
 eid_host2=`echo $name_dev_eid_porteid_host2 | awk '{print $3}'`
 ipv6_host2=`echo $name_dev_eid_porteid_host2 | awk '{print $4}'`
 
@@ -59,9 +59,11 @@ host_info:
       ip: ${host1}
     test_nic1:
       dev: ${name_host1}
-      name: ${name_host1}
+      bond_dev: ${bond_dev_host1}
+      name: ipourma0
       mac: ${mac_host1}
-      eid: ${eid_host1}
+      eid: ${ipv6_host1}
+      bond_eid: ${eid_host1}
       ipv6: ${ipv6_host1}
     arch: ${arch}
   host2:
@@ -72,9 +74,11 @@ host_info:
       ip: ${host2}
     test_nic1:
       dev: ${name_host2}
-      name: ${name_host2}
+      bond_dev: ${bond_dev_host2}
+      name: ipourma0
       mac: ${mac_host2}
-      eid: ${eid_host2}
+      eid: ${ipv6_host2}
+      bond_eid: ${eid_host2}
       ipv6: ${ipv6_host2}
     arch: ${arch}
 
