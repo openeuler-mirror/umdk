@@ -65,13 +65,14 @@ public class RouteInstantiationTest {
         for (int rack = 1; rack <= 4; rack++) {
             for (int board = 1; board <= 8; board++) {
                 for (int npuIndex = 1; npuIndex <= 4; npuIndex++) {
-                    String deviceName = getNpuDeviceName(superNode.getName(), rack, board, npuIndex);
+                    int boardIndex = board * 2 - 1;
+                    String deviceName = getNpuDeviceName(superNode.getName(), rack, boardIndex, npuIndex);
                     Map<Integer, NpuForwardingChip> chips = new HashMap<>();
                     NpuForwardingChip iodie2 = new NpuForwardingChip(2);
                     iodie2.setPorts(new LinkedHashMap<>());
                     chips.put(2, iodie2);
                     NpuDevice npuDevice = new NpuDevice(deviceName, null, String.valueOf(rack),
-                        chips, "os0", null, board, 0, npuIndex);
+                        chips, "os0", null, boardIndex, 0, npuIndex);
                     npuDevices.put(deviceName, npuDevice);
                 }
             }
