@@ -25,7 +25,7 @@
 
 #### 3. Running Scripts
 1. Run the master_create_yaml.sh on both sides of host1 and host2
-  bash -x master_create_yaml.sh host1 host2
+  bash -x master_create_yaml.sh host1,host2
 2. Run the master_get_release.sh on both sides of host1 and host2
   bash -x master_get_release.sh
 3. (Do not do this step if have download test cases)Run the master_get_scripts.sh on both sides of host1 and host2
