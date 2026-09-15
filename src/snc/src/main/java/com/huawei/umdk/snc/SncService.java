@@ -372,6 +372,7 @@ public class SncService {
 
     // 路由计算加实例化
     public synchronized void routeCalculate() {
+        checkNotUninit();
         if (routeCalculated) {
             LOG.info("route has calculated");
             return;
@@ -389,6 +390,7 @@ public class SncService {
     }
 
     public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode) {
+        checkNotUninit();
         if (!routeCalculated) {
             throw new IllegalStateException("calculate routeCalculate first");
         }
@@ -422,6 +424,7 @@ public class SncService {
     }
 
     public Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex) {
+        checkNotUninit();
         if (deviceName == null) {
             throw new IllegalArgumentException("device info is null");
         }
