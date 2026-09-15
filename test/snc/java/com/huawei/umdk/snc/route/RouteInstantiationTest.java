@@ -10,6 +10,7 @@
 package com.huawei.umdk.snc.route;
 
 import com.huawei.umdk.snc.SncService;
+import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
@@ -25,8 +26,9 @@ import com.huawei.umdk.snc.route.topo.template.model.Label;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -39,6 +41,8 @@ public class RouteInstantiationTest {
     private static final Map<String, SncTopology> topologyMap = new HashMap<>();
 
     private static final SuperNode superNode = new SuperNode();
+
+    private SncService sncService;
 
     private static String getNpuDeviceName(String superNodeName, int rack, int board, int device) {
         return String.format("%s#rack%d#board%d#npu%d", superNodeName, rack, board, device);
@@ -219,15 +223,25 @@ public class RouteInstantiationTest {
         superNode.setSwDevices(swDevices);
     }
 
-    @BeforeAll
-    public static void init() {
+    @BeforeEach
+    public void init() {
         SncService.registerLogCallback(((level, msg) -> {
             System.out.printf("[%s] %s\n", level.getValue(), msg);
         }));
 
+        sncService = new SncService();
+        sncService.init(new SNCConfig());
+
         topologyMap.putAll(TestUtils.parseTopoTemplate());
 
         constructSuperNode();
+    }
+
+    @AfterEach
+    public void uninit() {
+        sncService.uninit();
+        sncService = null;
+        topologyMap.clear();
     }
 
     private void printRoutingEntry(Map<String, RoutingEntry> routeMap) {
@@ -243,9 +257,8 @@ public class RouteInstantiationTest {
 
     @Test
     void makeRoutesTest() {
-        SncService service = new SncService();
-        service.routeCalculate();
-        Map<String, Map<String, RoutingEntry>> result = service.makeRoutes(superNode);
+        sncService.routeCalculate();
+        Map<String, Map<String, RoutingEntry>> result = sncService.makeRoutes(superNode);
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         // 拼接该npu对应的路由的key
         String key = npuDevice.getDeviceName().concat("#").concat("2");
@@ -260,11 +273,10 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateNpuRouteTest() {
-        SncService service = new SncService();
-        service.routeCalculate();
-        service.makeRoutes(superNode);
+        sncService.routeCalculate();
+        sncService.makeRoutes(superNode);
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
-        Map<String, RoutingEntry> routeMap = service.getNodeRoute(npuDevice.getDeviceName(), 2);
+        Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(npuDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
         // 目的为31个npu：每个npu 8个 port cna和1个 pg cna
         // 目的为4个l1 sw：每个l1 sw 1个 node cna
@@ -275,11 +287,10 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL1SwRouteTest() {
-        SncService service = new SncService();
-        service.routeCalculate();
-        service.makeRoutes(superNode);
+        sncService.routeCalculate();
+        sncService.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
-        Map<String, RoutingEntry> routeMap = service.getNodeRoute(swDevice.getDeviceName(), 1);
+        Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 1);
         printRoutingEntry(routeMap);
         // 目的为32个npu：每个npu 2个 port cna和1个 pg cna
         // 目的为1个l2 sw：每个l2 sw 2个 node cna
@@ -289,11 +300,10 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        SncService service = new SncService();
-        service.routeCalculate();
-        service.makeRoutes(superNode);
+        sncService.routeCalculate();
+        sncService.makeRoutes(superNode);
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
-        Map<String, RoutingEntry> routeMap = service.getNodeRoute(swDevice.getDeviceName(), 2);
+        Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
         // 目的128个npu：每个npu 2个 port cna和1个 pg cna
         // 目的为4个l1 sw：每个l1 sw 1个 node cna
