@@ -629,6 +629,9 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         *info.local_buf_cnt = 0;
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
         *tls_return_buf_cnt += return_buf_cnt;
+        if (with_data) {
+            stats->sc_tls_return_buf_cnt[sc] += return_buf_cnt;
+        }
         (void)pthread_spin_unlock(&global_pool->global_mutex);
         return;
     }
@@ -648,6 +651,9 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
         (void)__atomic_fetch_sub(info.local_buf_cnt, return_buf_cnt, __ATOMIC_RELAXED);
         *tls_return_buf_cnt += return_buf_cnt;
+        if (with_data) {
+            stats->sc_tls_return_buf_cnt[sc] += return_buf_cnt;
+        }
     }
 
     (void)pthread_spin_unlock(&global_pool->global_mutex);
