@@ -2664,7 +2664,7 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
                                                               bool with_data, uint32_t sc)
 {
     int ret;
-    uint32_t batch_cnt = get_batch_count(sc);
+    uint32_t batch_cnt = with_data ? get_batch_count(sc) : umq_qbuf_pool_batch_cnt();
 
     if (g_qbuf_pool.disable_scale_cap) {
         g_dbg_expansion_happened = false; // reset expansion flag before alloc (sticky: once true, never reset to false)
