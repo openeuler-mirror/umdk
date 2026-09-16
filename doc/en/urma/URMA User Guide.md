@@ -1439,6 +1439,8 @@ IODIE1:
 
 ### 6.2.2 Aggregation Device Basic Usage Flow
 
+In Active-Backup and Balance modes, the receiver must pre-post RQEs according to the port count multiplier: if a single port requires N pre-posted RQEs, the aggregation device requires N × M pre-posted RQEs. Query the multiplier M by calling urma_user_ctl with the `BONDP_USER_CTL_QUERY_PORT` opcode and reading the active_count field in the returned bondp_query_port_out_t structure. After the initial pre-posting, replenish one RQE for each RQE consumed.
+
 - **Bootstrapping Connection Setup Scenario**
 
 Bootstrapping connection setup refers to the connection method that uses a URMA well-known jetty as the channel for exchanging connection setup information. The overall flow is shown below:

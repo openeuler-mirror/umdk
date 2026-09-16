@@ -1530,6 +1530,11 @@ int check_local_cfg(perftest_config_t *cfg)
             LOG_ERROR("Credit DOES NOT take effect in UM trans_mode.\n");
             exit(1);
         }
+        if (cfg->enable_bond_mode && cfg->bond_mode != BONDP_BONDING_MODE_STANDALONE) {
+            LOG_ERROR("Warning: SEND with enable_credit on a bonding device in active-backup or "
+                      "load-balancing mode (current mode: %s) may exhaust credits and stall traffic.\n",
+                      g_bond_mode_str[cfg->bond_mode]);
+        }
     }
 
     if (cfg->enable_imm == true) {

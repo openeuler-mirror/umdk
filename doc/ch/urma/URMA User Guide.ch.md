@@ -1484,6 +1484,8 @@ IODIE1：
 
 ### 6.2.2 聚合设备基本使用流程
 
+在主备模式（ActiveBackup）和负载均衡模式（Balance）下，接收端需要按端口数量倍数预先下发 RQE：若单端口需要预下发 N 个 RQE，则聚合设备需要预下发 N × M 个 RQE。倍数 M 可通过调用 urma_user_ctl、指定操作码 `BONDP_USER_CTL_QUERY_PORT` 查询，取返回结构 bondp_query_port_out_t 中的 active_count 字段。完成预下发后，每消耗一个 RQE，再补充下发一个 RQE。
+
 - 自举建链场景
 
 自举建链指的是使用 URMA 公知 jetty 作为建链信息交换通道的建链方法。整体流程如图所示：
