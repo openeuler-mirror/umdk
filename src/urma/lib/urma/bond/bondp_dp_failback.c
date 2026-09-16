@@ -75,7 +75,7 @@ uint32_t bondp_fb_switch_path(bondp_comp_t *bdp_comp)
         }
         recovered_cnt++;
         atomic_store(&bdp_comp->valid[i], true);
-        URMA_LOG_INFO("Path restored: local jetty recovered, vjetty_id=%u, local_idx=%u\n",
+        URMA_LOG_WARN("Path restored: local jetty recovered, vjetty_id=%u, local_idx=%u\n",
                       bdp_comp->v_jetty.jetty_id.id, i);
     }
     return recovered_cnt;
@@ -317,7 +317,7 @@ static int bondp_rebuild_pjetty(bondp_comp_t *bdp_jetty, uint32_t local_idx)
         URMA_LOG_WARN("Failed to delete old pjetty at idx=%d\n", local_idx);
     }
 
-    URMA_LOG_INFO("Failback pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
+    URMA_LOG_WARN("Failback pjetty rebuilt, idx=%d old=" URMA_JETTY_ID_FMT " new=" URMA_JETTY_ID_FMT "\n",
                   local_idx, URMA_JETTY_ID_ARGS(&old_id), URMA_JETTY_ID_ARGS(&new_jetty->jetty_id));
     return 0;
 }
