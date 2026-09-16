@@ -136,6 +136,7 @@ typedef struct perftest_context {
     urma_target_seg_t **credit_seg;
     urma_token_id_t **credit_token_id;
     urma_seg_t *remote_credit_seg;
+    urma_seg_t **remote_credit_seg_duplex; // delegated seg ctx, bonding duplex only
     urma_target_seg_t **import_credit_seg;
 
     // write notify
@@ -143,6 +144,7 @@ typedef struct perftest_context {
     urma_target_seg_t *notify_seg;
     urma_token_id_t *notify_token_id;
     urma_seg_t *remote_notify_seg;
+    urma_seg_t **remote_notify_seg_duplex; // delegated seg ctx, bonding duplex only
     uint32_t remote_jetty_idx;
     urma_target_seg_t **import_notify_seg; // be processed for different remote seg
 
