@@ -14,19 +14,41 @@ import com.sun.jna.Library;
 
 public final class HashUtils {
 
-    private interface UbSwitchLibrary extends Library {
+    /**
+     * JNA binding for {@code libubswitch} — the inter-chassis L1SW&lt;-&gt;L2SW
+     * and L1SW-&gt;NPU selection hash ({@code ubswitch_Hash_ecmp}).
+     */
+    private interface UbSwitchEcmpLibrary extends Library {
         int ubswitch_Hash_ecmp(String dip, String sip, int dport, int sport,
                             int protocol, int hash_func, int ecmp_cnt);
     }
 
-    private static final String NATIVE_LIBRARY_NAME = detectNativeLibraryName();
+    /**
+     * JNA binding for {@code libubswitch-die} — the NPU-&gt;L1SW uplink
+     * selection hash ({@code ubswitch_Hash_dieEcmp}), CRC-8/ATM based.
+     */
+    private interface UbSwitchDieLibrary extends Library {
+        /**
+         * NPU-&gt;L1SW uplink selection with the two-tuple
+         * {@code (DstCNA, jettyId)} — CRC-8/ATM based.
+         */
+        int ubswitch_Hash_dieEcmp(String dstCna, int jettyId, int ecmpCnt);
+    }
 
-    private static final UbSwitchLibrary LIB;
+    private static final String ECMP_NATIVE_LIBRARY_NAME =
+        detectNativeLibraryName("libubswitch");
+
+    private static final String DIE_NATIVE_LIBRARY_NAME =
+        detectNativeLibraryName("libubswitch-die");
+
+    private static final UbSwitchEcmpLibrary LIB_ECMP;
+
+    private static final UbSwitchDieLibrary LIB_DIE;
 
     static {
-        UbSwitchLibrary lib;
+        UbSwitchEcmpLibrary ecmpLib;
         try {
-            lib = DllLoader.load(NATIVE_LIBRARY_NAME, UbSwitchLibrary.class);
+            ecmpLib = DllLoader.load(ECMP_NATIVE_LIBRARY_NAME, UbSwitchEcmpLibrary.class);
         } catch (Throwable t) {
             // Native library unavailable; existing hash methods remain usable.
             // nativeHash will throw IllegalStateException when called.
@@ -34,34 +56,65 @@ public final class HashUtils {
             // load failure (e.g. architecture mismatch) is diagnosable from
             // the test/build log instead of being silently swallowed.
             System.err.println("[HashUtils] Failed to load native library '"
-                + NATIVE_LIBRARY_NAME + "': " + t);
+                + ECMP_NATIVE_LIBRARY_NAME + "': " + t);
             t.printStackTrace(System.err);
-            lib = null;
+            ecmpLib = null;
         }
-        LIB = lib;
+        LIB_ECMP = ecmpLib;
+
+        UbSwitchDieLibrary dieLib;
+        try {
+            dieLib = DllLoader.load(DIE_NATIVE_LIBRARY_NAME, UbSwitchDieLibrary.class);
+        } catch (Throwable t) {
+            // Native library unavailable; nativeHashDstCnaJetty will throw
+            // IllegalStateException when called. Surface the underlying
+            // JNA/dlopen failure to stderr so that a load failure (e.g.
+            // architecture mismatch) is diagnosable from the test/build log
+            // instead of being silently swallowed.
+            System.err.println("[HashUtils] Failed to load native library '"
+                + DIE_NATIVE_LIBRARY_NAME + "': " + t);
+            t.printStackTrace(System.err);
+            dieLib = null;
+        }
+        LIB_DIE = dieLib;
     }
 
     /**
-     * Returns the platform-appropriate native library file name.
+     * Returns the platform-appropriate native library file name for the
+     * given base name.
      *
-     * <p>On Windows returns {@code libubswitch.dll}. On Linux returns the
+     * <p>The two hash entry points are served by two separate native
+     * libraries so that each exported symbol lives in its own loadable
+     * artifact:
+     * <ul>
+     *   <li>{@code libubswitch} — {@code ubswitch_Hash_ecmp} (inter-chassis
+     *       L1SW&lt;-&gt;L2SW and L1SW-&gt;NPU selection)</li>
+     *   <li>{@code libubswitch-die} — {@code ubswitch_Hash_dieEcmp}
+     *       (NPU-&gt;L1SW uplink selection, CRC-8/ATM)</li>
+     * </ul>
+     *
+     * <p>On Windows returns {@code <baseName>.dll}. On Linux returns the
      * architecture-specific shared library selected via {@code os.arch}:
-     * {@code libubswitch-aarch64.so} for AArch64, {@code libubswitch-x86_64.so}
+     * {@code <baseName>-aarch64.so} for AArch64, {@code <baseName>-x86_64.so}
      * for x86-64. This is required because a shared object built for one
      * architecture cannot be {@code dlopen}'ed on another; shipping both and
      * selecting at runtime keeps the same resource set portable across
      * x86-64 and AArch64 build/test hosts.
+     *
+     * @param baseName the library base name, either {@code "libubswitch"}
+     *                 (for the ECMP entry point) or {@code "libubswitch-die"}
+     *                 (for the dieEcmp entry point)
      */
-    private static String detectNativeLibraryName() {
+    private static String detectNativeLibraryName(String baseName) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
-            return "libubswitch.dll";
+            return baseName + ".dll";
         }
         String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         if (arch.equals("aarch64") || arch.equals("arm64")) {
-            return "libubswitch-aarch64.so";
+            return baseName + "-aarch64.so";
         }
-        return "libubswitch-x86_64.so";
+        return baseName + "-x86_64.so";
     }
 
     private HashUtils() {
@@ -93,13 +146,13 @@ public final class HashUtils {
     public static int nativeHash(String dip, String sip, int dport, int sport,
                                  int ethertype, int protocol, int offset,
                                  int ecmpCnt, int hashFunc, int hashSeed) {
-        if (LIB == null) {
+        if (LIB_ECMP == null) {
             throw new IllegalStateException(
-                "Native library libubswitch (" + NATIVE_LIBRARY_NAME + ") is not loaded");
+                "Native library libubswitch (" + ECMP_NATIVE_LIBRARY_NAME + ") is not loaded");
         }
         // ethertype, offset, hashSeed are intentionally ignored per the
         // native API contract.
-        int rawHash = LIB.ubswitch_Hash_ecmp(dip, sip, dport, sport, protocol,
+        int rawHash = LIB_ECMP.ubswitch_Hash_ecmp(dip, sip, dport, sport, protocol,
                                            mapHashMode(hashFunc), ecmpCnt);
         if (ecmpCnt == 0) {
             return rawHash;
@@ -126,6 +179,67 @@ public final class HashUtils {
      */
     public static int nativeHash(String dip, String sip, int ecmpCnt, int hashFunc) {
         return nativeHash(dip, sip, 0, 0, 0, ecmpCnt, hashFunc);
+    }
+
+    // ======================================================================
+    //  NPU->L1SW egress port selection: (DstCNA, jettyId) two-tuple
+    // ======================================================================
+
+    /** Minimum valid jetty id (inclusive), per the UB jetty id allocation rule. */
+    public static final int JETTY_ID_MIN = 32;
+
+    /** Maximum valid jetty id (inclusive), per the UB jetty id allocation rule. */
+    public static final int JETTY_ID_MAX = 1023;
+
+    /**
+     * Returns whether {@code jettyId} is within the valid range
+     * {@code [32, 1023]}.
+     *
+     * @param jettyId the jetty id to validate
+     * @return {@code true} when the value is a legal jetty id
+     */
+    public static boolean isValidJettyId(int jettyId) {
+        return jettyId >= JETTY_ID_MIN && jettyId <= JETTY_ID_MAX;
+    }
+
+    /**
+     * Computes the NPU egress port index for the NPU-&gt;L1SW hop using the
+     * standard two-tuple {@code (DstCNA, jettyId)}.
+     *
+     * <p><b>Algorithm.</b> This entry point is served by the dedicated native
+     * symbol {@code ubswitch_Hash_dieEcmp} (CRC-8/ATM, poly {@code 0x07},
+     * init {@code 0x00}) over the bytes of the DstCNA string followed by the
+     * low and high bytes of the jetty id. It is intentionally different from
+     * the inter-chassis L1SW/L2SW entry point ({@code ubswitch_Hash_ecmp}):
+     * the NPU uplink hash of the hardware uses the {@code (DstCNA, jettyId)}
+     * two-tuple only.
+     *
+     * <p>The jetty id is not range-checked; the native symbol folds it into
+     * the CRC by its low 8 bits (and high 8 bits), so any non-negative
+     * {@code int} value is accepted.
+     *
+     * <p>The native call already reduces the CRC modulo {@code ecmpCnt}, so the
+     * returned value is directly the index of the selected NPU uplink out-port
+     * within the ECMP member set.
+     *
+     * @param dstCna   destination CNA (dotted-quad) of the flow
+     * @param jettyId  jetty id of the sending NPU port; not range-checked,
+     *                 the low 8 bits participate in the CRC
+     * @param ecmpCnt  number of NPU uplink candidate ports; {@code 0} returns
+     *                 the raw CRC (0..255)
+     * @param hashFunc accepted for API symmetry with the L1SW/L2SW entry point;
+     *                 CRC8 has no algorithm selector and ignores it
+     * @return the selected out-port index, or the raw CRC when
+     *         {@code ecmpCnt == 0}
+     * @throws IllegalStateException if {@code libubswitch-die} was not loaded
+     */
+    public static int nativeHashDstCnaJetty(String dstCna, int jettyId,
+                                            int ecmpCnt, int hashFunc) {
+        if (LIB_DIE == null) {
+            throw new IllegalStateException(
+                "Native library libubswitch-die (" + DIE_NATIVE_LIBRARY_NAME + ") is not loaded");
+        }
+        return LIB_DIE.ubswitch_Hash_dieEcmp(dstCna, jettyId, ecmpCnt);
     }
 
     /**
