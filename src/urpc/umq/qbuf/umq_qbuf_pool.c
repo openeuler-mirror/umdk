@@ -194,7 +194,6 @@ typedef struct qbuf_pool {
     bool disable_scale_cap;
     bool disable_malloc_escape;
     uint32_t shrink_decay_ms;
-    uint32_t per_sc_weights[UMQ_QBUF_SIZE_CLASS_MAX]; // 0=lazy(no reserve), >0=weight
     // per-SC cumulative alloc/free counters (atomic, for DFX leak analysis)
     volatile uint64_t alloc_count[UMQ_QBUF_SIZE_CLASS_MAX];
     volatile uint64_t free_count[UMQ_QBUF_SIZE_CLASS_MAX];
@@ -937,7 +936,7 @@ static inline uint32_t buf_data_to_size_class(void *buf_data)
     }
     // Data regions are laid out in descending block_size order (larger SC at lower addresses),
     // so data_region_start[]/end[] are NOT monotonic in sc. Search every non-lazy region for one
-    // that contains buf_data. count <= UMQ_QBUF_SIZE_CLASS_MAX(16), so O(count) is acceptable on
+    // that contains buf_data. count <= UMQ_QBUF_SIZE_CLASS_MAX(5), so O(count) is acceptable on
     // the data_to_head path (free/lookup, not core alloc fast path).
     for (uint32_t i = 0; i < count; i++) {
         if (g_qbuf_pool.data_region_end[i] == NULL) {
@@ -951,7 +950,7 @@ static inline uint32_t buf_data_to_size_class(void *buf_data)
 }
 
 // Derive size_class index from a block's blk_size via linear scan.
-// count <= UMQ_QBUF_SIZE_CLASS_MAX(16), so O(count) is acceptable on free/lookup path.
+// count <= UMQ_QBUF_SIZE_CLASS_MAX(5), so O(count) is acceptable on free/lookup path.
 static inline uint32_t blk_size_to_sc(uint32_t blk_size)
 {
     if (blk_size == 0) {
