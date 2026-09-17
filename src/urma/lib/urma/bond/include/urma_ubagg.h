@@ -342,6 +342,15 @@ typedef struct bondp_path {
     uint32_t least_load;
 } bondp_path_t;
 
+/* Return true when a bonding jetty has at least one valid physical jetty. */
+bool bondp_jetty_is_available(const urma_jetty_t *jetty);
+
+/* TX and RX CRs returned by a bonding JFC or jetty flush carry the physical
+ * device index in imm_data bits 22-37 (the former vjetty_id field). Convert
+ * that index to a bond port ID. Return an ID with value UINT16_MAX for NULL
+ * or an out-of-range index. */
+bondp_port_id_t bondp_get_cr_local_port_id(const urma_cr_t *cr);
+
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
                                   urma_target_seg_t *dst_tseg, urma_target_seg_t *src_tseg,
                                   uint64_t dst, uint64_t src, uint32_t len,

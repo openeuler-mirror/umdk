@@ -124,6 +124,9 @@ void convert_jfs_pwr_to_vwr(urma_jfs_wr_t *wr, urma_target_jetty_t *vtjetty,
 void convert_jfr_vwr_to_pwr(urma_jfr_wr_t *wr, int recv_idx);
 void convert_pcr_to_vcr(urma_cr_t *cr, bondp_context_t *bdp_ctx, uint32_t *msn);
 
+void bondp_set_cr_port_idx(urma_cr_t *cr, uint32_t port_idx);
+uint32_t bondp_get_cr_port_idx(const urma_cr_t *cr);
+
 static inline bool is_recv_cr(const urma_cr_t *cr)
 {
     return cr->flag.bs.s_r == 1;
