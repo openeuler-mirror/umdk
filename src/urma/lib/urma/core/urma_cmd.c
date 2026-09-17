@@ -2377,6 +2377,7 @@ int urma_cmd_free_jetty(urma_jetty_t *jetty, urma_cmd_udrv_priv_t *udata)
     int ret = urma_ioctl_free_jetty(jetty->urma_ctx->dev_fd, &arg);
     if (ret != 0) {
         URMA_LOG_ERR("ioctl failed, ret=%d, errno=%d.\n", ret, errno);
+        return ret;
     }
 
     urma_uninit_jetty_cfg(&jetty->jetty_cfg);
