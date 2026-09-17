@@ -29,7 +29,7 @@ class CoveredEidPairTest {
         CoverageLink link = new CoverageLink();
         CoveredEidPair pair = new CoveredEidPair(
             "eid1", "eid2", "npu1", "port1", "cna1", "cna2",
-            "npu2", "port2", List.of(link));
+            "npu2", "port2", List.of(link), CoveragePathType.CROSS_L2);
         assertEquals("eid1", pair.getSrcEid());
         assertEquals("eid2", pair.getDstEid());
         assertEquals("npu1", pair.getSrcDevice());
@@ -68,10 +68,10 @@ class CoveredEidPairTest {
     void equalsHashCodeToString() {
         CoveredEidPair a = new CoveredEidPair(
             "eid1", "eid2", "npu1", "port1", "cna1", "cna2",
-            "npu2", "port2", null);
+            "npu2", "port2", null, CoveragePathType.CROSS_L2);
         CoveredEidPair b = new CoveredEidPair(
             "eid1", "eid2", "npu1", "port1", "cna1", "cna2",
-            "npu2", "port2", null);
+            "npu2", "port2", null, CoveragePathType.CROSS_L2);
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
         b.setSrcEid("other");
