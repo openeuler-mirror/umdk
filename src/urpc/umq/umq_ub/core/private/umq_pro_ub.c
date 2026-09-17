@@ -671,8 +671,9 @@ int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **ba
 
         rx_buf_ctx = queue_rx_buf_ctx_get(&qcfg->jfr_ctx[UB_QUEUE_JETTY_IO]->rx_buf_ctx_list);
         if (rx_buf_ctx == NULL) {
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, rx buf ctx is used up\n",
-                umq_id, EID_ARGS(*eid), id);
+            UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, "
+                "rx buf ctx temporarily unavailable\n", umq_id, EID_ARGS(*eid), id);
+            ret = -UMQ_ERR_EAGAIN;
             goto PUT_ALL_RX_CTX;
         }
         rx_buf_ctx->buffer = buffer;
