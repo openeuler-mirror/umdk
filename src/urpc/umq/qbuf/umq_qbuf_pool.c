@@ -134,6 +134,8 @@ typedef struct expansion_qbuf_pool {
     volatile uint32_t is_expanding;
     pthread_t shrink_thread;
     bool shrink_thread_created;
+    pthread_t expand_thread;
+    bool expand_thread_created;
     uint64_t trigger_expand_block_num;
     uint32_t expansion_block_count;
     uint32_t expansion_count;
@@ -1998,7 +2000,17 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
         exp_pool->shrink_thread_created = false;
     }
 
-    /* Thread is dead — safe to clean up slots */
+    /* Wait for async expand thread to finish, then join it.
+     * Must join before cleaning up slot_list — the expand thread may be
+     * operating on a slot (slot_with_data_init → spin_lock → slot_list
+     * or UNINIT_SLOT path). Joining here guarantees no concurrent slot
+     * access during cleanup below. */
+    if (exp_pool->expand_thread_created) {
+        (void)pthread_join(exp_pool->expand_thread, NULL);
+        exp_pool->expand_thread_created = false;
+    }
+
+    /* Both threads are dead — safe to clean up slots */
     (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
     qbuf_expansion_pool_slot_t *slot;
     qbuf_expansion_pool_slot_t *next_slot;
@@ -2034,31 +2046,6 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
         free(cur_node);
     }
     (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
-
-    /* Wait for async expand to finish. */
-    uint64_t start_time_expand = urpc_get_cpu_cycles();
-    uint32_t expected = 0;
-    while (!__atomic_compare_exchange_n(&exp_pool->is_expanding, &expected, 1, true, __ATOMIC_ACQ_REL,
-                                        __ATOMIC_ACQUIRE) &&
-                                        ((urpc_get_cpu_cycles() - start_time_expand) / urpc_get_cpu_hz()) <
-                                        QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S) {
-        expected = 0;
-        usleep(QBUF_POOL_CHECK_ASYNC_PERIOD_US);
-    }
-    bool expand_timed_out = (expected != 0);
-
-    if (expand_timed_out) {
-        __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
-        /* Shrink thread is already joined and dead — its mutex/condvar
-         * are safe to destroy. But expansion_pool_lock may still be
-         * accessed by the timed-out expand thread, so leak it. */
-        (void)pthread_mutex_destroy(&exp_pool->shrink_task_list.mutex);
-        (void)pthread_cond_destroy(&exp_pool->shrink_task_list.cond);
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-            "expansion pool async expand did not finish within %us, leaking expansion_pool_lock to avoid UAF\n",
-            QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S);
-        return false;
-    }
 
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
     (void)pthread_mutex_destroy(&exp_pool->shrink_task_list.mutex);
@@ -2104,6 +2091,7 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
     (void)pthread_cond_init(&exp_pool->shrink_task_list.cond, NULL);
     exp_pool->inited = true;
     exp_pool->shrink_thread_created = false;
+    exp_pool->expand_thread_created = false;
 
     /* Create dedicated shrink thread for this expansion pool. The thread
      * persists for the pool's lifetime, waiting on a condvar when idle. */
@@ -2881,6 +2869,11 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
         }
     }
 
+    if (!exp_pool->inited) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "expansion pool has not been inited\n");
+        return -UMQ_ERR_ENOMEM;
+    }
+
     int ret = alloc_expansion_pool_slot(&slot, alloc_sc);
     if (ret != UMQ_SUCCESS) {
         if (!already_locked) {
@@ -3090,7 +3083,11 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt)
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);
     } else {
-        pthread_detach(tid);
+        /* Store tid for pthread_join during uninit. Only one async expand
+         * can be in-flight at a time (guarded by is_expanding CAS above),
+         * so overwriting expand_thread is safe. */
+        exp_pool->expand_thread = tid;
+        exp_pool->expand_thread_created = true;
         UMQ_VLOG_DEBUG(VLOG_UMQ,
                        "%s_EXPAND_ASYNC_LAUNCH sc=%u free=%llu(g_free=%llu+e_free=%llu) expand_threshold=%llu\n",
                        with_data ? "WD" : "ND", sc, (unsigned long long)(g_buf_cnt + exp_free),
