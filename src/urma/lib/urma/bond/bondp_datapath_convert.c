@@ -183,6 +183,23 @@ urma_status_t copy_jfr_wr(const urma_jfr_wr_t *src, urma_jfr_wr_t *dst,
 #define IMM_CR_OPCODE_MASK ((1ULL << IMM_CR_OPCODE_BITS) - 1)
 #define IMM_MSN_MASK       ((1ULL << IMM_MSN_BITS) - 1)
 
+/* After CR conversion, the vjetty_id field is free for the local port index. */
+void bondp_set_cr_port_idx(urma_cr_t *cr, uint32_t port_idx)
+{
+    const uint64_t field_mask = IMM_VJETTY_ID_MASK << IMM_VJETTY_ID_SHIFT;
+    cr->imm_data = (cr->imm_data & ~field_mask) |
+                   (((uint64_t)port_idx & IMM_VJETTY_ID_MASK) << IMM_VJETTY_ID_SHIFT);
+}
+
+uint32_t bondp_get_cr_port_idx(const urma_cr_t *cr)
+{
+    if (cr == NULL) {
+        return UINT32_MAX;
+    }
+    uint32_t port_idx = (uint32_t)((cr->imm_data >> IMM_VJETTY_ID_SHIFT) & IMM_VJETTY_ID_MASK);
+    return port_idx < URMA_UBAGG_DEV_MAX_NUM ? port_idx : UINT32_MAX;
+}
+
 static inline uint64_t encode_imm_data(uint32_t cr_opcode, uint32_t msn, uint32_t vjetty_id,
                                        uint64_t user_data, bool msn_enable)
 {
