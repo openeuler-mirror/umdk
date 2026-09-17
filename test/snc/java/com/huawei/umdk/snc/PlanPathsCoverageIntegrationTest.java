@@ -37,8 +37,6 @@ class PlanPathsCoverageIntegrationTest {
     @BeforeAll
     static void setUp() throws Exception {
         SuperNode sn = RackTopologyLoader.loadRawTopology();
-        CoverageRouteAugmentor.augmentL1swRouting(sn);
-        CoverageRouteAugmentor.augmentL2swRouting(sn);
 
         Set<String> keepNpu = new HashSet<>();
         Set<String> keepSw = new HashSet<>();

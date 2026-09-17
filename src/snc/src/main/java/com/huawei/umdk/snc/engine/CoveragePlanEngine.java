@@ -62,22 +62,22 @@ public class CoveragePlanEngine {
     private final int dieHashFunctionSelect;
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore) {
-        this(superNodeStore, 1, 0, 0, HashTuple.TWO, 1);
+        this(superNodeStore, 1, 0, 0, HashTuple.TWO, 0);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc) {
-        this(superNodeStore, hashFunc, 0, 0, HashTuple.TWO, 1);
+        this(superNodeStore, hashFunc, 0, 0, HashTuple.TWO, 0);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
                               int fixedDataUdpPort, int fixedAckUdpPort) {
-        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, HashTuple.TWO, 1);
+        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, HashTuple.TWO, 0);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
                               int fixedDataUdpPort, int fixedAckUdpPort,
                               HashTuple hashTuple) {
-        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, hashTuple, 1);
+        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, hashTuple, 0);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
@@ -106,7 +106,7 @@ public class CoveragePlanEngine {
     /**
      * Returns the native {@code function_select} value forwarded to
      * {@code ubswitch_Hash_dieEcmp} when the engine selects the NPU&rarr;L1SW
-     * egress port. {@code 1} selects CRC-8/ATM (default).
+     * egress port. {@code 0} (default) and {@code 1} both select CRC-8/ATM.
      */
     public int getDieHashFunctionSelect() {
         return dieHashFunctionSelect;
