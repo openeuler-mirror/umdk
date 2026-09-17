@@ -666,7 +666,8 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
  *         or 0 on failure (urma_get_seg_ctx failed or out_cap too small)
  */
 uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint32_t token_value,
-                             uint32_t version, ub_import_mempool_info_t *out, uint32_t out_cap);
+                             uint32_t version, ub_import_mempool_info_t *out, uint32_t out_cap,
+                             bool use_user_tseg);
 
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
 int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
@@ -811,6 +812,11 @@ void umq_ub_tseg_remove(import_tseg_table_t *tseg_table, uint32_t mempool_id);
 static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 {
     return (feature & UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS) != 0;
+}
+
+static ALWAYS_INLINE bool umq_ub_enable_user_tseg(uint32_t feature)
+{
+    return (feature & UMQ_FEATURE_ENABLE_USER_TSEG) != 0;
 }
 
 // Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
