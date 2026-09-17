@@ -25,6 +25,11 @@ import lombok.ToString;
 @ToString
 public class CoverageLink {
 
+    /**
+     * Owner device of the out-port. <b>Extended semantics:</b> the value is a
+     * switch device name for the L1SW↔L2SW segment and an NPU device name for
+     * the NPU↔L1SW segment.
+     */
     private String switchDevice;
 
     private Integer chipIndex;
@@ -42,4 +47,14 @@ public class CoverageLink {
     private List<CoveredEidPairRef> coveredPairs;
 
     private Integer coverCount;
+
+    /**
+     * Owner device type of the out-port, {@code "NPU"} or {@code "SW"}. The
+     * value is converted from {@code DeviceType.name()} by the service layer so
+     * that this DTO does not depend on the entity package.
+     */
+    private String deviceType;
+
+    /** Link layer; {@code null} for results produced by the original interface. */
+    private CoverageLinkLayer layer;
 }

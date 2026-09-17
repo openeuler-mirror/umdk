@@ -29,6 +29,7 @@ import com.huawei.umdk.snc.route.topo.template.model.PolicyPrefix;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.util.HashUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,6 +74,11 @@ public class TopoTemplateService {
             }
             topoPort.setPeerNodeId(port.getPeerNodeLabel());
             topoPort.setPeerPortId(port.getPeerPortId());
+            // Jetty id: taken from the topology input when present; otherwise
+            // derived as 32 + portId so that every physical port still owns a
+            // legal jetty id in [32, 1023] (see HashUtils.JETTY_ID_MIN/MAX).
+            topoPort.setJettyId(port.getJettyId() != null
+                ? port.getJettyId() : HashUtils.JETTY_ID_MIN + portId);
             topoPort.getLabel().refreshAllNames(templateLoader.getNodeLabel() + "|port:" + portId);
             node.getPortMap().put(topoPort.getId(), topoPort);
         });

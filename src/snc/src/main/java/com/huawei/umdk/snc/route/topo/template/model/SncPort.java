@@ -36,6 +36,12 @@ public class SncPort {
     @NonNull
     private Integer peerPortId;
 
+    /**
+     * Jetty id of this physical port, in {@code [32, 1023]}; one per physical
+     * port. {@code null} when the template did not carry {@code jetty_id}.
+     */
+    private Integer jettyId;
+
     @NonNull
     private PortPolicyCache portPolicyCache = new PortPolicyCache();
 

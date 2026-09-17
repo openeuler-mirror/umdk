@@ -4,7 +4,8 @@
  * Description: SNC (Supernode Network Controller) service
  * Create: 2026-07-07
  * Note:
- * History: 2026-07-07  Create File; 2026-07-16 key=value log format; 2026-08-27 add planPathsCoverage
+ * History: 2026-07-07  Create File; 2026-07-16 key=value log format; 2026-08-27 add planPathsCoverage;
+ *          2026-09-13 add planPathsCoverageEx (NPU<->L1SW hash by (DstCNA, jettyId))
  */
 package com.huawei.umdk.snc;
 
@@ -104,7 +105,8 @@ public class SncService {
             config != null ? config.getHashFunc() : 1,
             config != null ? config.getFixedDataUdpPort() : 0,
             config != null ? config.getFixedAckUdpPort() : 0,
-            config != null ? config.getHashTuple() : HashTuple.TWO);
+            config != null ? config.getHashTuple() : HashTuple.TWO,
+            config != null ? config.getDieHashFunctionSelect() : 1);
 
         this.superNodeService = new SuperNodeService(superNodeStore);
         this.pathService = new PathService(superNodeStore,
@@ -305,6 +307,32 @@ public class SncService {
         }
         CoveragePathsResult result = pathService.planPathsCoverage(request);
         LOG.info("planPathsCoverage: status=" + result.getStatus());
+        return result;
+    }
+
+    /**
+     * Extended coverage planning: besides the L1SW↔L2SW out-ports, the
+     * NPU→L1SW egress port is selected by the {@code (DstCNA, jettyId)}
+     * two-tuple hash and the NPU↔L1SW out-ports are covered as well. The CNA of
+     * the selected NPU port is used as the SCNA of the downstream L1SW/L2SW
+     * hash selections; the ACK direction is resolved symmetrically. The result
+     * carries {@code scope = NPU_L1_L2} and per-layer statistics.
+     *
+     * @param request coverage request ({@code superNodeName} is required)
+     * @return coverage result with per-layer coverage statistics
+     * @throws SNCStateException        when the current state is not DATAREADY
+     * @throws IllegalArgumentException when {@code request} is null
+     */
+    public CoveragePathsResult planPathsCoverageEx(CoveragePathsRequest request) {
+        if (state != State.DATAREADY) {
+            throw new SNCStateException("SNC is not in DATAREADY state, current state: " + state);
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("CoveragePathsRequest must not be null");
+        }
+        CoveragePathsResult result = pathService.planPathsCoverageEx(request);
+        LOG.info("planPathsCoverageEx: status=" + result.getStatus()
+            + ", scope=" + result.getScope());
         return result;
     }
 

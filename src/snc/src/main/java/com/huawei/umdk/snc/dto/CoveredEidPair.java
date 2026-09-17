@@ -42,4 +42,12 @@ public class CoveredEidPair {
     private String destPort;
 
     private List<CoverageLink> coveredLinks;
+
+    /**
+     * Path type of this pair: {@link CoveragePathType#CROSS_L2} (traverses L2,
+     * 4 forward + 4 ACK links) or {@link CoveragePathType#LOCAL_L1} (stays in
+     * one L1 domain, 2 forward + 2 ACK links). {@code null} for results of
+     * the original interface.
+     */
+    private CoveragePathType type;
 }

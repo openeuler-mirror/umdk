@@ -24,6 +24,13 @@ public class PortLoader {
     @JSONField(name = "port_cna")
     String portCna;
 
+    /**
+     * Jetty id of this physical port, in {@code [32, 1023]}.
+     * Optional: when absent the loader falls back to {@code 32 + portId}.
+     */
+    @JSONField(name = "jetty_id")
+    Integer jettyId;
+
     @JSONField(name = "mask")
     String mask;
 

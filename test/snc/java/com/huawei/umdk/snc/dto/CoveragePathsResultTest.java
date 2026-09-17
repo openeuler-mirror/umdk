@@ -9,8 +9,10 @@ package com.huawei.umdk.snc.dto;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus;
 
@@ -38,7 +40,7 @@ class CoveragePathsResultTest {
             100, 200, 0.25, 1, 4, 2.0,
             1, 2, 1.5, 1, 2, 1.5, npu);
         CoveragePathsResult result = new CoveragePathsResult(
-            PlanStatus.SUCCESS, null, List.of(pair), List.of(link), stats);
+            PlanStatus.SUCCESS, null, List.of(pair), List.of(link), stats, null, null);
         assertEquals(PlanStatus.SUCCESS, result.getStatus());
         assertNull(result.getErrorMessage());
         assertEquals(1, result.getEidPairs().size());
@@ -85,6 +87,27 @@ class CoveragePathsResultTest {
         assertEquals(0.8, result.getStats().getCoverageRate());
         assertEquals(0.1, result.getStats().getRepeatRate());
         assertEquals(0.2, result.getStats().getEidRepeatRate());
+    }
+
+    @Test
+    @DisplayName("scope/layerStats（NPU-L1 扩展字段）setter/getter 工作正常")
+    void scopeAndLayerStats() {
+        CoveragePathsResult result = new CoveragePathsResult();
+        result.setScope(CoverageLinkScope.NPU_L1_L2);
+
+        Map<CoverageLinkLayer, CoverageLayerStats> layerStats = new EnumMap<>(CoverageLinkLayer.class);
+        layerStats.put(CoverageLinkLayer.NPU_L1,
+            new CoverageLayerStats(1024, 1024, 1.0, 1, 4, 2.1, 1.1));
+        layerStats.put(CoverageLinkLayer.L1_L2,
+            new CoverageLayerStats(1056, 1044, 0.9886, 1, 5, 2.4, 1.37));
+        result.setLayerStats(layerStats);
+
+        assertEquals(CoverageLinkScope.NPU_L1_L2, result.getScope());
+        assertEquals(2, result.getLayerStats().size());
+        assertEquals(1024, result.getLayerStats().get(CoverageLinkLayer.NPU_L1).getTotalLinks());
+        assertEquals(1.0, result.getLayerStats().get(CoverageLinkLayer.NPU_L1).getCoverageRate());
+        assertEquals(1044, result.getLayerStats().get(CoverageLinkLayer.L1_L2).getCoveredCount());
+        assertEquals(1.37, result.getLayerStats().get(CoverageLinkLayer.L1_L2).getRepeatRate());
     }
 
     @Test

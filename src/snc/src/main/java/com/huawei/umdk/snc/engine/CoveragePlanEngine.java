@@ -31,6 +31,8 @@ import com.huawei.umdk.snc.entity.RoutingTable;
 import com.huawei.umdk.snc.entity.RoutingTableKey;
 import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.config.HashTuple;
+import com.huawei.umdk.snc.dto.CoverageLinkLayer;
+import com.huawei.umdk.snc.dto.CoveragePathType;
 import com.huawei.umdk.snc.dto.CoverageRequirement;
 import com.huawei.umdk.snc.store.SuperNodeStore;
 import com.huawei.umdk.snc.util.AddressUtils;
@@ -57,28 +59,36 @@ public class CoveragePlanEngine {
     private final int fixedDataUdpPort;
     private final int fixedAckUdpPort;
     private final HashTuple hashTuple;
+    private final int dieHashFunctionSelect;
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore) {
-        this(superNodeStore, 1, 0, 0, HashTuple.TWO);
+        this(superNodeStore, 1, 0, 0, HashTuple.TWO, 1);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc) {
-        this(superNodeStore, hashFunc, 0, 0, HashTuple.TWO);
+        this(superNodeStore, hashFunc, 0, 0, HashTuple.TWO, 1);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
                               int fixedDataUdpPort, int fixedAckUdpPort) {
-        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, HashTuple.TWO);
+        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, HashTuple.TWO, 1);
     }
 
     public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
                               int fixedDataUdpPort, int fixedAckUdpPort,
                               HashTuple hashTuple) {
+        this(superNodeStore, hashFunc, fixedDataUdpPort, fixedAckUdpPort, hashTuple, 1);
+    }
+
+    public CoveragePlanEngine(SuperNodeStore superNodeStore, int hashFunc,
+                              int fixedDataUdpPort, int fixedAckUdpPort,
+                              HashTuple hashTuple, int dieHashFunctionSelect) {
         this.superNodeStore = superNodeStore;
         this.hashFunc = hashFunc;
         this.fixedDataUdpPort = fixedDataUdpPort;
         this.fixedAckUdpPort = fixedAckUdpPort;
         this.hashTuple = hashTuple;
+        this.dieHashFunctionSelect = dieHashFunctionSelect;
     }
 
     public int getFixedDataUdpPort() {
@@ -91,6 +101,15 @@ public class CoveragePlanEngine {
 
     public HashTuple getHashTuple() {
         return hashTuple;
+    }
+
+    /**
+     * Returns the native {@code function_select} value forwarded to
+     * {@code ubswitch_Hash_dieEcmp} when the engine selects the NPU&rarr;L1SW
+     * egress port. {@code 1} selects CRC-8/ATM (default).
+     */
+    public int getDieHashFunctionSelect() {
+        return dieHashFunctionSelect;
     }
 
     /**
@@ -158,6 +177,12 @@ public class CoveragePlanEngine {
         public final String dstChassis;
         public int coverCount;
 
+        /** Link layer (NPU_L1 for the NPU↔L1SW segment, L1_L2 otherwise). */
+        public final CoverageLinkLayer layer;
+
+        /** Owner device type of the out-port. */
+        public final DeviceType deviceType;
+
         public LinkInfo(String switchDevice, Integer chipIndex, String outPortName,
                         String remoteSwitch, String remotePort,
                         int outPortIndex, int totalOutPorts) {
@@ -168,6 +193,15 @@ public class CoveragePlanEngine {
         public LinkInfo(String switchDevice, Integer chipIndex, String outPortName,
                         String remoteSwitch, String remotePort,
                         int outPortIndex, int totalOutPorts, String dstChassis) {
+            this(switchDevice, chipIndex, outPortName, remoteSwitch, remotePort,
+                 outPortIndex, totalOutPorts, dstChassis,
+                 CoverageLinkLayer.L1_L2, DeviceType.SW);
+        }
+
+        public LinkInfo(String switchDevice, Integer chipIndex, String outPortName,
+                        String remoteSwitch, String remotePort,
+                        int outPortIndex, int totalOutPorts, String dstChassis,
+                        CoverageLinkLayer layer, DeviceType deviceType) {
             this.switchDevice = switchDevice;
             this.chipIndex = chipIndex;
             this.outPortName = outPortName;
@@ -176,6 +210,8 @@ public class CoveragePlanEngine {
             this.outPortIndex = outPortIndex;
             this.totalOutPorts = totalOutPorts;
             this.dstChassis = dstChassis;
+            this.layer = layer;
+            this.deviceType = deviceType;
         }
 
         public String getKey() {
@@ -193,10 +229,26 @@ public class CoveragePlanEngine {
         public final int totalOutPorts;
         public final String dstChassis;
 
+        /** Link layer (NPU_L1 for the NPU↔L1SW segment, L1_L2 otherwise). */
+        public final CoverageLinkLayer layer;
+
+        /** Owner device type of the out-port. */
+        public final DeviceType deviceType;
+
         public CoveredLinkDetail(String switchDeviceName, Integer chipIndex,
                                   String outPortName, String remoteDeviceName,
                                   String remotePortName, int outPortIndex,
                                   int totalOutPorts, String dstChassis) {
+            this(switchDeviceName, chipIndex, outPortName, remoteDeviceName,
+                 remotePortName, outPortIndex, totalOutPorts, dstChassis,
+                 CoverageLinkLayer.L1_L2, DeviceType.SW);
+        }
+
+        public CoveredLinkDetail(String switchDeviceName, Integer chipIndex,
+                                  String outPortName, String remoteDeviceName,
+                                  String remotePortName, int outPortIndex,
+                                  int totalOutPorts, String dstChassis,
+                                  CoverageLinkLayer layer, DeviceType deviceType) {
             this.switchDeviceName = switchDeviceName;
             this.chipIndex = chipIndex;
             this.outPortName = outPortName;
@@ -205,6 +257,8 @@ public class CoveragePlanEngine {
             this.outPortIndex = outPortIndex;
             this.totalOutPorts = totalOutPorts;
             this.dstChassis = dstChassis;
+            this.layer = layer;
+            this.deviceType = deviceType;
         }
 
         public String getLinkKey() {
@@ -221,6 +275,8 @@ public class CoveragePlanEngine {
         public final List<CoveredLinkDetail> reverseLinkDetails;
         public final String srcChassis;
         public final String dstChassis;
+        /** CROSS_L2 (traverses L2) or LOCAL_L1 (stays in one L1 domain) path of this pair. */
+        public final CoveragePathType pathType;
 
         public CoveredPair(NpuCandidate src, NpuCandidate dst,
                            List<String> forwardCoveredKeys,
@@ -228,6 +284,18 @@ public class CoveragePlanEngine {
                            List<CoveredLinkDetail> forwardLinkDetails,
                            List<CoveredLinkDetail> reverseLinkDetails,
                            String srcChassis, String dstChassis) {
+            this(src, dst, forwardCoveredKeys, reverseCoveredKeys,
+                 forwardLinkDetails, reverseLinkDetails, srcChassis, dstChassis,
+                 CoveragePathType.CROSS_L2);
+        }
+
+        public CoveredPair(NpuCandidate src, NpuCandidate dst,
+                           List<String> forwardCoveredKeys,
+                           List<String> reverseCoveredKeys,
+                           List<CoveredLinkDetail> forwardLinkDetails,
+                           List<CoveredLinkDetail> reverseLinkDetails,
+                           String srcChassis, String dstChassis,
+                           CoveragePathType pathType) {
             this.src = src;
             this.dst = dst;
             this.forwardCoveredKeys = forwardCoveredKeys;
@@ -236,6 +304,7 @@ public class CoveragePlanEngine {
             this.reverseLinkDetails = reverseLinkDetails;
             this.srcChassis = srcChassis;
             this.dstChassis = dstChassis;
+            this.pathType = pathType == null ? CoveragePathType.CROSS_L2 : pathType;
         }
     }
 
@@ -264,6 +333,10 @@ public class CoveragePlanEngine {
         public final int dstEidMaxRepeat;
         public final double dstEidAvgRepeat;
         public final Map<String, Integer> npuUsageByChassis;
+        /** Total links per layer (NPU_L1 / L1_L2). */
+        public final Map<CoverageLinkLayer, Integer> layerTotalLinks;
+        /** Covered links per layer (NPU_L1 / L1_L2). */
+        public final Map<CoverageLinkLayer, Integer> layerCoveredCount;
 
         public CoverageSearchResult(List<CoveredPair> selectedPairs,
                                     List<LinkInfo> allLinkInfos,
@@ -276,6 +349,25 @@ public class CoveragePlanEngine {
                                     Map<String, Integer> srcEidUsageMap,
                                     Map<String, Integer> dstEidUsageMap,
                                     Map<String, Integer> npuUsageByChassis) {
+            this(selectedPairs, allLinkInfos, totalLinks, coveredCount, coverageRate,
+                 minRepeatCount, maxRepeatCount, avgRepeatCount, repeatRate,
+                 fullCoverage, eidUsageMap, srcEidUsageMap, dstEidUsageMap,
+                 npuUsageByChassis, new HashMap<>(), new HashMap<>());
+        }
+
+        public CoverageSearchResult(List<CoveredPair> selectedPairs,
+                                    List<LinkInfo> allLinkInfos,
+                                    int totalLinks, int coveredCount,
+                                    double coverageRate,
+                                    int minRepeatCount, int maxRepeatCount,
+                                    double avgRepeatCount, double repeatRate,
+                                    boolean fullCoverage,
+                                    Map<String, Integer> eidUsageMap,
+                                    Map<String, Integer> srcEidUsageMap,
+                                    Map<String, Integer> dstEidUsageMap,
+                                    Map<String, Integer> npuUsageByChassis,
+                                    Map<CoverageLinkLayer, Integer> layerTotalLinks,
+                                    Map<CoverageLinkLayer, Integer> layerCoveredCount) {
             this.selectedPairs = selectedPairs;
             this.allLinkInfos = allLinkInfos;
             this.totalLinks = totalLinks;
@@ -309,6 +401,8 @@ public class CoveragePlanEngine {
             this.dstEidAvgRepeat = dstEidUsageMap.isEmpty()
                 ? 0.0 : (double) sumUsage(dstEidUsageMap) / dstEidUsageMap.size();
             this.npuUsageByChassis = npuUsageByChassis;
+            this.layerTotalLinks = layerTotalLinks == null ? new HashMap<>() : layerTotalLinks;
+            this.layerCoveredCount = layerCoveredCount == null ? new HashMap<>() : layerCoveredCount;
         }
 
         private static int minUsage(Map<String, Integer> usage) {
@@ -335,6 +429,14 @@ public class CoveragePlanEngine {
     static class PrecomputedTopo {
         Map<String, NpuPortConn> npuPortConns = new HashMap<>();
         Map<String, Map<Integer, Map<String, List<String>>>> l2swChipRemotePorts = new HashMap<>();
+        /**
+         * NPU device → the L1SW devices that have at least one physical port
+         * towards it. Used to expand the route scope: a packet whose DstCNA
+         * belongs to an NPU may be delivered by <b>any</b> L1SW connected to
+         * that NPU, because the receiving NPU accepts a CNA that belongs to its
+         * own device regardless of the receiving port.
+         */
+        Map<String, Set<String>> npuL1Peers = new HashMap<>();
         Map<String, DeviceEntity> devices;
         Set<String> l2swNames;
     }
@@ -568,6 +670,24 @@ public class CoveragePlanEngine {
                 if (!remotePorts.isEmpty()) {
                     topo.l2swChipRemotePorts.computeIfAbsent(dev.getDeviceName(), k -> new HashMap<>())
                         .put(chip.getChipIndex(), remotePorts);
+                }
+            }
+        }
+
+        // NPU device -> L1SW peers (every L1SW that has a port towards the NPU).
+        for (DeviceEntity dev : devices.values()) {
+            if (dev.getDeviceType() != DeviceType.SW) continue;
+            if (!isL1Sw(dev)) continue;
+            if (dev.getForwardingChips() == null) continue;
+            for (ForwardingChip chip : dev.getForwardingChips().values()) {
+                if (chip.getPorts() == null) continue;
+                for (PortEntity port : chip.getPorts().values()) {
+                    if (port.getRemoteDevice() == null) continue;
+                    DeviceEntity remote = devices.get(port.getRemoteDevice());
+                    if (remote == null || remote.getDeviceType() != DeviceType.NPU) continue;
+                    topo.npuL1Peers
+                        .computeIfAbsent(remote.getDeviceName(), k -> new java.util.TreeSet<>())
+                        .add(dev.getDeviceName());
                 }
             }
         }
@@ -1003,12 +1123,18 @@ public class CoveragePlanEngine {
         int minRepeat = Integer.MAX_VALUE;
         int maxRepeat = 0;
         double totalRepeat = 0;
+        Map<CoverageLinkLayer, Integer> layerTotalLinks = new HashMap<>();
+        Map<CoverageLinkLayer, Integer> layerCoveredCount = new HashMap<>();
         for (LinkInfo link : allLinkInfos) {
+            CoverageLinkLayer layer = link.layer == null
+                ? CoverageLinkLayer.L1_L2 : link.layer;
+            layerTotalLinks.merge(layer, 1, Integer::sum);
             if (link.coverCount > 0) {
                 coveredCount++;
                 minRepeat = Math.min(minRepeat, link.coverCount);
                 maxRepeat = Math.max(maxRepeat, link.coverCount);
                 totalRepeat += link.coverCount;
+                layerCoveredCount.merge(layer, 1, Integer::sum);
             }
         }
         if (minRepeat == Integer.MAX_VALUE) {
@@ -1055,7 +1181,7 @@ public class CoveragePlanEngine {
         return new CoverageSearchResult(selected, allLinkInfos, totalLinks, coveredCount,
                                         coverageRate, minRepeat, maxRepeat, avgRepeat, repeatRate,
                                         fullCoverage, eidUsageMap, srcEidUsageMap, dstEidUsageMap,
-                                        npuUsageByChassis);
+                                        npuUsageByChassis, layerTotalLinks, layerCoveredCount);
     }
 
     private List<NpuCandidate> collectNpuCandidates(Map<String, DeviceEntity> devices) {
@@ -1242,11 +1368,21 @@ public class CoveragePlanEngine {
         final List<CoveredLinkDetail> reverseLinkDetails;
         final String srcChassis;
         final String dstChassis;
+        final CoveragePathType pathType;
 
         PairCoverage(NpuCandidate src, NpuCandidate dst, List<String> fwdKeys,
                      List<String> revKeys, List<CoveredLinkDetail> forwardLinkDetails,
                      List<CoveredLinkDetail> reverseLinkDetails,
                      String srcChassis, String dstChassis) {
+            this(src, dst, fwdKeys, revKeys, forwardLinkDetails, reverseLinkDetails,
+                 srcChassis, dstChassis, CoveragePathType.CROSS_L2);
+        }
+
+        PairCoverage(NpuCandidate src, NpuCandidate dst, List<String> fwdKeys,
+                     List<String> revKeys, List<CoveredLinkDetail> forwardLinkDetails,
+                     List<CoveredLinkDetail> reverseLinkDetails,
+                     String srcChassis, String dstChassis,
+                     CoveragePathType pathType) {
             this.src = src;
             this.dst = dst;
             this.fwdKeys = fwdKeys;
@@ -1255,6 +1391,7 @@ public class CoveragePlanEngine {
             this.reverseLinkDetails = reverseLinkDetails;
             this.srcChassis = srcChassis;
             this.dstChassis = dstChassis;
+            this.pathType = pathType == null ? CoveragePathType.CROSS_L2 : pathType;
         }
     }
 
@@ -1522,7 +1659,7 @@ public class CoveragePlanEngine {
         selected.add(new CoveredPair(pc.src, pc.dst,
             new ArrayList<>(pc.fwdKeys), new ArrayList<>(pc.revKeys),
             pc.forwardLinkDetails, pc.reverseLinkDetails,
-            pc.srcChassis, pc.dstChassis));
+            pc.srcChassis, pc.dstChassis, pc.pathType));
 
         srcEidUsage.merge(pc.src.eid, 1, Integer::sum);
         dstEidUsage.merge(pc.dst.eid, 1, Integer::sum);
@@ -1665,7 +1802,7 @@ public class CoveragePlanEngine {
             CoveredPair bestPair = new CoveredPair(winner.src, winner.dst,
                 new ArrayList<>(winner.fwdKeys), new ArrayList<>(winner.revKeys),
                 winner.forwardLinkDetails, winner.reverseLinkDetails,
-                winner.srcChassis, winner.dstChassis);
+                winner.srcChassis, winner.dstChassis, winner.pathType);
 
             srcEidUsage.merge(bestPair.src.eid, 1, Integer::sum);
             dstEidUsage.merge(bestPair.dst.eid, 1, Integer::sum);
@@ -1790,7 +1927,7 @@ public class CoveragePlanEngine {
             selected.set(bestSi, new CoveredPair(rep.src, rep.dst,
                 new ArrayList<>(rep.fwdKeys), new ArrayList<>(rep.revKeys),
                 rep.forwardLinkDetails, rep.reverseLinkDetails,
-                rep.srcChassis, rep.dstChassis));
+                rep.srcChassis, rep.dstChassis, rep.pathType));
         }
     }
 
@@ -1859,4 +1996,939 @@ public class CoveragePlanEngine {
             new ArrayList<>(), new ArrayList<>(), 0, 0, 0.0, 0, 0, 0.0, 0.0, false,
             new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>());
     }
+
+    // ==================================================================
+    //  Extended coverage (planPathsCoverageEx)
+    //  NPU<->L1SW egress selection hashed by the (DstCNA, jettyId)
+    //  two-tuple; the CNA of the selected NPU port becomes the SCNA used
+    //  by every downstream L1SW/L2SW hash selection.
+    // ==================================================================
+
+    /** Instance counters for the extended path (kept non-static on purpose). */
+    private int exFailNpuRoute;
+    private int exFailNpuPort;
+    private int exJettyFallback;
+    private int exFailL1;
+    private int exFailL2;
+    private int exFailDstL1;
+    private int exFailRevNpu;
+    private int exFailRevDstL1;
+    private int exFailRevL2;
+    private int exFailRevSrcL1;
+
+    /** NPU uplink egress resolved for one flow. */
+    private static final class NpuEgress {
+        final String npuPortName;
+        final Integer npuChipIdx;
+        /** CNA of the selected NPU out-port; becomes the SCNA for L1 hashing. */
+        final String scna;
+        final String l1swName;
+        final String l1swPortName;
+        final int l1swChipIdx;
+        final int outPortIndex;
+        final int totalOutPorts;
+
+        NpuEgress(String npuPortName, Integer npuChipIdx, String scna,
+                  String l1swName, String l1swPortName, int l1swChipIdx,
+                  int outPortIndex, int totalOutPorts) {
+            this.npuPortName = npuPortName;
+            this.npuChipIdx = npuChipIdx;
+            this.scna = scna;
+            this.l1swName = l1swName;
+            this.l1swPortName = l1swPortName;
+            this.l1swChipIdx = l1swChipIdx;
+            this.outPortIndex = outPortIndex;
+            this.totalOutPorts = totalOutPorts;
+        }
+    }
+
+    /**
+     * Jetty id of an NPU physical port. Falls back to {@code 32 + portId} when
+     * the topology input did not provide one, and counts the fallback so that
+     * missing input is visible in the report instead of failing silently.
+     */
+    private int jettyIdOf(PortEntity port) {
+        if (port instanceof NpuPortEntity) {
+            Integer jettyId = ((NpuPortEntity) port).getJettyId();
+            if (jettyId != null && HashUtils.isValidJettyId(jettyId)) {
+                return jettyId;
+            }
+        }
+        exJettyFallback++;
+        Integer id = port == null ? null : port.getId();
+        return HashUtils.JETTY_ID_MIN + (id == null ? 0 : id);
+    }
+
+    /** Chip index that owns {@code portName} inside {@code dev}; null when unknown. */
+    private static Integer chipIndexOfPort(DeviceEntity dev, String portName) {
+        if (dev == null || dev.getForwardingChips() == null) return null;
+        for (ForwardingChip chip : dev.getForwardingChips().values()) {
+            if (chip.getPorts() != null && chip.getPorts().containsKey(portName)) {
+                return chip.getChipIndex();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the NPU-&gt;L1SW egress port of an NPU for a flow towards
+     * {@code dstCna}:
+     * <ol>
+     *   <li>LPM lookup of {@code dstCna} in the NPU chip routing table;</li>
+     *   <li>keep the out-ports whose peer is an L1SW (the ECMP member set);</li>
+     *   <li>select the member index with the {@code (DstCNA, jettyId)}
+     *       two-tuple hash.</li>
+     * </ol>
+     *
+     * @return the resolved egress (including the peer L1SW port and the CNA of
+     *         the selected NPU port), or {@code null} when it cannot be
+     *         resolved
+     */
+    private NpuEgress selectNpuEgress(SuperNode superNode, DeviceEntity npu,
+                                      int npuChipIdx, String dstCna, int jettyId,
+                                      Map<String, DeviceEntity> devices) {
+        if (npu == null || npu.getForwardingChips() == null) {
+            exFailNpuRoute++;
+            return null;
+        }
+        RoutingEntry entry = lookupRoute(superNode, npu.getDeviceName(), npuChipIdx, dstCna);
+        if (entry == null || entry.getOutPortInfos() == null) {
+            exFailNpuRoute++;
+            return null;
+        }
+        ForwardingChip chip = npu.getForwardingChips().get(npuChipIdx);
+        if (chip == null || chip.getPorts() == null) {
+            exFailNpuRoute++;
+            return null;
+        }
+
+        List<String> members = new ArrayList<>();
+        for (OutPortInfo opi : entry.getOutPortInfos().values()) {
+            PortEntity p = chip.getPorts().get(opi.getPortName());
+            if (p == null || p.getRemoteDevice() == null) continue;
+            if (isL1Sw(devices.get(p.getRemoteDevice()))) members.add(p.getPortName());
+        }
+        if (members.isEmpty()) {
+            exFailNpuRoute++;
+            return null;
+        }
+
+        int idx = HashUtils.nativeHashDstCnaJetty(
+            AddressUtils.ipToInt(dstCna), jettyId, members.size(), hashFunc,
+            dieHashFunctionSelect);
+        String npuOutPortName = members.get(idx);
+        PortEntity npuOut = chip.getPorts().get(npuOutPortName);
+        if (npuOut == null || npuOut.getCna() == null || npuOut.getRemoteDevice() == null) {
+            exFailNpuPort++;
+            return null;
+        }
+        DeviceEntity l1sw = devices.get(npuOut.getRemoteDevice());
+        PortEntity l1swPort = findPortInDevice(l1sw, npuOut.getRemotePort());
+        if (l1swPort == null) {
+            exFailNpuPort++;
+            return null;
+        }
+        return new NpuEgress(npuOutPortName, chip.getChipIndex(), npuOut.getCna(),
+            npuOut.getRemoteDevice(), npuOut.getRemotePort(),
+            l1swPort.getChipIndex(), idx, members.size());
+    }
+
+    /** Forward trace result of the extended path (4 hops). */
+    private static final class PathTraceEx {
+        boolean viable;
+        String srcChassis;
+        String dstChassis;
+        List<CoveredLinkDetail> forwardLinkDetails = new ArrayList<>();
+    }
+
+    /** Reverse (ACK) trace result of the extended path (4 hops). */
+    private static final class ReversePathTraceEx {
+        boolean viable;
+        List<CoveredLinkDetail> reverseLinkDetails = new ArrayList<>();
+    }
+
+    /**
+     * Forward path of the extended coverage: source NPU -&gt; source L1SW -&gt;
+     * L2SW -&gt; destination L1SW -&gt; destination NPU.
+     *
+     * <p>Hop 1 is the NPU egress selection hashed by {@code (dst.cna, jettyId)};
+     * the CNA of the selected NPU port becomes the SCNA of hops 2-4.
+     */
+    private PathTraceEx traceForwardPathEx(SuperNode superNode, NpuCandidate src,
+                                            NpuCandidate dst, int dataUdpSrcPort,
+                                            int ackUdpSrcPort, PrecomputedTopo topo) {
+        PathTraceEx result = new PathTraceEx();
+        Map<String, DeviceEntity> devices = topo.devices;
+
+        DeviceEntity srcNpu = devices.get(src.deviceName);
+        Integer srcChipIdx = chipIndexOfPort(srcNpu, src.portName);
+        if (srcNpu == null || srcChipIdx == null) {
+            exFailNpuRoute++;
+            return result;
+        }
+        PortEntity srcPort = srcNpu.getForwardingChips().get(srcChipIdx)
+            .getPorts().get(src.portName);
+        if (srcPort == null) {
+            exFailNpuPort++;
+            return result;
+        }
+
+        // hop 1: NPU -> L1SW, egress hashed by (DstCNA, jettyId)
+        NpuEgress egress = selectNpuEgress(superNode, srcNpu, srcChipIdx, dst.cna,
+            jettyIdOf(srcPort), devices);
+        if (egress == null) {
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            src.deviceName, srcChipIdx, egress.npuPortName,
+            egress.l1swName, egress.l1swPortName,
+            egress.outPortIndex, egress.totalOutPorts, null,
+            CoverageLinkLayer.NPU_L1, DeviceType.NPU));
+
+        String scna = egress.scna;   // selected NPU port CNA -> downstream SCNA
+        DeviceEntity l1sw = devices.get(egress.l1swName);
+        ForwardingChip l1Chip = l1sw == null || l1sw.getForwardingChips() == null
+            ? null : l1sw.getForwardingChips().get(egress.l1swChipIdx);
+        RoutingEntry l1Route = lookupRoute(superNode, egress.l1swName,
+            egress.l1swChipIdx, dst.cna);
+        if (l1Chip == null || l1Route == null || l1Route.getOutPortInfos() == null) {
+            exFailL1++;
+            return result;
+        }
+        List<String> l1L2Ports = new ArrayList<>();
+        for (OutPortInfo opi : l1Route.getOutPortInfos().values()) {
+            PortEntity pe = l1Chip.getPorts() == null
+                ? null : l1Chip.getPorts().get(opi.getPortName());
+            if (pe != null && isL2Sw(devices.get(pe.getRemoteDevice()))) {
+                l1L2Ports.add(opi.getPortName());
+            }
+        }
+        if (l1L2Ports.isEmpty()) {
+            exFailL1++;
+            return result;
+        }
+
+        // hop 2: source L1SW -> L2SW
+        int l1Idx = nativePortIdx(scna, dst.cna, dataUdpSrcPort, ackUdpSrcPort,
+            l1L2Ports.size());
+        String l1OutPortName = l1L2Ports.get(l1Idx);
+        PortEntity l1OutPort = l1Chip.getPorts().get(l1OutPortName);
+        if (l1OutPort == null || l1OutPort.getRemoteDevice() == null) {
+            exFailL1++;
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            egress.l1swName, egress.l1swChipIdx, l1OutPortName,
+            l1OutPort.getRemoteDevice(), l1OutPort.getRemotePort(),
+            l1Idx, l1L2Ports.size(), null,
+            CoverageLinkLayer.L1_L2, DeviceType.SW));
+
+        // hop 3: L2SW -> destination L1SW
+        String l2swName = l1OutPort.getRemoteDevice();
+        DeviceEntity l2sw = devices.get(l2swName);
+        PortEntity l2InPort = findPortInDevice(l2sw, l1OutPort.getRemotePort());
+        if (l2sw == null || l2InPort == null) {
+            exFailL2++;
+            return result;
+        }
+        int l2ChipIdx = l2InPort.getChipIndex();
+        Map<Integer, Map<String, List<String>>> l2ChipRemote =
+            topo.l2swChipRemotePorts.get(l2swName);
+        Map<String, List<String>> fwdChipRemote = l2ChipRemote == null
+            ? null : l2ChipRemote.get(l2ChipIdx);
+        ForwardingChip l2Chip = l2sw.getForwardingChips() == null
+            ? null : l2sw.getForwardingChips().get(l2ChipIdx);
+        // Route-scope expansion: the L2SW may use any of its ports towards an
+        // L1SW that has a port to the destination NPU device (the NPU accepts a
+        // CNA that belongs to itself regardless of the receiving port).
+        List<String> l2DstPorts = l2PortsTowardsL1Peers(fwdChipRemote,
+            dst.deviceName, topo);
+        if (l2Chip == null || l2DstPorts == null || l2DstPorts.isEmpty()) {
+            exFailL2++;
+            return result;
+        }
+        int l2Idx = nativePortIdx(scna, dst.cna, dataUdpSrcPort, ackUdpSrcPort,
+            l2DstPorts.size());
+        String l2OutPortName = l2DstPorts.get(l2Idx);
+        PortEntity l2OutPort = l2Chip.getPorts().get(l2OutPortName);
+        if (l2OutPort == null || l2OutPort.getRemoteDevice() == null) {
+            exFailL2++;
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            l2swName, l2ChipIdx, l2OutPortName,
+            l2OutPort.getRemoteDevice(), l2OutPort.getRemotePort(),
+            l2Idx, l2DstPorts.size(), null,
+            CoverageLinkLayer.L1_L2, DeviceType.SW));
+
+        // hop 4: destination L1SW -> destination NPU
+        String dstL1swName = l2OutPort.getRemoteDevice();
+        DeviceEntity dstL1sw = devices.get(dstL1swName);
+        PortEntity dstL1InPort = findPortInDevice(dstL1sw, l2OutPort.getRemotePort());
+        if (dstL1sw == null || dstL1InPort == null) {
+            exFailDstL1++;
+            return result;
+        }
+        int dstL1ChipIdx = dstL1InPort.getChipIndex();
+        ForwardingChip dstL1Chip = dstL1sw.getForwardingChips() == null
+            ? null : dstL1sw.getForwardingChips().get(dstL1ChipIdx);
+        RoutingEntry dstRoute = lookupRoute(superNode, dstL1swName, dstL1ChipIdx, dst.cna);
+        if (dstL1Chip == null || dstRoute == null || dstRoute.getOutPortInfos() == null) {
+            exFailDstL1++;
+            return result;
+        }
+        List<String> dstPorts = new ArrayList<>();
+        for (OutPortInfo opi : dstRoute.getOutPortInfos().values()) {
+            PortEntity pe = dstL1Chip.getPorts() == null
+                ? null : dstL1Chip.getPorts().get(opi.getPortName());
+            if (pe != null && dst.deviceName.equals(pe.getRemoteDevice())) {
+                dstPorts.add(opi.getPortName());
+            }
+        }
+        if (dstPorts.isEmpty()) {
+            exFailDstL1++;
+            return result;
+        }
+        int dstIdx = nativePortIdx(scna, dst.cna, dataUdpSrcPort, ackUdpSrcPort,
+            dstPorts.size());
+        String dstOutPortName = dstPorts.get(dstIdx);
+        PortEntity dstOutPort = dstL1Chip.getPorts().get(dstOutPortName);
+        if (dstOutPort == null || !dst.deviceName.equals(dstOutPort.getRemoteDevice())) {
+            exFailDstL1++;
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            dstL1swName, dstL1ChipIdx, dstOutPortName,
+            dst.deviceName, dstOutPort.getRemotePort(),
+            dstIdx, dstPorts.size(), null,
+            CoverageLinkLayer.NPU_L1, DeviceType.SW));
+
+        result.viable = true;
+        result.srcChassis = src.rack;
+        result.dstChassis = dst.rack;
+        return result;
+    }
+
+    /**
+     * Reverse (ACK) path of the extended coverage, symmetric to
+     * {@link #traceForwardPathEx}: destination NPU -&gt; destination L1SW -&gt;
+     * L2SW -&gt; source L1SW -&gt; source NPU.
+     *
+     * <p>The ACK flow originates from the destination NPU, but the jettyId
+     * used for NPU egress selection is the <b>source NPU port's jettyId</b>
+     * (the same jettyId as the forward direction), not the destination
+     * NPU port's jettyId. Therefore its {@code (DstCNA, jettyId)} tuple is
+     * {@code (src.cna, jettyId of the source NPU port)} and the CNA of the
+     * selected port becomes the SCNA of the reverse direction.
+     */
+    private ReversePathTraceEx traceReversePathEx(SuperNode superNode, NpuCandidate src,
+                                                   NpuCandidate dst, int ackUdpSrcPort,
+                                                   int dataUdpSrcPort, PrecomputedTopo topo) {
+        ReversePathTraceEx result = new ReversePathTraceEx();
+        Map<String, DeviceEntity> devices = topo.devices;
+
+        // Resolve the source NPU port — its jettyId drives the ACK egress
+        // selection, mirroring the forward direction's hash input.
+        DeviceEntity srcNpu = devices.get(src.deviceName);
+        Integer srcChipIdxForJetty = chipIndexOfPort(srcNpu, src.portName);
+        if (srcNpu == null || srcChipIdxForJetty == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        PortEntity srcPortForJetty = srcNpu.getForwardingChips().get(srcChipIdxForJetty)
+            .getPorts().get(src.portName);
+        if (srcPortForJetty == null) {
+            exFailRevNpu++;
+            return result;
+        }
+
+        DeviceEntity dstNpu = devices.get(dst.deviceName);
+        Integer dstChipIdx = chipIndexOfPort(dstNpu, dst.portName);
+        if (dstNpu == null || dstChipIdx == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        PortEntity dstPort = dstNpu.getForwardingChips().get(dstChipIdx)
+            .getPorts().get(dst.portName);
+        if (dstPort == null) {
+            exFailRevNpu++;
+            return result;
+        }
+
+        // R1: destination NPU -> destination L1SW (ACK direction)
+        // ACK egress uses the source NPU port's jettyId (same as forward),
+        // NOT the destination NPU port's jettyId.
+        NpuEgress revEgress = selectNpuEgress(superNode, dstNpu, dstChipIdx, src.cna,
+            jettyIdOf(srcPortForJetty), devices);
+        if (revEgress == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            dst.deviceName, dstChipIdx, revEgress.npuPortName,
+            revEgress.l1swName, revEgress.l1swPortName,
+            revEgress.outPortIndex, revEgress.totalOutPorts, null,
+            CoverageLinkLayer.NPU_L1, DeviceType.NPU));
+
+        String scnaRev = revEgress.scna;
+        DeviceEntity dstL1sw = devices.get(revEgress.l1swName);
+        ForwardingChip dstL1Chip = dstL1sw == null || dstL1sw.getForwardingChips() == null
+            ? null : dstL1sw.getForwardingChips().get(revEgress.l1swChipIdx);
+        RoutingEntry dstL1Route = lookupRoute(superNode, revEgress.l1swName,
+            revEgress.l1swChipIdx, src.cna);
+        if (dstL1Chip == null || dstL1Route == null
+            || dstL1Route.getOutPortInfos() == null) {
+            exFailRevDstL1++;
+            return result;
+        }
+        List<String> dstL1L2Ports = new ArrayList<>();
+        for (OutPortInfo opi : dstL1Route.getOutPortInfos().values()) {
+            PortEntity pe = dstL1Chip.getPorts() == null
+                ? null : dstL1Chip.getPorts().get(opi.getPortName());
+            if (pe != null && isL2Sw(devices.get(pe.getRemoteDevice()))) {
+                dstL1L2Ports.add(opi.getPortName());
+            }
+        }
+        if (dstL1L2Ports.isEmpty()) {
+            exFailRevDstL1++;
+            return result;
+        }
+
+        // R2: destination L1SW -> L2SW
+        int r2Idx = nativePortIdx(scnaRev, src.cna, ackUdpSrcPort, dataUdpSrcPort,
+            dstL1L2Ports.size());
+        String r2OutPortName = dstL1L2Ports.get(r2Idx);
+        PortEntity r2OutPort = dstL1Chip.getPorts().get(r2OutPortName);
+        if (r2OutPort == null || r2OutPort.getRemoteDevice() == null) {
+            exFailRevDstL1++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            revEgress.l1swName, revEgress.l1swChipIdx, r2OutPortName,
+            r2OutPort.getRemoteDevice(), r2OutPort.getRemotePort(),
+            r2Idx, dstL1L2Ports.size(), null,
+            CoverageLinkLayer.L1_L2, DeviceType.SW));
+
+        // R3: L2SW -> source L1SW
+        String l2swRevName = r2OutPort.getRemoteDevice();
+        DeviceEntity l2swRev = devices.get(l2swRevName);
+        PortEntity l2swRevInPort = findPortInDevice(l2swRev, r2OutPort.getRemotePort());
+        if (l2swRev == null || l2swRevInPort == null) {
+            exFailRevL2++;
+            return result;
+        }
+        int l2RevChipIdx = l2swRevInPort.getChipIndex();
+        Map<Integer, Map<String, List<String>>> l2RevChipRemote =
+            topo.l2swChipRemotePorts.get(l2swRevName);
+        Map<String, List<String>> revChipRemote = l2RevChipRemote == null
+            ? null : l2RevChipRemote.get(l2RevChipIdx);
+        ForwardingChip l2RevChip = l2swRev.getForwardingChips() == null
+            ? null : l2swRev.getForwardingChips().get(l2RevChipIdx);
+        // Route-scope expansion (ACK): any port towards an L1SW that can reach
+        // the original source NPU device.
+        List<String> l2RevSrcPorts = l2PortsTowardsL1Peers(revChipRemote,
+            src.deviceName, topo);
+        if (l2RevChip == null || l2RevSrcPorts == null || l2RevSrcPorts.isEmpty()) {
+            exFailRevL2++;
+            return result;
+        }
+        int r3Idx = nativePortIdx(scnaRev, src.cna, ackUdpSrcPort, dataUdpSrcPort,
+            l2RevSrcPorts.size());
+        String r3OutPortName = l2RevSrcPorts.get(r3Idx);
+        PortEntity r3OutPort = l2RevChip.getPorts().get(r3OutPortName);
+        if (r3OutPort == null || r3OutPort.getRemoteDevice() == null) {
+            exFailRevL2++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            l2swRevName, l2RevChipIdx, r3OutPortName,
+            r3OutPort.getRemoteDevice(), r3OutPort.getRemotePort(),
+            r3Idx, l2RevSrcPorts.size(), src.rack,
+            CoverageLinkLayer.L1_L2, DeviceType.SW));
+
+        // R4: source L1SW -> source NPU
+        String srcL1swName = r3OutPort.getRemoteDevice();
+        DeviceEntity srcL1sw = devices.get(srcL1swName);
+        PortEntity srcL1InPort = findPortInDevice(srcL1sw, r3OutPort.getRemotePort());
+        if (srcL1sw == null || srcL1InPort == null) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        int srcL1RevChipIdx = srcL1InPort.getChipIndex();
+        ForwardingChip srcL1RevChip = srcL1sw.getForwardingChips() == null
+            ? null : srcL1sw.getForwardingChips().get(srcL1RevChipIdx);
+        RoutingEntry srcL1RevRoute = lookupRoute(superNode, srcL1swName,
+            srcL1RevChipIdx, src.cna);
+        if (srcL1RevChip == null || srcL1RevRoute == null
+            || srcL1RevRoute.getOutPortInfos() == null) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        List<String> srcRevPorts = new ArrayList<>();
+        for (OutPortInfo opi : srcL1RevRoute.getOutPortInfos().values()) {
+            PortEntity pe = srcL1RevChip.getPorts() == null
+                ? null : srcL1RevChip.getPorts().get(opi.getPortName());
+            if (pe != null && src.deviceName.equals(pe.getRemoteDevice())) {
+                srcRevPorts.add(opi.getPortName());
+            }
+        }
+        if (srcRevPorts.isEmpty()) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        int r4Idx = nativePortIdx(scnaRev, src.cna, ackUdpSrcPort, dataUdpSrcPort,
+            srcRevPorts.size());
+        String r4OutPortName = srcRevPorts.get(r4Idx);
+        PortEntity r4OutPort = srcL1RevChip.getPorts().get(r4OutPortName);
+        if (r4OutPort == null || !src.deviceName.equals(r4OutPort.getRemoteDevice())) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            srcL1swName, srcL1RevChipIdx, r4OutPortName,
+            src.deviceName, r4OutPort.getRemotePort(),
+            r4Idx, srcRevPorts.size(), null,
+            CoverageLinkLayer.NPU_L1, DeviceType.SW));
+
+        result.viable = true;
+        return result;
+    }
+
+    /**
+     * Ports of an L2SW chip towards every L1SW that has a physical port to
+     * {@code npuDeviceName}, in a deterministic (L1SW-name sorted) order.
+     * This is the route-scope expansion of the L2SW→L1SW hop.
+     */
+    private static List<String> l2PortsTowardsL1Peers(Map<String, List<String>> chipRemoteByL1,
+                                                      String npuDeviceName,
+                                                      PrecomputedTopo topo) {
+        if (chipRemoteByL1 == null) {
+            return null;
+        }
+        Set<String> peers = topo.npuL1Peers.get(npuDeviceName);
+        if (peers == null || peers.isEmpty()) {
+            return null;
+        }
+        List<String> ports = new ArrayList<>();
+        for (String l1 : peers) {
+            List<String> p = chipRemoteByL1.get(l1);
+            if (p != null) {
+                ports.addAll(p);
+            }
+        }
+        return ports.isEmpty() ? null : ports;
+    }
+
+    /** Out-ports of an L1SW chip whose peer is {@code deviceName}, from a route. */
+    private static List<String> l1PortsTowardsDevice(ForwardingChip chip, RoutingEntry route,
+                                                     String deviceName) {
+        List<String> ports = new ArrayList<>();
+        if (chip == null || chip.getPorts() == null || route == null
+            || route.getOutPortInfos() == null) {
+            return ports;
+        }
+        for (OutPortInfo opi : route.getOutPortInfos().values()) {
+            PortEntity pe = chip.getPorts().get(opi.getPortName());
+            if (pe != null && deviceName.equals(pe.getRemoteDevice())) {
+                ports.add(opi.getPortName());
+            }
+        }
+        return ports;
+    }
+
+    /**
+     * Intra-chassis (框内) forward path: {@code NPU -> L1SW -> NPU} inside one
+     * chassis, i.e. without traversing the L2SW spine. Used in phase 2 of the
+     * extended coverage to cover the remaining NPU↔L1SW out-ports.
+     */
+    private PathTraceEx traceIntraForwardPathEx(SuperNode superNode, NpuCandidate src,
+                                                 NpuCandidate dst, int dataUdpSrcPort,
+                                                 int ackUdpSrcPort, PrecomputedTopo topo) {
+        PathTraceEx result = new PathTraceEx();
+        Map<String, DeviceEntity> devices = topo.devices;
+
+        DeviceEntity srcNpu = devices.get(src.deviceName);
+        Integer srcChipIdx = chipIndexOfPort(srcNpu, src.portName);
+        if (srcNpu == null || srcChipIdx == null) {
+            exFailNpuRoute++;
+            return result;
+        }
+        PortEntity srcPort = srcNpu.getForwardingChips().get(srcChipIdx)
+            .getPorts().get(src.portName);
+        if (srcPort == null) {
+            exFailNpuPort++;
+            return result;
+        }
+
+        // hop 1: NPU -> L1SW (CRC8 over (DstCNA, jettyId))
+        NpuEgress egress = selectNpuEgress(superNode, srcNpu, srcChipIdx, dst.cna,
+            jettyIdOf(srcPort), devices);
+        if (egress == null) {
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            src.deviceName, srcChipIdx, egress.npuPortName,
+            egress.l1swName, egress.l1swPortName,
+            egress.outPortIndex, egress.totalOutPorts, null,
+            CoverageLinkLayer.NPU_L1, DeviceType.NPU));
+
+        // hop 2: L1SW -> NPU. The L1SW only needs to be able to reach the
+        // destination NPU device: the receiving NPU accepts a CNA of its own
+        // device even when it arrives on another port (route-scope expansion).
+        String scna = egress.scna;
+        DeviceEntity l1sw = devices.get(egress.l1swName);
+        ForwardingChip l1Chip = l1sw == null || l1sw.getForwardingChips() == null ? null
+            : l1sw.getForwardingChips().get(egress.l1swChipIdx);
+        RoutingEntry route = lookupRoute(superNode, egress.l1swName,
+            egress.l1swChipIdx, dst.cna);
+        List<String> ports = l1PortsTowardsDevice(l1Chip, route, dst.deviceName);
+        if (ports.isEmpty()) {
+            exFailDstL1++;
+            return result;
+        }
+        int idx = nativePortIdx(scna, dst.cna, dataUdpSrcPort, ackUdpSrcPort, ports.size());
+        String outPortName = ports.get(idx);
+        PortEntity outPort = l1Chip.getPorts().get(outPortName);
+        if (outPort == null || !dst.deviceName.equals(outPort.getRemoteDevice())) {
+            exFailDstL1++;
+            return result;
+        }
+        result.forwardLinkDetails.add(new CoveredLinkDetail(
+            egress.l1swName, egress.l1swChipIdx, outPortName,
+            dst.deviceName, outPort.getRemotePort(),
+            idx, ports.size(), null,
+            CoverageLinkLayer.NPU_L1, DeviceType.SW));
+
+        result.viable = true;
+        result.srcChassis = src.rack;
+        result.dstChassis = dst.rack;
+        return result;
+    }
+
+    /**
+     * Intra-chassis (框内) reverse path (ACK): {@code NPU -> L1SW -> NPU} from
+     * the destination NPU back to the source NPU.
+     *
+     * <p>The ACK egress uses the <b>source NPU port's jettyId</b> (same as
+     * the forward direction), not the destination NPU port's jettyId.
+     */
+    private ReversePathTraceEx traceIntraReversePathEx(SuperNode superNode, NpuCandidate src,
+                                                        NpuCandidate dst, int ackUdpSrcPort,
+                                                        int dataUdpSrcPort,
+                                                        PrecomputedTopo topo) {
+        ReversePathTraceEx result = new ReversePathTraceEx();
+        Map<String, DeviceEntity> devices = topo.devices;
+
+        // Resolve the source NPU port — its jettyId drives the ACK egress
+        // selection, mirroring the forward direction's hash input.
+        DeviceEntity srcNpu = devices.get(src.deviceName);
+        Integer srcChipIdxForJetty = chipIndexOfPort(srcNpu, src.portName);
+        if (srcNpu == null || srcChipIdxForJetty == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        PortEntity srcPortForJetty = srcNpu.getForwardingChips().get(srcChipIdxForJetty)
+            .getPorts().get(src.portName);
+        if (srcPortForJetty == null) {
+            exFailRevNpu++;
+            return result;
+        }
+
+        DeviceEntity dstNpu = devices.get(dst.deviceName);
+        Integer dstChipIdx = chipIndexOfPort(dstNpu, dst.portName);
+        if (dstNpu == null || dstChipIdx == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        PortEntity dstPort = dstNpu.getForwardingChips().get(dstChipIdx)
+            .getPorts().get(dst.portName);
+        if (dstPort == null) {
+            exFailRevNpu++;
+            return result;
+        }
+
+        // R1: destination NPU -> L1SW, ACK tuple = (src.cna, jettyId of src port)
+        // ACK egress uses the source NPU port's jettyId (same as forward),
+        // NOT the destination NPU port's jettyId.
+        NpuEgress egress = selectNpuEgress(superNode, dstNpu, dstChipIdx, src.cna,
+            jettyIdOf(srcPortForJetty), devices);
+        if (egress == null) {
+            exFailRevNpu++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            dst.deviceName, dstChipIdx, egress.npuPortName,
+            egress.l1swName, egress.l1swPortName,
+            egress.outPortIndex, egress.totalOutPorts, null,
+            CoverageLinkLayer.NPU_L1, DeviceType.NPU));
+
+        // R2: L1SW -> source NPU
+        String scnaRev = egress.scna;
+        DeviceEntity l1sw = devices.get(egress.l1swName);
+        ForwardingChip l1Chip = l1sw == null || l1sw.getForwardingChips() == null ? null
+            : l1sw.getForwardingChips().get(egress.l1swChipIdx);
+        RoutingEntry route = lookupRoute(superNode, egress.l1swName,
+            egress.l1swChipIdx, src.cna);
+        List<String> ports = l1PortsTowardsDevice(l1Chip, route, src.deviceName);
+        if (ports.isEmpty()) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        int idx = nativePortIdx(scnaRev, src.cna, ackUdpSrcPort, dataUdpSrcPort, ports.size());
+        String outPortName = ports.get(idx);
+        PortEntity outPort = l1Chip.getPorts().get(outPortName);
+        if (outPort == null || !src.deviceName.equals(outPort.getRemoteDevice())) {
+            exFailRevSrcL1++;
+            return result;
+        }
+        result.reverseLinkDetails.add(new CoveredLinkDetail(
+            egress.l1swName, egress.l1swChipIdx, outPortName,
+            src.deviceName, outPort.getRemotePort(),
+            idx, ports.size(), null,
+            CoverageLinkLayer.NPU_L1, DeviceType.SW));
+
+        result.viable = true;
+        return result;
+    }
+
+    /**
+     * Adds the NPU↔L1SW out-ports to the coverage link universe:
+     * <ul>
+     *   <li>NPU out-ports whose peer is an L1SW (NPU→L1SW, owner type NPU);</li>
+     *   <li>L1SW out-ports whose peer is an NPU (L1SW→NPU, owner type SW).</li>
+     * </ul>
+     * Single-out-port routes are included as well: they have no ECMP but are
+     * mandatory links and belong to the coverage denominator.
+     */
+    private void collectNpuL1Links(SuperNode superNode, Map<String, DeviceEntity> devices,
+                                   List<LinkInfo> links) {
+        // NPU -> L1SW
+        for (DeviceEntity dev : devices.values()) {
+            if (dev.getDeviceType() != DeviceType.NPU || dev.getForwardingChips() == null) {
+                continue;
+            }
+            for (ForwardingChip chip : dev.getForwardingChips().values()) {
+                if (chip.getPorts() == null) continue;
+                RoutingTable rt = superNodeStore.getRoutingTable(new RoutingTableKey(
+                    superNode.getName(), dev.getDeviceName(), chip.getChipIndex()));
+                if (rt == null || rt.getRoutes() == null) continue;
+                for (RoutingEntry entry : rt.getRoutes().values()) {
+                    if (entry.getOutPortInfos() == null) continue;
+                    List<OutPortInfo> ports =
+                        new ArrayList<>(entry.getOutPortInfos().values());
+                    for (int idx = 0; idx < ports.size(); idx++) {
+                        PortEntity p = chip.getPorts().get(ports.get(idx).getPortName());
+                        if (p == null || p.getRemoteDevice() == null) continue;
+                        if (!isL1Sw(devices.get(p.getRemoteDevice()))) continue;
+                        links.add(new LinkInfo(dev.getDeviceName(), chip.getChipIndex(),
+                            p.getPortName(), p.getRemoteDevice(), p.getRemotePort(),
+                            idx, ports.size(), null,
+                            CoverageLinkLayer.NPU_L1, DeviceType.NPU));
+                    }
+                }
+            }
+        }
+
+        // L1SW -> NPU
+        for (DeviceEntity dev : devices.values()) {
+            if (!isL1Sw(dev) || dev.getForwardingChips() == null) continue;
+            for (ForwardingChip chip : dev.getForwardingChips().values()) {
+                if (chip.getPorts() == null) continue;
+                RoutingTable rt = superNodeStore.getRoutingTable(new RoutingTableKey(
+                    superNode.getName(), dev.getDeviceName(), chip.getChipIndex()));
+                if (rt == null || rt.getRoutes() == null) continue;
+                for (RoutingEntry entry : rt.getRoutes().values()) {
+                    if (entry.getOutPortInfos() == null) continue;
+                    List<OutPortInfo> ports =
+                        new ArrayList<>(entry.getOutPortInfos().values());
+                    for (int idx = 0; idx < ports.size(); idx++) {
+                        PortEntity p = chip.getPorts().get(ports.get(idx).getPortName());
+                        if (p == null || p.getRemoteDevice() == null) continue;
+                        DeviceEntity remote = devices.get(p.getRemoteDevice());
+                        if (remote == null || remote.getDeviceType() != DeviceType.NPU) {
+                            continue;
+                        }
+                        links.add(new LinkInfo(dev.getDeviceName(), chip.getChipIndex(),
+                            p.getPortName(), p.getRemoteDevice(), p.getRemotePort(),
+                            idx, ports.size(), null,
+                            CoverageLinkLayer.NPU_L1, DeviceType.SW));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Diagnostics of the extended path, mainly for the coverage test report:
+     * counts of the per-hop resolution failures plus the number of times a
+     * missing jetty id had to be derived from {@code 32 + portId}.
+     */
+    public Map<String, Integer> getExDiagnostics() {
+        Map<String, Integer> diag = new java.util.LinkedHashMap<>();
+        diag.put("npuRouteFail", exFailNpuRoute);
+        diag.put("npuPortFail", exFailNpuPort);
+        diag.put("jettyIdFallback", exJettyFallback);
+        diag.put("l1Fail", exFailL1);
+        diag.put("l2Fail", exFailL2);
+        diag.put("dstL1Fail", exFailDstL1);
+        diag.put("revNpuFail", exFailRevNpu);
+        diag.put("revDstL1Fail", exFailRevDstL1);
+        diag.put("revL2Fail", exFailRevL2);
+        diag.put("revSrcL1Fail", exFailRevSrcL1);
+        return diag;
+    }
+
+    /**
+     * Extended coverage planning: builds the link universe of both the
+     * L1SW↔L2SW and the NPU↔L1SW segments, traces the forward (data) and
+     * reverse (ACK) paths with the NPU egress hashed by {@code (DstCNA,
+     * jettyId)}, and runs the greedy pair selection over the whole universe.
+     *
+     * @param superNode          the topology to plan for
+     * @param fixedDataUdpSrcPort fixed UDP source port of the data flow
+     * @param fixedAckUdpSrcPort  fixed UDP source port of the ACK flow
+     * @param requirement         coverage requirement (null = MIN_COVERAGE)
+     * @return the coverage search result, including per-layer link counts
+     */
+    public CoverageSearchResult findCoverageEx(SuperNode superNode,
+                                               int fixedDataUdpSrcPort,
+                                               int fixedAckUdpSrcPort,
+                                               CoverageRequirement requirement) {
+        Map<String, DeviceEntity> devices = superNode.getAllDevices();
+        if (devices == null || devices.isEmpty()) {
+            return emptyResult();
+        }
+        List<NpuCandidate> npuCandidates = collectNpuCandidates(devices);
+        if (npuCandidates.isEmpty()) {
+            return emptyResult();
+        }
+        Set<String> l2swNames = collectL2swNames(devices);
+
+        List<LinkInfo> links = new ArrayList<>();
+        collectBidirectionalLinks(superNode, devices, l2swNames, links);
+        collectNpuL1Links(superNode, devices, links);
+        if (links.isEmpty()) {
+            return emptyResult();
+        }
+
+        Map<String, LinkInfo> linkMap = new HashMap<>();
+        for (LinkInfo link : links) {
+            linkMap.merge(link.getKey(), link, (a, b) ->
+                a.totalOutPorts >= b.totalOutPorts ? a : b);
+        }
+        int totalLinks = linkMap.size();
+
+        PrecomputedTopo topo = precomputeTopology(devices, l2swNames);
+
+        List<NpuCandidate> crossRackSrc = new ArrayList<>();
+        List<NpuCandidate> crossRackDst = new ArrayList<>();
+        buildCrossChassisCandidates(npuCandidates, crossRackSrc, crossRackDst);
+        if (crossRackSrc.isEmpty()) {
+            return emptyResult();
+        }
+
+        // ---- phase 1: CROSS_L2 coverage of the L1SW↔L2SW segment
+        List<PairCoverage> interPairs = new ArrayList<>();
+        for (NpuCandidate src : crossRackSrc) {
+            for (NpuCandidate dst : crossRackDst) {
+                if (src.deviceName.equals(dst.deviceName)) continue;
+                if (src.rack != null && src.rack.equals(dst.rack)) continue;
+                addPair(superNode, src, dst, fixedDataUdpSrcPort, fixedAckUdpSrcPort,
+                    topo, CoveragePathType.CROSS_L2, interPairs, false);
+            }
+        }
+        CoverageSearchResult phase1 = requirement == CoverageRequirement.REDUNDANT
+            ? runGreedyCoverageDualDisjoint(interPairs, linkMap, totalLinks,
+                fixedDataUdpSrcPort, fixedAckUdpSrcPort)
+            : runGreedyCoverage(interPairs, linkMap, totalLinks,
+                fixedDataUdpSrcPort, fixedAckUdpSrcPort);
+
+        // ---- phase 2: LOCAL_L1 coverage of whatever NPU↔L1SW
+        // out-ports the CROSS_L2 phase could not cover.
+        int required = requirement == CoverageRequirement.REDUNDANT ? 2 : 1;
+        Map<String, LinkInfo> uncovered = new HashMap<>();
+        for (LinkInfo li : phase1.allLinkInfos) {
+            if (li.layer == CoverageLinkLayer.NPU_L1 && li.coverCount < required) {
+                uncovered.put(li.getKey(), li);
+            }
+        }
+
+        List<CoveredPair> merged = new ArrayList<>(phase1.selectedPairs);
+        if (!uncovered.isEmpty()) {
+            List<PairCoverage> intraPairs = new ArrayList<>();
+            for (NpuCandidate src : crossRackSrc) {
+                for (NpuCandidate dst : crossRackDst) {
+                    if (src.deviceName.equals(dst.deviceName)) continue;
+                    if (src.rack == null || !src.rack.equals(dst.rack)) continue;
+                    addPair(superNode, src, dst, fixedDataUdpSrcPort, fixedAckUdpSrcPort,
+                        topo, CoveragePathType.LOCAL_L1, intraPairs, true);
+                }
+            }
+            if (!intraPairs.isEmpty()) {
+                // REDUNDANT keeps its ">= 2 per link" contract in phase 2 as well.
+                CoverageSearchResult phase2 = requirement == CoverageRequirement.REDUNDANT
+                    ? runGreedyCoverageDualDisjoint(intraPairs, uncovered, uncovered.size(),
+                        fixedDataUdpSrcPort, fixedAckUdpSrcPort)
+                    : runGreedyCoverage(intraPairs, uncovered, uncovered.size(),
+                        fixedDataUdpSrcPort, fixedAckUdpSrcPort);
+                merged.addAll(phase2.selectedPairs);
+            }
+        }
+
+        // ---- merged result over the complete link universe
+        Map<String, Integer> eidUsage = new HashMap<>();
+        Map<String, Integer> npuUsageByChassis = new HashMap<>();
+        Map<String, Integer> npuUsage = new HashMap<>();
+        recomputeUsage(merged, eidUsage, npuUsageByChassis, npuUsage);
+        Map<String, Integer> linkCounts = computeLinkCounts(merged);
+        boolean fullCoverage = true;
+        for (String k : linkMap.keySet()) {
+            if (linkCounts.getOrDefault(k, 0) < required) {
+                fullCoverage = false;
+                break;
+            }
+        }
+        return buildResult(linkMap, merged, totalLinks, fixedDataUdpSrcPort,
+            fixedAckUdpSrcPort, fullCoverage, eidUsage, npuUsageByChassis);
+    }
+
+    /**
+     * Traces one candidate EID pair in both directions and appends it when both
+     * are viable.
+     *
+     * @param intraChassis {@code true} selects the LOCAL_L1 2-hop path
+     *                     ({@code NPU -> L1SW -> NPU}) instead of the CROSS_L2
+     *                     4-hop path through the L2SW spine
+     */
+    private void addPair(SuperNode superNode, NpuCandidate src, NpuCandidate dst,
+                         int dataUdpSrcPort, int ackUdpSrcPort, PrecomputedTopo topo,
+                         CoveragePathType pathType, List<PairCoverage> out,
+                         boolean intraChassis) {
+        PathTraceEx fwd = intraChassis
+            ? traceIntraForwardPathEx(superNode, src, dst, dataUdpSrcPort, ackUdpSrcPort, topo)
+            : traceForwardPathEx(superNode, src, dst, dataUdpSrcPort, ackUdpSrcPort, topo);
+        if (!fwd.viable) {
+            return;
+        }
+        ReversePathTraceEx rev = intraChassis
+            ? traceIntraReversePathEx(superNode, src, dst, ackUdpSrcPort, dataUdpSrcPort, topo)
+            : traceReversePathEx(superNode, src, dst, ackUdpSrcPort, dataUdpSrcPort, topo);
+        if (!rev.viable) {
+            return;
+        }
+
+        List<String> fwdKeys = new ArrayList<>();
+        for (CoveredLinkDetail d : fwd.forwardLinkDetails) {
+            fwdKeys.add(d.getLinkKey());
+        }
+        List<String> revKeys = new ArrayList<>();
+        for (CoveredLinkDetail d : rev.reverseLinkDetails) {
+            revKeys.add(d.getLinkKey());
+        }
+        out.add(new PairCoverage(src, dst, fwdKeys, revKeys,
+            fwd.forwardLinkDetails, rev.reverseLinkDetails,
+            fwd.srcChassis, fwd.dstChassis, pathType));
+    }
+
 }
+

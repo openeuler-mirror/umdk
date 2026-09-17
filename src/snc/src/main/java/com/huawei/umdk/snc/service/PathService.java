@@ -10,6 +10,7 @@ package com.huawei.umdk.snc.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,9 @@ import com.huawei.umdk.snc.dto.PathPlanRequest;
 import com.huawei.umdk.snc.dto.PathPlanResult;
 import com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus;
 import com.huawei.umdk.snc.dto.CoverageLink;
+import com.huawei.umdk.snc.dto.CoverageLayerStats;
+import com.huawei.umdk.snc.dto.CoverageLinkLayer;
+import com.huawei.umdk.snc.dto.CoverageLinkScope;
 import com.huawei.umdk.snc.dto.CoveragePathsRequest;
 import com.huawei.umdk.snc.dto.CoveragePathsResult;
 import com.huawei.umdk.snc.dto.CoverageStats;
@@ -378,7 +382,28 @@ public class PathService {
         return records.isEmpty() ? null : records;
     }
 
+    /** Original coverage planning: L1SW↔L2SW out-ports only. */
     public CoveragePathsResult planPathsCoverage(CoveragePathsRequest request) {
+        return planPathsCoverageInternal(request, CoverageLinkScope.L1_L2);
+    }
+
+    /**
+     * Extended coverage planning: additionally hashes the NPU→L1SW egress port
+     * with the standard {@code (DstCNA, jettyId)} two-tuple and covers the
+     * NPU↔L1SW out-ports. The CNA of the NPU port selected by that hash becomes
+     * the SCNA used by the downstream L1SW/L2SW hash selections; the ACK
+     * direction is resolved symmetrically.
+     *
+     * @param request coverage request ({@code superNodeName} is required)
+     * @return coverage result with {@code scope = NPU_L1_L2} and per-layer stats
+     */
+    public CoveragePathsResult planPathsCoverageEx(CoveragePathsRequest request) {
+        return planPathsCoverageInternal(request, CoverageLinkScope.NPU_L1_L2);
+    }
+
+    private CoveragePathsResult planPathsCoverageInternal(CoveragePathsRequest request,
+                                                          CoverageLinkScope scope) {
+        boolean extended = scope == CoverageLinkScope.NPU_L1_L2;
         if (request == null) {
             LOG.error("planPathsCoverage: error=CoveragePathsRequest must not be null");
             CoveragePathsResult result = new CoveragePathsResult();
@@ -409,8 +434,11 @@ public class PathService {
         }
 
         CoverageRequirement requirement = request.getCoverageRequirement();
-        CoverageSearchResult searchResult = coveragePlanEngine.findCoverage(
-            superNode, dataUdpSrcPort, ackUdpSrcPort, requirement);
+        CoverageSearchResult searchResult = extended
+            ? coveragePlanEngine.findCoverageEx(superNode, dataUdpSrcPort, ackUdpSrcPort,
+                requirement)
+            : coveragePlanEngine.findCoverage(superNode, dataUdpSrcPort, ackUdpSrcPort,
+                requirement);
         LOG.debug("planPathsCoverage: coverage search done, fullCoverage=%s, coveredCount=%d, totalLinks=%d",
             searchResult.fullCoverage, searchResult.coveredCount, searchResult.totalLinks);
 
@@ -420,10 +448,10 @@ public class PathService {
         for (CoveredPair pair : searchResult.selectedPairs) {
             List<CoverageLink> pairLinks = new ArrayList<>();
             for (CoveragePlanEngine.CoveredLinkDetail d : pair.forwardLinkDetails) {
-                pairLinks.add(toCoverageLinkFromDetail(d));
+                pairLinks.add(toCoverageLinkFromDetail(d, extended));
             }
             for (CoveragePlanEngine.CoveredLinkDetail d : pair.reverseLinkDetails) {
-                pairLinks.add(toCoverageLinkFromDetail(d));
+                pairLinks.add(toCoverageLinkFromDetail(d, extended));
             }
 
             CoveredEidPair eidPair = new CoveredEidPair();
@@ -436,6 +464,7 @@ public class PathService {
             eidPair.setDestDevice(pair.dst.deviceName);
             eidPair.setDestPort(pair.dst.portName);
             eidPair.setCoveredLinks(pairLinks);
+            eidPair.setType(pair.pathType);
             eidPairs.add(eidPair);
         }
 
@@ -444,7 +473,7 @@ public class PathService {
         // Build coverage links
         List<CoverageLink> coverageLinks = new ArrayList<>();
         for (LinkInfo link : searchResult.allLinkInfos) {
-            coverageLinks.add(toCoverageLink(link));
+            coverageLinks.add(toCoverageLink(link, extended));
         }
 
         LOG.debug("planPathsCoverage: coverageLinks built, count=%d", coverageLinks.size());
@@ -481,6 +510,14 @@ public class PathService {
                 + String.format("%.2f%%", searchResult.coverageRate * 100)
                 + " (" + searchResult.coveredCount + "/" + searchResult.totalLinks + " 出端口已覆盖)");
         }
+        result.setScope(scope);
+        if (extended) {
+            result.setLayerStats(buildLayerStats(searchResult));
+            if (!searchResult.fullCoverage && result.getErrorMessage() != null) {
+                result.setErrorMessage(result.getErrorMessage() + " "
+                    + formatLayerDetail(searchResult));
+            }
+        }
         result.setEidPairs(eidPairs);
         result.setCoverageLinks(coverageLinks);
         CoverageStats stats = new CoverageStats();
@@ -505,12 +542,65 @@ public class PathService {
         stats.setDstEidAvgRepeat(searchResult.dstEidAvgRepeat);
         stats.setNpuUsageByChassis(searchResult.npuUsageByChassis);
         result.setStats(stats);
-        LOG.info("planPathsCoverage: status=%s, pairCount=%d, linkCount=%d",
-            result.getStatus(), eidPairs.size(), coverageLinks.size());
+        LOG.info("planPathsCoverage: scope=%s, status=%s, pairCount=%d, linkCount=%d",
+            scope, result.getStatus(), eidPairs.size(), coverageLinks.size());
         return result;
     }
 
-    private CoverageLink toCoverageLink(LinkInfo li) {
+    /**
+     * Builds the per-layer statistics from the link details, so that the
+     * NPU↔L1SW and L1SW↔L2SW coverage can be inspected separately.
+     */
+    private Map<CoverageLinkLayer, CoverageLayerStats> buildLayerStats(
+            CoverageSearchResult searchResult) {
+        Map<CoverageLinkLayer, CoverageLayerStats> layerStats =
+            new EnumMap<>(CoverageLinkLayer.class);
+        for (CoverageLinkLayer layer : CoverageLinkLayer.values()) {
+            int total = searchResult.layerTotalLinks.getOrDefault(layer, 0);
+            int covered = searchResult.layerCoveredCount.getOrDefault(layer, 0);
+            int min = Integer.MAX_VALUE;
+            int max = 0;
+            int sum = 0;
+            for (LinkInfo li : searchResult.allLinkInfos) {
+                CoverageLinkLayer liLayer = li.layer == null
+                    ? CoverageLinkLayer.L1_L2 : li.layer;
+                if (liLayer != layer || li.coverCount <= 0) continue;
+                min = Math.min(min, li.coverCount);
+                max = Math.max(max, li.coverCount);
+                sum += li.coverCount;
+            }
+            if (min == Integer.MAX_VALUE) {
+                min = 0;
+            }
+            double coverageRate = total > 0 ? (double) covered / total : 0.0;
+            double avgRepeat = covered > 0 ? (double) sum / covered : 0.0;
+            double repeatRate = total > 0 ? (double) (sum - covered) / total : 0.0;
+            layerStats.put(layer, new CoverageLayerStats(total, covered, coverageRate,
+                min, max, avgRepeat, repeatRate));
+        }
+        return layerStats;
+    }
+
+    /** Renders a compact per-layer coverage detail for the error message. */
+    private static String formatLayerDetail(CoverageSearchResult searchResult) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (CoverageLinkLayer layer : CoverageLinkLayer.values()) {
+            int total = searchResult.layerTotalLinks.getOrDefault(layer, 0);
+            if (total == 0) continue;
+            int covered = searchResult.layerCoveredCount.getOrDefault(layer, 0);
+            if (!first) {
+                sb.append("; ");
+            }
+            sb.append(layer.name()).append(": ")
+              .append(String.format("%.2f%%", covered * 100.0 / total))
+              .append(" ").append(covered).append("/").append(total);
+            first = false;
+        }
+        return sb.append(']').toString();
+    }
+
+    private CoverageLink toCoverageLink(LinkInfo li, boolean includeLayer) {
         CoverageLink cl = new CoverageLink();
         cl.setSwitchDevice(li.switchDevice);
         cl.setChipIndex(li.chipIndex);
@@ -520,10 +610,14 @@ public class PathService {
         cl.setOutPortIndex(li.outPortIndex);
         cl.setTotalOutPorts(li.totalOutPorts);
         cl.setCoverCount(li.coverCount);
+        if (includeLayer) {
+            cl.setLayer(li.layer);
+            cl.setDeviceType(li.deviceType == null ? null : li.deviceType.name());
+        }
         return cl;
     }
 
-    private CoverageLink toCoverageLinkFromDetail(CoveredLinkDetail d) {
+    private CoverageLink toCoverageLinkFromDetail(CoveredLinkDetail d, boolean includeLayer) {
         CoverageLink cl = new CoverageLink();
         cl.setSwitchDevice(d.switchDeviceName);
         cl.setChipIndex(d.chipIndex);
@@ -532,6 +626,10 @@ public class PathService {
         cl.setRemotePort(d.remotePortName);
         cl.setOutPortIndex(d.outPortIndex);
         cl.setTotalOutPorts(d.totalOutPorts);
+        if (includeLayer) {
+            cl.setLayer(d.layer);
+            cl.setDeviceType(d.deviceType == null ? null : d.deviceType.name());
+        }
         return cl;
     }
 

@@ -10,6 +10,8 @@ package com.huawei.umdk.snc.dto;
 
 import java.util.List;
 
+import java.util.Map;
+
 import com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus;
 
 import lombok.AllArgsConstructor;
@@ -36,4 +38,10 @@ public class CoveragePathsResult {
     private List<CoverageLink> coverageLinks;
 
     private CoverageStats stats;
+
+    /** Coverage link scope used by this call; {@code null} for the original interface. */
+    private CoverageLinkScope scope;
+
+    /** Per-layer statistics; {@code null} for the original interface. */
+    private Map<CoverageLinkLayer, CoverageLayerStats> layerStats;
 }

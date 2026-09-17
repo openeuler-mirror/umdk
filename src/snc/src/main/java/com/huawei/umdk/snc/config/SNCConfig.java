@@ -48,4 +48,13 @@ public class SNCConfig {
      * Defaults to {@link HashTuple#TWO} (two-tuple {@code (dip, sip)}).
      */
     private HashTuple hashTuple = HashTuple.TWO;
+
+    /**
+     * Native hash function selector for {@code ubswitch_Hash_dieEcmp}
+     * (NPU&rarr;L1SW uplink selection). Defaults to {@code 1}, which selects
+     * CRC-8/ATM (poly {@code 0x07}, init {@code 0x00}). Other values are
+     * reserved for future algorithm variants and currently return {@code -1}
+     * from the native library.
+     */
+    private int dieHashFunctionSelect = 1;
 }

@@ -29,10 +29,20 @@ public final class HashUtils {
      */
     private interface UbSwitchDieLibrary extends Library {
         /**
-         * NPU-&gt;L1SW uplink selection with the two-tuple
-         * {@code (DstCNA, jettyId)} — CRC-8/ATM based.
+         * NPU-&gt;L1SW uplink selection. CRC-8/ATM over the byte stream
+         * {@code (src_cna[4 BE], dst_cna[4 BE], lb[1])}.
+         *
+         * @param srcCna          source CNA as a 32-bit unsigned int
+         *                       (Java {@code int}); the caller passes 0
+         * @param dstCna          destination CNA as a 32-bit unsigned int
+         * @param lb              low 8 bits of the jetty id
+         * @param ecmpCnt         ECMP member count; {@code 0} returns the
+         *                       raw CRC8 (0..255)
+         * @param functionSelect  hash function selector; {@code 1} selects
+         *                       CRC-8/ATM, the only supported mode
          */
-        int ubswitch_Hash_dieEcmp(String dstCna, int jettyId, int ecmpCnt);
+        int ubswitch_Hash_dieEcmp(int srcCna, int dstCna, int lb,
+                                  int ecmpCnt, int functionSelect);
     }
 
     private static final String ECMP_NATIVE_LIBRARY_NAME =
@@ -203,43 +213,71 @@ public final class HashUtils {
     }
 
     /**
-     * Computes the NPU egress port index for the NPU-&gt;L1SW hop using the
-     * standard two-tuple {@code (DstCNA, jettyId)}.
+     * Computes the NPU egress port index for the NPU-&gt;L1SW hop.
      *
      * <p><b>Algorithm.</b> This entry point is served by the dedicated native
      * symbol {@code ubswitch_Hash_dieEcmp} (CRC-8/ATM, poly {@code 0x07},
-     * init {@code 0x00}) over the bytes of the DstCNA string followed by the
-     * low and high bytes of the jetty id. It is intentionally different from
-     * the inter-chassis L1SW/L2SW entry point ({@code ubswitch_Hash_ecmp}):
-     * the NPU uplink hash of the hardware uses the {@code (DstCNA, jettyId)}
-     * two-tuple only.
+     * init {@code 0x00}) over the byte stream
+     * {@code (src_cna[4 BE], dst_cna[4 BE], lb[1])}, where {@code src_cna}
+     * is fixed to {@code 0} by this wrapper, {@code dst_cna} is the
+     * 32-bit unsigned form of the destination CNA, and {@code lb} is the
+     * low 8 bits of the jetty id.
      *
-     * <p>The jetty id is not range-checked; the native symbol folds it into
-     * the CRC by its low 8 bits (and high 8 bits), so any non-negative
-     * {@code int} value is accepted.
+     * <p>The jetty id is not range-checked; the native symbol folds its
+     * low 8 bits into the CRC, so any non-negative {@code int} value is
+     * accepted.
      *
-     * <p>The native call already reduces the CRC modulo {@code ecmpCnt}, so the
-     * returned value is directly the index of the selected NPU uplink out-port
-     * within the ECMP member set.
+     * <p>The native call already reduces the CRC modulo {@code ecmpCnt}, so
+     * the returned value is directly the index of the selected NPU uplink
+     * out-port within the ECMP member set.
      *
-     * @param dstCna   destination CNA (dotted-quad) of the flow
-     * @param jettyId  jetty id of the sending NPU port; not range-checked,
-     *                 the low 8 bits participate in the CRC
-     * @param ecmpCnt  number of NPU uplink candidate ports; {@code 0} returns
-     *                 the raw CRC (0..255)
-     * @param hashFunc accepted for API symmetry with the L1SW/L2SW entry point;
-     *                 CRC8 has no algorithm selector and ignores it
+     * @param dstCna          destination CNA as a 32-bit unsigned int
+     *                        (use {@link AddressUtils#ipToInt(String)} to
+     *                        convert a dotted-quad CNA)
+     * @param jettyId         jetty id of the sending NPU port; not
+     *                        range-checked, the low 8 bits participate in
+     *                        the CRC
+     * @param ecmpCnt         number of NPU uplink candidate ports;
+     *                        {@code 0} returns the raw CRC (0..255)
+     * @param hashFunc        accepted for API symmetry with the L1SW/L2SW
+     *                        entry point; ignored by the native call
+     * @param functionSelect  hash function selector passed to the native
+     *                        library; {@code 1} selects CRC-8/ATM (the
+     *                        only supported mode), other values return
+     *                        {@code -1}
      * @return the selected out-port index, or the raw CRC when
-     *         {@code ecmpCnt == 0}
+     *         {@code ecmpCnt == 0}; {@code -1} when {@code functionSelect}
+     *         is unsupported
      * @throws IllegalStateException if {@code libubswitch-die} was not loaded
      */
-    public static int nativeHashDstCnaJetty(String dstCna, int jettyId,
-                                            int ecmpCnt, int hashFunc) {
+    public static int nativeHashDstCnaJetty(int dstCna, int jettyId,
+                                            int ecmpCnt, int hashFunc,
+                                            int functionSelect) {
         if (LIB_DIE == null) {
             throw new IllegalStateException(
                 "Native library libubswitch-die (" + DIE_NATIVE_LIBRARY_NAME + ") is not loaded");
         }
-        return LIB_DIE.ubswitch_Hash_dieEcmp(dstCna, jettyId, ecmpCnt);
+        return LIB_DIE.ubswitch_Hash_dieEcmp(
+            0, dstCna, jettyId & 0xFF, ecmpCnt, functionSelect);
+    }
+
+    /**
+     * Computes the NPU egress port index for the NPU-&gt;L1SW hop with the
+     * default {@code functionSelect = 1} (CRC-8/ATM).
+     *
+     * @param dstCna   destination CNA as a 32-bit unsigned int
+     * @param jettyId  jetty id of the sending NPU port
+     * @param ecmpCnt  number of NPU uplink candidate ports; {@code 0} returns
+     *                 the raw CRC (0..255)
+     * @param hashFunc accepted for API symmetry; ignored
+     * @return the selected out-port index, or the raw CRC when
+     *         {@code ecmpCnt == 0}
+     * @throws IllegalStateException if {@code libubswitch-die} was not loaded
+     * @see #nativeHashDstCnaJetty(int, int, int, int, int)
+     */
+    public static int nativeHashDstCnaJetty(int dstCna, int jettyId,
+                                            int ecmpCnt, int hashFunc) {
+        return nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc, 1);
     }
 
     /**
