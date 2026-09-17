@@ -51,7 +51,7 @@ struct PingContext {
     HccnRpingResultInfo hccnResult;
 };
 
-static void PreparePingTarget(SncPingTask* task, PingContext* ctx)
+static void PreparePingTarget(SncTask* task, PingContext* ctx)
 {
     memset(&ctx->target, 0, sizeof(ctx->target));
     ctx->target.srcPort = 0;
@@ -114,7 +114,7 @@ static int CollectPingResult(SncPingEidCtx* eidCtx, PingContext* ctx)
     return 0;
 }
 
-static void FillPingResult(SncPingTask* task, const HccnRpingResultInfo* hccnResult)
+static void FillPingResult(SncTask* task, const HccnRpingResultInfo* hccnResult)
 {
     std::lock_guard<std::mutex> resLock(task->cvMutex);
     if (task->canceled.load()) {
@@ -152,7 +152,23 @@ static int StopAndRemoveTarget(SncPingEidCtx* eidCtx, PingContext* ctx)
     return 0;
 }
 
-static int DoPing(SncPingDevThread* devThread, SncPingEidCtx* eidCtx, SncPingTask* task)
+static int GetCtx(SncPingDevThread* devThread, SncPingEidCtx* eidCtx, SncTask* task)
+{
+    HccnRpingCtxInfoJetty jettyInfo;
+    void* infoPtr = &jettyInfo;
+    HccnResult hccnRet = HccnRpingGetCtxInfo(&eidCtx->rpingCtx, HCCN_RPING_CTX_INFO_JETTY, &infoPtr, sizeof(jettyInfo));
+    if (hccnRet == HCCN_SUCCESS) {
+        std::lock_guard<std::mutex> resLock(task->cvMutex);
+        task->jettyId = jettyInfo.jettyId;
+        return 0;
+    }
+
+    LOG_ERROR("GetCtx: failed devId=%d, eid=%s, ret=%d",
+              devThread->devId, task->clientEid, (int)hccnRet);
+    return -1;
+}
+
+static int DoPing(SncPingDevThread* devThread, SncPingEidCtx* eidCtx, SncTask* task)
 {
     (void)devThread;
     PingContext ctx;
@@ -172,13 +188,41 @@ static int DoPing(SncPingDevThread* devThread, SncPingEidCtx* eidCtx, SncPingTas
     return task->canceled.load() ? -1 : 0;
 }
 
+static HccnUbTransactionMode SncPingTaModeToHccn(SncPingTaMode mode)
+{
+    switch (mode) {
+        case SNC_PING_TA_MODE_UM:
+            return HCCN_RPING_UB_UM;
+        case SNC_PING_TA_MODE_RM:
+            return HCCN_RPING_UB_RM;
+        case SNC_PING_TA_MODE_RC:
+            return HCCN_RPING_UB_RC;
+        default:
+            return HCCN_RPING_UB_UM;
+    }
+}
+
+static HccnUbTransportMode SncPingTpModeToHccn(SncPingTpMode mode)
+{
+    switch (mode) {
+        case SNC_PING_TP_MODE_UTP:
+            return HCCN_RPING_UB_UTP;
+        case SNC_PING_TP_MODE_CTP:
+            return HCCN_RPING_UB_CTP;
+        case SNC_PING_TP_MODE_RTP:
+            return HCCN_RPING_UB_RTP;
+        default:
+            return HCCN_RPING_UB_UTP;
+    }
+}
+
 static void InitEidCtxs(SncPingDevThread* devThread)
 {
     std::lock_guard<std::mutex> lock(devThread->eidMutex);
     for (auto& eidCtx : devThread->eidCtxs) {
         HccnRpingInitAttr initAttr;
         memset(&initAttr, 0, sizeof(initAttr));
-        initAttr.mode = HCCN_RPING_MODE_UB_RC;
+        initAttr.mode = HCCN_RPING_MODE_UB;
         initAttr.port = PING_PORT;
         initAttr.npuNum = PING_NPU_NUM;
         size_t needSize = (size_t)PKT_NUM * PING_BUFFER_SIZE_PER_PKT;
@@ -188,8 +232,15 @@ static void InitEidCtxs(SncPingDevThread* devThread)
         strncpy(eidBuf, eidCtx.eid, IP_LEN - 1);
         eidBuf[IP_LEN - 1] = '\0';
         initAttr.eid = eidBuf;
+
+        HccnRpingInitCfg initCfg;
+        memset(&initCfg, 0, sizeof(initCfg));
+        initCfg.validCfgLen = sizeof(HccnRpingInitCfg);
+        initCfg.ub.taMode = SncPingTaModeToHccn(devThread->taMode);
+        initCfg.ub.tpMode = SncPingTpModeToHccn(devThread->tpMode);
+
         HccnRpingCtx rpingCtx = nullptr;
-        HccnResult ret = HccnRpingInit((uint32_t)devThread->devId, &initAttr, &rpingCtx);
+        HccnResult ret = HccnRpingInitWithCfg((uint32_t)devThread->devId, &initAttr, &initCfg, &rpingCtx);
         if (ret != HCCN_SUCCESS) {
             LOG_ERROR("device[%d,%s] init failed, ret=%d", devThread->devId, eidCtx.eid, (int)ret);
             continue;
@@ -216,9 +267,9 @@ static void DeinitEidCtxs(SncPingDevThread* devThread)
     }
 }
 
-static std::shared_ptr<SncPingTask> PopTaskFromQueue(SncPingDevThread* devThread)
+static std::shared_ptr<SncTask> PopTaskFromQueue(SncPingDevThread* devThread)
 {
-    std::shared_ptr<SncPingTask> task;
+    std::shared_ptr<SncTask> task;
     std::unique_lock<std::mutex> lock(devThread->queueMutex);
     devThread->queueCv.wait_for(lock, std::chrono::seconds(PING_QUEUE_WAIT_TIMEOUT_SEC),
         [devThread]() {
@@ -231,7 +282,7 @@ static std::shared_ptr<SncPingTask> PopTaskFromQueue(SncPingDevThread* devThread
     return task;
 }
 
-static void ProcessTask(SncPingDevThread* devThread, const std::shared_ptr<SncPingTask>& task)
+static void ProcessTask(SncPingDevThread* devThread, const std::shared_ptr<SncTask>& task)
 {
     if (task->canceled.load()) {
         LOG_WARN("WorkerThread: task already canceled, skip processing for devId=%d, eid=%s",
@@ -243,8 +294,13 @@ static void ProcessTask(SncPingDevThread* devThread, const std::shared_ptr<SncPi
                 task->clientDevId, task->clientEid);
             task->ret.store(-1);
         } else {
-            int doPingRet = DoPing(devThread, eidCtx, task.get());
-            task->ret.store(doPingRet);
+            if (task->type == DO_PING) {
+                int doPingRet = DoPing(devThread, eidCtx, task.get());
+                task->ret.store(doPingRet);
+            } else {
+                int getCtxRet = GetCtx(devThread, eidCtx, task.get());
+                task->ret.store(getCtxRet);
+            }
         }
     }
     task->done.store(true);
@@ -261,7 +317,7 @@ static void WorkerThreadFunc(SncPingDevThread* devThread)
 
     InitEidCtxs(devThread);
     while (devThread->isStop.load() == false) {
-        std::shared_ptr<SncPingTask> task = PopTaskFromQueue(devThread);
+        std::shared_ptr<SncTask> task = PopTaskFromQueue(devThread);
         if (!task) {
             continue;
         }
@@ -271,9 +327,59 @@ static void WorkerThreadFunc(SncPingDevThread* devThread)
     DeinitEidCtxs(devThread);
 }
 
+static int AddDevThread(int devId, const std::vector<SncPingEntity>& entities,
+    SncPingTaMode taMode, SncPingTpMode tpMode)
+{
+    if (g_devThread.find(devId) != g_devThread.end()) {
+        LOG_INFO("AddDevThread: device[%d] already inited, skipping %zu new eids",
+            devId, entities.size());
+        return 0;
+    }
+
+    auto devThread = std::make_shared<SncPingDevThread>();
+    devThread->devId = devId;
+    devThread->isStop.store(false);
+    devThread->workerThread = nullptr;
+    devThread->taMode = taMode;
+    devThread->tpMode = tpMode;
+
+    for (const auto& entity : entities) {
+        SncPingEidCtx eidCtx;
+        memset(&eidCtx, 0, sizeof(eidCtx));
+        strncpy(eidCtx.eid, entity.eid, IP_LEN - 1);
+        eidCtx.eid[IP_LEN - 1] = '\0';
+        devThread->eidCtxs.push_back(eidCtx);
+    }
+
+    devThread->workerThread = new std::thread(WorkerThreadFunc, devThread.get());
+    g_devThread[devId] = devThread;
+    LOG_INFO("AddDevThread: added device[%d] with %zu eids, taMode=%d, tpMode=%d",
+        devId, entities.size(), (int)taMode, (int)tpMode);
+    return 0;
+}
+
+static int InitDevThreads(SncPingEntity* entities, int count,
+    SncPingTaMode taMode, SncPingTpMode tpMode)
+{
+    std::lock_guard<std::mutex> lock(g_devMutex);
+
+    std::map<int, std::vector<SncPingEntity>> devToEids;
+    for (int i = 0; i < count; i++) {
+        devToEids[entities[i].devId].push_back(entities[i]);
+    }
+
+    for (auto& entry : devToEids) {
+        AddDevThread(entry.first, entry.second, taMode, tpMode);
+    }
+
+    LOG_INFO("InitDevThreads: total %zu devThreads", g_devThread.size());
+    return 0;
+}
+
 int SncPingInit(SncPingEntity* entities, int count)
 {
     SncLogInit();
+
     if (entities == nullptr) {
         LOG_ERROR("SncPingInit: invalid input, entities is null");
         return -1;
@@ -283,47 +389,34 @@ int SncPingInit(SncPingEntity* entities, int count)
         return -1;
     }
 
-    std::lock_guard<std::mutex> lock(g_devMutex);
-
-    std::map<int, std::vector<SncPingEntity>> devToEids;
-    for (int i = 0; i < count; i++) {
-        devToEids[entities[i].devId].push_back(entities[i]);
-    }
-
-    for (auto& entry : devToEids) {
-        int devId = entry.first;
-        if (g_devThread.find(devId) != g_devThread.end()) {
-            LOG_INFO("SncPingInit: device[%d] already inited, skipping %zu new eids",
-                devId, entry.second.size());
-            continue;
-        }
-        auto devThread = std::make_shared<SncPingDevThread>();
-        devThread->devId = devId;
-        devThread->isStop.store(false);
-        devThread->workerThread = nullptr;
-
-        for (auto& entity : entry.second) {
-            SncPingEidCtx eidCtx;
-            memset(&eidCtx, 0, sizeof(eidCtx));
-            strncpy(eidCtx.eid, entity.eid, IP_LEN - 1);
-            eidCtx.eid[IP_LEN - 1] = '\0';
-            devThread->eidCtxs.push_back(eidCtx);
-        }
-
-        devThread->workerThread = new std::thread(WorkerThreadFunc, devThread.get());
-        g_devThread[devId] = devThread;
-        LOG_INFO("SncPingInit: added devThread for device[%d] with %zu eids",
-            devId, entry.second.size());
-    }
-
-    LOG_INFO("SncPingInit: total %zu devThreads", g_devThread.size());
-    return 0;
+    return InitDevThreads(entities, count, SNC_PING_TA_MODE_UM, SNC_PING_TP_MODE_UTP);
 }
 
-static std::shared_ptr<SncPingTask> BuildPingTask(int clientDevId, const char* clientEid,
-    const char* serverEid, SncPingResult* result)
+int SncPingInitWithCfg(SncPingEntity* entities, int count, SncPingInitCfg* cfg)
 {
-    auto task = std::make_shared<SncPingTask>();
+    SncLogInit();
+
+    if (entities == nullptr) {
+        LOG_ERROR("SncPingInitWithCfg: invalid input, entities is null");
+        return -1;
+    }
+    if (count <= 0) {
+        LOG_ERROR("SncPingInitWithCfg: invalid input, count=%d (must be > 0)", count);
+        return -1;
+    }
+    if (cfg == nullptr) {
+        LOG_ERROR("SncPingInitWithCfg: invalid parameters, cfg is null");
+        return -1;
+    }
+
+    return InitDevThreads(entities, count, cfg->taMode, cfg->tpMode);
+}
+
+static std::shared_ptr<SncTask> BuildSncTask(SncTaskType type, int clientDevId,
+    const char* clientEid, const char* serverEid, SncPingResult* result)
+{
+    auto task = std::make_shared<SncTask>();
+    task->type = type;
     task->clientDevId = clientDevId;
     memset(task->clientEid, 0, IP_LEN);
     memset(task->serverEid, 0, IP_LEN);
@@ -343,7 +436,7 @@ static std::shared_ptr<SncPingTask> BuildPingTask(int clientDevId, const char* c
 }
 
 static int EnqueueTask(const std::shared_ptr<SncPingDevThread>& devThread,
-    const std::shared_ptr<SncPingTask>& task, int clientDevId)
+    const std::shared_ptr<SncTask>& task, int clientDevId)
 {
     std::lock_guard<std::mutex> lock(devThread->queueMutex);
     if (devThread->isStop.load()) {
@@ -356,7 +449,7 @@ static int EnqueueTask(const std::shared_ptr<SncPingDevThread>& devThread,
     return 0;
 }
 
-static void WaitForTaskCompletion(const std::shared_ptr<SncPingTask>& task,
+static void WaitForTaskCompletion(const std::shared_ptr<SncTask>& task,
     int clientDevId, const char* clientEid, const char* serverEid)
 {
     std::unique_lock<std::mutex> lock(task->cvMutex);
@@ -385,7 +478,7 @@ int SncPingOne(int clientDevId, const char* clientEid, const char* serverEid, Sn
         LOG_ERROR("SncPingOne: devThread not found for devId=%d", clientDevId);
         return -1;
     }
-    auto task = BuildPingTask(clientDevId, clientEid, serverEid, result);
+    auto task = BuildSncTask(DO_PING, clientDevId, clientEid, serverEid, result);
     if (EnqueueTask(devThread, task, clientDevId) != 0) {
         return -1;
     }
@@ -395,6 +488,52 @@ int SncPingOne(int clientDevId, const char* clientEid, const char* serverEid, Sn
         return -1;
     }
     return task->ret.load();
+}
+
+int SncPingGetCtxInfo(SncPingEntity* entities, int count, SncPingCtxInfoMap* result)
+{
+    if (entities == nullptr || count <= 0 || result == nullptr || result->items == nullptr) {
+        LOG_ERROR("SncPingGetCtxInfo: invalid parameters");
+        return -1;
+    }
+
+    int successCount = 0;
+
+    for (int i = 0; i < count; i++) {
+        int devId = entities[i].devId;
+        const char* eid = entities[i].eid;
+
+        std::shared_ptr<SncPingDevThread> devThread = FindDevThread(devId);
+        if (devThread == nullptr) {
+            LOG_ERROR("SncPingGetCtxInfo: devThread not found for devId=%d, eid=%s", devId, eid);
+            continue;
+        }
+
+        auto task = BuildSncTask(GET_CTX, devId, eid, nullptr, nullptr);
+        if (EnqueueTask(devThread, task, devId) != 0) {
+            continue;
+        }
+        WaitForTaskCompletion(task, devId, eid, nullptr);
+
+        if (task->ret.load() == 0) {
+            std::lock_guard<std::mutex> lock(g_devMutex);
+            strncpy(result->items[successCount].eid, eid, IP_LEN - 1);
+            result->items[successCount].eid[IP_LEN - 1] = '\0';
+            result->items[successCount].jettyId = task->jettyId;
+            successCount++;
+        } else {
+            LOG_ERROR("SncPingGetCtxInfo: failed for devId=%d, eid=%s", devId, eid);
+        }
+    }
+
+    result->count = successCount;
+
+    if (successCount < count) {
+        LOG_WARN("SncPingGetCtxInfo: partial success %d/%d", successCount, count);
+        return -1;
+    }
+
+    return 0;
 }
 
 static void StopWorkerThread(const std::shared_ptr<SncPingDevThread>& devThread)
@@ -412,7 +551,7 @@ static void CancelPendingTasks(const std::shared_ptr<SncPingDevThread>& devThrea
 {
     std::lock_guard<std::mutex> qLock(devThread->queueMutex);
     while (!devThread->taskQueue.empty()) {
-        std::shared_ptr<SncPingTask> t = devThread->taskQueue.front();
+        std::shared_ptr<SncTask> t = devThread->taskQueue.front();
         devThread->taskQueue.pop();
         t->canceled.store(true);
         t->cv.notify_one();
