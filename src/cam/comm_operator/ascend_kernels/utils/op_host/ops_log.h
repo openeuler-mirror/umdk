@@ -9,6 +9,10 @@
 
 #ifndef OPS_LOG_H
 #define OPS_LOG_H
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include "dfx_base.h"
 
 /* base log */
@@ -44,4 +48,51 @@
         LOG_FUNC;                      \
         EXPR;                          \
     }
+
+/* CAM comm-window / batch-size helpers (used by cam_moe_distribute_* op_host).
+ * Distinct from Util::Mc2TilingUtils::GetMaxWindowSize (HCCL_BUFFSIZE semantics):
+ * these read LCCL_BUFFER_SIZE, matching the CAM communication library window. */
+namespace optiling {
+
+constexpr char LCCL_BUFFER_SIZE[] = "LCCL_BUFFER_SIZE";
+constexpr char BATCH_SIZE_FACTOR[] = "BATCH_SIZE_FACTOR";
+constexpr int DEFAULT_BUFFER_SIZE = 2 * (200 + 4);  // 408MB
+constexpr int MAX_BUFFER_SIZE = 32 * 1024;          // 32GB
+constexpr float DEFAULT_BATCH_SIZE_FACTOR = 1.0;
+
+static inline uint64_t GetMaxWindowSize()
+{
+    int size = DEFAULT_BUFFER_SIZE;
+    auto env = std::getenv(LCCL_BUFFER_SIZE);
+    if (env != nullptr) {
+        try {
+            std::string envStr(env);
+            size = std::stoi(envStr);
+            if (size > MAX_BUFFER_SIZE) {
+                fprintf(stderr, "LCCL_BUFFER_SIZE %d larger than MAX %d, clamped\n", size, MAX_BUFFER_SIZE);
+                size = MAX_BUFFER_SIZE;
+            }
+        } catch (...) {
+            fprintf(stderr, "Unknown exception parsing LCCL_BUFFER_SIZE\n");
+        }
+    }
+    return static_cast<uint64_t>(size) * 1024UL * 1024UL;
+}
+
+static inline float GetBatchSizeFactor()
+{
+    float factor = DEFAULT_BATCH_SIZE_FACTOR;
+    auto env = std::getenv(BATCH_SIZE_FACTOR);
+    if (env == nullptr) {
+        return factor;
+    }
+    try {
+        factor = std::stof(std::string(env));
+    } catch (...) {
+        fprintf(stderr, "Unknown exception parsing BATCH_SIZE_FACTOR\n");
+    }
+    return factor;
+}
+
+}  // namespace optiling
 #endif // OPS_LOG_H
