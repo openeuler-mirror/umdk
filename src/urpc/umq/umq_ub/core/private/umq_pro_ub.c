@@ -1958,7 +1958,9 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
 static void umq_ub_process_cr_err_for_jetty_pool(ub_queue_t *queue, urma_cr_t *cr,
     uint32_t tp_handle_idx, umq_io_option_t *option)
 {
-    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR) {
+    // bond vjetty will rebuild pjetty
+    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR ||
+        is_umq_ub_bonding_dev(umq_ub_queue_cfg_get(queue)->dev_ctx->urma_ctx->dev->name)) {
         return;
     }
 
