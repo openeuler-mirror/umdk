@@ -23,6 +23,7 @@ extern "C" {
 /* For version compatibility */
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
 #define BONDP_USER_CTL_SET_CTX_CFG BONDP_USER_CTL_SET_CTX_CFG
+#define BONDP_HAS_DATAPATH_QUERY BONDP_HAS_DATAPATH_QUERY
 
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
 #define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
@@ -345,10 +346,9 @@ typedef struct bondp_path {
 /* Return true when a bonding jetty has at least one valid physical jetty. */
 bool bondp_jetty_is_available(const urma_jetty_t *jetty);
 
-/* TX and RX CRs returned by a bonding JFC or jetty flush carry the physical
- * device index in imm_data bits 22-37 (the former vjetty_id field). Convert
- * that index to a bond port ID. Return an ID with value UINT16_MAX for NULL
- * or an out-of-range index. */
+/* Get the local bond port ID for a TX or RX completion returned by polling a
+ * bonding JFC or flushing a bonding jetty. Only pass CRs from bonding devices.
+ * Return an ID with value UINT16_MAX if cr is NULL or its port ID is invalid. */
 bondp_port_id_t bondp_get_cr_local_port_id(const urma_cr_t *cr);
 
 urma_status_t urma_write_affinity(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr,
