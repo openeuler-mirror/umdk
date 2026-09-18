@@ -1235,14 +1235,14 @@ static int umq_ub_destroy_jetty_node(ub_queue_t *queue, jetty_pool_node_t *jetty
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JETTY, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jetty for fc jetty failed, status: %d\n", status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
         start_timestamp = umq_perf_get_start_timestamp();
         status = umq_symbol_urma()->urma_delete_jfc(fc_jfs_jfc);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfc for fc jfs_jfc failed, status: %d\n", status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
     }
 
@@ -1251,7 +1251,7 @@ static int umq_ub_destroy_jetty_node(ub_queue_t *queue, jetty_pool_node_t *jetty
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JETTY, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jetty for io jetty failed, status: %d\n", status);
-        ret = -UMQ_ERR_EDESTROY_FATAL;
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
     }
 
     start_timestamp = umq_perf_get_start_timestamp();
@@ -1259,7 +1259,7 @@ static int umq_ub_destroy_jetty_node(ub_queue_t *queue, jetty_pool_node_t *jetty
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfc for io jfs_jfc failed, status: %d\n", status);
-        ret = -UMQ_ERR_EDESTROY_FATAL;
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
     }
 
     if (qcfg->mode == UMQ_MODE_INTERRUPT) {
@@ -1268,7 +1268,7 @@ static int umq_ub_destroy_jetty_node(ub_queue_t *queue, jetty_pool_node_t *jetty
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfce failed, status: %d\n", status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
     }
     return ret;
@@ -1347,9 +1347,9 @@ int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_ha
     int ret = umq_ub_destroy_jetty_node(queue, jetty_node_list->node_list[tp_handle_idx]);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "destroy jetty node failed, index %u\n", tp_handle_idx);
-        // Returning -UMQ_ERR_EDESTROY_FATAL indicates that an error occurred while destroying jetty resources
+        // Returning -UMQ_ERR_ETEARDOWN_FATAL indicates that an error occurred while destroying jetty resources
         // It is not retryable; continue destroying other resources.
-        if (ret != -UMQ_ERR_EDESTROY_FATAL) {
+        if (ret != -UMQ_ERR_ETEARDOWN_FATAL) {
             (void)util_mutex_unlock(jetty_node_list->lock);
             return ret;
         }
@@ -1665,7 +1665,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
                          "eid: " EID_FMT ", jetty_id: %u, urma_delete_jetty for flowcontrol jetty "
                          "failed, status: %d\n",
                          EID_ARGS(*fc_eid), fc_id, status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
 
         start_timestamp = umq_perf_get_start_timestamp();
@@ -1676,16 +1676,16 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
                          "eid: " EID_FMT ", jetty_id: %u, urma_delete_jfc for flowcontrol jfs_jfc "
                          "failed, status: %d\n",
                          EID_ARGS(*fc_eid), fc_id, status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
 
         if (umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL) != UMQ_SUCCESS) {
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
     } else if (queue->flow_control != NULL && is_umq_ub_logic_queue(queue->create_flag)) {
         umq_ub_credit_clean_up(queue);
         if (umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_FLOW_CONTROL) != UMQ_SUCCESS) {
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
     }
 
@@ -1697,7 +1697,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
             URPC_BITMAP_FOR_EACH_1(idx, jetty_node_list->list_len, jetty_node_list->bitmap)
             {
                 if (umq_ub_transport_pool_resource_destroy_impl(umqh, idx) != UMQ_SUCCESS) {
-                    ret = -UMQ_ERR_EDESTROY_FATAL;
+                    ret = -UMQ_ERR_ETEARDOWN_FATAL;
                 }
             }
         }
@@ -1717,7 +1717,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jetty failed, status: %d\n",
                          EID_ARGS(*io_eid), io_id, status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
         start_timestamp = umq_perf_get_start_timestamp();
         status = umq_symbol_urma()->urma_delete_jfc(queue->jfs_jfc[UB_QUEUE_JETTY_IO]);
@@ -1725,7 +1725,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jfc failed, status: %d\n",
                          EID_ARGS(*io_eid), io_id, status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
         if (qcfg->mode == UMQ_MODE_INTERRUPT) {
             start_timestamp = umq_perf_get_start_timestamp();
@@ -1734,7 +1734,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
             if (status != URMA_SUCCESS) {
                 UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "eid: " EID_FMT ", jetty_id: %u, urma_delete_jfc failed, status: %d\n",
                              EID_ARGS(*io_eid), io_id, status);
-                ret = -UMQ_ERR_EDESTROY_FATAL;
+                ret = -UMQ_ERR_ETEARDOWN_FATAL;
             }
         }
     }
@@ -1801,7 +1801,7 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
     }
 
     if (umq_ub_jfr_ctx_put(queue, UB_QUEUE_JETTY_IO) != UMQ_SUCCESS) {
-        ret = -UMQ_ERR_EDESTROY_FATAL;
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
     }
     umq_dec_ref(qcfg->dev_ctx->io_lock_free, &qcfg->dev_ctx->ref_cnt, 1);
 
@@ -2333,18 +2333,31 @@ int umq_ub_unbind_impl(uint64_t umqh)
     }
 
     umq_inc_ref(qcfg->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
+    int ret = UMQ_SUCCESS;
+    urma_status_t status;
     if (queue->flow_control != NULL) {
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
         UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind flowcontrol jetty\n",
                       queue->umq_id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
         if (qcfg->tp_mode == URMA_TM_RC) {
             start_timestamp = umq_perf_get_start_timestamp();
-            (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
+            status = umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
             umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY, start_timestamp);
+            if (status != URMA_SUCCESS) {
+                /* Keep running unimport and the remaining cleanup, report the unbind failure at the end. */
+                UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_unbind_jetty for flowcontrol jetty failed, status: %d\n",
+                             (int)status);
+                ret = -UMQ_ERR_ETEARDOWN_FATAL;
+            }
         }
         start_timestamp = umq_perf_get_start_timestamp();
-        (void)umq_symbol_urma()->urma_unimport_jetty(tjetty);
+        status = umq_symbol_urma()->urma_unimport_jetty(tjetty);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY, start_timestamp);
+        if (status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_unimport_jetty for flowcontrol jetty failed, status: %d\n",
+                         (int)status);
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
+        }
         if (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
             umq_modify_ubq_to_err(queue, UMQ_IO_TX, UB_QUEUE_JETTY_FLOW_CONTROL);
         } else {
@@ -2371,13 +2384,21 @@ int umq_ub_unbind_impl(uint64_t umqh)
         EID_ARGS(tjetty->id.eid), tjetty->id.id);
     if (qcfg->tp_mode == URMA_TM_RC) {
         start_timestamp = umq_perf_get_start_timestamp();
-        (void)umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
+        status = umq_symbol_urma()->urma_unbind_jetty(queue->jetty[UB_QUEUE_JETTY_IO]);
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNBIND_JETTY, start_timestamp);
+        if (status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_unbind_jetty for io jetty failed, status: %d\n", (int)status);
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
+        }
     }
 
     start_timestamp = umq_perf_get_start_timestamp();
-    (void)umq_symbol_urma()->urma_unimport_jetty(tjetty);
+    status = umq_symbol_urma()->urma_unimport_jetty(tjetty);
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_UNIMPORT_JETTY, start_timestamp);
+    if (status != URMA_SUCCESS) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_unimport_jetty for io jetty failed, status: %d\n", (int)status);
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
+    }
     if (queue->create_flag & UMQ_CREATE_FLAG_SUB_UMQ) {
         UMQ_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u), sub umq only need set tx res error\n", queue->umq_id);
         umq_modify_ubq_to_err(queue, UMQ_IO_TX, UB_QUEUE_JETTY_IO);
@@ -2396,7 +2417,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
 
     umq_dec_ref(qcfg->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     umq_ub_release_sub_queue(queue);
-    return UMQ_SUCCESS;
+    return ret;
 }
 
 int32_t umq_ub_enqueue_impl(uint64_t umqh_tp, umq_buf_t *qbuf, umq_buf_t **bad_qbuf)
