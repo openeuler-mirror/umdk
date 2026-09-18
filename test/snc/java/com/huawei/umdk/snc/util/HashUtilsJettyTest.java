@@ -125,12 +125,24 @@ class HashUtilsJettyTest {
     }
 
     @Test
-    @DisplayName("functionSelect != 1 时返回 -1（不支持）")
+    @DisplayName("functionSelect 非 0/1 时返回 -1（不支持）")
     void unsupportedFunctionSelectReturnsNegativeOne() {
         Assumptions.assumeTrue(nativeAvailable(), "libubswitch-die not available");
-        for (int fs : new int[]{0, 2, 3, 7, -1, 255}) {
+        for (int fs : new int[]{2, 3, 7, -1, 255}) {
             int r = HashUtils.nativeHashDstCnaJetty(cnaToInt("223.223.0.17"), 32, 4, 1, fs);
             assertEquals(-1, r, "functionSelect=" + fs + " must return -1 (unsupported)");
+        }
+    }
+
+    @Test
+    @DisplayName("functionSelect == 0 与 == 1 结果一致（默认别名）")
+    void functionSelectZeroAliasOfOne() {
+        Assumptions.assumeTrue(nativeAvailable(), "libubswitch-die not available");
+        for (int ecmp = 0; ecmp <= 8; ecmp++) {
+            int r0 = HashUtils.nativeHashDstCnaJetty(cnaToInt("223.223.0.17"), 32, ecmp, 1, 0);
+            int r1 = HashUtils.nativeHashDstCnaJetty(cnaToInt("223.223.0.17"), 32, ecmp, 1, 1);
+            assertTrue(r0 >= 0, "functionSelect=0 must be supported, got " + r0);
+            assertEquals(r1, r0, "functionSelect=0 must equal functionSelect=1 for ecmpCnt=" + ecmp);
         }
     }
 

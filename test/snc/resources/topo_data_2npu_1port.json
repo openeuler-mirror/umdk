@@ -21,6 +21,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/1",
                         "cna": "170.170.170.18",
+                        "jettyId": 32,
                         "eid": "AAAAAA12000000000000000000000002",
                         "upi": "0A0A0A01"
                     }
@@ -69,6 +70,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/2",
                         "cna": "221.221.221.66",
+                        "jettyId": 32,
                         "eid": "DDDDDD42000000000000000000000002",
                         "upi": "0A0A0A01"
                     }

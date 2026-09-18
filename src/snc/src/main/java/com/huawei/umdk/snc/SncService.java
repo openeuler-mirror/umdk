@@ -106,7 +106,7 @@ public class SncService {
             config != null ? config.getFixedDataUdpPort() : 0,
             config != null ? config.getFixedAckUdpPort() : 0,
             config != null ? config.getHashTuple() : HashTuple.TWO,
-            config != null ? config.getDieHashFunctionSelect() : 1);
+            config != null ? config.getDieHashFunctionSelect() : 0);
 
         this.superNodeService = new SuperNodeService(superNodeStore);
         this.pathService = new PathService(superNodeStore,

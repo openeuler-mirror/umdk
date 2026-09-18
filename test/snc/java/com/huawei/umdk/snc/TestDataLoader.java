@@ -185,7 +185,10 @@ public class TestDataLoader {
         for (JsonNode portNode : portsArray) {
             NpuPortEntity port = new NpuPortEntity(
                 portNode.has("eid") ? portNode.get("eid").asText() : null,
-                portNode.has("upi") ? portNode.get("upi").asText() : null
+                portNode.has("upi") ? portNode.get("upi").asText() : null,
+                // Topology input carries one jetty id per physical port ([32, 1023]).
+                portNode.has("jettyId") && !portNode.get("jettyId").isNull()
+                    ? portNode.get("jettyId").asInt() : null
             );
             port.setPortName(portNode.get("portName").asText());
             port.setId(portNode.get("id").asInt());

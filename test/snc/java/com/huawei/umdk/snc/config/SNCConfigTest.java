@@ -24,6 +24,7 @@ class SNCConfigTest {
         assertEquals(0, config.getFixedDataUdpPort());
         assertEquals(0, config.getFixedAckUdpPort());
         assertEquals(HashTuple.TWO, config.getHashTuple());
+        assertEquals(0, config.getDieHashFunctionSelect());
     }
 
     @Test
@@ -103,6 +104,21 @@ class SNCConfigTest {
     }
 
     @Test
+    @DisplayName("dieHashFunctionSelect defaults to 0")
+    void dieHashFunctionSelectDefault() {
+        assertEquals(0, new SNCConfig().getDieHashFunctionSelect());
+    }
+
+    @Test
+    @DisplayName("dieHashFunctionSelect setter works")
+    void dieHashFunctionSelectSetter() {
+        SNCConfig config = new SNCConfig();
+        config.setDieHashFunctionSelect(1);
+        assertEquals(1, config.getDieHashFunctionSelect());
+        assertNotEquals(config, new SNCConfig());
+    }
+
+    @Test
     @DisplayName("equals() - equality")
     void equalsEqual() {
         SNCConfig a = new SNCConfig();
@@ -135,5 +151,6 @@ class SNCConfigTest {
         String str = config.toString();
         assertNotNull(str);
         assertTrue(str.contains("hashFunc=1"));
+        assertTrue(str.contains("dieHashFunctionSelect=0"));
     }
 }

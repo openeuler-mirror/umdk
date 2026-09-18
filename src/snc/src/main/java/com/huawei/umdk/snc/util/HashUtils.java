@@ -38,8 +38,9 @@ public final class HashUtils {
          * @param lb              low 8 bits of the jetty id
          * @param ecmpCnt         ECMP member count; {@code 0} returns the
          *                       raw CRC8 (0..255)
-         * @param functionSelect  hash function selector; {@code 1} selects
-         *                       CRC-8/ATM, the only supported mode
+         * @param functionSelect  hash function selector; {@code 0} (default)
+         *                       and {@code 1} select CRC-8/ATM; other values
+         *                       return {@code -1}
          */
         int ubswitch_Hash_dieEcmp(int srcCna, int dstCna, int lb,
                                   int ecmpCnt, int functionSelect);
@@ -242,8 +243,8 @@ public final class HashUtils {
      * @param hashFunc        accepted for API symmetry with the L1SW/L2SW
      *                        entry point; ignored by the native call
      * @param functionSelect  hash function selector passed to the native
-     *                        library; {@code 1} selects CRC-8/ATM (the
-     *                        only supported mode), other values return
+     *                        library; {@code 0} (default) and {@code 1}
+     *                        select CRC-8/ATM, other values return
      *                        {@code -1}
      * @return the selected out-port index, or the raw CRC when
      *         {@code ecmpCnt == 0}; {@code -1} when {@code functionSelect}
@@ -263,7 +264,7 @@ public final class HashUtils {
 
     /**
      * Computes the NPU egress port index for the NPU-&gt;L1SW hop with the
-     * default {@code functionSelect = 1} (CRC-8/ATM).
+     * default {@code functionSelect = 0} (CRC-8/ATM).
      *
      * @param dstCna   destination CNA as a 32-bit unsigned int
      * @param jettyId  jetty id of the sending NPU port
@@ -277,7 +278,7 @@ public final class HashUtils {
      */
     public static int nativeHashDstCnaJetty(int dstCna, int jettyId,
                                             int ecmpCnt, int hashFunc) {
-        return nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc, 1);
+        return nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc, 0);
     }
 
     /**

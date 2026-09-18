@@ -14,7 +14,6 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-import com.huawei.umdk.snc.CoverageRouteAugmentor;
 import com.huawei.umdk.snc.RackTopologyLoader;
 import com.huawei.umdk.snc.config.HashTuple;
 import com.huawei.umdk.snc.config.SNCConfig;
@@ -61,12 +60,10 @@ public class CoverageDiagramGenerator {
             hashTuple = HashTuple.fromCount(Integer.parseInt(args[5]));
         }
 
-        // === Step 2: Load & augment topology ===
+        // === Step 2: Load topology ===
         // 2a. Build the full 148-device rack topology as an in-memory SuperNode.
         System.out.println("Loading topology...");
         SuperNode rawSn = RackTopologyLoader.loadRawTopology();
-        CoverageRouteAugmentor.augmentL1swRouting(rawSn);
-        CoverageRouteAugmentor.augmentL2swRouting(rawSn);
 
         // === Step 3: Extract port mappings for HTML rendering ===
         //     Builds 8 lookup maps (npuPortToL1sw, l1swPortToNpu, l1swL2swPortToL1swPort,

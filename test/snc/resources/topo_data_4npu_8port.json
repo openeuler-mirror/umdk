@@ -21,6 +21,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/0",
                         "cna": "170.170.170.17",
+                        "jettyId": 32,
                         "eid": "AAAAAA12000000000000000000000001",
                         "upi": "0A0A0A01"
                     },
@@ -30,6 +31,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/0/0",
                         "cna": "170.170.170.18",
+                        "jettyId": 33,
                         "eid": "AAAAAA12000000000000000000000002",
                         "upi": "0A0A0A01"
                     },
@@ -39,6 +41,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/0/0",
                         "cna": "170.170.170.19",
+                        "jettyId": 34,
                         "eid": "AAAAAA12000000000000000000000003",
                         "upi": "0A0A0A01"
                     },
@@ -48,6 +51,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/0/0",
                         "cna": "170.170.170.20",
+                        "jettyId": 35,
                         "eid": "AAAAAA12000000000000000000000004",
                         "upi": "0A0A0A01"
                     },
@@ -57,6 +61,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/1/0",
                         "cna": "170.170.170.21",
+                        "jettyId": 36,
                         "eid": "AAAAAA12000000000000000000000005",
                         "upi": "0A0A0A01"
                     },
@@ -66,6 +71,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/1/0",
                         "cna": "170.170.170.22",
+                        "jettyId": 37,
                         "eid": "AAAAAA12000000000000000000000006",
                         "upi": "0A0A0A01"
                     },
@@ -75,6 +81,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/1/0",
                         "cna": "170.170.170.23",
+                        "jettyId": 38,
                         "eid": "AAAAAA12000000000000000000000007",
                         "upi": "0A0A0A01"
                     },
@@ -84,6 +91,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/1/0",
                         "cna": "170.170.170.24",
+                        "jettyId": 39,
                         "eid": "AAAAAA12000000000000000000000008",
                         "upi": "0A0A0A01"
                     }
@@ -162,6 +170,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/2",
                         "cna": "221.221.221.68",
+                        "jettyId": 32,
                         "eid": "DDDDDD42000000000000000000000001",
                         "upi": "0A0A0A01"
                     },
@@ -171,6 +180,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/0/2",
                         "cna": "221.221.221.66",
+                        "jettyId": 33,
                         "eid": "DDDDDD42000000000000000000000002",
                         "upi": "0A0A0A01"
                     },
@@ -180,6 +190,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/0/2",
                         "cna": "221.221.221.69",
+                        "jettyId": 34,
                         "eid": "DDDDDD42000000000000000000000003",
                         "upi": "0A0A0A01"
                     },
@@ -189,6 +200,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/0/2",
                         "cna": "221.221.221.70",
+                        "jettyId": 35,
                         "eid": "DDDDDD42000000000000000000000004",
                         "upi": "0A0A0A01"
                     },
@@ -198,6 +210,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/1/2",
                         "cna": "221.221.221.71",
+                        "jettyId": 36,
                         "eid": "DDDDDD42000000000000000000000005",
                         "upi": "0A0A0A01"
                     },
@@ -207,6 +220,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/1/2",
                         "cna": "221.221.221.72",
+                        "jettyId": 37,
                         "eid": "DDDDDD42000000000000000000000006",
                         "upi": "0A0A0A01"
                     },
@@ -216,6 +230,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/1/2",
                         "cna": "221.221.221.73",
+                        "jettyId": 38,
                         "eid": "DDDDDD42000000000000000000000007",
                         "upi": "0A0A0A01"
                     },
@@ -225,6 +240,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/1/2",
                         "cna": "221.221.221.74",
+                        "jettyId": 39,
                         "eid": "DDDDDD42000000000000000000000008",
                         "upi": "0A0A0A01"
                     }
@@ -303,6 +319,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/4",
                         "cna": "238.238.238.85",
+                        "jettyId": 32,
                         "eid": "EEEEEE55000000000000000000000001",
                         "upi": "0A0A0A01"
                     },
@@ -312,6 +329,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/0/4",
                         "cna": "238.238.238.86",
+                        "jettyId": 33,
                         "eid": "EEEEEE55000000000000000000000002",
                         "upi": "0A0A0A01"
                     },
@@ -321,6 +339,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/0/4",
                         "cna": "238.238.238.87",
+                        "jettyId": 34,
                         "eid": "EEEEEE55000000000000000000000003",
                         "upi": "0A0A0A01"
                     },
@@ -330,6 +349,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/0/4",
                         "cna": "238.238.238.88",
+                        "jettyId": 35,
                         "eid": "EEEEEE55000000000000000000000004",
                         "upi": "0A0A0A01"
                     },
@@ -339,6 +359,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/1/4",
                         "cna": "238.238.238.89",
+                        "jettyId": 36,
                         "eid": "EEEEEE55000000000000000000000005",
                         "upi": "0A0A0A01"
                     },
@@ -348,6 +369,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/1/4",
                         "cna": "238.238.238.90",
+                        "jettyId": 37,
                         "eid": "EEEEEE55000000000000000000000006",
                         "upi": "0A0A0A01"
                     },
@@ -357,6 +379,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/1/4",
                         "cna": "238.238.238.91",
+                        "jettyId": 38,
                         "eid": "EEEEEE55000000000000000000000007",
                         "upi": "0A0A0A01"
                     },
@@ -366,6 +389,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/1/4",
                         "cna": "238.238.238.92",
+                        "jettyId": 39,
                         "eid": "EEEEEE55000000000000000000000008",
                         "upi": "0A0A0A01"
                     }
@@ -444,6 +468,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/0/6",
                         "cna": "255.255.255.102",
+                        "jettyId": 32,
                         "eid": "FFFFFF66000000000000000000000001",
                         "upi": "0A0A0A01"
                     },
@@ -453,6 +478,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/0/6",
                         "cna": "255.255.255.103",
+                        "jettyId": 33,
                         "eid": "FFFFFF66000000000000000000000002",
                         "upi": "0A0A0A01"
                     },
@@ -462,6 +488,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/0/6",
                         "cna": "255.255.255.104",
+                        "jettyId": 34,
                         "eid": "FFFFFF66000000000000000000000003",
                         "upi": "0A0A0A01"
                     },
@@ -471,6 +498,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/0/6",
                         "cna": "255.255.255.105",
+                        "jettyId": 35,
                         "eid": "FFFFFF66000000000000000000000004",
                         "upi": "0A0A0A01"
                     },
@@ -480,6 +508,7 @@
                         "remoteDevice": "rack1#l1sw0",
                         "remotePort": "400GE 1/1/6",
                         "cna": "255.255.255.106",
+                        "jettyId": 36,
                         "eid": "FFFFFF66000000000000000000000005",
                         "upi": "0A0A0A01"
                     },
@@ -489,6 +518,7 @@
                         "remoteDevice": "rack1#l1sw1",
                         "remotePort": "400GE 1/1/6",
                         "cna": "255.255.255.107",
+                        "jettyId": 37,
                         "eid": "FFFFFF66000000000000000000000006",
                         "upi": "0A0A0A01"
                     },
@@ -498,6 +528,7 @@
                         "remoteDevice": "rack1#l1sw2",
                         "remotePort": "400GE 1/1/6",
                         "cna": "255.255.255.108",
+                        "jettyId": 38,
                         "eid": "FFFFFF66000000000000000000000007",
                         "upi": "0A0A0A01"
                     },
@@ -507,6 +538,7 @@
                         "remoteDevice": "rack1#l1sw3",
                         "remotePort": "400GE 1/1/6",
                         "cna": "255.255.255.109",
+                        "jettyId": 39,
                         "eid": "FFFFFF66000000000000000000000008",
                         "upi": "0A0A0A01"
                     }
