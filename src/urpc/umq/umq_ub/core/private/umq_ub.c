@@ -1885,7 +1885,7 @@ int umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFR, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfr failed, status: %d\n", (int)status);
-        ret = -UMQ_ERR_EDESTROY_FATAL;
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
     }
 
     start_timestamp = umq_perf_get_start_timestamp();
@@ -1893,7 +1893,7 @@ int umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFC, start_timestamp);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfc failed, status: %d\n", (int)status);
-        ret = -UMQ_ERR_EDESTROY_FATAL;
+        ret = -UMQ_ERR_ETEARDOWN_FATAL;
     }
 
     // only delete the jfce of io and the jfce of sub_umq flow control
@@ -1904,7 +1904,7 @@ int umq_ub_jfr_ctx_destroy(ub_queue_t *queue, ub_queue_jetty_index_t jetty_idx)
         umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_DESTROY_JFCE, start_timestamp);
         if (status != URMA_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_jfce failed, status: %d\n", (int)status);
-            ret = -UMQ_ERR_EDESTROY_FATAL;
+            ret = -UMQ_ERR_ETEARDOWN_FATAL;
         }
     }
     if (jetty_idx == UB_QUEUE_JETTY_IO && qcfg->dev_ctx != NULL &&
