@@ -429,14 +429,6 @@ public class CoveragePlanEngine {
     static class PrecomputedTopo {
         Map<String, NpuPortConn> npuPortConns = new HashMap<>();
         Map<String, Map<Integer, Map<String, List<String>>>> l2swChipRemotePorts = new HashMap<>();
-        /**
-         * NPU device → the L1SW devices that have at least one physical port
-         * towards it. Used to expand the route scope: a packet whose DstCNA
-         * belongs to an NPU may be delivered by <b>any</b> L1SW connected to
-         * that NPU, because the receiving NPU accepts a CNA that belongs to its
-         * own device regardless of the receiving port.
-         */
-        Map<String, Set<String>> npuL1Peers = new HashMap<>();
         Map<String, DeviceEntity> devices;
         Set<String> l2swNames;
     }
@@ -670,24 +662,6 @@ public class CoveragePlanEngine {
                 if (!remotePorts.isEmpty()) {
                     topo.l2swChipRemotePorts.computeIfAbsent(dev.getDeviceName(), k -> new HashMap<>())
                         .put(chip.getChipIndex(), remotePorts);
-                }
-            }
-        }
-
-        // NPU device -> L1SW peers (every L1SW that has a port towards the NPU).
-        for (DeviceEntity dev : devices.values()) {
-            if (dev.getDeviceType() != DeviceType.SW) continue;
-            if (!isL1Sw(dev)) continue;
-            if (dev.getForwardingChips() == null) continue;
-            for (ForwardingChip chip : dev.getForwardingChips().values()) {
-                if (chip.getPorts() == null) continue;
-                for (PortEntity port : chip.getPorts().values()) {
-                    if (port.getRemoteDevice() == null) continue;
-                    DeviceEntity remote = devices.get(port.getRemoteDevice());
-                    if (remote == null || remote.getDeviceType() != DeviceType.NPU) continue;
-                    topo.npuL1Peers
-                        .computeIfAbsent(remote.getDeviceName(), k -> new java.util.TreeSet<>())
-                        .add(dev.getDeviceName());
                 }
             }
         }
@@ -2232,18 +2206,26 @@ public class CoveragePlanEngine {
             return result;
         }
         int l2ChipIdx = l2InPort.getChipIndex();
-        Map<Integer, Map<String, List<String>>> l2ChipRemote =
-            topo.l2swChipRemotePorts.get(l2swName);
-        Map<String, List<String>> fwdChipRemote = l2ChipRemote == null
-            ? null : l2ChipRemote.get(l2ChipIdx);
         ForwardingChip l2Chip = l2sw.getForwardingChips() == null
             ? null : l2sw.getForwardingChips().get(l2ChipIdx);
-        // Route-scope expansion: the L2SW may use any of its ports towards an
-        // L1SW that has a port to the destination NPU device (the NPU accepts a
-        // CNA that belongs to itself regardless of the receiving port).
-        List<String> l2DstPorts = l2PortsTowardsL1Peers(fwdChipRemote,
-            dst.deviceName, topo);
-        if (l2Chip == null || l2DstPorts == null || l2DstPorts.isEmpty()) {
+        // ECMP member set = out-ports of the L2SW route found by LPM on dst.cna
+        // (same source as all other hops — no route-scope expansion, no physical
+        // connection merging).  ecmpCnt is exactly the route entry's outPort count.
+        RoutingEntry l2Route = lookupRoute(superNode, l2swName, l2ChipIdx, dst.cna);
+        if (l2Chip == null || l2Route == null || l2Route.getOutPortInfos() == null) {
+            exFailL2++;
+            return result;
+        }
+        List<String> l2DstPorts = new ArrayList<>();
+        for (OutPortInfo opi : l2Route.getOutPortInfos().values()) {
+            PortEntity pe = l2Chip.getPorts() == null
+                ? null : l2Chip.getPorts().get(opi.getPortName());
+            if (pe != null && pe.getRemoteDevice() != null
+                && isL1Sw(devices.get(pe.getRemoteDevice()))) {
+                l2DstPorts.add(opi.getPortName());
+            }
+        }
+        if (l2DstPorts.isEmpty()) {
             exFailL2++;
             return result;
         }
@@ -2418,17 +2400,25 @@ public class CoveragePlanEngine {
             return result;
         }
         int l2RevChipIdx = l2swRevInPort.getChipIndex();
-        Map<Integer, Map<String, List<String>>> l2RevChipRemote =
-            topo.l2swChipRemotePorts.get(l2swRevName);
-        Map<String, List<String>> revChipRemote = l2RevChipRemote == null
-            ? null : l2RevChipRemote.get(l2RevChipIdx);
         ForwardingChip l2RevChip = l2swRev.getForwardingChips() == null
             ? null : l2swRev.getForwardingChips().get(l2RevChipIdx);
-        // Route-scope expansion (ACK): any port towards an L1SW that can reach
-        // the original source NPU device.
-        List<String> l2RevSrcPorts = l2PortsTowardsL1Peers(revChipRemote,
-            src.deviceName, topo);
-        if (l2RevChip == null || l2RevSrcPorts == null || l2RevSrcPorts.isEmpty()) {
+        // ECMP member set = out-ports of the L2SW route found by LPM on src.cna
+        // (ACK direction uses src.cna as destination).  No route-scope expansion.
+        RoutingEntry l2RevRoute = lookupRoute(superNode, l2swRevName, l2RevChipIdx, src.cna);
+        if (l2RevChip == null || l2RevRoute == null || l2RevRoute.getOutPortInfos() == null) {
+            exFailRevL2++;
+            return result;
+        }
+        List<String> l2RevSrcPorts = new ArrayList<>();
+        for (OutPortInfo opi : l2RevRoute.getOutPortInfos().values()) {
+            PortEntity pe = l2RevChip.getPorts() == null
+                ? null : l2RevChip.getPorts().get(opi.getPortName());
+            if (pe != null && pe.getRemoteDevice() != null
+                && isL1Sw(devices.get(pe.getRemoteDevice()))) {
+                l2RevSrcPorts.add(opi.getPortName());
+            }
+        }
+        if (l2RevSrcPorts.isEmpty()) {
             exFailRevL2++;
             return result;
         }
@@ -2492,31 +2482,6 @@ public class CoveragePlanEngine {
 
         result.viable = true;
         return result;
-    }
-
-    /**
-     * Ports of an L2SW chip towards every L1SW that has a physical port to
-     * {@code npuDeviceName}, in a deterministic (L1SW-name sorted) order.
-     * This is the route-scope expansion of the L2SW→L1SW hop.
-     */
-    private static List<String> l2PortsTowardsL1Peers(Map<String, List<String>> chipRemoteByL1,
-                                                      String npuDeviceName,
-                                                      PrecomputedTopo topo) {
-        if (chipRemoteByL1 == null) {
-            return null;
-        }
-        Set<String> peers = topo.npuL1Peers.get(npuDeviceName);
-        if (peers == null || peers.isEmpty()) {
-            return null;
-        }
-        List<String> ports = new ArrayList<>();
-        for (String l1 : peers) {
-            List<String> p = chipRemoteByL1.get(l1);
-            if (p != null) {
-                ports.addAll(p);
-            }
-        }
-        return ports.isEmpty() ? null : ports;
     }
 
     /** Out-ports of an L1SW chip whose peer is {@code deviceName}, from a route. */
