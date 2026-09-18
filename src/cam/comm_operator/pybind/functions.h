@@ -217,4 +217,17 @@ at::Tensor cam_dispatch_send_async_impl_autograd(
     const int64_t dynamicQuant,
     c10::string_view groupName);
 
+std::vector<at::Tensor> cam_gmm_swiglu_quant_v2_layered_impl_autograd(
+    const at::Tensor &x,
+    const at::TensorList &allWeight,
+    const at::TensorList &allWeightScale,
+    const at::TensorList &allWeightAssistMatrix,
+    const at::Tensor &xScale,
+    const at::Tensor &groupList,
+    const at::Tensor &layerIndex,
+    const int64_t dequantMode,
+    const int64_t quantMode,
+    const int64_t groupListType,
+    const c10::optional<std::vector<int64_t>> &tuningConfigOptional);
+
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_
