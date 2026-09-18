@@ -29,7 +29,7 @@ aclnnStatus aclnnCamMoeDistributeCombineSendGetWorkspaceSize(
     const aclTensor *commArgs,
     const aclTensor *batchInfo,
     int64_t magic,
-    int64_t batchSize,
+    int64_t maxSeqLen,
     int64_t hiddenSize,
     int64_t topk,
     int64_t moeRankNum,
@@ -44,7 +44,7 @@ aclnnStatus aclnnCamMoeDistributeCombineSendGetWorkspaceSize(
     aclOpExecutor **executor)
 {
     return aclnnInnerCamMoeDistributeCombineSendGetWorkspaceSize(expandX, expandXShared, commArgs, batchInfo,
-        magic, batchSize, hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize,
+        magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize,
         tpSize, hcclGroupName, out, workspaceSize, executor);
 }
 

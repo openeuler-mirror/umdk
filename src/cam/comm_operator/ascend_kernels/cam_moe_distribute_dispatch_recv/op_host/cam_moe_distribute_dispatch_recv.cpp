@@ -26,7 +26,7 @@ constexpr static int ONE_DIM = 1;
 constexpr static int INPUT_X_INDEX = 0;
 
 constexpr static int ATTR_ENUM_MAGIC = 0;
-constexpr static int ATTR_ENUM_BATCH_SIZE = 1;
+constexpr static int ATTR_ENUM_MAX_SEQ_LEN = 1;
 constexpr static int ATTR_ENUM_HIDDEN_SIZE = 2;
 constexpr static int ATTR_ENUM_TOPK = 3;
 constexpr static int ATTR_ENUM_MOE_RANK_NUM = 4;
@@ -51,19 +51,19 @@ constexpr static int TILING_KEY_FP16 = 101;
 
 constexpr static int INFO_NUM = 5; // number of valid batch-info fields; also start/end expert per chunk
 
-// batchSize [1, 8192]
-constexpr static int LIMIT_BATCH_SIZE_MIN = 1;
-constexpr static int LIMIT_HIDDEN_SIZE = 1024 * 6;
-constexpr static int LIMIT_TOPK = 8;
+// maxSeqLen [1, 8192]
+constexpr static int LIMIT_MAX_SEQ_LEN_MIN = 1;
+constexpr static int LIMIT_MAX_SEQ_LEN_MAX = 1024 * 256;
+constexpr static int LIMIT_HIDDEN_SIZE_MIN = 1;
+constexpr static int LIMIT_TOPK_MIN = 1;
 constexpr static int LIMIT_ATTENTION_RANK_SIZE_MIN = 1;
-constexpr static int LIMIT_EXPERT_NUM_MAX = 256;
 constexpr static int LIMIT_TP_SIZE_MIN = 1;
-constexpr static int LIMIT_TP_SIZE_MAX = 256;
+constexpr static int LIMIT_EXPERT_RANK_SIZE_MIN = 1;
 
 constexpr static int BATCH_INFO_VAL_NUM = 5;
 constexpr static int UB_ALIGN = 32;
 constexpr static int MAX_AIV_NUM = 48;
-constexpr static int64_t MAX_BATCH_SIZE = 1024 * 256;
+
 constexpr static float EP_BALANCE_FACTOR = 1.2;
 
 constexpr static uint32_t OP_TYPE_ALL_TO_ALL = 8U;
@@ -92,7 +92,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     auto attrs = context->GetAttrs();
     int64_t magic = *(attrs->GetInt(ATTR_ENUM_MAGIC));
-    int64_t batchSize = *(attrs->GetInt(ATTR_ENUM_BATCH_SIZE));
+    int64_t maxSeqLen = *(attrs->GetInt(ATTR_ENUM_MAX_SEQ_LEN));
     int64_t hiddenSize = *(attrs->GetInt(ATTR_ENUM_HIDDEN_SIZE));
     int64_t topk = *(attrs->GetInt(ATTR_ENUM_TOPK));
     int64_t moeRankNum = *(attrs->GetInt(ATTR_ENUM_MOE_RANK_NUM));
@@ -109,17 +109,23 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     const gert::StorageShape *xShape = context->GetInputShape(INPUT_X_INDEX);
 
-    int64_t limitBatchSizePerRank = batchSize / tpSize;
-    OPS_ERR_IF(batchSize < LIMIT_BATCH_SIZE_MIN || batchSize > MAX_BATCH_SIZE,
-        OPS_LOG_E(nodeName, "batchSize is invalid, only support [%d, %ld], but got batchSize=%ld.",
-            LIMIT_BATCH_SIZE_MIN, MAX_BATCH_SIZE, batchSize),
+    OPS_ERR_IF(maxSeqLen < LIMIT_MAX_SEQ_LEN_MIN || maxSeqLen > LIMIT_MAX_SEQ_LEN_MAX,
+        OPS_LOG_E(nodeName, "maxSeqLen is invalid, only support [%d, %d], but got maxSeqLen=%ld.",
+            LIMIT_MAX_SEQ_LEN_MIN, LIMIT_MAX_SEQ_LEN_MAX, maxSeqLen),
         return ge::GRAPH_FAILED);
-    OPS_ERR_IF(topk != LIMIT_TOPK, OPS_LOG_E(nodeName, "topk is invalid, only support %d, but got topk=%ld.",
-        LIMIT_TOPK, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(hiddenSize < LIMIT_HIDDEN_SIZE_MIN,
+        OPS_LOG_E(nodeName, "hiddenSize is invalid, must >= %d, but got hiddenSize=%ld.",
+            LIMIT_HIDDEN_SIZE_MIN, hiddenSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(topk < LIMIT_TOPK_MIN,
+        OPS_LOG_E(nodeName, "topk is invalid, must >= %d, but got topk=%ld.",
+            LIMIT_TOPK_MIN, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(moeRankNum < LIMIT_EXPERT_RANK_SIZE_MIN,
+        OPS_LOG_E(nodeName, "moeRankNum is invalid, must >= %d, but got moeRankNum=%ld.",
+            LIMIT_EXPERT_RANK_SIZE_MIN, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(attnRankNum < LIMIT_ATTENTION_RANK_SIZE_MIN,
         OPS_LOG_E(nodeName, "attnRankNum is invalid, must >= %d, but got attnRankNum=%ld.",
             LIMIT_ATTENTION_RANK_SIZE_MIN, attnRankNum), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(expertNum < topk || expertNum > LIMIT_EXPERT_NUM_MAX,
+    OPS_ERR_IF(expertNum < topk,
         OPS_LOG_E(nodeName, "expertNum is invalid, routeExpertNumPerMoe=%ld moeRankNum=%ld.",
             routeExpertNumPerMoe, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(worldSize != (moeRankNum + attnRankNum),
@@ -128,9 +134,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     OPS_ERR_IF(moeRankId < 0 || moeRankId > (worldSize - 1),
         OPS_LOG_E(nodeName, "moeRankId is invalid, only support [0, %ld), but got moeRankId=%ld.",
             worldSize, moeRankId), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(tpSize < LIMIT_TP_SIZE_MIN || tpSize > LIMIT_TP_SIZE_MAX || (attnRankNum % tpSize) != 0,
-        OPS_LOG_E(nodeName, "tpSize is invalid, only support [%d, %d] and divide attnRankNum, but got tpSize=%ld.",
-            LIMIT_TP_SIZE_MIN, LIMIT_TP_SIZE_MAX, tpSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(tpSize < LIMIT_TP_SIZE_MIN || (attnRankNum % tpSize) != 0,
+        OPS_LOG_E(nodeName, "tpSize is invalid, must >= %d and divide attnRankNum, but got tpSize=%ld.",
+            LIMIT_TP_SIZE_MIN, tpSize), return ge::GRAPH_FAILED);
+
+    OPS_ERR_IF(dynamicQuant != 0 && dynamicQuant != 1,
+        OPS_LOG_E(nodeName, "dynamicQuant is invalid, only support 0 or 1, but got dynamicQuant=%ld.",
+            dynamicQuant), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(xShape == nullptr, OPS_LOG_E(nodeName, "xShape is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(xShape->GetStorageShape().GetDimNum() != ONE_DIM,
@@ -140,6 +150,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         OPS_LOG_E(nodeName, "xShape dim0 is invalid, must be 1, but got dim0=%u.",
             xShape->GetStorageShape().GetDim(0)), return ge::GRAPH_FAILED);
 
+    int64_t limitMaxSeqLenPerRank = maxSeqLen / tpSize;
+
     // 64 B, info sent by dispatch send
     uint64_t dispatchInfoSize = MathCeil(sizeof(int64_t) * BATCH_INFO_VAL_NUM, UB_ALIGN);
     // max ~96 B, token count received per expert / chunk flag for whether expert already processed
@@ -147,12 +159,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     // max ~112 KB, real tokens received
     uint64_t dispatchTokenSize = 0;
     if (dynamicQuant == 1) {
-        dispatchTokenSize = MathCeil((sizeof(int8_t) * LIMIT_HIDDEN_SIZE + UB_ALIGN) * limitBatchSizePerRank, UB_ALIGN);
+        dispatchTokenSize = MathCeil((sizeof(int8_t) * hiddenSize + UB_ALIGN) * limitMaxSeqLenPerRank, UB_ALIGN);
     } else {
-        dispatchTokenSize = MathCeil(sizeof(int16_t) * LIMIT_HIDDEN_SIZE * limitBatchSizePerRank, UB_ALIGN);
+        dispatchTokenSize = MathCeil(sizeof(int16_t) * hiddenSize * limitMaxSeqLenPerRank, UB_ALIGN);
     }
     // max ~144 KB, offsets of received tokens
-    uint64_t tokenAddrSize = MathCeil(sizeof(uint16_t) * limitBatchSizePerRank * (topk + 1), UB_ALIGN);
+    uint64_t tokenAddrSize = MathCeil(sizeof(uint16_t) * limitMaxSeqLenPerRank * (topk + 1), UB_ALIGN);
     // min shared memory needed on the moe side
     uint64_t sharedMemMoeNeedSize =
         (dispatchInfoSize + expertTokenCntSize * 2 + dispatchTokenSize + tokenAddrSize) * attnRankNum;
@@ -161,14 +173,17 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         OPS_LOG_E(nodeName, "sharedMemSize is %lu but need %lu.", sharedMemSize, sharedMemMoeNeedSize),
         return ge::GRAPH_FAILED);
 
-    float batchSizeFactor = GetBatchSizeFactor();
-    uint64_t maxTokenNum = (int64_t)(MAX_BATCH_SIZE * batchSizeFactor);
+    float maxSeqLenFactor = GetBatchSizeFactor();
+    OPS_ERR_IF(!(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f),
+        OPS_LOG_E(nodeName, "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=%f.",
+            maxSeqLenFactor), return ge::GRAPH_FAILED);
+    uint64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
 
     std::string groupName(groupNamePtr);
     SetHcommCfg(tilingData, groupName);
 
     tilingData->moeDistributeDispatchInfo.magic = magic;
-    tilingData->moeDistributeDispatchInfo.batchSize = batchSize;
+    tilingData->moeDistributeDispatchInfo.maxSeqLen = maxSeqLen;
     tilingData->moeDistributeDispatchInfo.hiddenSize = hiddenSize;
     tilingData->moeDistributeDispatchInfo.topk = topk;
     tilingData->moeDistributeDispatchInfo.moeRankNum = moeRankNum;
@@ -207,7 +222,7 @@ namespace ge {
 static ge::graphStatus InferShape(gert::InferShapeContext* context)
 {
     auto attrs = context->GetAttrs();
-    int64_t batchSize = *(attrs->GetInt(ATTR_ENUM_BATCH_SIZE));
+    int64_t maxSeqLen = *(attrs->GetInt(ATTR_ENUM_MAX_SEQ_LEN));
     int64_t hiddenSize = *(attrs->GetInt(ATTR_ENUM_HIDDEN_SIZE));
     int64_t topk = *(attrs->GetInt(ATTR_ENUM_TOPK));
     int64_t moeRankNum = *(attrs->GetInt(ATTR_ENUM_MOE_RANK_NUM));
@@ -216,8 +231,11 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     int64_t dynamicQuant = *(attrs->GetInt(ATTR_ENUM_DYNAMIC_QUANT));
 
     // max token count a routing expert can receive
-    float batchSizeFactor = optiling::GetBatchSizeFactor();
-    int64_t maxTokenNum = (int64_t)(MAX_BATCH_SIZE * batchSizeFactor);
+    float maxSeqLenFactor = optiling::GetBatchSizeFactor();
+    OPS_ERR_IF(!(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f),
+        OPS_LOG_E(context->GetNodeName(), "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=%f.",
+            maxSeqLenFactor), return ge::GRAPH_FAILED);
+    int64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
 
     gert::Shape *expandXOutShape = context->GetOutputShape(OUTPUT_EXPAND_X);
     expandXOutShape->SetDimNum(2);
@@ -225,7 +243,7 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     expandXOutShape->SetDim(1, hiddenSize);
 
     // max token count a shared expert can receive
-    int64_t maxSharedTokenNum = MAX_BATCH_SIZE / moeRankNum;
+    int64_t maxSharedTokenNum = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
     gert::Shape *expandXOutSharedShape = context->GetOutputShape(OUTPUT_EXPAND_X_SHARED);
     expandXOutSharedShape->SetDimNum(2);
     expandXOutSharedShape->SetDim(0, maxSharedTokenNum);
@@ -344,7 +362,7 @@ public:
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
 
         this->Attr("magic").Int();
-        this->Attr("batchSize").Int();
+        this->Attr("maxSeqLen").Int();
         this->Attr("hiddenSize").Int();
         this->Attr("topk").Int();
         this->Attr("moeRankNum").Int();

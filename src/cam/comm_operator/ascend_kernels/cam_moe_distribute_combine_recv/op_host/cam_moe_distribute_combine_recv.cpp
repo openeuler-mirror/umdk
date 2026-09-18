@@ -42,9 +42,13 @@ constexpr static int ATTR_ENUM_HCCL_GROUP_NAME = 9;
 constexpr static int TILING_KEY_BF16 = 100;
 constexpr static int TILING_KEY_FP16 = 101;
 
-constexpr static int LIMIT_TOPK = 8;
+constexpr static int LIMIT_BATCH_SIZE_MIN = 1;
+constexpr static int LIMIT_BATCH_SIZE_MAX = 1024 * 256;
+constexpr static int LIMIT_TOPK_MIN = 1;
+constexpr static int LIMIT_HIDDEN_SIZE_MIN = 1;
 constexpr static int LIMIT_ATTENTION_RANK_SIZE_MIN = 1;
-constexpr static int LIMIT_EXPERT_NUM_MAX = 256;
+constexpr static int LIMIT_EXPERT_RANK_SIZE_MIN = 1;
+constexpr static int LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN = 1;
 
 constexpr static int BATCH_INFO_VAL_NUM = 5;
 constexpr static int UB_ALIGN = 32;
@@ -91,14 +95,27 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const gert::StorageShape *expertIdsShape = context->GetInputShape(INPUT_EXPERT_IDS_INDEX);
     const gert::StorageShape *expertScalesShape = context->GetInputShape(INPUT_EXPERT_SCALES_INDEX);
 
-    OPS_ERR_IF(topk != LIMIT_TOPK, OPS_LOG_E(nodeName, "topk is invalid, only support %d, but got topk=%ld.",
-        LIMIT_TOPK, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(batchSize < LIMIT_BATCH_SIZE_MIN || batchSize > LIMIT_BATCH_SIZE_MAX,
+        OPS_LOG_E(nodeName, "batchSize is invalid, must be in range [%d, %d], but got batchSize=%ld.",
+            LIMIT_BATCH_SIZE_MIN, LIMIT_BATCH_SIZE_MAX, batchSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(hiddenSize < LIMIT_HIDDEN_SIZE_MIN,
+        OPS_LOG_E(nodeName, "hiddenSize is invalid, must >= %d, but got hiddenSize=%ld.",
+            LIMIT_HIDDEN_SIZE_MIN, hiddenSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(topk < LIMIT_TOPK_MIN,
+        OPS_LOG_E(nodeName, "topk is invalid, must >= %d, but got topk=%ld.",
+            LIMIT_TOPK_MIN, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(moeRankNum < LIMIT_EXPERT_RANK_SIZE_MIN,
+        OPS_LOG_E(nodeName, "moeRankNum is invalid, must >= %d, but got moeRankNum=%ld.",
+            LIMIT_EXPERT_RANK_SIZE_MIN, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(attnRankNum < LIMIT_ATTENTION_RANK_SIZE_MIN,
         OPS_LOG_E(nodeName, "attnRankNum is invalid, must >= %d, but got attnRankNum=%ld.",
             LIMIT_ATTENTION_RANK_SIZE_MIN, attnRankNum), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(expertNum < topk || expertNum > LIMIT_EXPERT_NUM_MAX,
-        OPS_LOG_E(nodeName, "expertNum is invalid, routeExpertNumPerMoe=%ld moeRankNum=%ld.",
-            routeExpertNumPerMoe, moeRankNum), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(routeExpertNumPerMoe < LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN,
+        OPS_LOG_E(nodeName, "routeExpertNumPerMoe is invalid, must >= %d, but got routeExpertNumPerMoe=%ld.",
+            LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN, routeExpertNumPerMoe), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(expertNum < topk,
+        OPS_LOG_E(nodeName, "expertNum is invalid, must >= topk=%ld, but got expertNum=%ld.",
+            topk, expertNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(worldSize != (moeRankNum + attnRankNum),
         OPS_LOG_E(nodeName, "worldSize is invalid, must be moeRankNum+attnRankNum, but got worldSize=%ld.",
             worldSize), return ge::GRAPH_FAILED);

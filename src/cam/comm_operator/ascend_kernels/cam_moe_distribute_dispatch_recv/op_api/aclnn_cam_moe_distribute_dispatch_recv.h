@@ -21,7 +21,7 @@ extern "C" {
  * x : required
  * commArgs : required
  * magic : required
- * batchSize : required
+ * maxSeqLen : required
  * hiddenSize : required
  * topk : required
  * moeRankNum : required
@@ -47,7 +47,7 @@ aclnnStatus aclnnCamMoeDistributeDispatchRecvGetWorkspaceSize(
     const aclTensor *x,
     const aclTensor *commArgs,
     int64_t magic,
-    int64_t batchSize,
+    int64_t maxSeqLen,
     int64_t hiddenSize,
     int64_t topk,
     int64_t moeRankNum,

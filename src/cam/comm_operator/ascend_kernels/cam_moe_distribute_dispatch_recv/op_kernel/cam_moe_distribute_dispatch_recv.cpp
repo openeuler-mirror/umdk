@@ -8,7 +8,6 @@
  */
 
 #include "kernel_operator.h"
-#include "op_def.h"  // GET_COMM_ARGS macro (defined in utils/op_kernel/op_def.h, copied into build op_kernel/ dir).
 #include "cam_moe_distribute_dispatch_recv_tiling.h"
 #include "cam_moe_distribute_dispatch_recv.h"
 

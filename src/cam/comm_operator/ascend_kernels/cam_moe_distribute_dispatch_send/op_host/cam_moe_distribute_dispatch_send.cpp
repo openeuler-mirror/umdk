@@ -45,14 +45,15 @@ constexpr static int ATTR_ENUM_HCCL_GROUP_NAME = 13;
 constexpr static int TILING_KEY_BF16 = 100;
 constexpr static int TILING_KEY_FP16 = 101;
 
-// batchSize [1, 8192]
 constexpr static int LIMIT_BATCH_SIZE_MIN = 1;
-constexpr static int LIMIT_BATCH_SIZE_MAX = 1024 * 256; // max batch size within a dp group
-constexpr static int LIMIT_TOPK = 8;
+constexpr static int LIMIT_MAX_SEQ_LEN_MIN = 1;
+constexpr static int LIMIT_MAX_SEQ_LEN_MAX = 1024 * 256; // max sequence length within a dp group
+constexpr static int LIMIT_HIDDEN_SIZE_MIN = 1;
+constexpr static int LIMIT_TP_SIZE_MIN = 1;
+constexpr static int LIMIT_TOPK_MIN = 1;
 constexpr static int LIMIT_ATTENTION_RANK_SIZE_MIN = 1;
-constexpr static int LIMIT_EXPERT_NUM_MAX = 256;
+constexpr static int LIMIT_EXPERT_RANK_SIZE_MIN = 1;
 constexpr static int LIMIT_LAYER_INDEX_MIN = 0;
-constexpr static int LIMIT_LAYER_INDEX_MAX = 100;
 
 constexpr static int BATCH_INFO_VAL_NUM = 5;
 constexpr static int UB_ALIGN = 32;
@@ -102,18 +103,30 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     const gert::StorageShape *xShape = context->GetInputShape(INPUT_X_INDEX);
     const gert::StorageShape *expertIdsShape = context->GetInputShape(INPUT_EXPERT_IDS_INDEX);
-    int64_t limitBatchSizePerRank = maxSeqLen / tpSize;
+    OPS_ERR_IF(maxSeqLen < LIMIT_MAX_SEQ_LEN_MIN || maxSeqLen > LIMIT_MAX_SEQ_LEN_MAX,
+        OPS_LOG_E(nodeName, "maxSeqLen is invalid, only support [%d, %d], but got maxSeqLen=%ld.",
+            LIMIT_MAX_SEQ_LEN_MIN, LIMIT_MAX_SEQ_LEN_MAX, maxSeqLen), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(tpSize < LIMIT_TP_SIZE_MIN || (attnRankNum % tpSize) != 0,
+        OPS_LOG_E(nodeName, "tpSize is invalid, must >= %d and divide attnRankNum, but got tpSize=%ld.",
+            LIMIT_TP_SIZE_MIN, tpSize), return ge::GRAPH_FAILED);
 
-    OPS_ERR_IF(batchSize < LIMIT_BATCH_SIZE_MIN || batchSize > LIMIT_BATCH_SIZE_MAX,
-        OPS_LOG_E(nodeName, "batchSize is invalid, only support [%d, %d], but got batchSize=%ld.",
-            LIMIT_BATCH_SIZE_MIN, LIMIT_BATCH_SIZE_MAX, batchSize),
-        return ge::GRAPH_FAILED);
-    OPS_ERR_IF(topk != LIMIT_TOPK, OPS_LOG_E(nodeName, "topk is invalid, only support %d, but got topk=%ld.",
-        LIMIT_TOPK, topk), return ge::GRAPH_FAILED);
+    int64_t limitMaxSeqLenPerRank = maxSeqLen / tpSize;
+    OPS_ERR_IF(batchSize < LIMIT_BATCH_SIZE_MIN || batchSize > limitMaxSeqLenPerRank,
+        OPS_LOG_E(nodeName, "batchSize is invalid, only support [%d, %ld], but got batchSize=%ld.",
+            LIMIT_BATCH_SIZE_MIN, limitMaxSeqLenPerRank, batchSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(hiddenSize < LIMIT_HIDDEN_SIZE_MIN,
+        OPS_LOG_E(nodeName, "hiddenSize is invalid, must >= %d, but got hiddenSize=%ld.",
+            LIMIT_HIDDEN_SIZE_MIN, hiddenSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(topk < LIMIT_TOPK_MIN,
+        OPS_LOG_E(nodeName, "topk is invalid, must >= %d, but got topk=%ld.",
+            LIMIT_TOPK_MIN, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(moeRankNum < LIMIT_EXPERT_RANK_SIZE_MIN,
+        OPS_LOG_E(nodeName, "moeRankNum is invalid, must >= %d, but got moeRankNum=%ld.",
+            LIMIT_EXPERT_RANK_SIZE_MIN, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(attnRankNum < LIMIT_ATTENTION_RANK_SIZE_MIN,
         OPS_LOG_E(nodeName, "attnRankNum is invalid, must >= %d, but got attnRankNum=%ld.",
             LIMIT_ATTENTION_RANK_SIZE_MIN, attnRankNum), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(expertNum < topk || expertNum > LIMIT_EXPERT_NUM_MAX,
+    OPS_ERR_IF(expertNum < topk,
         OPS_LOG_E(nodeName, "expertNum is invalid, routeExpertNumPerMoe=%ld moeRankNum=%ld.",
             routeExpertNumPerMoe, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(worldSize != (moeRankNum + attnRankNum),
@@ -122,9 +135,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     OPS_ERR_IF(attnRankId < 0 || attnRankId > (worldSize - 1),
         OPS_LOG_E(nodeName, "attnRankId is invalid, only support [0, %ld), but got attnRankId=%ld.",
             worldSize, attnRankId), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(layerIndex < LIMIT_LAYER_INDEX_MIN || layerIndex > LIMIT_LAYER_INDEX_MAX,
-        OPS_LOG_E(nodeName, "layerIndex is invalid, only support [%d, %d], but got layerIndex=%ld.",
-            LIMIT_LAYER_INDEX_MIN, LIMIT_LAYER_INDEX_MAX, layerIndex), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(layerIndex < LIMIT_LAYER_INDEX_MIN,
+        OPS_LOG_E(nodeName, "layerIndex is invalid, must >= %d, but got layerIndex=%ld.",
+            LIMIT_LAYER_INDEX_MIN, layerIndex), return ge::GRAPH_FAILED);
+
+    OPS_ERR_IF(dynamicQuant != 0 && dynamicQuant != 1,
+        OPS_LOG_E(nodeName, "dynamicQuant is invalid, only support 0 or 1, but got dynamicQuant=%ld.",
+            dynamicQuant), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(xShape == nullptr, OPS_LOG_E(nodeName, "xShape is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(xShape->GetStorageShape().GetDimNum() != TWO_DIMS,
@@ -166,7 +183,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     SetHcommCfg(tilingData, groupName);
 
     tilingData->moeDistributeDispatchInfo.magic = magic;
-    tilingData->moeDistributeDispatchInfo.maxBatchSize = limitBatchSizePerRank;
+    tilingData->moeDistributeDispatchInfo.maxBatchSize = limitMaxSeqLenPerRank;
     tilingData->moeDistributeDispatchInfo.batchSize = batchSize;
     tilingData->moeDistributeDispatchInfo.hiddenSize = hiddenSize;
     tilingData->moeDistributeDispatchInfo.topk = topk;

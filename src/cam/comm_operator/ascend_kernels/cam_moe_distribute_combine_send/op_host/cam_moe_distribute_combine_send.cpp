@@ -25,10 +25,11 @@ constexpr static int ONE_DIM = 1;
 constexpr static int TWO_DIMS = 2;
 
 constexpr static int INPUT_X_INDEX = 0;
+constexpr static int INPUT_X_SHARED_INDEX = 1;
 constexpr static int INPUT_BATCH_INFO_INDEX = 3;
 
 constexpr static int ATTR_ENUM_MAGIC = 0;
-constexpr static int ATTR_ENUM_BATCH_SIZE = 1;
+constexpr static int ATTR_ENUM_MAX_SEQ_LEN = 1;
 constexpr static int ATTR_ENUM_HIDDEN_SIZE = 2;
 constexpr static int ATTR_ENUM_TOPK = 3;
 constexpr static int ATTR_ENUM_MOE_RANK_NUM = 4;
@@ -44,14 +45,14 @@ constexpr static int TILING_KEY_FP16 = 101;
 
 constexpr static int INFO_NUM = 5; // number of valid batch-info fields; also start/end expert per chunk
 
-// batchSize [1, 8192]
-constexpr static int LIMIT_BATCH_SIZE_MIN = 1;
-constexpr static int LIMIT_BATCH_SIZE_MAX = 1024 * 256;
-constexpr static int LIMIT_TOPK = 8;
+constexpr static int LIMIT_MAX_SEQ_LEN_MIN = 1;
+constexpr static int LIMIT_MAX_SEQ_LEN_MAX = 1024 * 256;
+constexpr static int LIMIT_TOPK_MIN = 1;
+constexpr static int LIMIT_HIDDEN_SIZE_MIN = 1;
 constexpr static int LIMIT_ATTENTION_RANK_SIZE_MIN = 1;
-constexpr static int LIMIT_EXPERT_NUM_MAX = 256;
+constexpr static int LIMIT_EXPERT_RANK_SIZE_MIN = 1;
+constexpr static int LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN = 1;
 constexpr static int LIMIT_TP_SIZE_MIN = 1;
-constexpr static int LIMIT_TP_SIZE_MAX = 256;
 
 constexpr static int BATCH_INFO_VAL_NUM = 5;
 constexpr static int UB_ALIGN = 32;
@@ -59,7 +60,7 @@ constexpr static int MAX_AIV_NUM = 48;
 
 constexpr static uint32_t OP_TYPE_ALL_TO_ALL = 8U;
 
-static uint32_t MathCeil(uint32_t n, uint32_t align)
+static uint64_t MathCeil(uint64_t n, uint64_t align)
 {
     return (n + align - 1) / align * align;
 }
@@ -81,7 +82,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     auto attrs = context->GetAttrs();
     int64_t magic = *(attrs->GetInt(ATTR_ENUM_MAGIC));
-    int64_t batchSize = *(attrs->GetInt(ATTR_ENUM_BATCH_SIZE));
+    int64_t maxSeqLen = *(attrs->GetInt(ATTR_ENUM_MAX_SEQ_LEN));
     int64_t hiddenSize = *(attrs->GetInt(ATTR_ENUM_HIDDEN_SIZE));
     int64_t topk = *(attrs->GetInt(ATTR_ENUM_TOPK));
     int64_t moeRankNum = *(attrs->GetInt(ATTR_ENUM_MOE_RANK_NUM));
@@ -96,19 +97,29 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t sharedMemSize = GetMaxWindowSize();
 
     const gert::StorageShape *xShape = context->GetInputShape(INPUT_X_INDEX);
+    const gert::StorageShape *xSharedShape = context->GetInputShape(INPUT_X_SHARED_INDEX);
     const gert::StorageShape *batchInfoShape = context->GetInputShape(INPUT_BATCH_INFO_INDEX);
 
-    int64_t limitBatchSizePerRank = batchSize / tpSize;
-    OPS_ERR_IF(batchSize < LIMIT_BATCH_SIZE_MIN || batchSize > LIMIT_BATCH_SIZE_MAX,
-        OPS_LOG_E(nodeName, "batchSize is invalid, only support [%d, %d], but got batchSize=%ld.",
-            LIMIT_BATCH_SIZE_MIN, LIMIT_BATCH_SIZE_MAX, batchSize),
+    OPS_ERR_IF(maxSeqLen < LIMIT_MAX_SEQ_LEN_MIN || maxSeqLen > LIMIT_MAX_SEQ_LEN_MAX,
+        OPS_LOG_E(nodeName, "maxSeqLen is invalid, only support [%d, %d], but got maxSeqLen=%ld.",
+            LIMIT_MAX_SEQ_LEN_MIN, LIMIT_MAX_SEQ_LEN_MAX, maxSeqLen),
         return ge::GRAPH_FAILED);
-    OPS_ERR_IF(topk != LIMIT_TOPK, OPS_LOG_E(nodeName, "topk is invalid, only support %d, but got topk=%ld.",
-        LIMIT_TOPK, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(hiddenSize < LIMIT_HIDDEN_SIZE_MIN,
+        OPS_LOG_E(nodeName, "hiddenSize is invalid, must >= %d, but got hiddenSize=%ld.",
+            LIMIT_HIDDEN_SIZE_MIN, hiddenSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(topk < LIMIT_TOPK_MIN,
+        OPS_LOG_E(nodeName, "topk is invalid, must >= %d, but got topk=%ld.",
+            LIMIT_TOPK_MIN, topk), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(moeRankNum < LIMIT_EXPERT_RANK_SIZE_MIN,
+        OPS_LOG_E(nodeName, "moeRankNum is invalid, must >= %d, but got moeRankNum=%ld.",
+            LIMIT_EXPERT_RANK_SIZE_MIN, moeRankNum), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(routeExpertNumPerMoe < LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN,
+        OPS_LOG_E(nodeName, "routeExpertNumPerMoe is invalid, must >= %d, but got routeExpertNumPerMoe=%ld.",
+            LIMIT_ROUTE_EXPERT_NUM_PER_MOE_MIN, routeExpertNumPerMoe), return ge::GRAPH_FAILED);
     OPS_ERR_IF(attnRankNum < LIMIT_ATTENTION_RANK_SIZE_MIN,
         OPS_LOG_E(nodeName, "attnRankNum is invalid, must >= %d, but got attnRankNum=%ld.",
             LIMIT_ATTENTION_RANK_SIZE_MIN, attnRankNum), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(expertNum < topk || expertNum > LIMIT_EXPERT_NUM_MAX,
+    OPS_ERR_IF(expertNum < topk,
         OPS_LOG_E(nodeName, "expertNum is invalid, routeExpertNumPerMoe=%ld moeRankNum=%ld.",
             routeExpertNumPerMoe, moeRankNum), return ge::GRAPH_FAILED);
     OPS_ERR_IF(worldSize != (moeRankNum + attnRankNum),
@@ -117,9 +128,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     OPS_ERR_IF(moeRankId < 0 || moeRankId > (worldSize - 1),
         OPS_LOG_E(nodeName, "moeRankId is invalid, only support [0, %ld), but got moeRankId=%ld.",
             worldSize, moeRankId), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(tpSize < LIMIT_TP_SIZE_MIN || tpSize > LIMIT_TP_SIZE_MAX || (attnRankNum % tpSize) != 0,
-        OPS_LOG_E(nodeName, "tpSize is invalid, only support [%d, %d] and divide attnRankNum, but got tpSize=%ld.",
-            LIMIT_TP_SIZE_MIN, LIMIT_TP_SIZE_MAX, tpSize), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(tpSize < LIMIT_TP_SIZE_MIN || (attnRankNum % tpSize) != 0,
+        OPS_LOG_E(nodeName, "tpSize is invalid, must >= %d and divide attnRankNum, but got tpSize=%ld.",
+            LIMIT_TP_SIZE_MIN, tpSize), return ge::GRAPH_FAILED);
 
     OPS_ERR_IF(xShape == nullptr, OPS_LOG_E(nodeName, "xShape is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(xShape->GetStorageShape().GetDimNum() != TWO_DIMS,
@@ -128,6 +139,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     OPS_ERR_IF(xShape->GetStorageShape().GetDim(1) != hiddenSize,
         OPS_LOG_E(nodeName, "xShape dim1 is invalid, must be hiddenSize=%ld, but got dim1=%u.",
             hiddenSize, xShape->GetStorageShape().GetDim(1)), return ge::GRAPH_FAILED);
+
+    OPS_ERR_IF(xSharedShape == nullptr, OPS_LOG_E(nodeName, "xSharedShape is null."), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(xSharedShape->GetStorageShape().GetDimNum() != TWO_DIMS,
+        OPS_LOG_E(nodeName, "xSharedShape dim is invalid, must be %d, but got dimNum=%u.",
+            TWO_DIMS, xSharedShape->GetStorageShape().GetDimNum()), return ge::GRAPH_FAILED);
+    OPS_ERR_IF(xSharedShape->GetStorageShape().GetDim(1) != hiddenSize,
+        OPS_LOG_E(nodeName, "xSharedShape dim1 is invalid, must be hiddenSize=%ld, but got dim1=%u.",
+            hiddenSize, xSharedShape->GetStorageShape().GetDim(1)), return ge::GRAPH_FAILED);
 
     int64_t batchInfoNum = INFO_NUM + tpSize + (routeExpertNumPerMoe + 1) * tpSize;
     OPS_ERR_IF(batchInfoShape == nullptr,
@@ -143,7 +162,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     SetHcommCfg(tilingData, groupName);
 
     tilingData->moeDistributeCombineInfo.magic = magic;
-    tilingData->moeDistributeCombineInfo.batchSize = batchSize;
+    tilingData->moeDistributeCombineInfo.maxSeqLen = maxSeqLen;
     tilingData->moeDistributeCombineInfo.hiddenSize = hiddenSize;
     tilingData->moeDistributeCombineInfo.topk = topk;
     tilingData->moeDistributeCombineInfo.moeRankNum = moeRankNum;
@@ -228,7 +247,7 @@ public:
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
 
         this->Attr("magic").Int();
-        this->Attr("batchSize").Int();
+        this->Attr("maxSeqLen").Int();
         this->Attr("hiddenSize").Int();
         this->Attr("topk").Int();
         this->Attr("moeRankNum").Int();
