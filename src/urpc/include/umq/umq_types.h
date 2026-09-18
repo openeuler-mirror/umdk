@@ -714,10 +714,10 @@ typedef struct umq_tp_resource_create_option {
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
 
 /* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
- * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~973B
- * uncompressed; 1024B covers it with slack, so one umq build runs against
+ * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~101B
+ * uncompressed; 128B covers it with slack, so one umq build runs against
  * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 1024u)
+#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 128u)
 
 #ifdef __cplusplus
 }
