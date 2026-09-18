@@ -3432,6 +3432,7 @@ int umq_ub_plus_stats_flow_control_get_impl(uint64_t umqh_tp, umq_flow_control_s
 int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
     qbuf_pool_stats->num = 0;
+    qbuf_pool_stats->local_qbuf_pool_num = 0;
     int ret = umq_qbuf_pool_info_get(qbuf_pool_stats);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq_qbuf pool info get failed\n");
