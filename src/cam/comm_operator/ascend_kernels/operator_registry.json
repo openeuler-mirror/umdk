@@ -5,6 +5,10 @@
     "ascend910_93": [
       "a2e",
       "all_to_all_detour",
+      "cam_moe_distribute_combine_recv",
+      "cam_moe_distribute_combine_send",
+      "cam_moe_distribute_dispatch_recv",
+      "cam_moe_distribute_dispatch_send",
       "e2a",
       "fused_deep_moe",
       "fused_deep_moe_fwk",
@@ -26,6 +30,18 @@
     ]
   },
   "operator_meta": {
+    "cam_moe_distribute_combine_recv": {
+      "requires_shmem": false
+    },
+    "cam_moe_distribute_combine_send": {
+      "requires_shmem": false
+    },
+    "cam_moe_distribute_dispatch_recv": {
+      "requires_shmem": false
+    },
+    "cam_moe_distribute_dispatch_send": {
+      "requires_shmem": false
+    },
     "fused_deep_moe": {
       "requires_shmem": true,
       "family": "fused_deep_moe",

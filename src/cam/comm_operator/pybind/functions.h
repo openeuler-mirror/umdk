@@ -149,4 +149,72 @@ std::tuple<at::Tensor, at::Tensor> swiglu_clip_quant_npu(
     const at::Tensor& x, const at::Tensor& group_index, const at::Tensor& group_alpha,
     bool activate_left, int64_t quant_mode, int64_t clamp_mode);
 
+at::Tensor cam_combine_recv_async_impl_autograd(
+    const at::Tensor &expandX,
+    const at::Tensor &expertIds,
+    const at::Tensor &expertScales,
+    const at::Tensor &commArgs,
+    const int64_t commId,
+    const int64_t batchSize,
+    const int64_t hiddenSize,
+    const int64_t topk,
+    const int64_t moeRankNum,
+    const int64_t attnRankNum,
+    const int64_t routeExpertNumPerMoe,
+    const int64_t attnRankId,
+    const int64_t worldSize,
+    c10::string_view groupName);
+
+at::Tensor cam_combine_send_async_impl_autograd(
+    const at::Tensor &expandX,
+    const at::Tensor &expandXShared,
+    const at::Tensor &commArgs,
+    const at::Tensor &batchInfo,
+    const int64_t commId,
+    const int64_t batchSize,
+    const int64_t hiddenSize,
+    const int64_t topk,
+    const int64_t moeRankNum,
+    const int64_t attnRankNum,
+    const int64_t routeExpertNumPerMoe,
+    const int64_t moeRankId,
+    const int64_t worldSize,
+    const int64_t tpSize,
+    c10::string_view groupName);
+
+std::vector<at::Tensor> cam_dispatch_recv_async_impl_autograd(
+    const at::Tensor &x,
+    const at::Tensor &commArgs,
+    const int64_t commId,
+    const int64_t batchSize,
+    const int64_t hiddenSize,
+    const int64_t topk,
+    const int64_t moeRankNum,
+    const int64_t attnRankNum,
+    const int64_t routeExpertNumPerMoe,
+    const int64_t moeRankId,
+    const int64_t worldSize,
+    const int64_t tpSize,
+    const int64_t dynamicQuant,
+    c10::string_view groupName);
+
+at::Tensor cam_dispatch_send_async_impl_autograd(
+    const at::Tensor &x,
+    const at::Tensor &expertIds,
+    const at::Tensor &commArgs,
+    const int64_t commId,
+    const int64_t maxSeqLen,
+    const int64_t batchSize,
+    const int64_t hiddenSize,
+    const int64_t topk,
+    const int64_t moeRankNum,
+    const int64_t attnRankNum,
+    const int64_t routeExpertNumPerMoe,
+    const int64_t attnRankId,
+    const int64_t worldSize,
+    const int64_t layerIndex,
+    const int64_t tpSize,
+    const int64_t dynamicQuant,
+    c10::string_view groupName);
+
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_

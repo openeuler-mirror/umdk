@@ -40,6 +40,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
           "gather_selection_sparse_flash_attention");
     m.def("quant_lightning_indexer", &quant_lightning_indexer_npu, "quant_lightning_indexer");
     m.def("swiglu_clip_quant", &swiglu_clip_quant_npu, "swiglu_clip_quant");
+    m.def("moe_combine_recv_async", &cam_combine_recv_async_impl_autograd, "moe_combine_recv_async");
+    m.def("moe_combine_send_async", &cam_combine_send_async_impl_autograd, "moe_combine_send_async");
+    m.def("moe_dispatch_recv_async", &cam_dispatch_recv_async_impl_autograd, "moe_dispatch_recv_async");
+    m.def("moe_dispatch_send_async", &cam_dispatch_send_async_impl_autograd, "moe_dispatch_send_async");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -104,4 +108,20 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
         int? key_dtype=None) -> (Tensor, Tensor)");
     m.def("swiglu_clip_quant(Tensor x, Tensor group_index, Tensor group_alpha, *, bool activate_left=False, \
         int quant_mode=1, int clamp_mode=1) -> (Tensor, Tensor)");
+    m.def("moe_combine_recv_async(Tensor expand_x, Tensor expert_ids, Tensor expert_scales, Tensor comm_args, \
+    int comm_id, int batch_size, int hidden_size, int top_k, \
+    int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
+    int world_size, str group_name) -> Tensor");
+    m.def("moe_combine_send_async(Tensor expand_x, Tensor expand_x_shared, Tensor comm_args, Tensor batch_info, \
+    int comm_id, int batch_size, int hidden_size, int top_k, \
+    int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int moe_rank_id, \
+    int world_size, int tp_size, str group_name) -> Tensor");
+    m.def("moe_dispatch_recv_async(Tensor x, Tensor comm_args, \
+    int comm_id, int batch_size, int hidden_size, int top_k, \
+    int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int moe_rank_id, \
+    int world_size, int tp_size, int dynamic_quant, str group_name) -> Tensor[]");
+    m.def("moe_dispatch_send_async(Tensor x, Tensor expert_ids, Tensor comm_args, \
+    int comm_id, int max_seq_len, int batch_size, int hidden_size, int top_k, \
+    int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
+    int world_size, int layer_index, int tp_size, int dynamic_quant, str group_name) -> Tensor");
 }
