@@ -232,11 +232,367 @@ Requires route prefix corrections before use (see Section 1.2 L1SW1 route correc
 
 ---
 
-## 4. Data Validation Checklist
+## 4. Main Success Scenario: Coverage Planning (planPathsCoverage / planPathsCoverageEx)
+
+### 4.1 planPathsCoverage — 4npu_8port main success scenario
+
+**Precondition:** `setSuperNode(topo_4npu_8port)` has been called, state is DATAREADY.
+
+**Input (CoveragePathsRequest):**
+
+```json
+{
+  "superNodeName": "A5-superPod-2",
+  "coverageRequirement": "MIN_COVERAGE"
+}
+```
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | PathService.planPathsCoverage | Construct CoveragePlanEngine(superNode, hashFunc, ...) |
+| 2 | engine.findCoverage(MIN_COVERAGE) | Collect L1SW↔L2SW out-port coverage domain |
+| 3 | Enumerate EID pairs | All src×dst NPU port combinations across-chassis + same-chassis |
+| 4 | Trace 4-hop forward/reverse path for each EID pair | Use H3a/H3b, H5a/H5b for port selection; NPU last-hop out-port takes get(0) |
+| 5 | Greedy selection | Pick EID pairs that cover the most uncovered L1SW↔L2SW ports |
+| 6 | Termination | All coverage domain ports coverCount >= 1 (MIN_COVERAGE) |
+| 7 | Statistics | totalStats = { totalLinks, coveredLinks=totalLinks, coverageRate=1.0, ... } |
+| 8 | Assemble result | scope=L1_L2, layerStats=null |
+
+**Expected Output (CoveragePathsResult):**
+
+```json
+{
+  "scope": "L1_L2",
+  "status": "SUCCESS",
+  "eidPairs": [
+    { "srcEid": "AAAAAA12...", "dstEid": "DDDDDD42...", "coveredLinks": [...4 items...], "type": null },
+    ...
+  ],
+  "coverageLinks": [
+    { "deviceName": "rack1#l1sw0", "chipIndex": 0, "outPortName": "400GE 1/0/8", ..., "coverCount": 1, "layer": null, "deviceType": null },
+    ...
+  ],
+  "totalStats": { "totalLinks": N, "coveredLinks": N, "coverageRate": 1.0, "redundantLinks": ..., "eidPairCount": M, "eidUniformity": ... },
+  "layerStats": null
+}
+```
+
+**Assertion Points:**
+- `result.status == PlanStatus.SUCCESS`
+- `result.scope == CoverageLinkScope.L1_L2`
+- `result.layerStats == null`
+- All entries in `result.coverageLinks` have `layer == null`, `deviceType == null`
+- All entries in `result.eidPairs` have `type == null`
+- Each `CoveredEidPair.coveredLinks.size() == 4` (2 forward + 2 reverse)
+- `totalStats.coverageRate == 1.0`
+- `totalStats.coveredLinks == totalStats.totalLinks`
+
+### 4.2 planPathsCoverageEx — 4npu_8port main success scenario (two-stage)
+
+**Precondition:** Same as 4.1; the topology input NPU ports must contain the `jettyId` field.
+
+**Input (CoveragePathsRequest):**
+
+```json
+{
+  "superNodeName": "A5-superPod-2",
+  "coverageRequirement": "MIN_COVERAGE"
+}
+```
+
+**Processing Trace (two-stage):**
+
+| Stage | Step | Operation | Result |
+|---|---|---|---|
+| Stage 1 | 1 | engine.findCoverageEx | Collect all NPU↔L1SW↔L2SW coverage domains |
+| Stage 1 | 2 | Enumerate cross-chassis EID pairs | src/dst in different chassis |
+| Stage 1 | 3 | Trace 4-hop forward/reverse path | Use H1/H2, H3a/H3b, H4, H5a/H5b for port selection |
+| Stage 1 | 4 | Greedy select CROSS_L2 EID pairs | Cover L1SW↔L2SW gaps |
+| Stage 1 | 5 | Termination condition | All L1_L2 layer ports coverCount >= 1 |
+| Stage 2 | 6 | Filter NPU_L1 gaps | layer == NPU_L1 && coverCount < required |
+| Stage 2 | 7 | Enumerate same-chassis EID pairs | src/dst in the same chassis |
+| Stage 2 | 8 | Trace 2-hop forward/reverse path | Use H6, H7a/H7b for port selection |
+| Stage 2 | 9 | Greedy fill LOCAL_L1 EID pairs | Cover NPU↔L1SW gaps |
+| Merge | 10 | Statistics | totalStats + layerStats=[NPU_L1, L1_L2] |
+| Merge | 11 | Assemble result | scope=NPU_L1_L2 |
+
+**Expected Output (CoveragePathsResult):**
+
+```json
+{
+  "scope": "NPU_L1_L2",
+  "status": "SUCCESS",
+  "eidPairs": [
+    { ..., "type": "CROSS_L2", "coveredLinks": [...8 items... (4 forward + 4 reverse)...] },
+    { ..., "type": "LOCAL_L1", "coveredLinks": [...4 items... (2 forward + 2 reverse)...] },
+    ...
+  ],
+  "coverageLinks": [
+    { ..., "layer": "NPU_L1", "deviceType": "NPU", ... },
+    { ..., "layer": "NPU_L1", "deviceType": "SW", ... },
+    { ..., "layer": "L1_L2",  "deviceType": "SW", ... },
+    ...
+  ],
+  "totalStats": { ..., "coverageRate": 1.0 },
+  "layerStats": [
+    { "layer": "NPU_L1", "stats": { ..., "coverageRate": 1.0 } },
+    { "layer": "L1_L2",   "stats": { ..., "coverageRate": 1.0 } }
+  ]
+}
+```
+
+**Assertion Points:**
+- `result.scope == CoverageLinkScope.NPU_L1_L2`
+- `result.layerStats.size() == 2`, containing NPU_L1 and L1_L2 layers
+- `result.coverageLinks[*].layer ∈ {NPU_L1, L1_L2}`
+- `result.coverageLinks[*].deviceType ∈ {"NPU", "SW"}`
+- `eidPairs[*].type ∈ {CROSS_L2, LOCAL_L1}`
+- CROSS_L2 `coveredLinks.size() == 8` (4 forward + 4 reverse)
+- LOCAL_L1 `coveredLinks.size() == 4` (2 forward + 2 reverse)
+- `totalStats.coverageRate == 1.0`
+- `layerStats[0].stats.coverageRate == 1.0` (NPU_L1 fully covered)
+- `layerStats[1].stats.coverageRate == 1.0` (L1_L2 fully covered)
+
+### 4.3 planPathsCoverageEx — jettyId missing fallback scenario
+
+**Precondition:** The topology input does not carry the `jettyId` field (simulating an old topology).
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | CoveragePlanEngine.jettyIdOf(port) | jettyId is null → fallback `32 + port.id` |
+| 2 | Accumulate diagnostic counter | `exJettyFallback++` |
+| 3 | Continue two-stage coverage planning | Call `HashUtils.nativeHashDstCnaJetty` with the fallback jettyId |
+
+**Assertion Points:**
+- `result.status == SUCCESS` (path selection still completes)
+- `engine.getExDiagnostics().jettyIdFallback > 0`
+- All other diagnostic counters are 0
+
+### 4.4 planPathsCoverage — COVERAGE_INCOMPLETE scenario
+
+**Precondition:** Some L1SW routing tables in the topology are missing or incomplete, making it impossible to cover certain L1SW↔L2SW ports.
+
+**Expected Output:**
+
+```json
+{
+  "scope": "L1_L2",
+  "status": "COVERAGE_INCOMPLETE",
+  "errorMessage": "coverage incomplete: 6/8 covered, missing 2 links",
+  "eidPairs": [...],
+  "coverageLinks": [..., { ..., "coverCount": 0 }, { ..., "coverCount": 0 }],
+  "totalStats": { "coverageRate": 0.75, ... }
+}
+```
+
+**Assertion Points:**
+- `result.status == PlanStatus.COVERAGE_INCOMPLETE`
+- `result.totalStats.coverageRate < 1.0`
+- Still returns `eidPairs` and `coverageLinks` (partial coverage result; the caller decides whether to accept or retry)
+
+---
+
+## 5. Main Success Scenario: Route Calculation and Instantiation (routeCalculate + makeRoutes + getNodeRoute)
+
+### 5.1 routeCalculate — first call (idempotent)
+
+**Precondition:** `init()` has completed, state is READY (no SuperNode deployment required).
+
+**Input:** No parameters.
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | Enter synchronized block | routeCalculated == false, continue |
+| 2 | TopoTemplateService.parseTemplateFile | Load 128_npu_rack.json + 128_npu_inter_rack.json |
+| 3 | RouteMspService.routeMsp | BFS to compute shortest path from each forwarding node to other nodes |
+| 4 | RouteInstantiationService.buildXpodRoutes | Generate template routing table routes |
+| 5 | routeCalculated = true | Subsequent repeated calls return directly |
+
+**Assertion Points:**
+- Method returns normally with no exception
+- Second call also returns with no exception (idempotent); internally `routeCalculated == true` skips the actual computation
+
+### 5.2 makeRoutes — instantiate route table
+
+**Precondition:** `routeCalculate()` has been called; `setSuperNode(superNode)` has been called.
+
+**Input:** SuperNode (already deployed).
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | Check routeCalculated | true, continue |
+| 2 | RouteInstantiationService.instantiateXpodRoute | Iterate over NPU/L1SW/L2SW devices |
+| 3 | NPU instantiation | Match template by chassis/slot/ubpu/die labels |
+| 4 | L1SW instantiation | Match template by chassis/index labels |
+| 5 | L2SW instantiation | Match template by index/chip labels, port index remapping |
+| 6 | deepCopyRoutingEntry | Deep copy to prevent external modifications from affecting internal state |
+| 7 | instantiationRouteMap.put | key="deviceName#chipIndex" |
+
+**Expected Output:** `Map<String, Map<String, RoutingEntry>>`
+
+**Assertion Points:**
+- Returned Map is not empty
+- The Map contains one record per chip per device in the SuperNode
+- Each `RoutingEntry` is **not equal** to the internal object in `instantiationRouteMap` (deep copy verification)
+- Modifying the returned Map does not affect the result of a subsequent `getNodeRoute` call
+
+### 5.3 getNodeRoute — query single device route
+
+**Precondition:** `makeRoutes(superNode)` has been called.
+
+**Input:**
+
+```java
+getNodeRoute("rack1#os0#npu1", 0)
+```
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | Look up instantiationRouteMap | key="rack1#os0#npu1#0" |
+| 2 | Return the corresponding Map<String, RoutingEntry> | That chip's route prefix → RoutingEntry |
+
+**Assertion Points:**
+- Returned Map contains multiple route prefixes
+- Each RoutingEntry.prefix is not null
+- Each RoutingEntry.outPortInfos contains at least one out-port
+- The returned value is equal in content to the corresponding sub-Map returned by `makeRoutes` (deep copy but same content)
+
+### 5.4 Error scenario: makeRoutes without routeCalculate
+
+**Precondition:** `routeCalculate()` has not been called.
+
+**Call:** `makeRoutes(superNode)`
+
+**Expected:** Throws `IllegalStateException`, error message contains "routeCalculate" or "not calculated".
+
+### 5.5 Error scenario: getNodeRoute without makeRoutes
+
+**Precondition:** `makeRoutes(superNode)` has not been called.
+
+**Call:** `getNodeRoute("rack1#os0#npu1", 0)`
+
+**Expected:** Throws `IllegalArgumentException` (key does not exist) or `IllegalStateException`.
+
+---
+
+## 6. Main Success Scenario: Link Event and Route Convergence (notifyLinkEvent)
+
+### 6.1 Link down event — single-hop convergence
+
+**Precondition:** `makeRoutes(superNode)` has completed; in the topology `rack1#l1sw0:400GE 1/0/2` is the uplink of `rack1#os0#npu2`.
+
+**Input (LinkEvent):**
+
+```json
+{
+  "deviceName": "rack1#l1sw0",
+  "portName": "400GE 1/0/2",
+  "eventType": "down",
+  "eventTime": 1716230400000
+}
+```
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | LinkEventService.handleLinkEvent | Locate chip 0 of l1sw0 containing port 1/0/2 |
+| 2 | PortEntity.setLinkStatus | port.linkStatus = LINK_DOWN, port.updateAt = 1716230400000 |
+| 3 | RouteConvergeService.converge | Iterate over the "rack1#l1sw0#0" routing table |
+| 4 | Locate the RoutingEntry containing 1/0/2 | Found, corresponding to prefix "221.221.221.68/32" |
+| 5 | OutPortInfo.setFlag | convergedFlag \|= FLAG_PASSIVE_CONVERRGED |
+| 6 | RoutingEntry.refreshReachable | This entry has only this one out-port → reachable = false |
+| 7 | BFS propagation | reachable changed (true→false) |
+| 8 | Find npu1 via port 1/0/0's remoteDevice | Look up prefix "221.221.221.68/32" in npu1 chip 0 routing table |
+| 9 | npu1 corresponding OutPortInfo.setFlag | Mark 1/0/0 as PASSIVE_CONVERGED |
+| 10 | npu1 refreshReachable for this entry | If npu1 has multiple out-ports and the rest are valid → reachable = true (no change), BFS terminates |
+
+**Assertion Points:**
+- Method returns normally with no exception
+- In the routing table returned by `getNodeRoute("rack1#l1sw0", 0)`, for the RoutingEntry with prefix "221.221.221.68/32":
+  - `reachable == false`
+  - `outPortInfos["400GE 1/0/2"].isConverged() == true`
+  - `outPortInfos["400GE 1/0/2"].getConvergedFlag() & FLAG_PASSIVE_CONVERRGED != 0`
+
+### 6.2 Link up event — clear PASSIVE_CONVERGED
+
+**Precondition:** 6.1 has been executed, route has converged.
+
+**Input (LinkEvent):**
+
+```json
+{
+  "deviceName": "rack1#l1sw0",
+  "portName": "400GE 1/0/2",
+  "eventType": "up",
+  "eventTime": 1716230500000
+}
+```
+
+**Processing Trace:**
+
+| Step | Operation | Result |
+|---|---|---|
+| 1 | PortEntity.setLinkStatus | port.linkStatus = LINK_UP, port.updateAt = 1716230500000 |
+| 2 | RouteConvergeService.converge | Iterate over the routing table |
+| 3 | OutPortInfo.clearFlag | convergedFlag &= ~FLAG_PASSIVE_CONVERRGED |
+| 4 | RoutingEntry.refreshReachable | reachable = true (true→false→true, changes again) |
+| 5 | BFS propagation | Same as 6.1 steps 7~10, the peer npu1 also clears PASSIVE_CONVERGED |
+
+**Assertion Points:**
+- For the RoutingEntry returned by `getNodeRoute("rack1#l1sw0", 0)`:
+  - `reachable == true`
+  - `outPortInfos["400GE 1/0/2"].isConverged() == false`
+  - `outPortInfos["400GE 1/0/2"].getConvergedFlag() == 0`
+
+### 6.3 Repeated down event — idempotency
+
+**Precondition:** 6.1 has been executed.
+
+**Input:** Same as 6.1 (send the down event again).
+
+**Assertion Points:**
+- Method returns normally with no exception
+- Routing table state unchanged (FLAG_PASSIVE_CONVERRGED already set, idempotent)
+- BFS does not propagate (reachable unchanged)
+
+### 6.4 Error scenario: device or port does not exist
+
+**Input:**
+
+```json
+{ "deviceName": "rack1#l1sw99", "portName": "400GE 1/0/0", "eventType": "down", "eventTime": 1716230400000 }
+```
+
+**Expected:** Throws `IllegalStateException`, error message contains "device" or "port" does not exist.
+
+### 6.5 Error scenario: invalid eventType
+
+**Input:**
+
+```json
+{ "deviceName": "rack1#l1sw0", "portName": "400GE 1/0/2", "eventType": "freeze", "eventTime": 1716230400000 }
+```
+
+**Expected:** Throws `IllegalArgumentException`, error message contains "eventType".
+
+---
+
+## 7. Data Validation Checklist
 
 Data must satisfy the following constraints:
 
-### 4.1 Route Consistency
+### 7.1 Route Consistency
 
 For each `(L1SW, NPU port)` combination:
 
@@ -246,9 +602,42 @@ cnaToTargetAddr(NPU_port.CNA) ∈ L1SW.routingTables[].prefix.dstAddress
 
 That is: the NPU port's CNA, after `cnaToTargetAddr` transformation, must have a matching prefix in the routing table of the connected L1SW.
 
+### 7.2 jettyId Value Consistency (planPathsCoverageEx)
+
+For each NPU port:
+
+```
+NPU_port.jettyId ∈ [32, 1023]   or   NPU_port.jettyId is null (triggers fallback)
+```
+
+When missing or out of range, `CoveragePlanEngine.jettyIdOf` falls back to `32 + port.id` and accumulates the diagnostic counter `exJettyFallback`.
+
+### 7.3 Coverage Domain Completeness (planPathsCoverage/Ex)
+
+```
+CoveragePathsResult.totalStats.coveredLinks == CoveragePathsResult.totalStats.totalLinks
+(when status == SUCCESS; when COVERAGE_INCOMPLETE, coveredLinks < totalLinks)
+```
+
+### 7.4 Route Convergence Consistency (notifyLinkEvent)
+
+After link down:
+
+```
+corresponding OutPortInfo.convergedFlag & FLAG_PASSIVE_CONVERRGED != 0
+RoutingEntry.reachable == false (if this entry has only this one out-port)
+```
+
+After link up:
+
+```
+corresponding OutPortInfo.convergedFlag & FLAG_PASSIVE_CONVERRGED == 0
+RoutingEntry.reachable == true
+```
+
 ---
 
-## 5. Coverage Markers
+## 8. Coverage Markers
 
 | Test Case | Covered Flow | Covered RoutePhase Direction |
 |---|---|---|
@@ -257,5 +646,19 @@ That is: the NPU port's CNA, after `cnaToTargetAddr` transformation, must have a
 | 3.2.1 npu1→npu2 via l1sw0 (port0) | Multi-hop SUCCESS + L1SW0 routing | Forward + Reverse |
 | 3.2.2 npu1→npu3 via l1sw1 (port1) | Multi-hop SUCCESS + L1SW1 routing | Forward + Reverse |
 | 4npu_8port full traversal (6 pairs × 8 ports) | Multi-hop SUCCESS × 96 | Forward + Reverse × 96 |
+| 4.1 planPathsCoverage L1↔L2 coverage | Coverage planning SUCCESS + statistics | Forward + Reverse |
+| 4.2 planPathsCoverageEx NPU↔L1↔L2 two-stage | Coverage planning SUCCESS + layered statistics + jettyId hash | Forward + Reverse |
+| 4.3 planPathsCoverageEx jettyId missing fallback | Diagnostic counter jettyIdFallback > 0 + SUCCESS | - |
+| 4.4 planPathsCoverage COVERAGE_INCOMPLETE | Partial coverage | - |
+| 5.1 routeCalculate idempotent | Route template computation + second call idempotent | - |
+| 5.2 makeRoutes instantiation | Template instantiation + deep copy | - |
+| 5.3 getNodeRoute query | HashMap query | - |
+| 5.4 makeRoutes without routeCalculate error | IllegalStateException | - |
+| 5.5 getNodeRoute without makeRoutes error | IllegalArgumentException/IllegalStateException | - |
+| 6.1 Link down convergence | OutPortInfo.setFlag + refreshReachable + BFS propagation | - |
+| 6.2 Link up clear | OutPortInfo.clearFlag + refreshReachable + BFS propagation | - |
+| 6.3 Repeated down idempotent | Bitwise idempotent + BFS does not propagate | - |
+| 6.4 Device/port does not exist error | IllegalStateException | - |
+| 6.5 eventType invalid error | IllegalArgumentException | - |
 
 ---

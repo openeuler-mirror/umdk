@@ -10,6 +10,8 @@
  */
 package com.huawei.umdk.snc.util;
 
+import com.huawei.umdk.snc.log.Logger;
+
 /**
  * Pure-Java implementation of the two native hash entry points, serving as
  * a fallback when {@code libubswitch} / {@code libubswitch-die} are not
@@ -39,6 +41,8 @@ package com.huawei.umdk.snc.util;
  * </ul>
  */
 public final class UbSwitchHash {
+
+    private static final Logger LOG = new Logger(UbSwitchHash.class);
 
     private UbSwitchHash() {
     }
@@ -145,6 +149,7 @@ public final class UbSwitchHash {
      */
     public static int ubswitchHashEcmp(String dip, String sip, int dport, int sport,
                                       int protocol, int hashFunc, int ecmpCnt) {
+        LOG.info("ubswitchHashEcmp: entered pure-Java fallback");
         int h = (hashFunc == 1)
             ? hashFnv1a(dip, sip, dport, sport, protocol, hashFunc)
             : hashSimple(dip, sip, dport, sport, protocol, hashFunc);
@@ -203,6 +208,7 @@ public final class UbSwitchHash {
      */
     public static int ubswitchHashDieEcmp(int srcCna, int dstCna, int lb,
                                           int ecmpCnt, int functionSelect) {
+        LOG.info("ubswitchHashDieEcmp: entered pure-Java fallback");
         if (functionSelect != 0 && functionSelect != 1) {
             return -1;
         }

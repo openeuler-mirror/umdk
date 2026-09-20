@@ -24,21 +24,22 @@ A test strategy aligned with the development layering is adopted, using real ins
 src/test/java/com/huawei/umdk/snc/
 ├── SNCServiceIntegrationTest.java    # Integration test (main entry point)
 ├── TestDataLoader.java               # Test data loading utility
-├── entity/                           # Entity layer unit tests (21 classes)
+├── entity/                           # Entity layer unit tests (22 classes, including LinkEvent)
 │   ├── DeviceEntityTest.java
 │   ├── DeviceTypeTest.java
 │   ├── ForwardingChipTest.java
 │   ├── InternalPathHopTest.java
 │   ├── InternalPathInfoTest.java
+│   ├── LinkEventTest.java            # New: link event entity
 │   ├── LogicPortEntityTest.java
 │   ├── MgmtInfoTest.java
 │   ├── NpuDeviceTest.java
 │   ├── NpuForwardingChipTest.java
-│   ├── NpuPortEntityTest.java
-│   ├── OutPortInfoTest.java
+│   ├── NpuPortEntityTest.java        # Updated: includes jettyId field tests
+│   ├── OutPortInfoTest.java          # Updated: includes convergedFlag/setFlag/clearFlag/isConverged tests
 │   ├── RoutePrefixTest.java
 │   ├── RouteSelectionRecordTest.java
-│   ├── RoutingEntryTest.java
+│   ├── RoutingEntryTest.java         # Updated: includes reachable field + refreshReachable tests
 │   ├── RoutingTableKeyTest.java
 │   ├── RoutingTableTest.java
 │   ├── SwDeviceTest.java
@@ -48,9 +49,20 @@ src/test/java/com/huawei/umdk/snc/
 │   └── SuperNodeTest.java
 ├── dto/                              # DTO layer unit tests
 │   ├── PathPlanRequestTest.java
-│   ├── PathPlanResultTest.java
+│   ├── PathPlanResultTest.java       # Updated: includes COVERAGE_INCOMPLETE status
 │   ├── PathInfoTest.java
-│   └── HopInfoTest.java
+│   ├── HopInfoTest.java
+│   ├── CoveragePathsRequestTest.java          # New
+│   ├── CoveragePathsResultTest.java           # New
+│   ├── CoverageStatsTest.java                 # New
+│   ├── CoverageLayerStatsTest.java            # New
+│   ├── CoverageLinkTest.java                  # New
+│   ├── CoverageLinkScopeTest.java             # New
+│   ├── CoverageLinkLayerTest.java             # New
+│   ├── CoveragePathTypeTest.java              # New
+│   ├── CoverageRequirementTest.java           # New
+│   ├── CoveredEidPairTest.java                # New
+│   └── CoveredEidPairRefTest.java             # New
 ├── config/                           # Config layer unit tests
 │   └── SNCConfigTest.java
 ├── exception/                        # Exception layer unit tests
@@ -59,15 +71,35 @@ src/test/java/com/huawei/umdk/snc/
 │   ├── SuperNodeNotFoundExceptionTest.java
 │   └── PathPlanExceptionTest.java
 ├── util/                             # Util layer unit tests
-│   └── AddressUtilsTest.java
+│   ├── AddressUtilsTest.java
+│   ├── HashUtilsTest.java                    # New: nativeHash/nativeHashDstCnaJetty/isValidJettyId
+│   ├── UbSwitchHashTest.java                 # New: Java fallback correctness
+│   └── DllLoaderTest.java                    # New: JNA search path
 ├── store/                            # Store layer unit tests
 │   └── SuperNodeStoreTest.java
 ├── engine/                           # Engine layer unit tests
 │   ├── RouteLookupEngineTest.java
-│   └── PathEngineTest.java
+│   ├── PathEngineTest.java
+│   └── CoveragePlanEngineTest.java           # New: findCoverage/findCoverageEx + two-phase coverage + getExDiagnostics
+├── route/                            # Route layer unit tests (new)
+│   ├── model/
+│   │   ├── RouteTableTest.java
+│   │   ├── RouteEntryTest.java
+│   │   ├── InboundTest.java
+│   │   ├── NextHopPortTest.java
+│   │   └── OriginNodeTest.java
+│   ├── service/
+│   │   ├── RouteMspServiceTest.java          # BFS shortest path + path policy
+│   │   ├── RouteInstantiationServiceTest.java # Template instantiation + deepCopyRoutingEntry
+│   │   └── RouteConvergeServiceTest.java     # BFS route convergence + setFlag/clearFlag/refreshReachable
+│   └── topo/
+│       └── template/
+│           ├── model/TemplateModelTest.java   # SncTopology/SncNode/SncPort/Label etc.
+│           └── service/TopoTemplateServiceTest.java # Template parsing
 └── service/                          # Service layer unit tests
     ├── SuperNodeServiceTest.java
-    └── PathServiceTest.java
+    ├── PathServiceTest.java                  # Updated: includes planPathsCoverage/planPathsCoverageEx
+    └── LinkEventServiceTest.java             # New: handleLinkEvent + trigger convergence
 ```
 
 ---
@@ -79,21 +111,31 @@ src/test/java/com/huawei/umdk/snc/
 | Layer | Test Class | Class Under Test | Case Count |
 |------|--------|--------|--------|
 | Service | `SuperNodeServiceTest` | `SuperNodeService` | 35 |
-| Service | `PathServiceTest` | `PathService` | 65 |
+| Service | `PathServiceTest` | `PathService` (incl. planPathsCoverage/Ex) | 95+ |
+| Service | `LinkEventServiceTest` | `LinkEventService` | 25+ |
 | Engine | `PathEngineTest` | `PathEngine` | 20 |
 | Engine | `RouteLookupEngineTest` | `RouteLookupEngine` | 8 |
+| Engine | `CoveragePlanEngineTest` | `CoveragePlanEngine` (findCoverage/Ex + two-phase) | 80+ |
+| Route | `RouteMspServiceTest` | `RouteMspService` | 20+ |
+| Route | `RouteInstantiationServiceTest` | `RouteInstantiationService` | 25+ |
+| Route | `RouteConvergeServiceTest` | `RouteConvergeService` | 30+ |
+| Route | `TopoTemplateServiceTest` | `TopoTemplateService` | 12+ |
+| Route | `TemplateModelTest` | SncTopology/SncNode/SncPort/Label etc. | 40+ |
+| Route | `RouteTableTest`/`RouteEntryTest`/`InboundTest`/`NextHopPortTest`/`OriginNodeTest` | route.model classes | 35+ |
 | Store | `SuperNodeStoreTest` | `SuperNodeStore` | 24 |
-| Entity | 21 test files | Various Entity classes | ~150 |
-| DTO | 4 test files | DTO classes | 29 |
+| Entity | 22 test files (incl. LinkEventTest) | Various Entity classes | ~170 |
+| DTO | 15 test files (incl. 11 new DTOs) | DTO classes | 80+ |
 | Exception | 4 test files | Exception classes | 18 |
 | Config | `SNCConfigTest` | `SNCConfig` | 7 |
-| Util | `AddressUtilsTest` | `AddressUtils` | 31 |
+| Util | `AddressUtilsTest` + `HashUtilsTest` + `UbSwitchHashTest` + `DllLoaderTest` | AddressUtils + HashUtils + UbSwitchHash + DllLoader | 60+ |
 
 ### 2.2 Integration Tests
 
 | Test Class | Case Count | Data Source |
 |--------|--------|---------|
-| `SNCServiceIntegrationTest` | 28+ | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
+| `SNCServiceIntegrationTest` | 60+ | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
+| `PlanPathsCoverageExIntegrationTest` | 30+ | Landed (delivered together with NPU-L1 design) |
+| `FullRackTopologyJettyIdTest` | 5+ | `FullRackTopologyGenerator` fixed jettyId allocation (32..39) |
 
 ---
 
@@ -101,7 +143,7 @@ src/test/java/com/huawei/umdk/snc/
 
 ### 3.1 Entity Layer
 
-22 entity classes + 1 inner class, totaling 21 test files and approximately 150 test cases.
+22 entity classes + 1 inner class, totaling 22 test files and approximately 170 test cases.
 
 | Category | Class Name | Test File |
 |:-----|:-----|:---------|
@@ -119,6 +161,7 @@ src/test/java/com/huawei/umdk/snc/
 | Domain class | NpuPortEntity | NpuPortEntityTest.java |
 | Domain class | SwPortEntity | SwPortEntityTest.java |
 | Domain class | LogicPortEntity | LogicPortEntityTest.java |
+| Domain class | LinkEvent | LinkEventTest.java |
 | Domain class | RoutingTable | RoutingTableTest.java |
 | Domain class | RoutingTableKey | RoutingTableKeyTest.java |
 | Domain class | RoutePrefix | RoutePrefixTest.java |
@@ -142,15 +185,30 @@ src/test/java/com/huawei/umdk/snc/
 - `RoutePrefix`/`RoutingTableKey` (HashMap key classes): Additional coverage for null field boundaries
 - `SuperNode`: Additional coverage for `getNpuDevices`/`getSwDevices`/`getAllDevices` merge logic
 - `NpuDevice`: Additional coverage for `findNpuPort` cross-chip search, null chip/null port boundaries
+- `NpuPortEntity`: Additional coverage for the `jettyId` field (including extended constructor); out-of-range jettyId triggers `HashUtils.isValidJettyId` throwing `IllegalArgumentException`
+- `OutPortInfo`: Additional coverage for `convergedFlag` bit operations: `setFlag`/`clearFlag`/`isConverged`; FLAG_PASSIVE_CONVERRGED / FLAG_ACTIVE_CONVERRGED bit combinations
+- `RoutingEntry`: Additional coverage for the `reachable` field; `refreshReachable()` state transitions under 0/1/multi outPort scenarios; `RoutingEntry.copy(src)` deep-copy semantics
+- `LinkEvent`: Additional coverage that `eventType` accepts only "up"/"down"; other values throw `IllegalArgumentException`; all-args constructor + Getter/Setter/equals/hashCode/toString
 
 ### 3.2 DTO Layer
 
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | PathPlanRequest | 8+ | Constructor/Getter/Setter/equals/hashCode/toString; `interDevices` null scenario |
-| PathPlanResult | 10+ | Same as above + `PlanStatus` enum coverage (9 status values) + success/failure constructors |
+| PathPlanResult | 12+ | Same as above + `PlanStatus` enum coverage (11 status values, incl. COVERAGE_INCOMPLETE/TOPO_NOT_FOUND) + success/failure constructors; `spray` field |
 | PathInfo | 6+ | Constructor/Getter/Setter/equals/hashCode/toString; `hops` null scenario |
 | HopInfo | 8+ | Constructor + `multiPath`/`deviceType` fields + source/destination/intermediate node field constraints |
+| CoveragePathsRequest | 6+ | Constructor + `superNodeName`/`coverageRequirement`; null coverageRequirement defaults to MIN_COVERAGE |
+| CoveragePathsResult | 15+ | All-fields constructor + `scope`/`status`/`eidPairs`/`coverageLinks`/`totalStats`/`layerStats`; layerStats null (planPathsCoverage) vs non-null (planPathsCoverageEx) |
+| CoverageStats | 10+ | All fields + coverage rate/duplicate rate calculation fields + eidUniformity |
+| CoverageLayerStats | 6+ | Constructor + `layer` enum + `stats` nesting |
+| CoverageLink | 10+ | All fields + `layer`/`deviceType` null vs non-null scenarios |
+| CoverageLinkScope | 4+ | Enum values() + valueOf(): L1_L2 / NPU_L1_L2 |
+| CoverageLinkLayer | 4+ | Enum values() + valueOf(): NPU_L1 / L1_L2 |
+| CoveragePathType | 4+ | Enum values() + valueOf(): CROSS_L2 / LOCAL_L1 |
+| CoverageRequirement | 4+ | Enum values() + valueOf(): MIN_COVERAGE / REDUNDANT |
+| CoveredEidPair | 8+ | All fields + `coveredLinks` list + `type` null vs non-null scenarios |
+| CoveredEidPairRef | 6+ | All fields + `srcEid`/`dstEid` |
 
 ### 3.3 Config Layer
 
@@ -172,6 +230,9 @@ src/test/java/com/huawei/umdk/snc/
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | AddressUtils | 31 | `cnaToTargetAddr`, `applyMask`, `ipToInt`, `intToIp`, `isValidCna`, `isValidEid` |
+| HashUtils | 18+ | `nativeHash` (ECMP), `nativeHashDstCnaJetty` (die hash), `JETTY_ID_MIN`/`JETTY_ID_MAX`, `isValidJettyId` (inside/outside [32,1023] / null); falls back to UbSwitchHash when native unavailable |
+| UbSwitchHash | 15+ | `hashEcmp` and `hashDieEcmp` pure Java implementations; dual-path consistency tests against the native library (`hashEcmp` ↔ `ubswitch_Hash_ecmp`, `hashDieEcmp` ↔ `ubswitch_Hash_dieEcmp`) |
+| DllLoader | 8+ | JNA search path: jar sibling directory, classpath extraction, temp directory; returns null when not found |
 
 ### 3.6 Store Layer
 
@@ -193,6 +254,7 @@ src/test/java/com/huawei/umdk/snc/
 |:---|:----------|:-----------|
 | RouteLookupEngine | 8 | LPM match/no-match/default route/empty route/ECMP multiple out-ports; maskLengths=[0] no match |
 | PathEngine | 20 | Direct path (NpuDevice/NpuPortEntity overload)/multi-hop path/cross-chip route lookup/path reversal/port lookup exception/null chip/half-connection |
+| CoveragePlanEngine | 80+ | findCoverage (L1↔L2 domain); findCoverageEx (two-phase CROSS_L2 + LOCAL_L1); hash usage points H1~H7b; jettyIdOf fallback (missing/out-of-range/null port.id); getExDiagnostics all 10 diagnostic counters; MIN_COVERAGE / REDUNDANT coverageRequirement; COVERAGE_INCOMPLETE and SUCCESS termination conditions; EID uniformity statistics |
 
 **RouteLookupEngine LPM Core Algorithm:**
 
@@ -211,12 +273,30 @@ src/test/java/com/huawei/umdk/snc/
 | Intermediate device not found | Throws SuperNodeNotFoundException |
 | Cross-chip route lookup | Returns longest prefix match entry |
 
+**CoveragePlanEngine Coverage Planning Core Tests:**
+
+| Test Class | Scenario | Expected |
+|:-------|:-----|:-----|
+| CoveragePlanEngineTest | findCoverage: 4npu_8port + MIN_COVERAGE | SUCCESS, scope=L1_L2, layerStats=null, coverageRate=1.0 |
+| CoveragePlanEngineTest | findCoverage: 4npu_8port + REDUNDANT | SUCCESS, coverageRate=1.0, redundantLinks > 0 |
+| CoveragePlanEngineTest | findCoverage: incomplete topology | COVERAGE_INCOMPLETE, coverageRate < 1.0 |
+| CoveragePlanEngineTest | findCoverageEx: cross-chassis + same-chassis + MIN_COVERAGE | SUCCESS, scope=NPU_L1_L2, layerStats=[NPU_L1, L1_L2], both layers coverageRate=1.0 |
+| CoveragePlanEngineTest | findCoverageEx: jettyId missing | SUCCESS + exJettyFallback > 0 |
+| CoveragePlanEngineTest | findCoverageEx: jettyId out of range (< 32 or > 1023) | SUCCESS + exJettyFallback > 0 (fallback 32 + portId) |
+| CoveragePlanEngineTest | findCoverageEx: CROSS_L2 EID pair coveredLinks.size()==8 | 4 forward + 4 reverse |
+| CoveragePlanEngineTest | findCoverageEx: LOCAL_L1 EID pair coveredLinks.size()==4 | 2 forward + 2 reverse |
+| CoveragePlanEngineTest | findCoverageEx: all diagnostic counters 0 | SUCCESS + all exDiagnostics fields 0 |
+| CoveragePlanEngineTest | findCoverageEx: NPU route LPM miss | npuRouteFail > 0 |
+| CoveragePlanEngineTest | findCoverageEx: L1SW route lookup failure | l1Fail > 0 |
+| CoveragePlanEngineTest | findCoverageEx: reverse NPU/L1SW/L2SW failure | revNpuFail / revDstL1Fail / revL2Fail / revSrcL1Fail > 0 |
+
 ### 3.8 Service Layer
 
 | Class | Test Case Count | Key Test Points |
 |:---|:----------|:-----------|
 | SuperNodeService | 35 | importSuperNode validation, addNpuDevices/addSwDevices, getDevice, getRoutingTable, exception handling; null/empty string/empty collection parameter validation |
-| PathService | 65 | Complete planPath flow (11 steps), various error code branches, reflection tests (null fields), routePhase exception branches, NpuDevice.findNpuPort boundary |
+| PathService | 95+ | Complete planPath flow (65) + planPathsCoverage (15+) + planPathsCoverageEx (15+); various error code branches, reflection tests (null fields), routePhase exception branches, NpuDevice.findNpuPort boundary; CoveragePlanEngine constructor injection; two-phase flow triggering; scope/layerStats validation |
+| LinkEventService | 25+ | handleLinkEvent normal down/up flow; port state update (linkStatus/updateAt); triggers RouteConvergeService.converge; invalid eventType throws IllegalArgumentException; device/port not found throws IllegalStateException; null SuperNode throws IllegalArgumentException |
 
 **PathService Flow Coverage (corresponding to design document §9):**
 
@@ -228,26 +308,89 @@ src/test/java/com/huawei/umdk/snc/
 | 2 | destPort not found/CNA/EID empty | DST_INFO_ERR (1004) |
 | 4 | Direct connection validation failed | TOPO_CONNECTION_ERROR (1008) |
 | 5 | Multi-hop path resolution failed | TOPO_CONNECTION_NOT_FOUND (1009) |
-| 8 | Route unreachable | ROUTE_NOT_REACHABLE (1010) |
-| 10 | Success | SUCCESS (0) |
+| 6-7 | Route unreachable | ROUTE_NOT_REACHABLE (1010) |
+| 9-10 | Success | SUCCESS (0) |
+
+**PathService Coverage Planning Tests (new):**
+
+| Scenario | Expected |
+|:-----|:-----|
+| planPathsCoverage: 4npu_8port + MIN_COVERAGE | SUCCESS, scope=L1_L2 |
+| planPathsCoverage: 4npu_8port + REDUNDANT | SUCCESS, redundantLinks > 0 |
+| planPathsCoverage: incomplete topology | COVERAGE_INCOMPLETE |
+| planPathsCoverage: superNodeName not found | TOPO_NOT_FOUND |
+| planPathsCoverage: state not DATAREADY | SNCStateException |
+| planPathsCoverage: request is null | IllegalArgumentException |
+| planPathsCoverageEx: 4npu_8port + jettyId + MIN_COVERAGE | SUCCESS, scope=NPU_L1_L2, layerStats=[NPU_L1, L1_L2] |
+| planPathsCoverageEx: jettyId missing | SUCCESS + exJettyFallback > 0 |
+| planPathsCoverageEx: incomplete topology | COVERAGE_INCOMPLETE |
+| planPathsCoverageEx: CROSS_L2 path length verification | coveredLinks.size() == 8 |
+| planPathsCoverageEx: LOCAL_L1 path length verification | coveredLinks.size() == 4 |
+
+**LinkEventService Test Scenarios:**
+
+| Scenario | Expected |
+|:-----|:-----|
+| handleLinkEvent: normal down event | port.linkStatus = LINK_DOWN + port.updateAt updated + converge triggered |
+| handleLinkEvent: normal up event | port.linkStatus = LINK_UP + port.updateAt updated + converge triggered |
+| handleLinkEvent: duplicate down event | Idempotent, routing state unchanged |
+| handleLinkEvent: eventType not up/down | IllegalArgumentException |
+| handleLinkEvent: deviceName not found | IllegalStateException |
+| handleLinkEvent: portName not found | IllegalStateException |
+| handleLinkEvent: superNode is null | IllegalArgumentException |
+| handleLinkEvent: event is null | IllegalArgumentException |
+| handleLinkEvent: eventTime is 0 or negative | Allowed (only written to updateAt, no range validation) |
 
 ### 3.9 SNCServiceImpl
 
 | Test Category | Test Case Count | Key Test Points |
 |:---------|:----------|:-----------|
-| Lifecycle state machine | 8 | INIT→READY→DATAREADY→UNINIT state transitions |
-| Parameter validation | 16 | All input parameter null/empty string checks |
-| Exception handling | 6 | Calling methods before init / after uninit |
-| Full end-to-end | 6 | From init → setSuperNodeData → addNpuDevices → addSwDevices → planPath → uninit |
+| Lifecycle state machine | 12+ | INIT→READY→DATAREADY→UNINIT state transitions; routeCalculate/makeRoutes/getNodeRoute/notifyLinkEvent available in both READY/DATAREADY; planPathsCoverage/Ex only in DATAREADY |
+| Parameter validation | 20+ | All input parameter null/empty string checks; CoveragePathsRequest/LinkEvent field validation |
+| Exception handling | 10+ | Calling methods before init / after uninit; routeCalculate not called before makeRoutes throws IllegalStateException; makeRoutes not called before getNodeRoute throws exception |
+| Full end-to-end | 10+ | From init → setSuperNodeData → addNpuDevices → addSwDevices → planPath → planPathsCoverage → planPathsCoverageEx → routeCalculate → makeRoutes → getNodeRoute → notifyLinkEvent → uninit |
+| Coverage planning chain | 8+ | planPathsCoverage/planPathsCoverageEx full flow; scope/layerStats/type validation |
+| Route calculation chain | 8+ | routeCalculate idempotency (two calls); makeRoutes instantiation; getNodeRoute query; notifyLinkEvent reachable changes after converge verified via getNodeRoute |
 
 **State Machine Tests:**
 
 | Test Scenario | Call Sequence | Expected Result |
 |:---------|:---------|:---------|
 | Call setSuperNode without init | setSuperNode(...) | SNCStateException |
-| Normal call after init | init → setSuperNode | Normal execution |
+| Normal call after init | init → setSuperNode | Normal execution, state enters DATAREADY |
 | Call after uninit | init → ... → uninit → getSuperNode | SNCStateException |
 | Repeated init | init → init | Idempotent, no exception thrown |
+| Call planPath in READY state | init → planPath | SNCStateException (not yet DATAREADY) |
+| Call routeCalculate in READY state | init → routeCalculate | Normal execution |
+| Call makeRoutes in READY state | init → makeRoutes | Throws IllegalStateException (routeCalculate not called) |
+| Call notifyLinkEvent in READY state | init → notifyLinkEvent | Throws IllegalStateException (makeRoutes not called, instantiationRouteMap empty) |
+| Call planPathsCoverage in DATAREADY state | init → setSuperNode → planPathsCoverage | Normal execution |
+| Call planPathsCoverageEx in DATAREADY state | init → setSuperNode → planPathsCoverageEx | Normal execution |
+
+### 3.10 Route Layer (new)
+
+| Class | Test Case Count | Key Test Points |
+|:---|:----------|:-----------|
+| RouteMspService | 20+ | BFS shortest path calculation; shortest/secondShortest/other path classification; template routing table generation; single-chassis/cross-chassis topology; cost=1 consistency; unreachable scenarios |
+| RouteInstantiationService | 25+ | instantiateXpodRoute expands per chassis; NPU/L1SW/L2SW label matching; L2SW out-port remapping when instantiating 4 chassis; buildRouteTableKey; deepCopyRoutingEntry deep-copy semantics (modifying the returned value does not affect internals); empty SuperNode / no forwardingChips boundaries |
+| RouteConvergeService | 30+ | converge BFS propagation; FLAG_PASSIVE_CONVERRGED setFlag/clearFlag; refreshReachable state transitions (true→false / false→true); ECMP multi-out-port only marks the hit one; same-device different-chip forwarding isolation; idempotency (repeated down events); up event clears PASSIVE then reverse BFS propagation |
+| TopoTemplateService | 12+ | parseTemplateFile parses 128_npu_rack.json + 128_npu_inter_rack.json; SncTopology model construction; NodeLoader/PortLoader/PrefixLoader collaboration; throws exception when template file not found |
+| TemplateModel | 40+ | SncTopology/SncNode/SncPort/Label/Address/Prefix/Bitmap/PolicyPath/PolicyPrefix/AddrType constructor + Getter/Setter/equals/hashCode/toString |
+| RouteTable / RouteEntry / Inbound / NextHopPort / OriginNode | 35+ | route.model class constructor + field constraints; RouteEntry's NhpSet + path classification; Inbound's inPortId/parentNode/cost/outIfSet; NextHopPort's pathType |
+
+**RouteConvergeService Key Test Scenarios:**
+
+| Scenario | Expected |
+|:-----|:-----|
+| Single-port down: single out-port RoutingEntry | reachable=false + convergedFlag!=0 + BFS propagation to peer |
+| Single-port down: ECMP multi-out-port RoutingEntry | Only the hit outPort setFlag, reachable=true (other out-ports still effective), no BFS propagation |
+| Single-port up: clear PASSIVE | convergedFlag==0 + reachable=true + reverse BFS propagation clears peer |
+| Repeated down event | Idempotent, state unchanged |
+| Same-device different-chip convergence | Forwarding isolated, only chip C routing table affected, chip C' unaffected |
+| Cross-multi-hop propagation | chip C → N → N' → N'' chained reachable changes |
+| Target object verification | Modifies instantiationRouteMap, does not modify SuperNode.routingTableMap |
+| Device not found | Throws IllegalStateException |
+| Port not found | Throws IllegalStateException |
 
 ---
 
@@ -288,16 +431,21 @@ src/test/resources/
 | NPU | `400GE 0/{chipIndex}/{portIndex}` | `400GE 0/0/1` |
 | L1SW | `400GE 1/{chipIndex}/{portIndex}` | `400GE 1/0/2` |
 
-| NPU | EID Prefix | CNA Range | UPI |
-|:----|:---------|:---------|:------------|
-| npu1 | AAAAAA | 170.170.170.x | 0A0A0A01 |
-| npu2 | DDDDDD | 221.221.221.x | 0A0A0A01 |
-| npu3 | EEEEEE | 238.238.238.x | 0A0A0A01 |
-| npu4 | FFFFFF | 255.255.255.x | 0A0A0A01 |
+| NPU | EID Prefix | CNA Range | UPI | jettyId Range |
+|:----|:---------|:---------|:------------|:-------------|
+| npu1 | AAAAAA | 170.170.170.x | 0A0A0A01 | [32, 1023]; FullRackTopologyGenerator uses 32..39 |
+| npu2 | DDDDDD | 221.221.221.x | 0A0A0A01 | [32, 1023]; FullRackTopologyGenerator uses 32..39 |
+| npu3 | EEEEEE | 238.238.238.x | 0A0A0A01 | [32, 1023]; FullRackTopologyGenerator uses 32..39 |
+| npu4 | FFFFFF | 255.255.255.x | 0A0A0A01 | [32, 1023]; FullRackTopologyGenerator uses 32..39 |
+
+**jettyId Test Data Sources:**
+- SuperNode JSON `jettyId` field: parsed by `TestDataLoader`;
+- Template JSON `jetty_id` field: `128_npu_rack.json`, carried by `PortLoader`/`SncPort`;
+- `FullRackTopologyGenerator` allocates `JETTY_ID_BASE + portIndex` (32..39) deterministically, pinned by `FullRackTopologyJettyIdTest`.
 
 ---
 
-## 6. Test Tools and Dependencies
+## 5. Test Tools and Dependencies
 
 | Tool | Version | Purpose |
 |------|------|------|
@@ -308,7 +456,7 @@ src/test/resources/
 
 ---
 
-## 7. Test Naming Conventions
+## 6. Test Naming Conventions
 
 - Test class name: `{ClassUnderTest}Test.java`
 - Test method name: `{scenario}_{expectedResult}` (camelCase)

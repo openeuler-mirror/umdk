@@ -22,9 +22,11 @@ mvn test
 输出示例：
 
 ```
-Tests run: 498, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 477, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
+
+> 477 为新增 planPathsCoverage/Ex、notifyLinkEvent、routeCalculate/makeRoutes/getNodeRoute、CoveragePlanEngine、route 服务、LinkEventService、HashUtils/UbSwitchHash/DllLoader、新 DTO 测试后的预期总数；具体以实际执行结果为准。
 
 ---
 
@@ -37,11 +39,35 @@ mvn clean test
 # 指定测试类
 mvn test -Dtest=SNCServiceIntegrationTest
 
+# 覆盖规划测试
+mvn test -Dtest=CoveragePlanEngineTest
+mvn test -Dtest=PlanPathsCoverageExIntegrationTest
+
+# 路由服务测试
+mvn test -Dtest=RouteConvergeServiceTest
+mvn test -Dtest=RouteInstantiationServiceTest
+mvn test -Dtest=RouteMspServiceTest
+mvn test -Dtest=TopoTemplateServiceTest
+
+# HashUtils 测试（含 Java fallback 一致性）
+mvn test -Dtest=HashUtilsTest
+mvn test -Dtest=UbSwitchHashTest
+
+# 链路事件服务测试
+mvn test -Dtest=LinkEventServiceTest
+
+# jettyId 固定分配钉死测试
+mvn test -Dtest=FullRackTopologyJettyIdTest
+
 # 通配符匹配
 mvn test -Dtest=*Service*
+mvn test -Dtest=Coverage*
+mvn test -Dtest=Route*
 
 # 指定包下所有测试
 mvn test -Dtest="com.huawei.umdk.snc.service.*"
+mvn test -Dtest="com.huawei.umdk.snc.route.*"
+mvn test -Dtest="com.huawei.umdk.snc.dto.*"
 
 # 跳过测试编译
 mvn compile -DskipTests
@@ -86,6 +112,11 @@ mvn package -Dmaven.test.skip=true
 - 拓扑 JSON 中的端口 EID/CNA 是否完整
 - 端口名称是否在拓扑数据中定义
 - 路由前缀是否与 `cnaToTargetAddr()` 结果一致（`/32` 精确匹配要求）
+- planPathsCoverageEx 失败时检查 NPU 端口 `jettyId` 字段是否在 `[32, 1023]` 范围内；缺失时会触发 `exJettyFallback` 诊断计数（非失败，仍 SUCCESS）
+- 路由收敛测试失败时检查 `instantiationRouteMap` 是否已通过 `makeRoutes` 填充；`notifyLinkEvent` 前必须先 `routeCalculate` + `makeRoutes`
+- CoveragePlanEngine 测试失败时检查 `getExDiagnostics()` 各计数器，定位是 NPU/L1SW/L2SW 哪一层的路由/端口查找失败
+- HashUtils 测试失败时检查原生库是否加载成功；若加载失败会自动回落到 `UbSwitchHash`（纯 Java），不影响测试通过，但 `DllLoaderTest` 会报告搜索路径
+- 模板解析测试失败时检查 `128_npu_rack.json` / `128_npu_inter_rack.json` 资源文件是否在 classpath
 
 ### 6.2 编译失败
 
