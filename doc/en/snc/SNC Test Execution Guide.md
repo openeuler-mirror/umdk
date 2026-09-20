@@ -22,9 +22,11 @@ mvn test
 Output example:
 
 ```
-Tests run: 498, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 477, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
+
+> 477 is the expected total after adding tests for planPathsCoverage/Ex, notifyLinkEvent, routeCalculate/makeRoutes/getNodeRoute, CoveragePlanEngine, route services, LinkEventService, HashUtils/UbSwitchHash/DllLoader, and new DTOs; the actual execution result prevails.
 
 ---
 
@@ -37,11 +39,35 @@ mvn clean test
 # Specify a test class
 mvn test -Dtest=SNCServiceIntegrationTest
 
+# Coverage planning tests
+mvn test -Dtest=CoveragePlanEngineTest
+mvn test -Dtest=PlanPathsCoverageExIntegrationTest
+
+# Route service tests
+mvn test -Dtest=RouteConvergeServiceTest
+mvn test -Dtest=RouteInstantiationServiceTest
+mvn test -Dtest=RouteMspServiceTest
+mvn test -Dtest=TopoTemplateServiceTest
+
+# HashUtils tests (including Java fallback consistency)
+mvn test -Dtest=HashUtilsTest
+mvn test -Dtest=UbSwitchHashTest
+
+# Link event service tests
+mvn test -Dtest=LinkEventServiceTest
+
+# jettyId fixed allocation pinning tests
+mvn test -Dtest=FullRackTopologyJettyIdTest
+
 # Wildcard matching
 mvn test -Dtest=*Service*
+mvn test -Dtest=Coverage*
+mvn test -Dtest=Route*
 
 # All tests under a specific package
 mvn test -Dtest="com.huawei.umdk.snc.service.*"
+mvn test -Dtest="com.huawei.umdk.snc.route.*"
+mvn test -Dtest="com.huawei.umdk.snc.dto.*"
 
 # Skip test compilation
 mvn compile -DskipTests
@@ -86,6 +112,11 @@ mvn package -Dmaven.test.skip=true
 - Verify that port EID/CNA in topology JSON are complete
 - Verify that port names are defined in topology data
 - Verify that route prefixes match the results of `cnaToTargetAddr()` (requires `/32` exact match)
+- If planPathsCoverageEx fails, check whether the NPU port `jettyId` field is within `[32, 1023]`; if missing, it triggers the `exJettyFallback` diagnostic counter (not a failure, still SUCCESS)
+- If route convergence tests fail, check whether `instantiationRouteMap` is filled via `makeRoutes`; `notifyLinkEvent` requires `routeCalculate` + `makeRoutes` first
+- If CoveragePlanEngine tests fail, check the counters from `getExDiagnostics()` to locate whether the NPU/L1SW/L2SW layer route/port lookup failed
+- If HashUtils tests fail, check whether the native library loaded successfully; if loading fails, it automatically falls back to `UbSwitchHash` (pure Java), which does not affect test passing, but `DllLoaderTest` reports the search paths
+- If template parsing tests fail, check whether the `128_npu_rack.json` / `128_npu_inter_rack.json` resource files are in the classpath
 
 ### 6.2 Compilation Failure
 

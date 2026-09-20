@@ -11,10 +11,11 @@
 3. [File Directory Design](#3-file-directory-design)
 4. [Data Structure Definitions (Domain Model Entity)](#4-data-structure-definitions)
 5. [Pure Internal Data Structures (Computation Model)](#5-pure-internal-data-structures)
-6. [Northbound Data Structures (DTO)](#6-northbound-data-structures)
-   - [6.1 PathPlanRequest (Path Planning Request)](#61-pathplanrequest)
-   - [6.2 PathPlanResult (Path Planning Response)](#62-pathplanresult)
-   - [6.3 Relationship Between Northbound and Internal Data Structures](#63-relationship-between-northbound-and-internal-data-structures)
+6. [Northbound Data Structures (DTO)](#6-northbound-data-structures-dto)
+   - [6.1 PathPlanRequest (Path Planning Request)](#61-pathplanrequest-path-planning-request)
+   - [6.2 PathPlanResult (Path Planning Response)](#62-pathplanresult-path-planning-response)
+   - [6.3 Coverage Planning DTO](#63-coverage-planning-dto)
+   - [6.4 Relationship Between Northbound and Internal Data Structures](#64-relationship-between-northbound-and-internal-data-structures)
 7. [Northbound Interface](#7-northbound-interface)
    - [7.1 Interface Overview](#71-interface-overview)
    - [7.2 SNCService Interface Definition](#72-sncservice-interface-definition)
@@ -24,8 +25,15 @@
    - [7.6 Parameter Validation Rules](#76-parameter-validation-rules)
    - [7.7 Interface Implementation Mapping](#77-interface-implementation-mapping)
    - [7.8 Invalid Invocation Order Description](#78-invalid-invocation-order-description)
-   - [7.9 SuperNodeStore (Topology Storage)](#79-supernodestore)
-8. [Path Planning Algorithm — Indexed Mask Match](#8-path-planning-algorithm--indexed-mask-match)
+   - [7.9 SuperNodeStore (Topology Storage)](#79-supernodestore-topology-storage)
+8. [Algorithm](#8-algorithm)
+   - [8.1 Indexed Mask Match](#81-algorithm-description)
+   - [8.2 RouteLookupEngine](#82-engine-interface)
+   - [8.3 Coverage Planning Algorithm (CoveragePlanEngine)](#83-coverage-planning-algorithm-coverageplanengine)
+   - [8.4 Route Convergence Algorithm (RouteConvergeService)](#84-route-convergence-algorithm-routeconvergeservice)
+   - [8.5 Route MSP Calculation and Instantiation Algorithm](#85-route-msp-calculation-and-instantiation-algorithm)
+   - [8.6 HashUtils (hash wrapper)](#86-hashutils-hash-wrapper)
+   - [8.7 Coverage Planning Key Design Decisions](#87-coverage-planning-key-design-decisions)
 9. [Detailed Path Planning Flow](#9-detailed-path-planning-flow)
 
 ---
@@ -34,7 +42,7 @@
 
 ### 1.1 Business Background
 
-SNC (Supernode Network Controller) is a super node controller responsible for managing network topology and routing information, and providing path planning functionality that returns the parameters required for communication path coverage.
+SNC (Supernode Network Controller) is a super node controller responsible for managing network topology and routing information, and providing path planning, coverage planning, link event route convergence functionality, returning the parameters required for communication path coverage.
 
 ### 1.2 Core Functional Requirements
 
@@ -43,6 +51,9 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 | Initialization/Deinitialization | SNC service startup and shutdown | P0 |
 | SuperNode Data Management | Network topology structure provisioning, querying, and deletion | P1 |
 | Path Planning | Path planning based on EID pairs | P2 |
+| Coverage Planning | Given a topology, select a set of EID pairs whose hash route selection traverses and covers the coverage domain out ports; supports L1↔L2 and NPU↔L1↔L2 coverage domains | P2 |
+| Link Event Notification | Receive link up/down events, trigger BFS route convergence to refresh OutPortInfo.convergedFlag and RoutingEntry.reachable | P2 |
+| Route Template Calculation and Instantiation | Calculate MSP routes based on built-in topology templates and instantiate per SuperNode chassis, for use by getNodeRoute / notifyLinkEvent | P2 |
 
 ---
 
@@ -76,6 +87,9 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 
 - **Configuration operations (topology provisioning):** Synchronous calls; the caller provides complete data snapshots.
 - **Query operations (path planning):** Synchronous calls; request-response mode; the caller sends a PathPlanRequest, SNC returns a PathPlanResult.
+- **Coverage Planning:** Synchronous call; request-response mode; the caller sends a CoveragePathsRequest, SNC returns a CoveragePathsResult (including EID pairs, coverage links, coverage rate statistics).
+- **Link Event Notification:** Synchronous call; the caller sends a LinkEvent, SNC internally updates port status and triggers BFS route convergence, returns void.
+- **Route Calculate/Instantiate/Query:** Synchronous call; `routeCalculate` is idempotent and repeatable; `makeRoutes` generates instantiated routing tables for SuperNode based on already-calculated template routes; `getNodeRoute` queries from instantiation results.
 - **Initialization/Deinitialization:** Synchronous calls; SNC loads data from the northbound at startup or receives full synchronization; deinitialization clears in-memory data.
 
 ### 2.3 Data Consistency Guarantee
@@ -83,6 +97,77 @@ SNC (Supernode Network Controller) is a super node controller responsible for ma
 - Topology data (including routing information) is provisioned as full snapshots; SNC does not maintain incremental change logs.
 - All data uses in-memory HashMap indexing, ensuring O(1) lookup efficiency.
 - Path planning is computed in real-time based on in-memory data, with no dependency on external storage.
+- Link events (up/down) update `PortEntity.linkStatus` and `updateAt` in real-time, and refresh `OutPortInfo.convergedFlag` and `RoutingEntry.reachable` through BFS route convergence, ensuring subsequent `getNodeRoute` queries reflect the latest topology state.
+- `instantiationRouteMap` (populated by `makeRoutes`) is decoupled from SuperNode topology data; `setSuperNode` full replacement does not affect `instantiationRouteMap`, requires re-calling `makeRoutes` to sync.
+- `routeCalculate` is idempotent: if already calculated, returns directly, avoiding repeated template parsing and MSP computation.
+
+### 2.4 Internal Call Chains
+
+#### 2.4.1 planPath Call Chain
+
+```
+SNCService.planPath(PathPlanRequest)
+└→ PathService.planPath(request)
+   ├→ superNode.getNpuDevices().get(srcDevice/destDevice)              // Step 0: NPU device lookup
+   ├→ srcNpuDevice.findNpuPort() + destNpuDevice.findNpuPort()         // Step 1~2: Port lookup
+   ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(InternalPathInfo) // Step 3~5: Path resolution
+   ├→ superNode.getAllDevices() + RouteLookupEngine.lookup()           // Step 6~8: Path planning
+   └→ Assemble dto.PathPlanResult                                      // Step 9~10: Output construction
+```
+
+#### 2.4.2 planPathsCoverage / planPathsCoverageEx Call Chain
+
+```
+SNCService.planPathsCoverage(req) / planPathsCoverageEx(req)
+└→ PathService.planPathsCoverage / planPathsCoverageEx(req)
+   ├→ SuperNodeStore.get(superNodeName)                                // Topology lookup
+   ├→ CoveragePlanEngine.findCoverage / findCoverageEx(superNode, requirement)
+   │   ├→ Construct coverage domain OutPortInfo collection (L1↔L2 or NPU↔L1↔L2)
+   │   ├→ Enumerate candidate EID pairs (src/dst NPU port combinations)
+   │   ├→ For each EID pair trace forward/reverse paths (planPathsCoverageEx calls HashUtils.nativeHashDstCnaJetty)
+   │   ├→ Greedily select EID pairs covering missed out ports
+   │   └→ Accumulate statistics (coverage rate / redundancy rate / EID uniformity / layer stats)
+   └→ Assemble dto.CoveragePathsResult
+```
+
+#### 2.4.3 notifyLinkEvent Call Chain
+
+```
+SNCService.notifyLinkEvent(superNode, LinkEvent)
+└→ LinkEventService.handleLinkEvent(superNode, event)
+   ├→ Locate the PortEntity corresponding to deviceName + portName
+   ├→ port.setLinkStatus(LINK_UP/LINK_DOWN) + port.setUpdateAt(eventTime)
+   ├→ RouteConvergeService.converge(superNode, deviceName, chipIndex, portName, isDown)
+   │   ├→ Iterate chip routing table, locate RoutingEntry containing this port
+   │   ├→ OutPortInfo.setFlag(FLAG_PASSIVE_CONVERRGED) [down] / clearFlag(FLAG_PASSIVE_CONVERRGED) [up]
+   │   ├→ RoutingEntry.refreshReachable() → record prefixes with reachable changes
+   │   └→ BFS propagation: locate peer forwarding node via PortEntity.remoteDevice/remotePort
+   │       └→ Query changed prefixes in remote chip routing table → refresh OutPortInfo.convergedFlag for the in-interface → refreshReachable
+   └→ (No return value; convergence results stored in instantiationRouteMap)
+```
+
+#### 2.4.4 routeCalculate / makeRoutes / getNodeRoute Call Chain
+
+```
+SNCService.routeCalculate()
+└→ synchronized { if already calculated, return directly }
+   ├→ TopoTemplateService.parseTemplateFile("128_npu_rack.json")
+   ├→ TopoTemplateService.parseTemplateFile("128_npu_inter_rack.json")
+   ├→ RouteMspService.routeMsp(topoTemplate)                  // BFS shortest path + path policy
+   └→ routes = RouteInstantiationService.buildXpodRoutes(template) // Template routing table (not instantiated)
+
+SNCService.makeRoutes(superNode)
+└→ RouteInstantiationService.instantiateXpodRoute(routes, superNode)
+   ├→ Iterate NPU devices: match template by chassis/slot/ubpu/die labels
+   ├→ Iterate L1SW devices: match template by chassis/index labels
+   ├→ Iterate L2SW devices: match template by index/chip labels (4-chassis instantiation remaps ports)
+   ├→ deepCopyRoutingEntry(...)                                // Deep copy to avoid external modification affecting internal
+   └→ instantiationRouteMap.put("deviceName#chipIndex", routingEntryMap)
+       Return a copy of instantiationRouteMap
+
+SNCService.getNodeRoute(deviceName, chipIndex)
+└→ instantiationRouteMap.get("deviceName#chipIndex")          // Direct HashMap lookup
+```
 
 ---
 
@@ -113,15 +198,16 @@ com.huawei.umdk.snc
 │   ├── ForwardingChip.java            # Forwarding chip abstract base class (with getPorts() abstract method)
 │   ├── NpuForwardingChip.java         # NPU forwarding chip (with ports precise type + getNpuPorts())
 │   ├── SwForwardingChip.java          # Switch forwarding chip (with ports precise type + getSwPorts())
-│   ├── PortEntity.java                # Port abstract base class
-│   ├── NpuPortEntity.java             # NPU port (§4.5.1)
+│   ├── PortEntity.java                # Port abstract base class (with linkStatus, updateAt fields, for LinkEventService to update)
+│   ├── NpuPortEntity.java             # NPU port (§4.5.1, with jettyId field for planPathsCoverageEx)
 │   ├── SwPortEntity.java              # Switch port (§4.5.2)
 │   ├── LogicPortEntity.java           # Logical port (§4.6)
+│   ├── LinkEvent.java                 # Link event (deviceName + portName + eventType + eventTime, for notifyLinkEvent)
 │   ├── RoutingTable.java              # Routing table (§4.7)
-│   ├── RoutingEntry.java              # Routing entry (§4.9)
+│   ├── RoutingEntry.java              # Routing entry (§4.9, with reachable status, for route convergence refreshReachable)
 │   ├── RoutePrefix.java               # Route prefix structure (§4.8)
 │   ├── RoutingTableKey.java           # Routing table composite key (superNodeName + deviceName + chipIndex, §4.7.1)
-│   ├── OutPortInfo.java               # Out port information (§4.9.1)
+│   ├── OutPortInfo.java               # Out port information (§4.9.1, with convergedFlag bit: down=set PASSIVE, up=clear PASSIVE)
 │   ├── InternalPathInfo.java          # §5.1 Internal path information (engine computation context)
 │   ├── InternalPathHop.java           # §5.1 Internal path hop
 │   └── RouteSelectionRecord.java      # §5.2 Internal route selection record
@@ -130,18 +216,48 @@ com.huawei.umdk.snc
 │   ├── PathPlanRequest.java           # Path planning request (§6.1)
 │   ├── PathPlanResult.java            # Path planning response + PlanStatus enum (§6.2)
 │   ├── PathInfo.java                  # Path information (§6.2.1)
-│   └── HopInfo.java                   # Hop information (§6.2.2)
+│   ├── HopInfo.java                   # Hop information (§6.2.2)
+│   ├── CoveragePathsRequest.java      # Coverage planning request (superNodeName + coverageRequirement, reused by planPathsCoverage/Ex)
+│   ├── CoveragePathsResult.java       # Coverage planning response (with scope, layerStats layer statistics)
+│   ├── CoverageStats.java             # Coverage summary statistics (with EID uniformity field)
+│   ├── CoverageLayerStats.java        # Layer statistics (NPU_L1 / L1_L2 each one)
+│   ├── CoverageLink.java              # Coverage link (with deviceType, layer fields)
+│   ├── CoverageLinkScope.java         # Coverage domain enum (L1_L2 / NPU_L1_L2)
+│   ├── CoverageLinkLayer.java         # Link layer enum (NPU_L1 / L1_L2)
+│   ├── CoveragePathType.java          # Path type enum (CROSS_L2 / LOCAL_L1)
+│   ├── CoverageRequirement.java      # Coverage requirement enum (MIN_COVERAGE / REDUNDANT)
+│   ├── CoveredEidPair.java            # Covered EID pair (with type field)
+│   └── CoveredEidPairRef.java         # EID pair reference (srcEid + dstEid)
 │
 ├── service/                           # Business logic layer (orchestration)
 │   ├── SuperNodeService.java               # Topology data management
-│   └── PathService.java               # Path planning orchestration (calls engine layer)
+│   ├── PathService.java               # Path planning orchestration + coverage planning orchestration (planPath / planPathsCoverage / planPathsCoverageEx)
+│   └── LinkEventService.java          # Link event processing (updates port.linkStatus/updateAt)
+│
+├── route/                             # Route calculation and convergence submodule (orchestrated by SncService)
+│   ├── model/                         # Route model
+│   │   ├── RouteTable.java            #   Template routing table (Prefix → RouteEntry)
+│   │   ├── RouteEntry.java            #   Template route entry (with NhpSet + shortest/secondShortest/other classification)
+│   │   ├── Inbound.java               #   Inbound interface (inPortId + parentNodeId + cost + outIfSet)
+│   │   ├── NextHopPort.java           #   Next hop port (outPortId + outPortName + cost + pathType)
+│   │   └── OriginNode.java            #   MSP search node (layer + inboundMap)
+│   ├── service/                       # Route services
+│   │   ├── RouteMspService.java       #   Template route MSP computation (BFS shortest path + path policy)
+│   │   ├── RouteInstantiationService.java # Template route instantiation (chassis extension + NPU/L1SW/L2SW dispatch + buildRouteTableKey + deepCopyRoutingEntry)
+│   │   └── RouteConvergeService.java  #   Route convergence (BFS propagates reachable changes between interconnected forwarding nodes)
+│   └── topo/                          # Topology template
+│       └── template/
+│           ├── model/                 # Template model (SncTopology, SncNode, SncPort, Label, Address, Prefix, Bitmap, PolicyPath, PolicyPrefix, AddrType)
+│           ├── loader/                # Template loaders (TemplateLoader, NodeLoader, PortLoader, PrefixLoader, PolicyLoader, PathPolicyLoader, LogicalPortLoader, PermitOrDenyPolicy, PrefixPolicyLoader, PortFwdPolicyLoader, PathPolicyItemsLoader, Deserializers)
+│           └── service/               # Template service (TopoTemplateService.parseTemplateFile)
 │
 ├── store/                             # Data storage layer (HashMap indexing)
 │   └── SuperNodeStore.java               # Topology index (superNodeName→SuperNode / routingTableMap)
 │
 ├── engine/                            # Algorithm engine layer
 │   ├── PathEngine.java                # Path resolution engine (Step 3~5)
-│   └── RouteLookupEngine.java         # Path planning engine / Indexed Mask Match (Step 6~8, §8)
+│   ├── RouteLookupEngine.java         # Path planning engine / Indexed Mask Match (Step 6~8, §8)
+│   └── CoveragePlanEngine.java        # Coverage planning engine (findCoverage / findCoverageEx + two-stage coverage + layer stats + getExDiagnostics)
 │
 ├── exception/                         # Exception definitions (§7.5.2)
 │   ├── SNCException.java              # Base exception
@@ -150,7 +266,10 @@ com.huawei.umdk.snc
 │   └── PathPlanException.java         # Path planning failure (contains PlanStatus)
 │
 └── util/                              # Utility classes
-    └── AddressUtils.java              # CNA mask calculation, address format validation
+    ├── AddressUtils.java              # CNA mask calculation, address format validation
+    ├── HashUtils.java                 # hash wrapper (nativeHash + nativeHashDstCnaJetty + JETTY_ID_MIN/MAX + isValidJettyId)
+    ├── UbSwitchHash.java              # Pure Java hash fallback (corresponds 1:1 to the two C files logic)
+    └── DllLoader.java                 # JNA native library search and loading (jar sibling directory, classpath extraction, etc.)
 ```
 
 ### 3.3 Dependency Relationships
@@ -161,7 +280,7 @@ com.huawei.umdk.snc
                     └────▲─────┘
                          │uses
                     ┌────┴─────┐
-                    │ service  │ (Orchestration layer: SuperNodeService / PathService)
+                    │ service  │ (Orchestration layer: SuperNodeService / PathService / LinkEventService)
                     └─┬──┬──┬─┘
                       │  │  │
             ┌─────────┘  │  └─────────┘
@@ -171,22 +290,31 @@ com.huawei.umdk.snc
        │(index) │  │(algo)   │  │(model) │
        └───┬────┘  └────┬────┘  └────────┘
            │            │
-           └─────┬──────┘
+           │     ┌──────┴───────┐
+           │     │              │
+           │  ┌──┴─────┐  ┌─────┴──────┐
+           │  │ route  │  │   util     │
+           │  │(template/│  │(HashUtils │
+           │  │converge)│  │/AddressUtils)│
+           │  └──┬─────┘  └────────────┘
+           │     │
+           └─────┴──────┘
                  │query/write
            ┌────────┐
-           │ entity │ (§4 Domain Model + §5 Computation Model, shared dependency of store/engine/service)
+           │ entity │ (§4 Domain Model + §5 Computation Model, shared dependency of store/engine/service/route)
            └────────┘
 ```
 
 | Layer | Can Depend On | Cannot Depend On | Description |
 |:---|:-------|:--------|:-----|
-| `dto` | - | entity / service / store / engine | API contract layer, independent of internal implementation |
-| `entity` | util | dto / service / store / engine | Pure data structure layer |
-| `store` | entity / util | dto / service / engine | Index storage, directly operates on domain model |
-| `engine` | entity / util | dto / service / store | Algorithm engine, reads entity and outputs §5 computation model |
-| `service` | entity / dto / store / engine / util | - | Orchestration layer, completes DTO-to-domain-model mapping |
+| `dto` | - | entity / service / store / engine / route / util | API contract layer, independent of internal implementation |
+| `entity` | util | dto / service / store / engine / route | Pure data structure layer |
+| `store` | entity / util | dto / service / engine / route | Index storage, directly operates on domain model |
+| `engine` | entity / util | dto / service / store / route | Algorithm engine, reads entity and outputs §5 computation model |
+| `route` | entity / util | dto / service / store / engine | Route MSP computation, instantiation, convergence, template parsing |
+| `service` | entity / dto / store / engine / route / util | - | Orchestration layer, completes DTO-to-domain-model mapping |
 | `exception` | dto.PathPlanResult.PlanStatus | - | Exceptions can reference error code enum (PlanStatus defined inside §6.2 PathPlanResult) |
-| `util` | - | entity / dto / service / store / engine | Pure utility class |
+| `util` | - | entity / dto / service / store / engine / route | Pure utility classes (HashUtils, UbSwitchHash, DllLoader, AddressUtils) |
 
 ### 3.4 Interface Layer to Internal Layer Conversion Mapping
 
@@ -776,6 +904,12 @@ public class NpuPortEntity extends PortEntity {
     /** UPI -- 32 bit -- Required field */
     private String upi;
 
+    /** jettyId -- the jettyId field of the (DstCNA, jettyId) tuple used by NPU→L1SW route selection hash;
+     *  value range [32, 1023], one per NPU physical port; used by planPathsCoverageEx
+     *  (§4.5.1.a jettyId). When missing or out of range, CoveragePlanEngine.jettyIdOf falls back
+     *  to HashUtils.JETTY_ID_MIN + portId (= 32 + portId) and increments the exJettyFallback diagnostic counter */
+    private Integer jettyId;
+
     public NpuPortEntity(String portName, Integer id, Integer chipIndex,
                          String remoteDevice, String remotePort, String cna,
                          String eid, String upi) {
@@ -783,12 +917,34 @@ public class NpuPortEntity extends PortEntity {
         this.eid = eid;
         this.upi = upi;
     }
+
+    /** Extended constructor with jettyId (for planPathsCoverageEx) */
+    public NpuPortEntity(String portName, Integer id, Integer chipIndex,
+                         String remoteDevice, String remotePort, String cna,
+                         String eid, String upi, Integer jettyId) {
+        super(portName, id, chipIndex, remoteDevice, remotePort, cna);
+        this.eid = eid;
+        this.upi = upi;
+        this.jettyId = jettyId;
+    }
 }
 ```
 
 **Field Constraints:**
 - `eid`: 128-bit EID identifier, string format. Only NPU ports carry EID information.
+- `upi`: UPI identifier, only carried by NPU ports, used for source/destination UPI consistency validation (`planPath` §9 Step 0).
+- `jettyId`: Physical port identifier for NPU→L1SW route selection hash, value range **`[32, 1023]`** (`HashUtils.JETTY_ID_MIN = 32`, `HashUtils.JETTY_ID_MAX = 1023`), one per NPU physical port. Only used by `planPathsCoverageEx` (as the jettyId field of the `(DstCNA, jettyId)` tuple, see §8 Path Planning Algorithm); not used by `planPath` or `planPathsCoverage`. When topology input is missing or out of range, `CoveragePlanEngine.jettyIdOf` falls back to `32 + portId` and increments the `exJettyFallback` diagnostic counter.
 - NpuPortEntity is stored in `NpuForwardingChip.ports` (`Map<String, NpuPortEntity>`, §4.4.1), accessed directly via `getNpuPorts()` for the precise type, without instanceof/cast.
+
+##### 4.5.1.a jettyId Value Rules (planPathsCoverageEx)
+
+| Item | Description |
+|:---|:---|
+| Value range | `[32, 1023]`, defined by `HashUtils.JETTY_ID_MIN` / `HashUtils.JETTY_ID_MAX`; out-of-range validated by `HashUtils.isValidJettyId`, throws `IllegalArgumentException` |
+| Topo input field | Super node JSON `jettyId` (parsed by `TestDataLoader`); template JSON `jetty_id` (`128_npu_rack.json`, carried by `PortLoader`/`SncPort`); `FullRackTopologyGenerator` uses fixed allocation `JETTY_ID_BASE + portIndex` (32..39, fully consistent each generation, pinned by `FullRackTopologyJettyIdTest`) |
+| Missing fallback | When jettyId is null or out of range, `CoveragePlanEngine.jettyIdOf(port)` falls back to `HashUtils.JETTY_ID_MIN + (port.id == null ? 0 : port.id)`, and increments diagnostic counter `exJettyFallback`, ensuring old topology input (without jettyId) can still complete route selection |
+| Hash usage | `HashUtils.nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc)` calls native library `ubswitch_Hash_dieEcmp` (CRC-8/ATM), see §8 Path Planning Algorithm |
+| ACK direction | ACK direction NPU port selection still uses the **source NPU port's jettyId** (same jettyId as forward), and DstCNA is the source CNA |
 
 #### 4.5.2 SwPortEntity (Switch Port)
 
@@ -810,6 +966,36 @@ public class SwPortEntity extends PortEntity {
 - Switch device ports have no CNA/EID/UPI concept; the `cna` field in switch port scenarios is **optional** (can be null) and does not participate in CNA matching in path planning.
 - `remoteDevice` / `remotePort` are core fields for switch ports, used for multi-hop topology path resolution.
 - SwPortEntity is stored in `SwForwardingChip.ports` (`Map<String, SwPortEntity>`, §4.4.2), accessed directly via `getSwPorts()` for the precise type, without instanceof/cast.
+
+#### 4.5.3 LinkEvent (Link Event Entity)
+
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+@ToString
+public class LinkEvent {
+    /** Device name the link belongs to -- required, corresponds to SuperNode's npuDevices/swDevices key */
+    private String deviceName;
+
+    /** Port name -- required, corresponds to ForwardingChip.ports key */
+    private String portName;
+
+    /** Event type: "up" / "down" -- required, case-sensitive; other values throw IllegalArgumentException */
+    private String eventType;
+
+    /** Event timestamp (milliseconds, epoch) -- required; used to update PortEntity.updateAt */
+    private long eventTime;
+}
+```
+
+**Field Constraints:**
+- `eventType` only accepts `"up"` or `"down"`; other values throw `IllegalArgumentException`.
+- `eventTime` is used to update `PortEntity.updateAt` (for subsequent audit / route convergence snapshots).
+- `deviceName` + `portName` must be able to locate the specific `PortEntity` in the SuperNode topology; if not found, throws `IllegalStateException`.
+- Processing flow see §7.2 `notifyLinkEvent` method description and §8 Route Convergence Algorithm.
 
 ---
 
@@ -1044,27 +1230,49 @@ A route entry, representing one routing table record.
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 @EqualsAndHashCode
 @ToString
 public class RoutingEntry {
     /** Target prefix structure -- includes destination address (dstAddress) and mask length (maskLength) */
     private RoutePrefix prefix;
 
-    /** Out port information Map -- supports multiple out ports (ECMP), Map key is portName, required field */
-    private Map<String, OutPortInfo> outPortInfos;
+    /** Out port information Map -- supports multiple out ports (ECMP), Map key is portName, required field;
+     *  internally uses LinkedHashMap to maintain insertion order, setOutPortInfos copies input to LinkedHashMap */
+    private Map<String, OutPortInfo> outPortInfos = new LinkedHashMap<>();
+
+    /** Route reachability: indicates whether outPortInfos contains a valid out port with convergedFlag==0;
+     *  default true; refreshed by refreshReachable() during link event convergence (§8 Route Convergence Algorithm) */
+    private boolean reachable = true;
+
+    public RoutingEntry(RoutePrefix prefix, Map<String, OutPortInfo> outPortInfos, boolean reachable) {
+        this.prefix = prefix;
+        this.reachable = reachable;
+        this.outPortInfos = new LinkedHashMap<>();
+        if (outPortInfos != null) {
+            this.outPortInfos.putAll(outPortInfos);
+        }
+    }
+
+    /** Iterate outPortInfos, if any port with convergedFlag==0 exists then reachable=true, otherwise false */
+    public void refreshReachable();
+
+    /** Deep copy: copies prefix, outPortInfos (including each OutPortInfo instance) and reachable */
+    public static RoutingEntry copy(RoutingEntry src);
 }
 ```
 
 | Field | Type | Description |
 |:-----|:-----|:-----|
 | prefix | RoutePrefix | Target prefix structure, includes destination address and mask length |
-| outPortInfos | Map\<String, OutPortInfo\> | Out port information Map, key is portName, supports multiple out ports (ECMP), required field |
+| outPortInfos | Map\<String, OutPortInfo\> | Out port information Map, key is portName, supports multiple out ports (ECMP), required field; internally LinkedHashMap maintains order |
+| reachable | boolean | Route reachability. Default true; refreshed by `refreshReachable()` during link event convergence: true as long as at least one out port has `convergedFlag==0` (valid), otherwise false |
 
 **Notes:**
 - `RoutingEntry` is stored in `RoutingTable.routes`, keyed by `RoutePrefix` object.
 - During path planning, CNA is padded to a 32-bit `targetAddr` (see §4.8.1), and known masks are taken from `RoutingTable.maskLengths` for level-by-level O(1) lookup by constructing keys (§8).
 - For example, `1.1.1.0/24` and `1.1.1.0/20` are different routes because different masks result in different `RoutePrefix`.
+- The `reachable` field is refreshed during the BFS route convergence flow triggered by `notifyLinkEvent` (§7.2), affecting the routing table state returned by subsequent `getNodeRoute` queries.
+- `RoutingEntry.copy(src)` is used by `RouteInstantiationService.deepCopyRoutingEntry`, ensuring the instantiated routing table returned by `makeRoutes` and the internal `instantiationRouteMap` do not affect each other.
 
 #### 4.9.1 OutPortInfo (Out Port Information)
 
@@ -1078,11 +1286,27 @@ Out port information; one route entry can contain multiple, supporting ECMP.
 @EqualsAndHashCode
 @ToString
 public class OutPortInfo {
+    /** Link down convergence passive flag: set on link event down */
+    public static final int FLAG_PASSIVE_CONVERRGED = 1 << 0;
+
+    /** Active convergence flag: used for two-dimensional routing policy maintenance */
+    public static final int FLAG_ACTIVE_CONVERRGED = 1 << 1;
+
     private String portName;         // Out interface name -- Required field
     private String nextHop;          // Next hop IP
     private Integer preference;      // Route priority (1-255, default 60)
     private Integer tag;             // Route tag
     private String protocol;         // Route protocol type
+    private int convergedFlag;       // Convergence flag bit, bitwise combination of FLAG_PASSIVE_CONVERRGED / FLAG_ACTIVE_CONVERRGED
+
+    /** Determine whether this out port is in converged state (no longer participates in forwarding) */
+    public boolean isConverged() { return convergedFlag != 0; }
+
+    /** Set the specified flag on convergedFlag (does not affect other bits) */
+    public void setFlag(int flag) { this.convergedFlag |= flag; }
+
+    /** Clear the specified flag on convergedFlag (does not affect other bits) */
+    public void clearFlag(int flag) { this.convergedFlag &= ~flag; }
 }
 ```
 
@@ -1093,10 +1317,17 @@ public class OutPortInfo {
 | preference | Integer | Route priority (1-255, default 60) |
 | tag | Integer | Route tag |
 | protocol | String | Route protocol type |
+| convergedFlag | int | Convergence flag bit (bitwise combination): `FLAG_PASSIVE_CONVERRGED` (set on link down), `FLAG_ACTIVE_CONVERRGED` (set on active route policy convergence). `isConverged()` returns `convergedFlag != 0`, indicating this out port does not participate in forwarding |
+
+**Convergence Flag Usage Rules:**
+- Link down event: `notifyLinkEvent` → `LinkEventService` locates the port's chip routing table → finds the `RoutingEntry` containing this port → `OutPortInfo.setFlag(FLAG_PASSIVE_CONVERRGED)` → `RoutingEntry.refreshReachable()`.
+- Link up event: `OutPortInfo.clearFlag(FLAG_PASSIVE_CONVERRGED)` → `RoutingEntry.refreshReachable()`.
+- Active route policy convergence: `OutPortInfo.setFlag(FLAG_ACTIVE_CONVERRGED)` / `clearFlag(FLAG_ACTIVE_CONVERRGED)`.
+- `RoutingEntry.refreshReachable()` iterates `outPortInfos`; as long as one port with `convergedFlag == 0` exists, `reachable = true`, otherwise `false`.
 
 **Notes:**
 - Mask length has been migrated to the `RoutePrefix` structure; `OutPortInfo` no longer contains a `maskLength` field.
-- The above five fields are uniformly encapsulated in `OutPortInfo`, serving as the value in `RoutingEntry.outPortInfos` Map; Map key is `portName`, supporting O(1) lookup and traversal, covering ECMP scenarios.
+- The above fields are uniformly encapsulated in `OutPortInfo`, serving as the value in `RoutingEntry.outPortInfos` Map; Map key is `portName`, supporting O(1) lookup and traversal, covering ECMP scenarios.
 
 
 ## 5 Pure Internal Data Structures
@@ -1335,16 +1566,15 @@ public class RouteSelectionRecord {
 
 **Recording Rules:**
 - Out port count == 1: Do not record `RouteSelectionRecord`, directly proceed to next hop.
-- Out port count > 1 and device does not support per-flow → Do not record, return error code **1011**.
-- Out port count > 1 and device supports per-flow → Record one `RouteSelectionRecord`, where `candidateOutPorts` contains all candidate out interfaces (all ECMP paths), the port consistent with `interDevices` specified out port is marked as `selected=true` (target port), others as `false`. Proceed to next hop.
+- Out port count > 1: Record one `RouteSelectionRecord`, where `candidateOutPorts` contains all candidate out interfaces (all ECMP paths), the port consistent with `interDevices` specified out port is marked as `selected=true` (target port), others as `false`. Proceed to next hop. SNC notifies the caller through `HopInfo.multiPath=true` and `PathPlanResult.spray=true` that this path contains ECMP multi-path; the caller decides per-flow strategy; no longer returns MULTI_PATH_NOT_SUPPORTED error code.
 
 **Consumption Relationship:**
 ```
-Step 9 (Record):
+§9.4.4 Step 9 (Record):
     For each intermediate device with ECMP → generate RouteSelectionRecord
     → candidateOutPorts records all candidate out interfaces + selected marker
     
-Step 9 (UDP port computation):
+§9.5 Step 9 (UDP port computation):
     Iterate RouteSelectionRecord list
     → Based on hashInfo + scna/dcna compute 8-bit src_udp_port / dst_udp_port
     → Fill into PathPlanResult.ackUdpSrcPort / dataUdpSrcPort
@@ -1542,7 +1772,215 @@ public class HopInfo {
 
 ---
 
-### 6.3 Relationship Between Northbound and Internal Data Structures
+### 6.3 Coverage Planning DTO
+
+#### 6.3.1 CoveragePathsRequest (Coverage Planning Request)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveragePathsRequest {
+    /** Super node name -- required, corresponds to SuperNode.name (§4.1) */
+    private String superNodeName;
+
+    /** Coverage requirement; null defaults to MIN_COVERAGE (§6.3.6 CoverageRequirement) */
+    private CoverageRequirement coverageRequirement;
+}
+```
+
+> planPathsCoverage and planPathsCoverageEx share this DTO; the coverage domain difference is determined by the method name, not by request fields.
+
+#### 6.3.2 CoveragePathsResult (Coverage Planning Response)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveragePathsResult {
+    /** Coverage domain: L1_L2 (planPathsCoverage) / NPU_L1_L2 (planPathsCoverageEx) */
+    private CoverageLinkScope scope;
+
+    /** Status: SUCCESS / COVERAGE_INCOMPLETE / TOPO_NOT_FOUND */
+    private PathPlanResult.PlanStatus status;
+
+    /** Error message; null when status=SUCCESS */
+    private String errorMessage;
+
+    /** Selected EID pair list */
+    private List<CoveredEidPair> eidPairs;
+
+    /** All coverage links (deduplicated), grouped by layer */
+    private List<CoverageLink> coverageLinks;
+
+    /** Summary statistics (full coverage domain) */
+    private CoverageStats totalStats;
+
+    /** Layer statistics; planPathsCoverage returns null, planPathsCoverageEx returns NPU_L1 + L1_L2 two layers */
+    private List<CoverageLayerStats> layerStats;
+}
+```
+
+**Field Constraints:**
+- `scope`: Required when SUCCESS, can be null when TOPO_NOT_FOUND.
+- `eidPairs`: Required when SUCCESS / COVERAGE_INCOMPLETE (may be partial coverage results); empty list when TOPO_NOT_FOUND.
+- `coverageLinks[*].layer`: null for planPathsCoverage; ∈ {NPU_L1, L1_L2} for planPathsCoverageEx.
+- `coverageLinks[*].deviceType`: null for planPathsCoverage; ∈ {"NPU", "SW"} for planPathsCoverageEx.
+- `eidPairs[*].type`: null for planPathsCoverage; ∈ {CROSS_L2, LOCAL_L1} for planPathsCoverageEx.
+
+#### 6.3.3 CoverageLinkScope (Coverage Domain Enum)
+
+```java
+public enum CoverageLinkScope {
+    /** planPathsCoverage: only covers L1SW↔L2SW out ports */
+    L1_L2,
+    /** planPathsCoverageEx: covers NPU↔L1SW↔L2SW out ports (including jettyId hash route selection) */
+    NPU_L1_L2
+}
+```
+
+#### 6.3.4 CoverageLinkLayer (Link Layer Enum)
+
+```java
+public enum CoverageLinkLayer {
+    /** NPU↔L1SW link layer (only used by planPathsCoverageEx) */
+    NPU_L1,
+    /** L1SW↔L2SW link layer */
+    L1_L2
+}
+```
+
+#### 6.3.5 CoveragePathType (Path Type Enum)
+
+```java
+public enum CoveragePathType {
+    /** Cross-chassis: source/destination NPU in different chassis, 4-hop path NPU→L1SW→L2SW→L1SW→NPU */
+    CROSS_L2,
+    /** Same chassis: source/destination NPU in same chassis, 2-hop path NPU→L1SW→NPU */
+    LOCAL_L1
+}
+```
+
+#### 6.3.6 CoverageRequirement (Coverage Requirement Enum)
+
+```java
+public enum CoverageRequirement {
+    /** Minimum coverage: each out port covered by at least 1 EID pair (coverCount >= 1) */
+    MIN_COVERAGE,
+    /** Redundant coverage: each out port covered by at least 2 EID pairs (coverCount >= 2) */
+    REDUNDANT
+}
+```
+
+#### 6.3.7 CoverageStats (Coverage Summary Statistics)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageStats {
+    /** Total out port count in current coverage domain */
+    private int totalLinks;
+    /** Covered out port count */
+    private int coveredLinks;
+    /** Coverage rate = coveredLinks / totalLinks */
+    private double coverageRate;
+    /** Out port count covered ≥ 2 times */
+    private int redundantLinks;
+    /** Redundancy rate = redundantLinks / totalLinks */
+    private double redundantRate;
+    /** Total EID pair count */
+    private int eidPairCount;
+    /** EID uniformity: standard deviation of coverage count per out port, lower is more uniform */
+    private double eidUniformity;
+}
+```
+
+#### 6.3.8 CoverageLayerStats (Layer Statistics)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageLayerStats {
+    /** Belonging layer */
+    private CoverageLinkLayer layer;
+    /** Statistics for this layer (same structure as CoverageStats) */
+    private CoverageStats stats;
+}
+```
+
+> planPathsCoverage returns `layerStats = null`; planPathsCoverageEx returns `[NPU_L1 layer stats, L1_L2 layer stats]`.
+
+#### 6.3.9 CoverageLink (Coverage Link)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageLink {
+    /** Device name the link belongs to */
+    private String deviceName;
+    /** Chip index the link belongs to */
+    private int chipIndex;
+    /** Out port name */
+    private String outPortName;
+    /** Out port ID */
+    private int outPortId;
+    /** Peer device name (PortEntity.remoteDevice) */
+    private String remoteDevice;
+    /** Peer port name (PortEntity.remotePort) */
+    private String remotePort;
+    /** Coverage count (how many EID pairs hit) */
+    private int coverCount;
+    /** Link layer; null for planPathsCoverage, ∈ {NPU_L1, L1_L2} for planPathsCoverageEx */
+    private CoverageLinkLayer layer;
+    /** Device type; null for planPathsCoverage, ∈ {"NPU", "SW"} for planPathsCoverageEx */
+    private String deviceType;
+}
+```
+
+#### 6.3.10 CoveredEidPair (Covered EID Pair)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveredEidPair {
+    /** Source EID (128 bit string) */
+    private String srcEid;
+    /** Destination EID (128 bit string) */
+    private String dstEid;
+    /** List of links covered by this EID pair (grouped by layer, forward+reverse merged) */
+    private List<CoverageLink> coveredLinks;
+    /** Path type; null for planPathsCoverage, ∈ {CROSS_L2, LOCAL_L1} for planPathsCoverageEx */
+    private CoveragePathType type;
+}
+```
+
+> `coveredLinks` link order: forward path in source→destination order, reverse path appended in destination→source order; the 4 (planPathsCoverage) or 4/8 (planPathsCoverageEx) coverage links of the same EID pair are stored consecutively in the list.
+
+#### 6.3.11 CoveredEidPairRef (EID Pair Reference)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveredEidPairRef {
+    /** Source EID */
+    private String srcEid;
+    /** Destination EID */
+    private String dstEid;
+}
+```
+
+> Used as a lightweight reference for CoveragePlanEngine internal candidate EID pair enumeration, avoiding constructing a full CoveredEidPair prematurely during the search phase.
+
+#### 6.3.12 LinkEvent (Link Event)
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class LinkEvent {
+    /** Device name the link belongs to -- required */
+    private String deviceName;
+    /** Port name -- required */
+    private String portName;
+    /** Event type: "up" / "down" -- required, case-sensitive */
+    private String eventType;
+    /** Event timestamp (milliseconds, epoch) -- required */
+    private long eventTime;
+}
+```
+
+---
+
+### 6.4 Relationship Between Northbound and Internal Data Structures
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -1578,7 +2016,7 @@ public class HopInfo {
 
 ### 7.1 Interface Overview
 
-The SNC module exposes a unified northbound interface `SNCService`, located in package `com.huawei.umdk.snc`. The caller (upper-layer orchestrator/management system) uses this interface to perform four phases of operations: **initialization, data provisioning, path planning, and deinitialization**.
+The SNC module exposes a unified northbound interface `SNCService`, located in package `com.huawei.umdk.snc`. The caller (upper-layer orchestrator/management system) uses this interface to perform six phases of operations: **initialization, data provisioning, path planning, coverage planning, link event and route management, and deinitialization**.
 
 ```
 Northbound Interface (SNCService)
@@ -1595,10 +2033,18 @@ Northbound Interface (SNCService)
     ├── removeSuperNode(String) → void             // Topology data deletion
     │
     ├── planPath(PathPlanRequest) → PathPlanResult     // Path planning (single path)
+    ├── planPathsCoverage(CoveragePathsRequest) → CoveragePathsResult       // Coverage planning (L1↔L2)
+    ├── planPathsCoverageEx(CoveragePathsRequest) → CoveragePathsResult     // Coverage planning extended (NPU↔L1↔L2)
+    │
+    ├── notifyLinkEvent(SuperNode, LinkEvent) → void                     // Link up/down notification + BFS route convergence
+    ├── routeCalculate() → void                                          // Route template calculation (idempotent, before makeRoutes)
+    ├── makeRoutes(SuperNode) → Map<String, Map<String, RoutingEntry>>   // Route instantiation
+    ├── getNodeRoute(String, int) → Map<String, RoutingEntry>            // Query single device single chip routing table
+    │
     └── uninit() → void                                // Deinitialization
 ```
 
-> **Data Structure Reference:** For complete definitions of northbound data structures involved in the interface such as `PathPlanRequest`, `PathPlanResult`, `PathInfo`, `HopInfo`, `PlanStatus`, etc., see [§6 Northbound Data Structures](#6-northbound-data-structures).
+> **Data Structure Reference:** For complete definitions of northbound data structures involved in the interface such as `PathPlanRequest`, `PathPlanResult`, `PathInfo`, `HopInfo`, `PlanStatus`, `CoveragePathsRequest`, `CoveragePathsResult`, `CoverageLink`, `CoverageLinkScope`, `CoverageLinkLayer`, `CoveragePathType`, `CoverageRequirement`, `CoverageStats`, `CoverageLayerStats`, `CoveredEidPair`, `CoveredEidPairRef`, `LinkEvent`, etc., see [§6 Northbound Data Structures](#6-northbound-data-structures-dto).
 
 ---
 
@@ -1611,6 +2057,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.huawei.umdk.snc.entity.*;
+import com.huawei.umdk.snc.dto.*;
 import com.huawei.umdk.snc.config.SNCConfig;
 
 /**
@@ -1625,6 +2072,12 @@ import com.huawei.umdk.snc.config.SNCConfig;
  *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 5. Incremental: batch remove devices
  *   sncService.addRoutingEntries("A5-superPod-1", "rack1#os0#npu1", 0, List.of(entry)); // 6. Incremental: batch add routes
  *   sncService.planPath(request);               // 7. Path planning (can be called concurrently multiple times)
+ *   sncService.planPathsCoverage(req);          // 7a. Coverage planning (L1↔L2)
+ *   sncService.planPathsCoverageEx(req);        // 7b. Coverage planning (NPU↔L1↔L2, including jettyId)
+ *   sncService.routeCalculate();                // 7c. Route template calculation (idempotent, must be before makeRoutes)
+ *   sncService.makeRoutes(superNode);           // 7d. Instantiate routing tables (fills instantiationRouteMap)
+ *   sncService.getNodeRoute("rack1#os0#npu1", 0); // 7e. Query single device single chip routing table
+ *   sncService.notifyLinkEvent(superNode, event); // 7f. Notify link up/down (triggers BFS route convergence)
  *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 8. Topology data query
  *   sncService.removeSuperNode("A5-superPod-1");              // 9. Topology data deletion
  *   sncService.uninit();                       // 10. Deinitialization
@@ -1634,9 +2087,14 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * - Calling other interfaces without init(): throws SNCStateException
  * - Calling other interfaces after uninit(): throws SNCStateException
  * - Repeated init(): idempotent handling or throws SNCStateException
+ * - planPath / planPathsCoverage / planPathsCoverageEx: requires state DATAREADY
+ * - notifyLinkEvent / routeCalculate / makeRoutes / getNodeRoute: requires state not INIT/UNINIT (READY / DATAREADY both OK)
  *
  * @see PathPlanRequest
  * @see PathPlanResult
+ * @see CoveragePathsRequest
+ * @see CoveragePathsResult
+ * @see LinkEvent
  * @see SuperNode
  */
 public interface SNCService {
@@ -1809,6 +2267,164 @@ public interface SNCService {
      * @throws SNCStateException SNC not initialized
      */
     PathPlanResult planPath(PathPlanRequest request);
+
+    // ============ Coverage Planning ============
+
+    /**
+     * Coverage planning (inter-chassis L1SW↔L2SW)
+     *
+     * Given a super node topology (including routing tables), select a set of EID pairs (src/dst NPU ports)
+     * such that their forward/reverse hash route selection results traverse the L1SW↔L2SW out port set,
+     * outputting EID pair → coverage link mapping and coverage rate / redundancy rate / EID uniformity statistics.
+     *
+     * <h3>Coverage Domain</h3>
+     * <ul>
+     *   <li>L1SW→L2SW: all out ports in L1SW routing with remoteDevice ∈ L2SW set (including single-port routes);</li>
+     *   <li>L2SW→L1SW: ECMP out ports in L2SW routing with remoteDevice being L1SW (non-default route and out port count &gt; 1).</li>
+     * </ul>
+     *
+     * <p>NPU↔L1SW out ports are not in this coverage domain; NPU out ports are fixed by candidate physical binding, last hop out port takes get(0).
+     *
+     * <h3>Result Characteristics</h3>
+     * <ul>
+     *   <li>{@code scope = L1_L2};</li>
+     *   <li>each EID pair has 4 coverage links (2 forward + 2 reverse);</li>
+     *   <li>{@code eidPairs[*].type = null}; {@code layerStats = null}; {@code coverageLinks[*].layer = null}.</li>
+     * </ul>
+     *
+     * @param request Coverage planning request (§6.x), {@code superNodeName} required; {@code coverageRequirement} null defaults to MIN_COVERAGE
+     * @return Coverage planning result; status is SUCCESS / COVERAGE_INCOMPLETE / TOPO_NOT_FOUND
+     * @throws SNCStateException current state is not DATAREADY
+     * @throws IllegalArgumentException request is null
+     */
+    CoveragePathsResult planPathsCoverage(CoveragePathsRequest request);
+
+    /**
+     * Coverage planning (extended version: including NPU↔L1SW)
+     *
+     * On top of {@link #planPathsCoverage} coverage domain, adds NPU↔L1SW out port coverage:
+     * <ul>
+     *   <li>NPU→L1SW out port selected by {@code (DstCNA, jettyId)} tuple CRC-8 hash (NPU route LPM hit entry's L1SW-direction out ports are ECMP member set);</li>
+     *   <li>The selected NPU port's CNA serves as downstream SCNA, participating in L1SW→L2SW, L2SW→L1SW, L1SW→NPU hash port selection;</li>
+     *   <li>L1SW→NPU last hop out port selected by hash (no longer takes get(0));</li>
+     *   <li>ACK direction uses source NPU port's jettyId for route selection (same jettyId as forward), DstCNA is source CNA.</li>
+     * </ul>
+     *
+     * <h3>Two-Phase Flow</h3>
+     * <ol>
+     *   <li>Phase 1 (inter-chassis CROSS_L2): enumerate cross-chassis EID pairs, trace 4-hop forward/reverse paths, greedily select EID pairs covering L1SW↔L2SW;</li>
+     *   <li>Phase 2 (intra-chassis LOCAL_L1): filter out {@code layer == NPU_L1 && coverCount < required} gaps from Phase 1 results, enumerate same-chassis EID pairs and trace 2-hop forward/reverse paths to fill gaps;</li>
+     *   <li>Merged statistics: after Phase 1 + Phase 2 EID pairs are merged, recompute coverage rate / redundancy rate / EID uniformity / layer statistics on the complete link domain.</li>
+     * </ol>
+     *
+     * <h3>Result Characteristics</h3>
+     * <ul>
+     *   <li>{@code scope = NPU_L1_L2};</li>
+     *   <li>inter-chassis EID pair has 8 coverage links (4 forward + 4 reverse, {@code type = CROSS_L2});</li>
+     *   <li>intra-chassis EID pair has 4 coverage links (2 forward + 2 reverse, {@code type = LOCAL_L1});</li>
+     *   <li>{@code layerStats} contains NPU_L1 / L1_L2 two layers; {@code coverageLinks[*].layer ∈ {NPU_L1, L1_L2}}; {@code coverageLinks[*].deviceType ∈ {"NPU", "SW"}}.</li>
+     * </ul>
+     *
+     * <h3>jettyId Values</h3>
+     * <p>Value range {@code [32, 1023]}, one per NPU physical port; when topology missing, falls back to {@code 32 + portId} and increments diagnostic counter {@code jettyIdFallback}.
+     *
+     * @param request Coverage planning request (same DTO reused with {@link #planPathsCoverage}, coverage domain determined by method name)
+     * @return Coverage planning result (with scope and layerStats layer statistics)
+     * @throws SNCStateException current state is not DATAREADY
+     * @throws IllegalArgumentException request is null
+     * @see CoverageLinkScope#NPU_L1_L2
+     * @see CoverageLinkLayer
+     * @see CoveragePathType
+     */
+    CoveragePathsResult planPathsCoverageEx(CoveragePathsRequest request);
+
+    // ============ Link Event and Route Management ============
+
+    /**
+     * Notify link up/down event
+     *
+     * Update port {@code linkStatus} and {@code updateAt} (handled by {@link LinkEventService}),
+     * and trigger BFS route convergence (handled by {@link RouteConvergeService#converge}): propagates reachability
+     * changes between interconnected forwarding nodes, refreshes {@code OutPortInfo.convergedFlag}
+     * (down=set PASSIVE, up=clear PASSIVE) and {@code RoutingEntry.reachable}.
+     *
+     * <h3>Convergence Algorithm</h3>
+     * <ol>
+     *   <li>Locate the event port's chip C, iterate RoutingEntry with this port as out port in the "device#C" routing table, refresh the hit OutPortInfo.convergedFlag;</li>
+     *   <li>Call {@link RoutingEntry#refreshReachable()} to refresh reachability, record prefixes with reachable changes;</li>
+     *   <li>If reachable changed, iterate other up ports on chip C, locate peer forwarding node's in-interface via PortEntity.remoteDevice/remotePort;</li>
+     *   <li>On peer forwarding node, locate the in-interface's chip C', query changed prefixes in "peerDevice#C'" routing table, refresh OutPortInfo status for out port being in-interface and refresh reachable;</li>
+     *   <li>Iterate until no more forwarding node route reachable changes need propagation (BFS).</li>
+     * </ol>
+     *
+     * <p>Different forwardingChips of the same device are forwarding-isolated; convergence propagates only within the port's chip routing table.
+     * The target is the {@code instantiationRouteMap} held by SNCService (populated by {@link #makeRoutes}),
+     * convergence results affect subsequent {@link #getNodeRoute} queries.
+     *
+     * @param supernode The super node the link event belongs to
+     * @param event Link event (deviceName + portName + eventType + eventTime)
+     * @throws IllegalArgumentException supernode/event is null, or event required fields are null/empty, or eventType is not "up"/"down"
+     * @throws IllegalStateException device or port does not exist in topology
+     * @throws SNCStateException SNC is in INIT/UNINIT state
+     */
+    void notifyLinkEvent(SuperNode supernode, LinkEvent event);
+
+    /**
+     * Route calculation (based on built-in topology template)
+     *
+     * Synchronized method: parses built-in topology templates ({@code 128_npu_rack.json}, {@code 128_npu_inter_rack.json}),
+     * calls {@link RouteMspService#routeMsp} to generate template routes by shortest path policy,
+     * then calls {@link RouteInstantiationService#instantiateXpodRoute} to instantiate per chassis, populating {@code routes}.
+     *
+     * <h3>Idempotency</h3>
+     * <p>If already calculated, returns directly ({@code routeCalculated == true}); repeated calls are safe with no side effects.
+     *
+     * <h3>Invocation Order</h3>
+     * <p>Must be called before {@link #makeRoutes}, otherwise {@code makeRoutes} throws {@link IllegalStateException}.
+     * Does not depend on SuperNode being provisioned: can be called at any time (non INIT/UNINIT) after init.
+     *
+     * @throws SNCStateException SNC is in INIT/UNINIT state
+     */
+    void routeCalculate();
+
+    /**
+     * Route instantiation (generate instantiated routing tables for SuperNode based on already-calculated route templates)
+     *
+     * Iterate NPU/L1SW/L2SW devices in SuperNode, match template route labels by device type and chassis/index,
+     * convert to {@code Map<String, RoutingEntry>} (key = route prefix IP) via {@link RouteInstantiationService},
+     * store in {@code instantiationRouteMap} (key = {@code "deviceName#chipIndex"}) and return a copy.
+     *
+     * <h3>Instantiation Rules</h3>
+     * <ul>
+     *   <li>NPU: match template by {@code chassis/slot/ubpu/die} labels;</li>
+     *   <li>L1SW: match by {@code chassis/index} labels;</li>
+     *   <li>L2SW: match by {@code index/chip} labels, 4-chassis instantiation remaps L2SW out port index/name per inter-chassis topology.</li>
+     * </ul>
+     *
+     * <p>Deep copy ensures internal {@code instantiationRouteMap} and return value do not affect each other
+     * ({@link RouteInstantiationService#deepCopyRoutingEntry}).
+     *
+     * @param superNode Already provisioned super node topology
+     * @return Instantiated routing tables (key = "deviceName#chipIndex", value = route prefix → RoutingEntry mapping for that chip)
+     * @throws IllegalArgumentException superNode is null, or device has no forwardingChips
+     * @throws IllegalStateException {@link #routeCalculate} not called
+     * @throws SNCStateException SNC is in INIT/UNINIT state
+     */
+    Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode);
+
+    /**
+     * Query single device single chip instantiated routing table
+     *
+     * Read the routing table for the specified device and chip from {@code instantiationRouteMap}.
+     * Typical use: query converged reachability state after route convergence ({@link #notifyLinkEvent}).
+     *
+     * @param deviceName Device unique identifier
+     * @param chipIndex Chip index
+     * @return Route prefix → RoutingEntry mapping for that chip
+     * @throws IllegalArgumentException deviceName is null, or key does not exist
+     * @throws SNCStateException SNC is in INIT/UNINIT state
+     */
+    Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex);
 }
 ```
 
@@ -1827,6 +2443,12 @@ public interface SNCService {
 | getSuperNode | String | SuperNode | Synchronous | Yes (read-only, concurrent) | Query topology data by superNodeName |
 | removeSuperNode | String | void | Synchronous | No (write operations require serialization) | Delete topology data and associated routing tables by superNodeName |
 | planPath | PathPlanRequest | PathPlanResult | Synchronous | Yes (read-only, concurrent) | Single path planning |
+| planPathsCoverage | CoveragePathsRequest | CoveragePathsResult | Synchronous | No (internally enumerates EID pairs, recommend serialization) | Coverage planning (L1↔L2 out port domain) |
+| planPathsCoverageEx | CoveragePathsRequest | CoveragePathsResult | Synchronous | No (two-phase enumerates EID pairs, recommend serialization) | Coverage planning extended (NPU↔L1↔L2, including jettyId hash) |
+| notifyLinkEvent | SuperNode, LinkEvent | void | Synchronous | No (modifies port status + triggers BFS route convergence, requires serialization) | Notify link up/down event, refresh OutPortInfo.convergedFlag and RoutingEntry.reachable |
+| routeCalculate | - | void | Synchronous | No (synchronized, idempotent) | Parse built-in topology template, compute MSP template routes; must be before makeRoutes |
+| makeRoutes | SuperNode | Map\<String, Map\<String, RoutingEntry\>\> | Synchronous | No (fills instantiationRouteMap, requires serialization) | Instantiate template routes per chassis; depends on routeCalculate completed |
+| getNodeRoute | String, int | Map\<String, RoutingEntry\> | Synchronous | Yes (read-only, concurrent) | Query single device single chip routing table from instantiationRouteMap |
 
 ---
 
@@ -1841,11 +2463,29 @@ Northbound Caller                                     SNCService
    │── setSuperNode(superNode) ────────────────────────▶│  Phase 2: Topology provisioning
    │◀── void ────────────────────────────────────────│
    │                                                   │
-│── planPath(request1) ────────────────────────────▶│  Phase 3: Path planning
+│── planPath(request1) ────────────────────────────▶│  Phase 3a: Path planning
 │◀── PathPlanResult { status=0, path=... } ───────│ (can be called concurrently multiple times)
 │                                                   │
 │── planPath(request2) ────────────────────────────▶│
 │◀── PathPlanResult { status=1010, ... } ─────────│
+│                                                   │
+│── planPathsCoverage(req) ────────────────────────▶│  Phase 3b: Coverage planning (L1↔L2)
+│◀── CoveragePathsResult { scope=L1_L2, ... } ────│
+│                                                   │
+│── planPathsCoverageEx(req) ──────────────────────▶│  Phase 3c: Coverage planning extended (NPU↔L1↔L2)
+│◀── CoveragePathsResult { scope=NPU_L1_L2, ... } ─│
+│                                                   │
+│── routeCalculate() ──────────────────────────────▶│  Phase 3d-1: Route template calculation (idempotent)
+│◀── void ────────────────────────────────────────│  Parse 128_npu_rack.json + 128_npu_inter_rack.json
+│                                                   │
+│── makeRoutes(superNode) ─────────────────────────▶│  Phase 3d-2: Route instantiation
+│◀── Map<dev#chip, Map<prefix, RoutingEntry>> ────│  Fill instantiationRouteMap
+│                                                   │
+│── getNodeRoute("rack1#os0#npu1", 0) ──────────────▶│  Phase 3d-3: Query single device route
+│◀── Map<prefix, RoutingEntry> ───────────────────│
+│                                                   │
+│── notifyLinkEvent(superNode, event) ──────────────▶│  Phase 3e: Link event notification
+│◀── void ────────────────────────────────────────│  Triggers BFS route convergence
 │                                                   │
 │── getSuperNode("A5-superPod-1") ──────────────────▶│  Phase 4: Data query
 │◀── SuperNode { name="A5-superPod-1", ... } ──────│
@@ -1858,7 +2498,11 @@ Northbound Caller                                     SNCService
    │                                                   │
 ```
 
-> **Note:** setSuperNode must be completed before planPath.
+> **Notes:**
+> - setSuperNode must be completed before planPath / planPathsCoverage / planPathsCoverageEx (state transitions to DATAREADY).
+> - routeCalculate must be called before makeRoutes (idempotent, safe to repeat); getNodeRoute can only be used after makeRoutes completes.
+> - notifyLinkEvent depends on the instantiationRouteMap populated by makeRoutes for route convergence.
+> - Coverage domain differences for planPathsCoverage / planPathsCoverageEx see §7.2 method description.
 
 ---
 
@@ -1870,10 +2514,13 @@ The SNC service internally maintains the following lifecycle states:
          init()                          uninit()
   INIT ──────────▶ READY ──(setSuperNode completed)──▶ DATAREADY
    │                                │                                 │
-   │                                │ Incremental operations (add/remove/get/…) │
-   │                                │ setSuperNode                     │ planPath (can be called concurrently)
-   │                                │ uninit()                         │ setSuperNode (can update)
-   │                                │ Incremental operations (add/remove/get/…) │
+   │                                │ Incremental operations (add/remove/get/…) │ planPath (can be called concurrently)
+   │                                │ setSuperNode                     │ planPathsCoverage / planPathsCoverageEx
+   │                                │ routeCalculate                   │ setSuperNode (can update)
+   │                                │ makeRoutes                       │ Incremental operations (add/remove/get/…)
+   │                                │ getNodeRoute                     │ routeCalculate / makeRoutes / getNodeRoute
+   │                                │ notifyLinkEvent                  │ notifyLinkEvent
+   │                                │ uninit()                         │ uninit()
    │                                │                                 │
    └──── uninit() ───▶ UNINIT ◀───────────────────────────────────────┘
 ```
@@ -1881,8 +2528,8 @@ The SNC service internally maintains the following lifecycle states:
 | State | Description | Allowed Operations |
 |:-----|:-----|:----------|
 | INIT | Initial state (not initialized) | init(), uninit() |
-| READY | Ready state (initialized, data not ready) | setSuperNode; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries); all query operations (getSuperNode); removeSuperNode; uninit |
-| DATAREADY | Data ready state (topology provisioned) | Same as READY, plus planPath |
+| READY | Ready state (initialized, data not ready) | setSuperNode; all incremental operations (addNpuDevices, addSwDevices, removeDevices, addRoutingEntries, removeRoutingEntries); all query operations (getSuperNode); removeSuperNode; routeCalculate, makeRoutes, getNodeRoute, notifyLinkEvent; uninit |
+| DATAREADY | Data ready state (topology provisioned) | Same as READY, plus planPath, planPathsCoverage, planPathsCoverageEx |
 | UNINIT | Deinitialized | (None, calling any operation throws SNCStateException) |
 
 **State Transition Rules:**
@@ -1890,7 +2537,8 @@ The SNC service internally maintains the following lifecycle states:
 - `uninit()`: INIT / READY / DATAREADY → UNINIT (calling in INIT state only clears state flag, no side effects)
 - `setSuperNode()`: READY → DATAREADY (auto-transitions when topology data is provisioned)
 - `setSuperNode()`: DATAREADY → DATAREADY (data ready state can continue updating data)
-- `planPath()`: Only available in **DATAREADY** state; returns SNCStateException when not in DATAREADY
+- `planPath()` / `planPathsCoverage()` / `planPathsCoverageEx()`: Only available in **DATAREADY** state; returns SNCStateException when not in DATAREADY
+- `routeCalculate()` / `makeRoutes()` / `getNodeRoute()` / `notifyLinkEvent()`: **READY / DATAREADY** both OK, only requires SNC initialized (non INIT/UNINIT); does not depend on SuperNode being provisioned (routeCalculate does not read SuperNode; makeRoutes requires SuperNode parameter)
 
 ---
 
@@ -1903,22 +2551,18 @@ All path planning error codes are returned via `PathPlanResult.status` (`PlanSta
 | Error Code | Enum Constant | Description | Trigger Phase |
 |:------:|:--------|:-----|:--------|
 | 0 | `SUCCESS` | Success | - |
-| 1 | `FAILED` | General failure | - |
-| 1001 | `SRC_EID_NOT_FOUND` | Source EID not found | Step 0 |
-| 1002 | `DEST_EID_NOT_FOUND` | Destination EID not found | Step 0 |
 | 1003 | `SRC_INFO_ERR` | Source info missing or incorrect | Step 1 |
 | 1004 | `DST_INFO_ERR` | Destination info missing or incorrect | Step 2 |
-
 | 1007 | `TOPO_INCOMPLETE` | Topology incomplete (device not found in super node devices) | Step 0 / Step 3~5 |
 | 1008 | `TOPO_CONNECTION_ERROR` | Topology connection error (direct connection validation failed) | Step 4 |
 | 1009 | `TOPO_CONNECTION_NOT_FOUND` | Topology connection not found (multi-hop path resolution failed) | Step 5 |
 | 1010 | `ROUTE_NOT_REACHABLE` | Route not reachable (indexed mask match missed or route entry has no out port) | Step 8 |
-| 1011 | `MULTI_PATH_NOT_SUPPORTED` | Multiple paths exist and device does not support per-flow | Step 9 |
-| 1012 | `TOPO_NOT_FOUND` | Topology data not found (superNodeName is empty or corresponding SuperNode does not exist) | Step 0 |
+| 1011 | `COVERAGE_INCOMPLETE` | Coverage planning incomplete: after enumerating all candidate EID pairs, still could not reach the minimum coverage rate required by `coverageRequirement` (only returned by `planPathsCoverage` / `planPathsCoverageEx`; result still contains selected EID pairs and statistics, caller decides whether to accept) | planPathsCoverage / planPathsCoverageEx |
+| 1012 | `TOPO_NOT_FOUND` | Topology data not found (superNodeName is empty or corresponding SuperNode does not exist); also used in `planPathsCoverage` / `planPathsCoverageEx` / `notifyLinkEvent` for SuperNode missing scenarios | Step 0 / Coverage planning / Link event |
 | 3002 | `SRC_AND_DST_MUST_BE_NPU` | Source and destination must be NPU | Step 0 |
 | 3003 | `UPI_MISMATCH` | Source and destination port UPI mismatch | Step 0 |
 
-> **Complete Enum Definition:** [§6.2 PathPlanResult.PlanStatus](#62-pathplanresult-path-planning-response).
+> **Complete Enum Definition:** [§6.2 PathPlanResult.PlanStatus](#62-pathplanresult-path-planning-response). The complete enum values correspond 1:1 to `com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus`.
 
 **Error Code Encoding Rules:**
 - `0`: Success
@@ -2052,6 +2696,47 @@ SNCServiceImpl
     │              ├→ RouteLookupEngine.lookup()    // Path planning (Step 6~8)
     │              └→ Assemble PathPlanResult            // Output construction (Step 9~10)
     │
+    ├── planPathsCoverage(CoveragePathsRequest)
+    │     └→ PathService.planPathsCoverage(request)
+    │              ├→ SuperNodeStore.getSuperNode(superNodeName)   // Topology lookup
+    │              ├→ new CoveragePlanEngine(superNode, hashFunc, ...)  // Construct engine
+    │              ├→ engine.findCoverage(requirement)             // L1↔L2 coverage
+    │              └→ Assemble CoveragePathsResult { scope=L1_L2, ... }
+    │
+    ├── planPathsCoverageEx(CoveragePathsRequest)
+    │     └→ PathService.planPathsCoverageEx(request)
+    │              ├→ SuperNodeStore.getSuperNode(superNodeName)
+    │              ├→ new CoveragePlanEngine(superNode, hashFunc, dieHashFuncSelect, ...)
+    │              ├→ engine.findCoverageEx(requirement)          // Two phases: CROSS_L2 + LOCAL_L1
+    │              └→ Assemble CoveragePathsResult { scope=NPU_L1_L2, layerStats=[...], ... }
+    │
+    ├── notifyLinkEvent(SuperNode, LinkEvent)
+    │     └→ LinkEventService.handleLinkEvent(superNode, event)
+    │              ├→ port.setLinkStatus(LINK_UP/LINK_DOWN) + port.setUpdateAt(eventTime)
+    │              └→ RouteConvergeService.converge(superNode, deviceName, chipIndex, portName, isDown)
+    │                       ├→ OutPortInfo.setFlag/clearFlag(FLAG_PASSIVE_CONVERRGED)
+    │                       ├→ RoutingEntry.refreshReachable()
+    │                       └→ BFS propagate to peer forwarding node
+    │
+    ├── routeCalculate()
+    │     └→ synchronized { if (routeCalculated) return; }
+    │              ├→ TopoTemplateService.parseTemplateFile("128_npu_rack.json")
+    │              ├→ TopoTemplateService.parseTemplateFile("128_npu_inter_rack.json")
+    │              ├→ RouteMspService.routeMsp(topoTemplate)             // BFS shortest path
+    │              ├→ RouteInstantiationService.buildXpodRoutes(template) // Template routing table
+    │              └→ routeCalculated = true
+    │
+    ├── makeRoutes(SuperNode)
+    │     └→ if (!routeCalculated) throw IllegalStateException
+    │     └→ RouteInstantiationService.instantiateXpodRoute(routes, superNode)
+    │              ├→ Iterate NPU/L1SW/L2SW devices to match template by labels
+    │              ├→ deepCopyRoutingEntry(...)                         // Deep copy
+    │              └→ instantiationRouteMap.put("deviceName#chipIndex", routingEntryMap)
+    │                  Return a copy of instantiationRouteMap
+    │
+    ├── getNodeRoute(String, int)
+    │     └→ instantiationRouteMap.get("deviceName#chipIndex")          // Direct HashMap lookup
+    │
     └── uninit()
             └→ SuperNodeStore.clear()  // Clear data
 ```
@@ -2062,10 +2747,14 @@ The following invocation sequences are illegal, and SNC should return an error:
 
 | Invalid Sequence | Error Reason | Suggested Handling |
 |:--------------------------------------|:----------------------------------|:--------------------|
-| Calling other interfaces without `init()` | Internal data structures not initialized | Throw SNCException |
-| Calling other interfaces after `uninit()` | Already deinitialized, in-memory data cleared | Throw SNCException |
-| Calling `planPath()` without provisioning topology data | Cannot find device information | Return error code 1001/1002 |
+| Calling other interfaces without `init()` | Internal data structures not initialized | Throw SNCStateException |
+| Calling other interfaces after `uninit()` | Already deinitialized, in-memory data cleared | Throw SNCStateException |
+| Calling `planPath()` / `planPathsCoverage()` / `planPathsCoverageEx()` without provisioning topology data | State not DATAREADY | Throw SNCStateException |
 | Repeated `init()` without calling `uninit()` | State machine duplicate initialization | Idempotent handling or throw exception |
+| Calling `makeRoutes()` without calling `routeCalculate()` first | Template routes not calculated, cannot instantiate | Throw IllegalStateException |
+| Calling `getNodeRoute()` / `notifyLinkEvent()` without calling `makeRoutes()` first | instantiationRouteMap is empty | Throw IllegalStateException / return key does not exist |
+| `notifyLinkEvent()` `deviceName` + `portName` not found in topology | Device or port does not exist | Throw IllegalStateException |
+| `notifyLinkEvent()` `eventType` is not "up"/"down" | Invalid parameter | Throw IllegalArgumentException |
 
 
 
@@ -2213,7 +2902,7 @@ RoutingTable rt = superNodeStore.getRoutingTable(rtKey);
 
 ---
 
-## 8 Path Planning Algorithm — Indexed Mask Match
+## 8 Algorithm
 
 ### 8.1 Algorithm Description
 
@@ -2318,6 +3007,388 @@ public class RouteLookupEngine {
     }
 }
 ```
+
+### 8.3 Coverage Planning Algorithm (CoveragePlanEngine)
+
+> **Corresponds to `engine/CoveragePlanEngine.java` in the §3.2 package structure** (~2882 lines)
+
+#### 8.3.1 Algorithm Overview
+
+Given a super node topology (including routing tables) and coverage requirement (MIN_COVERAGE / REDUNDANT), greedily select a set of EID pairs from NPU port EID cartesian product such that their forward/reverse hash route selection paths traverse all out ports in the coverage domain. `planPathsCoverage` and `planPathsCoverageEx` share the same engine; the difference is only whether the coverage domain includes NPU↔L1SW:
+
+| Method | Engine Entry | Coverage Domain | Hash Usage Points |
+|:-----|:---------|:-------|:-----------|
+| planPathsCoverage | findCoverage | L1SW↔L2SW (2 of 4-hop path: L1SW→L2SW, L2SW→L1SW) | H3a/H3b, H5a/H5b |
+| planPathsCoverageEx | findCoverageEx | NPU↔L1SW↔L2SW (all 4 segments of 4-hop path + 2-hop intra-chassis path) | H1/H2, H3a/H3b, H4, H5a/H5b, H6, H7a/H7b |
+
+#### 8.3.2 Hash Usage Points
+
+| ID | Location | Input | Hash Function | Output Port |
+|:---|:-----|:-----|:---------|:-------|
+| H1 | NPU→L1SW (forward) | `(DstCNA, jettyId)` | `ubswitch_Hash_dieEcmp` (CRC-8/ATM) | L1SW-direction ECMP out ports of NPU route LPM hit entry |
+| H2 | NPU→L1SW (ACK) | `(sourceCNA, source port jettyId)` | `ubswitch_Hash_dieEcmp` | Same as H1, but jettyId uses source NPU port |
+| H3a | L1SW→L2SW (forward) | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | L2SW-direction out ports of L1SW route LPM hit entry |
+| H3b | L1SW→L2SW (ACK) | Same as H3a, reverse direction | `ubswitch_Hash_ecmp` | - |
+| H4 | L1SW→NPU (forward, extended version) | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | NPU-direction out ports of L1SW route LPM hit entry (no longer get(0)) |
+| H5a | L2SW→L1SW (forward) | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | L1SW-direction ECMP out ports of L2SW route LPM hit entry |
+| H5b | L2SW→L1SW (ACK) | Same as H5a | `ubswitch_Hash_ecmp` | - |
+| H6 | L1SW→L2SW (intra-chassis ACK) | `(sourceCNA, ...)` | `ubswitch_Hash_ecmp` | - |
+| H7a/H7b | L1SW→NPU (intra-chassis forward/reverse) | `(DstCNA/sourceCNA, ...)` | `ubswitch_Hash_ecmp` | - |
+
+> Note: planPathsCoverage does not use H1/H2/H4/H6/H7 (only L1↔L2 coverage domain), last hop out port takes get(0).
+
+#### 8.3.3 SCNA Chaining
+
+When `planPathsCoverageEx` enumerates inter-chassis EID pairs in Phase 1, the selected NPU port's CNA (source CNA) serves as the DstCNA (i.e., SCNA) for downstream L1SW/L2SW/L1SW route lookup, determining the downstream hops' hash port selection. That is: source NPU port CNA → affects L1SW→L2SW, L2SW→L1SW, L1SW→NPU out port selection. The forward DstCNA and reverse DstCNA of the same EID pair are different (reverse uses source CNA), causing forward and reverse paths to not necessarily coincide, thereby covering more links.
+
+#### 8.3.4 Two-Phase Coverage (planPathsCoverageEx)
+
+**Phase 1 (inter-chassis CROSS_L2):**
+1. Enumerate cross-chassis EID pairs (src in chassis A, dst in chassis B);
+2. For each EID pair, trace 4-hop forward/reverse paths (NPU→L1SW→L2SW→L1SW→NPU), using H1~H5b hash port selection;
+3. Greedy selection: each time pick the EID pair that covers the most uncovered L1SW↔L2SW links;
+4. Until all L1SW↔L2SW out ports have coverCount >= required (MIN_COVERAGE=1, REDUNDANT=2) or candidate EID pairs are exhausted.
+
+**Phase 2 (intra-chassis LOCAL_L1):**
+1. Filter out gaps with `layer == NPU_L1 && coverCount < required` from Phase 1 results;
+2. Enumerate same-chassis EID pairs (src and dst in same chassis);
+3. For each EID pair, trace 2-hop forward/reverse paths (NPU→L1SW→NPU), using H6/H7a/H7b hash port selection;
+4. Greedily fill NPU↔L1SW uncovered links.
+
+**Merged Statistics:** After Phase 1 + Phase 2 EID pairs are merged, recompute coverage rate / redundancy rate / EID uniformity / layer statistics (NPU_L1 / L1_L2) on the complete link domain.
+
+#### 8.3.5 EID and Out Port Relationship
+
+| NPU Port Field | Usage | Impact Scope |
+|:---|:---|:---|
+| eid | EID pair's srcEid/dstEid, as input parameter to planPath | Determines EID pair set |
+| cna | As DstCNA for downstream hash / source CNA (SCNA) for reverse | Determines H3a~H7b out port selection |
+| jettyId | Only planPathsCoverageEx: jettyId field of NPU→L1SW route selection hash tuple | Determines H1/H2 out port selection |
+
+#### 8.3.6 Route Scope Extension (planPathsCoverageEx)
+
+The NPU route LPM hit entry's out port set is only `get(0)` as last hop out port in planPathsCoverage; in planPathsCoverageEx it serves as ECMP member set, with one selected by H1/H2 hash. L1SW→NPU is similar: planPathsCoverage takes get(0), planPathsCoverageEx selects by H4 hash.
+
+#### 8.3.7 Engine Interface
+
+```java
+package com.huawei.umdk.snc.engine;
+
+public class CoveragePlanEngine {
+
+    /** JETTY_ID_MIN/MAX consistent with HashUtils; used to validate jettyId values */
+    public static final int JETTY_ID_MIN = HashUtils.JETTY_ID_MIN;
+    public static final int JETTY_ID_MAX = HashUtils.JETTY_ID_MAX;
+
+    /**
+     * Construct coverage planning engine
+     *
+     * @param superNode       Super node topology (including routing tables)
+     * @param hashFunc        hash function selector (HashUtils.HASH_FUNC_CRC8_ATM, etc.)
+     * @param dieHashFuncSelect planPathsCoverageEx NPU→L1SW die hash function selector
+     * @param fixedDataUdpPort Fixed data UDP port (for path planning)
+     * @param fixedAckUdpPort  Fixed ACK UDP port (for path planning)
+     * @param hashTuple        hash tuple configuration
+     */
+    public CoveragePlanEngine(SuperNode superNode, int hashFunc, int dieHashFuncSelect,
+                              int fixedDataUdpPort, int fixedAckUdpPort, int hashTuple);
+
+    /** planPathsCoverage entry: only covers L1SW↔L2SW */
+    public CoveragePathsResult findCoverage(CoverageRequirement requirement);
+
+    /** planPathsCoverageEx entry: covers NPU↔L1SW↔L2SW, two-phase flow */
+    public CoveragePathsResult findCoverageEx(CoverageRequirement requirement);
+
+    /** Get jettyId; falls back to 32 + portId when missing or out of range and increments exJettyFallback */
+    private int jettyIdOf(NpuPortEntity port);
+
+    /** Get extended version diagnostic counters (for planPathsCoverageEx) */
+    public ExDiagnostics getExDiagnostics();
+}
+```
+
+**`ExDiagnostics` Fields:**
+
+| Field | Description |
+|:---|:---|
+| npuRouteFail | NPU route LPM miss count |
+| npuPortFail | NPU port lookup failure count |
+| jettyIdFallback | jettyId missing or out-of-range fallback count |
+| l1Fail | L1SW route lookup/port selection failure count |
+| l2Fail | L2SW route lookup/port selection failure count |
+| dstL1Fail | Destination L1SW lookup failure count |
+| revNpuFail | Reverse NPU port selection failure count |
+| revDstL1Fail | Reverse destination L1SW failure count |
+| revL2Fail | Reverse L2SW failure count |
+| revSrcL1Fail | Reverse source L1SW failure count |
+
+> Diagnostic counters are used for test and production fault localization; in normal SUCCESS results, all counters should be 0 or only jettyIdFallback non-0 (old topology input scenario).
+
+### 8.4 Route Convergence Algorithm (RouteConvergeService)
+
+> **Corresponds to `route/service/RouteConvergeService.java` in the §3.2 package structure**
+
+#### 8.4.1 Algorithm Overview
+
+After link up/down event trigger, BFS propagates reachability changes between interconnected forwarding nodes: starting from the event port's chip, locate affected route prefixes, propagate along peer forwarding links to downstream chip routing tables, refresh corresponding OutPortInfo.convergedFlag and RoutingEntry.reachable.
+
+#### 8.4.2 Convergence Steps
+
+1. **Locate event port**: In SuperNode, find DeviceEntity by `deviceName`, iterate its forwardingChips, find chip C containing `portName`.
+2. **Refresh local chip routing table**: Iterate all RoutingEntry in the `"deviceName#C"` routing table, for each entry.outPortInfos where portName == eventPortName's OutPortInfo:
+   - down event: `setFlag(FLAG_PASSIVE_CONVERRGED)`
+   - up event: `clearFlag(FLAG_PASSIVE_CONVERRGED)`
+3. **Refresh reachable**: Call `refreshReachable()` on RoutingEntry modified in step 2, record prefixes with reachable changes (true→false or false→true) as `changedPrefixes` set.
+4. **BFS propagation**: If `changedPrefixes` is non-empty:
+   - Iterate other ports P with `linkStatus == up` on chip C;
+   - Locate peer forwarding node N's in-interface P' via `P.remoteDevice` / `P.remotePort`;
+   - Find chip C' to which P' belongs on N;
+   - Query prefixes in `changedPrefixes` in the `"N#C'"` routing table;
+   - For RoutingEntry with hit prefixes, locate OutPortInfo where portName == P'.portName in outPortInfos, setFlag/clearFlag `FLAG_PASSIVE_CONVERRGED` (consistent with event direction), refreshReachable;
+   - If N's reachable also changed, add N to BFS queue and continue propagation.
+5. **Termination condition**: BFS queue is empty (no more reachable changes need propagation).
+
+#### 8.4.3 Key Constraints
+
+- Forwarding isolation: Different forwardingChips of the same device have independent routing tables; convergence propagates only within the port's chip routing table.
+- Target: SNCService's `instantiationRouteMap` (populated by `makeRoutes`); does not modify SuperNode topology data's `routingTableMap` itself.
+- ECMP handling: If a RoutingEntry has multiple out ports, down event only marks the hit out port; reachable is determined by all out ports' convergedFlag jointly (any one == 0 means reachable=true).
+- Idempotency: Repeatedly sending the same down event does not repeatedly set flags (bit operation idempotent).
+
+### 8.5 Route MSP Calculation and Instantiation Algorithm
+
+#### 8.5.1 RouteMspService (Template Route MSP Calculation)
+
+> **Corresponds to `route/service/RouteMspService.java`**
+
+Based on topology templates (`128_npu_rack.json`, `128_npu_inter_rack.json`), uses BFS to compute the shortest path from each forwarding node to other nodes, generates template routing table `RouteTable` (`Prefix → RouteEntry`, each RouteEntry contains NhpSet + path classification) by path policy (shortest / secondShortest / other).
+
+**BFS Shortest Path Policy:**
+- Each hop cost = 1, BFS queue ensures first arrival is shortest;
+- shortest: next hop out port set for shortest path;
+- secondShortest: next hop out port set for second shortest path (one more hop than shortest);
+- other: out ports for other longer paths, used for ECMP multi-path scenarios.
+
+#### 8.5.2 RouteInstantiationService (Template Route Instantiation)
+
+> **Corresponds to `route/service/RouteInstantiationService.java`**
+
+Instantiate template routing table into `Map<String, RoutingEntry>` (key = route prefix IP) per SuperNode's actual chassis/slot/index, store in `instantiationRouteMap` (key = `"deviceName#chipIndex"`).
+
+**Instantiation Rules:**
+- NPU: Match template nodes by `chassis/slot/ubpu/die` labels; each NPU device generates one routing table copy.
+- L1SW: Match by `chassis/index` labels; L1SW routing table's out port names are remapped per actual ports.
+- L2SW: Match by `index/chip` labels; 4-chassis instantiation remaps L2SW out port index/name per inter-chassis topology.
+- Deep copy: `deepCopyRoutingEntry` ensures `instantiationRouteMap` and return value do not affect each other.
+
+#### 8.5.3 TopoTemplateService (Template Parsing)
+
+> **Corresponds to `route/topo/template/service/TopoTemplateService.java`**
+
+Parse built-in topology template JSON files, construct `SncTopology` model (including SncNode, SncPort, Label, Address, Prefix, Bitmap, PolicyPath, PolicyPrefix, etc.). Deserialization is completed collaboratively by `TemplateLoader`, `NodeLoader`, `PortLoader`, `PrefixLoader`, etc.
+
+### 8.6 HashUtils (hash wrapper)
+
+> **Corresponds to `util/HashUtils.java`, `util/UbSwitchHash.java`, `util/DllLoader.java`**
+
+#### 8.6.1 Dual JNA Bindings
+
+HashUtils loads two native library interfaces via JNA:
+
+| Interface | Native Function | Algorithm | Usage |
+|:-----|:---------|:-----|:-----|
+| `UbSwitchEcmpLibrary` | `ubswitch_Hash_ecmp` | ECMP hash (corresponds to `ubswitch_hash.c`) | L1SW/L2SW route selection (H3~H7) |
+| `UbSwitchDieLibrary` | `ubswitch_Hash_dieEcmp` | CRC-8/ATM hash (corresponds to `ubswitch_dieHash.c`) | NPU→L1SW route selection (H1/H2, tuple `(DstCNA, jettyId)`) |
+
+**JNA Loading Flow:**
+1. `DllLoader` searches native library files in order of jar sibling directory, classpath extraction, etc.;
+2. `Native.load("ubswitch_hash", UbSwitchEcmpLibrary.class)` loads ECMP library;
+3. `Native.load("ubswitch_dieHash", UbSwitchDieLibrary.class)` loads die library;
+4. Falls back to `UbSwitchHash` (pure Java implementation, corresponds 1:1 to the two C files logic) when any loading fails.
+
+#### 8.6.2 Java Fallback (UbSwitchHash)
+
+`UbSwitchHash` provides `hashEcmp` and `hashDieEcmp` two static methods, logic fully consistent with native library, used for:
+- Test environment without native library;
+- Automatic fallback when JNA loading fails;
+- Dual-path consistency test verification (call native and Java implementations simultaneously to compare results).
+
+#### 8.6.3 Key API
+
+```java
+public class HashUtils {
+    public static final int JETTY_ID_MIN = 32;
+    public static final int JETTY_ID_MAX = 1023;
+
+    /** ECMP hash (L1SW/L2SW route selection) */
+    public static int nativeHash(String dstCna, int ecmpCnt, int hashFunc);
+
+    /** die hash (NPU→L1SW route selection, tuple (DstCNA, jettyId)) */
+    public static int nativeHashDstCnaJetty(String dstCna, int jettyId, int ecmpCnt, int hashFunc);
+
+    /** Validate jettyId value range [32, 1023] */
+    public static boolean isValidJettyId(int jettyId);
+}
+```
+
+### 8.7 Coverage Planning Key Design Decisions
+
+> This section is merged from the original "SNC NPU-L1 Coverage Path Planning Design" document's §12 Open Questions and §13 Implementation Supplementary Notes, recording design decisions landed on 2026-09-13.
+
+#### 8.7.1 Interface Naming (Q1)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| Extended interface naming | `planPathsCoverageEx` / `planPathsCoverageWithNpuL1` / `planPathsFullCoverage` | **`planPathsCoverageEx`** (concise, retains original interface name prefix) |
+
+#### 8.7.2 SCNA Semantics (Q2)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| SCNA used by NPU out port hash | Flow's source CNA / NPU port-level CNA | **Flow's source CNA** (follows existing convention; if hardware implementation uses out port CNA for hash, adjust per actual behavior) |
+
+#### 8.7.3 REDUNDANT Coverage Granularity (Q3)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| REDUNDANT's "≥2" application granularity | Unified configuration per layer / Fine-grained configuration per sub-layer | **Unified configuration per layer** (all NPU_L1 ≥ 2, all L1_L2 ≥ 2); if finer granularity needed, can configure per layer |
+
+#### 8.7.4 CoverageLinkScope Values (Q4)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| Whether to support only NPU↔L1 (excluding L1↔L2) | Add `NPU_L1` enum value / Not add | **Not add** (currently only `L1_L2` / `NPU_L1_L2`; can be extended later if needed) |
+
+#### 8.7.5 Diagnostic Counter Instantiation (Q5)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| Whether failure counters are `static` or instance fields | `static` (global shared) / Instance fields (independent per construction) | **Instance fields** (`CoveragePlanEngine.ExDiagnostics`, reset each time engine is constructed; concurrency-safe) |
+
+#### 8.7.6 CoverageLink Field Naming (Q6)
+
+| Decision | Options | Final Adoption |
+|:---|:---|:---|
+| Whether to rename `CoverageLink.switchDevice` to `deviceName` | Rename / Keep original name | **Rename to `deviceName`** (consistent with other DTO field naming; JSON contract updated synchronously) |
+
+#### 8.7.7 Route Scope Extension and Reception Semantics
+
+**Reception Semantics (Key Premise):** The destination CNA belongs to a certain NPU device, and that NPU can receive the packet, even if the packet arrives at a port that is not the CNA's own corresponding physical port. Therefore the route/port selection constraint is relaxed from "CNA ↔ port one-to-one correspondence" to "**the NPU device owning the CNA is reachable**".
+
+| Location | Old Definition | Extended Definition |
+|:---|:---|:---|
+| L1SW routing | Only build /32 routes for CNAs of "physically connected ports" | For **every NPU with ports**, build /32 routes for **each of its CNAs**, out port = all ports from this L1SW to that NPU |
+| L2SW→L1SW port selection | Fixed use of `dst.remoteL1sw` (L1SW where destination port is located) | Any "L1SW that can reach the destination NPU device" |
+| L1SW→NPU port selection | Route has only 1 out port (no ECMP) | All ports from this L1SW to destination NPU (≥2 → hash selectable) |
+
+**Side Effect (forward):** The ECMP member sets for L1SW→NPU and L2SW→L1SW two hops no longer degenerate; coverage planning can truly "step on" these out ports, and NPU↔L1SW layer coverage rate can reach 100%.
+
+#### 8.7.8 EID and Out Port Relationship
+
+- `srcPort` / `srcCna` / `srcEid` identify **endpoint identity** (which device's which logical port initiates/receives the flow), **do not constrain** the packet's physical out port;
+- After the source NPU receives the packet, it selects the real out port among its uplink ports (all ports to the L1SW traversed for the destination) by **CRC8 `(DstCNA, jettyId)`**; **the selected port's CNA is the SCNA used by subsequent L1/L2 port selection**;
+- Therefore `CoveredEidPair.srcPort` (selected endpoint identity) and `coveredLinks[0].outPort` (real out port) **can be different**, which is intentional by design;
+- ACK direction is similar: `destPort` is the ACK sending endpoint identity, real out port is determined by `(srcCna, source port jettyId)` (jettyId taken from source NPU port, same as forward).
+
+#### 8.7.9 Native Library CRC8 Algorithm Details
+
+`ubswitch.c` (repository root directory) exports symbols:
+
+```c
+int ubswitch_Hash_dieEcmp(const char *dst_cna, int jetty_id, int ecmp_cnt);
+/* CRC-8/ATM: poly 0x07, init 0x00, no reflection, no final XOR
+   byte stream = DstCNA's ASCII (excluding trailing NUL) + jettyId low byte + jettyId high byte
+   ecmp_cnt == 0 → return raw CRC (0..255); ecmp_cnt > 0 → CRC % ecmp_cnt */
+```
+
+| Usage | Native Symbol | Java Entry |
+|:---|:---|:---|
+| Inter-chassis L1SW↔L2SW port selection, L1SW→NPU port selection | `ubswitch_Hash_ecmp` | `HashUtils.nativeHash(...)` |
+| **NPU→L1SW port selection (CRC8)** | **`ubswitch_Hash_dieEcmp`** | **`HashUtils.nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc)`** |
+
+Binary build: `build_ubswitch.ps1` (MinGW `gcc -O2 -shared` produces `libubswitch.dll`; `clang --target={x86_64,aarch64}-unknown-linux-gnu -fuse-ld=lld -nostdlib -shared` produces two `.so` files), artifacts land in `umdk/src/snc/src/main/resources/`. CRC8 correctness verified by `HashUtilsJettyTest.crc8MatchesReference` using Java reference implementation bit-by-bit comparison (including `ecmpCnt` modulo).
+
+#### 8.7.10 Real Test Results (2026-09-13 Landed)
+
+| Scenario | Interface | status | Inter-chassis Pairs | Intra-chassis Pairs | NPU_L1 Coverage Rate | L1_L2 Coverage Rate | Report |
+|:---|:---|:---|--:|--:|--:|--:|:---|
+| **Full rack 4 chassis** (148 devices) | `planPathsCoverageEx` | **SUCCESS** | **598** | 0 | **100.00% (2048/2048)** | **100.00% (2048/2048)** | `target/coverage-rack4-report.md` (≈189s) |
+| 2 chassis subset | `planPathsCoverage` (inter-chassis only) | see `PlanPathsCoverageIntegrationTest` | — | — | — | — | console output (`CoverageMainSuccessTest`) |
+| Single chassis (no L2SW) | `planPathsCoverageEx` | SUCCESS | 0 | 18 | 100% (64/64) | 0/0 | `target/coverage-intra-chassis-report.md` |
+
+> Full rack 4 chassis = `FullRackTopologyGenerator` generated content (128 NPU × 8 ports + 16 L1SW + 4 L2SW), coverage link domain 4096 (NPU_L1 2048 = NPU→L1 1024 + L1→NPU 1024; L1_L2 2048 = L1→L2 1024 + L2→L1 1024), **all 4096 links covered by 598 inter-chassis EID pairs**, 10 engine diagnostic counters all 0, `jettyIdFallback` is 0.
+
+#### 8.7.11 Test Conventions (2026-09-13)
+
+**2-chassis scenario is only used for old interface `planPathsCoverage` regression testing** (`PlanPathsCoverageIntegrationTest`, `CoverageMainSuccessTest`); new interface `planPathsCoverageEx` automated tests are all based on topology generated by `FullRackTopologyGenerator`, trimmed to **single chassis** subset:
+
+- `PlanPathsCoverageExIntegrationTest` (northbound `SncService`, analogous to old interface integration tests): MIN/REDUNDANT coverage rate + state machine/null parameter/SuperNode not exists/uninit four contract test cases;
+- `CoverageIntraChassisTest` (`PathService` layer): intra-chassis 2-hop + CRC8 port selection + SCNA chaining + layer statistics + route scope end-to-end validation, and produces intra-chassis coverage report.
+- `FullRackTopologyJettyIdTest`: `FullRackTopologyGenerator` uses fixed allocation `JETTY_ID_BASE + portIndex` (32..39, fully consistent each generation).
+
+#### 8.7.12 Inter-chassis Flow Example (4-hop + ACK)
+
+> Example data is from 2-chassis topology planning output. Per §8.7.11 test conventions, 2-chassis scenario is only for old interface regression, so this example serves as **flow walkthrough**; new interface automated assertions see §8.7.13 (single chassis).
+
+Topology: 2-chassis subset (8 NPU + 8 L1SW + 4 L2SW). EID pair: `rack2#board1#npu1:400GUB 1/2/1` ↔ `rack1#board1#npu2:400GUB 1/4/1`.
+
+| # | Direction | Device | Out Port | Peer | Peer Port | layer |
+|--:|:---|:---|:---|:---|:---|:---|
+| 0 | forward | rack2#board1#npu1 | 400GUB 1/2/1 | rack2#l1sw1 | 400GUB 1/0/1 | NPU_L1 |
+| 1 | forward | rack2#l1sw1 | 400GUB 1/0/78 | l2sw1 | 400GUB 1/0/7:2 | L1_L2 |
+| 2 | forward | l2sw1 | 400GUB 1/0/7:2 | rack1#l1sw1 | 400GUB 1/0/78 | L1_L2 |
+| 3 | forward | rack1#l1sw1 | 400GUB 1/0/3 | rack1#board1#npu2 | 400GUB 1/4/1 | NPU_L1 |
+| 4 | ACK | rack1#board1#npu2 | 400GUB 1/4/2 | rack1#l1sw1 | 400GUB 1/0/4 | NPU_L1 |
+| 5 | ACK | rack1#l1sw1 | 400GUB 1/0/94 | l2sw1 | 400GUB 1/0/15:2 | L1_L2 |
+| 6 | ACK | l2sw1 | 400GUB 1/0/47:2 | rack2#l1sw1 | 400GUB 1/0/94 | L1_L2 |
+| 7 | ACK | rack2#l1sw1 | 400GUB 1/0/1 | rack2#board1#npu1 | 400GUB 1/2/1 | NPU_L1 |
+
+**Flow Key Points:**
+1. Source NPU uses **CRC8 `(DstCNA, jettyId)`** to select out port among "uplink ports to the L1SW traversed for the destination" (hop 0);
+2. The selected port's **CNA becomes SCNA**, participating in L1SW→L2SW (hop 1) and L2SW→L1SW (hop 2) port selection;
+3. Destination-side L1SW looks up table by `DstCNA`, selects out port by hash among "all ports to the destination NPU" (hop 3);
+4. ACK direction (hop 4~7): `DstCNA = source CNA`, **jettyId = source NPU port jettyId** (same jettyId as forward).
+
+#### 8.7.13 Intra-chassis Flow Example (2-hop + ACK, Real Test Output)
+
+Topology: single chassis (rack1: 4 NPU + 4 L1SW, no L2SW) → Phase 1 has no available EID pairs, all covered by Phase 2.
+EID pair: `rack1#board1#npu2:400GUB 1/4/1` ↔ `rack1#board1#npu1:400GUB 1/2/1`.
+
+| # | Direction | Device | Out Port | Peer | Peer Port | layer |
+|--:|:---|:---|:---|:---|:---|:---|
+| 0 | forward | rack1#board1#npu2 | 400GUB 1/4/1 | rack1#l1sw1 | 400GUB 1/0/3 | NPU_L1 |
+| 1 | forward | rack1#l1sw1 | 400GUB 1/0/2 | rack1#board1#npu1 | 400GUB 1/2/2 | NPU_L1 |
+| 2 | ACK | rack1#board1#npu1 | 400GUB 1/2/1 | rack1#l1sw1 | 400GUB 1/0/1 | NPU_L1 |
+| 3 | ACK | rack1#l1sw1 | 400GUB 1/0/4 | rack1#board1#npu2 | 400GUB 1/4/2 | NPU_L1 |
+
+#### 8.7.14 Key Invariants
+
+| No. | Invariant |
+|:---:|:---|
+| I1 | NPU↔L1 member set only comes from **routing table LPM hit entries**, not from physical connection full enumeration (consistent with hardware forwarding) |
+| I2 | When member set `size == 1`, hash degenerates to deterministic port selection, consistent with old interface same-scenario results |
+| I3 | `linkMap` key remains `deviceName:outPortName`, no cross-layer conflict; same key deduplication takes the one with larger `totalOutPorts` |
+| I4 | Under `L1_L2` domain, link domain, hash points, `CoveredPair` link count, statistics are all bit-by-bit consistent with old implementation |
+| I5 | `sum(layerStats[*].totalLinks) == stats.totalLinks`, `sum(layerStats[*].coveredCount) == stats.coveredCount` |
+| I6 | Each EID pair's forward/reverse coverage link count is equal (CROSS_L2 4 each, 8 total; LOCAL_L1 2 each, 4 total), jettyId is the same in both directions (both taken from source port) |
+| I7 | Greedy and statistics logic do not introduce layer branches; layering only appears in `collectBidirectionalLinks` (domain name) and `buildResult` (statistics) |
+
+#### 8.7.15 Thread Safety
+
+- `CoveragePlanEngine` itself is stateless; `hashFunc` / `fixedDataUdpPort` / `fixedAckUdpPort` / `hashTuple` are final fields.
+- `ExDiagnostics` diagnostic counters are **instance fields** (internal objects of `CoveragePlanEngine`), reset each time engine is constructed; the same engine instance is not safe for concurrent invocation, but each `planPathsCoverage` / `planPathsCoverageEx` call constructs a new engine, so the northbound interface level is concurrency-safe.
+- `SncService.routeCalculate` / `makeRoutes` protect `routeCalculated` flag and `instantiationRouteMap` writes via `synchronized`; `getNodeRoute` is read-only and concurrent; `notifyLinkEvent` modifies `instantiationRouteMap` and requires serialization.
+- `SuperNode` / `SuperNodeStore` concurrency safety is ensured by the caller (existing constraints unchanged).
+
+#### 8.7.16 Configuration Compatibility
+
+| Configuration | New | Description |
+|:---|:---:|:---|
+| `SNCConfig.hashFunc` | No | NPU segment hash reuses same function selector |
+| `SNCConfig.dieHashFunctionSelect` | Yes | NPU→L1SW die hash function selector (for planPathsCoverageEx) |
+| `SNCConfig.fixedDataUdpPort` / `fixedAckUdpPort` | No | NPU segment reuses fixed ports (effective when four/five-tuple participates in hash) |
+| `SNCConfig.hashTuple` | No | NPU segment reuses same tuple width |
+| New NPU segment switch | **Not added** | Whether to enable is determined by which interface is called (`planPathsCoverage` vs `planPathsCoverageEx`) |
 
 ---
 ## 9 Detailed Path Planning Flow
@@ -2610,8 +3681,7 @@ Judge the out port for `RoutingEntry.outPortInfos` returned by Step 8:
 | Condition | Handling |
 |:-----|:-----|
 | `outPortInfos.size() == 1` | Use this out port normally, proceed to next hop |
-| `outPortInfos.size() > 1 && device does not support autonomous per-flow` | Return error code **1011** (`MULTI_PATH_NOT_SUPPORTED`, §6.2) |
-| `outPortInfos.size() > 1 && device supports autonomous per-flow` | Create a `RouteSelectionRecord` (§5.2), record route selection info, proceed to next hop |
+| `outPortInfos.size() > 1` | Create a `RouteSelectionRecord` (§5.2), record route selection info, proceed to next hop; simultaneously `HopInfo.multiPath=true`, `PathPlanResult.spray=true` marks this path contains ECMP multi-path, caller decides per-flow strategy |
 
 **RouteSelectionRecord Creation Rules (ECMP Scenario):**
 
@@ -2760,7 +3830,7 @@ Return success (code **0**), with complete `PathPlanResult` information.
 | 1008 | TOPO_CONNECTION_ERROR | Step 4 | Direct connection validation failed (port connection relationship mismatch) |
 | 1009 | TOPO_CONNECTION_NOT_FOUND | Step 5 | Multi-hop path resolution failed (connection relationship error) |
 | 1010 | ROUTE_NOT_REACHABLE | Step 8 | Route unreachable (no route, no out port, or out port inconsistent with topology) |
-| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 9 | Multiple paths (ECMP) and device does not support autonomous per-flow |
+| 1011 | COVERAGE_INCOMPLETE | Coverage planning phase | Coverage planning did not reach 100% (only planPathsCoverage/planPathsCoverageEx) |
 | 1012 | TOPO_NOT_FOUND | Step 0 | Super node does not exist |
 | 3002 | SRC_AND_DST_MUST_BE_NPU | Step 0 | Source and destination must be NPU devices |
 | 3003 | UPI_MISMATCH | Step 0 | Source and destination port UPI mismatch |
@@ -2809,10 +3879,9 @@ PathPlanRequest (§6.1)
 │                                                                           │
 │   Step 9: Out Port Judgment                                             │
 │     1 out port → proceed to next hop normally                           │
-│     Multiple out ports (no ECMP support) → 1011                        │
-│     Multiple out ports (ECMP supported) → append RouteSelectionRecord  │
+│     Multiple out ports → append RouteSelectionRecord + multiPath=true/spray=true │
 │                                                                           │
-│   Error codes: 1010, 1011                                               │
+│   Error codes: 1010                                                      │
 └──────────────────────────────────┬───────────────────────────────────────┘
                                    │
 ┌──────────────────────────────────────────────────────────────────────────┐

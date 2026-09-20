@@ -11,10 +11,11 @@
 3. [文件目录设计](#3-文件目录设计)
 4. [数据结构定义（领域模型 Entity）](#4-数据结构定义)
 5. [纯内部数据结构（计算模型）](#5-纯内部数据结构)
-6. [北向数据结构（DTO）](#6-北向数据结构)
+6. [北向数据结构（DTO）](#6-北向数据结构dto)
    - [6.1 PathPlanRequest（路径规划请求）](#61-pathplanrequest路径规划请求)
    - [6.2 PathPlanResult（路径规划响应）](#62-pathplanresult路径规划响应)
-   - [6.3 北向数据结构与内部数据结构的关系](#63-北向数据结构与内部数据结构的关系)
+   - [6.3 覆盖规划 DTO](#63-覆盖规划-dto)
+   - [6.4 北向数据结构与内部数据结构的关系](#64-北向数据结构与内部数据结构的关系)
 7. [北向接口](#7-北向接口)
    - [7.1 接口概述](#71-接口概述)
    - [7.2 SNCService 接口定义](#72-sncservice-接口定义)
@@ -25,7 +26,14 @@
    - [7.7 接口实现映射](#77-接口实现映射)
    - [7.8 错误调用顺序说明](#78-错误调用顺序说明)
    - [7.9 SuperNodeStore（拓扑存储）](#79-supernodestore拓扑存储)
-8. [路径规划算法 — 索引掩码匹配（Indexed Mask Match）](#8-路径规划算法--索引掩码匹配indexed-mask-match)
+8. [算法](#8-算法)
+   - [8.1 索引掩码匹配（Indexed Mask Match）](#81-算法描述)
+   - [8.2 RouteLookupEngine](#82-引擎接口)
+   - [8.3 覆盖规划算法（CoveragePlanEngine）](#83-覆盖规划算法coverageplanengine)
+   - [8.4 路由收敛算法（RouteConvergeService）](#84-路由收敛算法routeconvergeservice)
+   - [8.5 路由 MSP 计算与实例化算法](#85-路由-msp-计算与实例化算法)
+   - [8.6 HashUtils（hash 封装）](#86-hashutilshash-封装)
+   - [8.7 覆盖规划关键设计决策](#87-覆盖规划关键设计决策)
 9. [路径规划详细流程](#9-路径规划详细流程)
 
 ---
@@ -34,7 +42,7 @@
 
 ### 1.1 业务背景
 
-SNC（Supernode Network Controller）是一个超级节点控制器，负责网络拓扑、路由信息的管理，并提供路径规划功能，返回通信覆盖当前路径时所需参数。
+SNC（Supernode Network Controller）是一个超级节点控制器，负责网络拓扑、路由信息的管理，并提供路径规划、覆盖规划、链路事件路由收敛功能，返回通信覆盖当前路径时所需参数。
 
 ### 1.2 核心功能需求
 
@@ -43,6 +51,9 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 | 初始化/去初始化   | SNC服务的启动与停止             | P0     |
 | SuperNode数据管理     | 网络拓扑结构下发、查询与删除     | P1     |
 | 路径规划   | 基于EID对的路径规划     | P2     |
+| 覆盖规划 | 给定拓扑挑选一组 EID 对使其 hash 选路遍历覆盖域出端口；支持 L1↔L2 与 NPU↔L1↔L2 两种覆盖域 | P2 |
+| 链路事件通知 | 接收链路 up/down 事件，触发 BFS 路由收敛刷新 OutPortInfo.convergedFlag 与 RoutingEntry.reachable | P2 |
+| 路由模板计算与实例化 | 基于内置拓扑模板计算 MSP 路由并按 SuperNode 机框实例化，供 getNodeRoute / notifyLinkEvent 使用 | P2 |
 
 ---
 
@@ -76,6 +87,9 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 
 - **配置类操作（拓扑下发）：** 同步调用，调用方下发完整数据快照。
 - **查询类操作（路径规划）：** 同步调用，请求-响应模式，调用方发送 PathPlanRequest，SNC 返回 PathPlanResult。
+- **覆盖规划：** 同步调用，请求-响应模式，调用方发送 CoveragePathsRequest，SNC 返回 CoveragePathsResult（含 EID 对、覆盖链路、覆盖率统计）。
+- **链路事件通知：** 同步调用，调用方发送 LinkEvent，SNC 内部更新端口状态并触发 BFS 路由收敛，返回 void。
+- **路由计算/实例化/查询：** 同步调用；`routeCalculate` 幂等可重复；`makeRoutes` 基于已计算的模板路由为 SuperNode 生成实例化路由表；`getNodeRoute` 从实例化结果中查询。
 - **初始化/去初始化：** 同步调用，SNC 启动时从北向加载数据或接收全量同步；去初始化时清理内存数据。
 
 ### 2.3 数据一致性保证
@@ -83,6 +97,77 @@ SNC（Supernode Network Controller）是一个超级节点控制器，负责网�
 - 拓扑数据（包含路由信息）以全量快照方式下发，SNC 不维护增量变更日志。
 - 所有数据使用内存 HashMap 索引，保证 O(1) 查找效率。
 - 路径规划基于内存中的数据实时计算，不依赖外部存储。
+- 链路事件（up/down）实时更新 `PortEntity.linkStatus` 与 `updateAt`，并通过 BFS 路由收敛刷新 `OutPortInfo.convergedFlag` 与 `RoutingEntry.reachable`，保证后续 `getNodeRoute` 查询反映最新拓扑状态。
+- `instantiationRouteMap`（由 `makeRoutes` 填充）与 SuperNode 拓扑数据解耦；`setSuperNode` 全量替换不影响 `instantiationRouteMap`，需重新调用 `makeRoutes` 同步。
+- `routeCalculate` 幂等：已计算过则直接返回，避免重复解析模板与 MSP 计算。
+
+### 2.4 内部调用链
+
+#### 2.4.1 planPath 调用链
+
+```
+SNCService.planPath(PathPlanRequest)
+└→ PathService.planPath(request)
+   ├→ superNode.getNpuDevices().get(srcDevice/destDevice)              // Step 0: NPU 设备查找
+   ├→ srcNpuDevice.findNpuPort() + destNpuDevice.findNpuPort()         // Step 1~2: 端口查找
+   ├→ PathEngine.resolveDirectPath/resolveMultiHopPath(InternalPathInfo) // Step 3~5: 路径还原
+   ├→ superNode.getAllDevices() + RouteLookupEngine.lookup()           // Step 6~8: 路径规划
+   └→ 组装 dto.PathPlanResult                                           // Step 9~10: 输出构造
+```
+
+#### 2.4.2 planPathsCoverage / planPathsCoverageEx 调用链
+
+```
+SNCService.planPathsCoverage(req) / planPathsCoverageEx(req)
+└→ PathService.planPathsCoverage / planPathsCoverageEx(req)
+   ├→ SuperNodeStore.get(superNodeName)                                // 拓扑查找
+   ├→ CoveragePlanEngine.findCoverage / findCoverageEx(superNode, requirement)
+   │   ├→ 构造覆盖域 OutPortInfo 集合（L1↔L2 或 NPU↔L1↔L2）
+   │   ├→ 枚举候选 EID 对（src/dst NPU 端口组合）
+   │   ├→ 对每个 EID 对追踪正反向路径（planPathsCoverageEx 调用 HashUtils.nativeHashDstCnaJetty）
+   │   ├→ 贪心选择覆盖未命中端口的 EID 对
+   │   └→ 累加统计（覆盖率 / 重复率 / EID 均匀度 / 分层统计）
+   └→ 组装 dto.CoveragePathsResult
+```
+
+#### 2.4.3 notifyLinkEvent 调用链
+
+```
+SNCService.notifyLinkEvent(superNode, LinkEvent)
+└→ LinkEventService.handleLinkEvent(superNode, event)
+   ├→ 定位 deviceName + portName 对应的 PortEntity
+   ├→ port.setLinkStatus(LINK_UP/LINK_DOWN) + port.setUpdateAt(eventTime)
+   ├→ RouteConvergeService.converge(superNode, deviceName, chipIndex, portName, isDown)
+   │   ├→ 遍历 chip 路由表，定位包含该端口的 RoutingEntry
+   │   ├→ OutPortInfo.setFlag(FLAG_PASSIVE_CONVERRGED) [down] / clearFlag(FLAG_PASSIVE_CONVERRGED) [up]
+   │   ├→ RoutingEntry.refreshReachable() → 记录 reachable 变化的前缀
+   │   └→ BFS 传播：通过 PortEntity.remoteDevice/remotePort 定位对端转发节点
+   │       └→ 在远端 chip 路由表中查询变化前缀 → 刷新入接口对应 OutPortInfo 的 convergedFlag → refreshReachable
+   └→ （无返回值；收敛结果存入 instantiationRouteMap）
+```
+
+#### 2.4.4 routeCalculate / makeRoutes / getNodeRoute 调用链
+
+```
+SNCService.routeCalculate()
+└→ synchronized { 已计算则直接返回 }
+   ├→ TopoTemplateService.parseTemplateFile("128_npu_rack.json")
+   ├→ TopoTemplateService.parseTemplateFile("128_npu_inter_rack.json")
+   ├→ RouteMspService.routeMsp(topoTemplate)                  // BFS 最短路径 + 路径策略
+   └→ routes = RouteInstantiationService.buildXpodRoutes(template) // 模板路由表（未实例化）
+
+SNCService.makeRoutes(superNode)
+└→ RouteInstantiationService.instantiateXpodRoute(routes, superNode)
+   ├→ 遍历 NPU 设备：按 chassis/slot/ubpu/die 标签匹配模板
+   ├→ 遍历 L1SW 设备：按 chassis/index 标签匹配模板
+   ├→ 遍历 L2SW 设备：按 index/chip 标签匹配模板（4 框实例化时端口重映射）
+   ├→ deepCopyRoutingEntry(...)                                // 深拷贝避免外部修改影响内部
+   └→ instantiationRouteMap.put("deviceName#chipIndex", routingEntryMap)
+       返回 instantiationRouteMap 的副本
+
+SNCService.getNodeRoute(deviceName, chipIndex)
+└→ instantiationRouteMap.get("deviceName#chipIndex")          // 直接 HashMap 查找
+```
 
 ---
 
@@ -113,15 +198,16 @@ com.huawei.umdk.snc
 │   ├── ForwardingChip.java            # 转发芯片抽象基类（含 getPorts() 抽象方法）
 │   ├── NpuForwardingChip.java         # NPU 转发芯片（含 ports 精确类型 + getNpuPorts()）
 │   ├── SwForwardingChip.java          # 交换转发芯片（含 ports 精确类型 + getSwPorts()）
-│   ├── PortEntity.java                # 端口抽象基类
-│   ├── NpuPortEntity.java             # NPU 端口（§4.5.1）
+│   ├── PortEntity.java                # 端口抽象基类（含 linkStatus、updateAt 字段，供 LinkEventService 更新）
+│   ├── NpuPortEntity.java             # NPU 端口（§4.5.1，含 jettyId 字段供 planPathsCoverageEx 使用）
 │   ├── SwPortEntity.java              # 交换端口（§4.5.2）
 │   ├── LogicPortEntity.java           # 逻辑端口（§4.6）
+│   ├── LinkEvent.java                 # 链路事件（deviceName + portName + eventType + eventTime，供 notifyLinkEvent）
 │   ├── RoutingTable.java              # 路由表（§4.7）
-│   ├── RoutingEntry.java              # 路由条目（§4.9）
+│   ├── RoutingEntry.java              # 路由条目（§4.9，含 reachable 状态，供路由收敛 refreshReachable）
 │   ├── RoutePrefix.java               # 路由前缀结构体（§4.8）
 │   ├── RoutingTableKey.java           # 路由表联合键（superNodeName + deviceName + chipIndex，§4.7.1）
-│   ├── OutPortInfo.java               # 出端口信息（§4.9.1）
+│   ├── OutPortInfo.java               # 出端口信息（§4.9.1，含 convergedFlag 标志位：down=置 PASSIVE，up=清 PASSIVE）
 │   ├── InternalPathInfo.java          # §5.1 内部路径信息（引擎计算上下文）
 │   ├── InternalPathHop.java           # §5.1 内部路径跳
 │   └── RouteSelectionRecord.java      # §5.2 内部选路记录
@@ -130,18 +216,48 @@ com.huawei.umdk.snc
 │   ├── PathPlanRequest.java           # 路径规划请求（§6.1）
 │   ├── PathPlanResult.java            # 路径规划响应 + PlanStatus 枚举（§6.2）
 │   ├── PathInfo.java                  # 路径信息（§6.2.1）
-│   └── HopInfo.java                   # 跳信息（§6.2.2）
+│   ├── HopInfo.java                   # 跳信息（§6.2.2）
+│   ├── CoveragePathsRequest.java      # 覆盖规划请求（superNodeName + coverageRequirement，复用于 planPathsCoverage/Ex）
+│   ├── CoveragePathsResult.java       # 覆盖规划响应（含 scope、layerStats 分层统计）
+│   ├── CoverageStats.java             # 覆盖合计统计（含 EID 均匀度字段）
+│   ├── CoverageLayerStats.java        # 分层统计（NPU_L1 / L1_L2 各一份）
+│   ├── CoverageLink.java              # 覆盖链路（含 deviceType、layer 字段）
+│   ├── CoverageLinkScope.java         # 覆盖域枚举（L1_L2 / NPU_L1_L2）
+│   ├── CoverageLinkLayer.java         # 链路分层枚举（NPU_L1 / L1_L2）
+│   ├── CoveragePathType.java          # 路径类型枚举（CROSS_L2 / LOCAL_L1）
+│   ├── CoverageRequirement.java       # 覆盖要求枚举（MIN_COVERAGE / REDUNDANT）
+│   ├── CoveredEidPair.java            # 覆盖的 EID 对（含 type 字段）
+│   └── CoveredEidPairRef.java         # EID 对引用（srcEid + dstEid）
 │
 ├── service/                           # 业务逻辑层（编排）
 │   ├── SuperNodeService.java               # 拓扑数据管理
-│   └── PathService.java               # 路径规划编排（调用 engine 层）
+│   ├── PathService.java               # 路径规划编排 + 覆盖规划编排（planPath / planPathsCoverage / planPathsCoverageEx）
+│   └── LinkEventService.java          # 链路事件处理（更新 port.linkStatus/updateAt）
+│
+├── route/                             # 路由计算与收敛子模块（由 SncService 编排）
+│   ├── model/                         # 路由模型
+│   │   ├── RouteTable.java            #   模板路由表（Prefix → RouteEntry）
+│   │   ├── RouteEntry.java            #   模板路由条目（含 NhpSet + shortest/secondShortest/other 分类）
+│   │   ├── Inbound.java               #   入接口（inPortId + parentNodeId + cost + outIfSet）
+│   │   ├── NextHopPort.java           #   下一跳端口（outPortId + outPortName + cost + pathType）
+│   │   └── OriginNode.java            #   MSP 搜索节点（layer + inboundMap）
+│   ├── service/                       # 路由服务
+│   │   ├── RouteMspService.java       #   模板路由 MSP 计算（BFS 最短路径 + 路径策略）
+│   │   ├── RouteInstantiationService.java # 模板路由实例化（按机框扩展 + NPU/L1SW/L2SW 分发 + buildRouteTableKey + deepCopyRoutingEntry）
+│   │   └── RouteConvergeService.java  #   路由收敛（BFS 在互联转发节点间传播 reachable 变化）
+│   └── topo/                          # 拓扑模板
+│       └── template/
+│           ├── model/                 # 模板模型（SncTopology、SncNode、SncPort、Label、Address、Prefix、Bitmap、PolicyPath、PolicyPrefix、AddrType）
+│           ├── loader/                # 模板加载器（TemplateLoader、NodeLoader、PortLoader、PrefixLoader、PolicyLoader、PathPolicyLoader、LogicalPortLoader、PermitOrDenyPolicy、PrefixPolicyLoader、PortFwdPolicyLoader、PathPolicyItemsLoader、Deserializers）
+│           └── service/               # 模板服务（TopoTemplateService.parseTemplateFile）
 │
 ├── store/                             # 数据存储层（HashMap 索引）
 │   └── SuperNodeStore.java                 # 拓扑索引（superNodeName→SuperNode / routingTableMap）
 │
 ├── engine/                            # 算法引擎层
 │   ├── PathEngine.java                # 路径还原引擎（Step 3~5）
-│   └── RouteLookupEngine.java         # 路径规划引擎 / 索引掩码匹配（Step 6~8，§8）
+│   ├── RouteLookupEngine.java         # 路径规划引擎 / 索引掩码匹配（Step 6~8，§8）
+│   └── CoveragePlanEngine.java        # 覆盖规划引擎（findCoverage / findCoverageEx + 两阶段覆盖 + 分层统计 + getExDiagnostics）
 │
 ├── exception/                         # 异常定义（§7.5.2）
 │   ├── SNCException.java              # 基础异常
@@ -150,7 +266,10 @@ com.huawei.umdk.snc
 │   └── PathPlanException.java         # 路径规划失败（内含 PlanStatus）
 │
 └── util/                              # 工具类
-    └── AddressUtils.java              # CNA 掩码计算、地址格式校验
+    ├── AddressUtils.java              # CNA 掩码计算、地址格式校验
+    ├── HashUtils.java                 # hash 封装（nativeHash + nativeHashDstCnaJetty + JETTY_ID_MIN/MAX + isValidJettyId）
+    ├── UbSwitchHash.java              # 纯 Java hash fallback（与两个 C 文件逻辑一一对应）
+    └── DllLoader.java                 # JNA 原生库搜索与加载（jar 同级目录、classpath 提取等）
 ```
 
 ### 3.3 依赖关系
@@ -161,7 +280,7 @@ com.huawei.umdk.snc
                     └────▲─────┘
                          │使用
                     ┌────┴─────┐
-                    │ service  │ （编排层：SuperNodeService / PathService）
+                    │ service  │ （编排层：SuperNodeService / PathService / LinkEventService）
                     └─┬──┬──┬─┘
                       │  │  │
             ┌─────────┘  │  └─────────┘
@@ -171,22 +290,31 @@ com.huawei.umdk.snc
        │ (索引)  │  │ (算法)   │  │ (模型)  │
        └───┬────┘  └────┬────┘  └────────┘
            │            │
-           └─────┬──────┘
+           │     ┌──────┴───────┐
+           │     │              │
+           │  ┌──┴─────┐  ┌─────┴──────┐
+           │  │ route  │  │   util     │
+           │  │ (模板/ │  │ (HashUtils │
+           │  │ 收敛)  │  │  /AddressUtils│
+           │  └──┬─────┘  └────────────┘
+           │     │
+           └─────┴──────┘
                  │查询/写入
            ┌────────┐
-           │ entity │ （§4 领域模型 + §5 计算模型，store/engine/service 共同依赖）
+           │ entity │ （§4 领域模型 + §5 计算模型，store/engine/service/route 共同依赖）
            └────────┘
 ```
 
 | 层 | 可依赖 | 不可依赖 | 说明 |
 |:---|:-------|:--------|:-----|
-| `dto` | - | entity / service / store / engine | API 契约层，独立于内部实现 |
-| `entity` | util | dto / service / store / engine | 纯数据结构层 |
-| `store` | entity / util | dto / service / engine | 索引存储，直接操作领域模型 |
-| `engine` | entity / util | dto / service / store | 算法引擎，读 entity 输出 §5 计算模型 |
-| `service` | entity / dto / store / engine / util | - | 编排层，完成 DTO 与领域模型 映射 |
+| `dto` | - | entity / service / store / engine / route / util | API 契约层，独立于内部实现 |
+| `entity` | util | dto / service / store / engine / route | 纯数据结构层 |
+| `store` | entity / util | dto / service / engine / route | 索引存储，直接操作领域模型 |
+| `engine` | entity / util | dto / service / store / route | 算法引擎，读 entity 输出 §5 计算模型 |
+| `route` | entity / util | dto / service / store / engine | 路由 MSP 计算、实例化、收敛、模板解析 |
+| `service` | entity / dto / store / engine / route / util | - | 编排层，完成 DTO 与领域模型映射 |
 | `exception` | dto.PathPlanResult.PlanStatus | - | 异常可引用错误码枚举（PlanStatus 定义在 §6.2 PathPlanResult 内部） |
-| `util` | - | entity / dto / service / store / engine | 纯工具类 |
+| `util` | - | entity / dto / service / store / engine / route | 纯工具类（HashUtils、UbSwitchHash、DllLoader、AddressUtils） |
 
 ### 3.4 接口层与内部层转换映射
 
@@ -776,6 +904,12 @@ public class NpuPortEntity extends PortEntity {
     /** UPI -- 32 bit -- 必填字段 */
     private String upi;
 
+    /** jettyId -- NPU→L1SW 选路 hash 的二元组 (DstCNA, jettyId) 中 jettyId 字段；
+     *  取值范围 [32, 1023]，每个 NPU 物理端口一个；用于 planPathsCoverageEx
+     *  （§4.5.1.a jettyId）。缺失或越界时 CoveragePlanEngine.jettyIdOf 回落
+     *  HashUtils.JETTY_ID_MIN + portId（= 32 + portId），并累加诊断计数 exJettyFallback */
+    private Integer jettyId;
+
     public NpuPortEntity(String portName, Integer id, Integer chipIndex,
                          String remoteDevice, String remotePort, String cna,
                          String eid, String upi) {
@@ -783,12 +917,34 @@ public class NpuPortEntity extends PortEntity {
         this.eid = eid;
         this.upi = upi;
     }
+
+    /** 含 jettyId 的扩展构造器（planPathsCoverageEx 用） */
+    public NpuPortEntity(String portName, Integer id, Integer chipIndex,
+                         String remoteDevice, String remotePort, String cna,
+                         String eid, String upi, Integer jettyId) {
+        super(portName, id, chipIndex, remoteDevice, remotePort, cna);
+        this.eid = eid;
+        this.upi = upi;
+        this.jettyId = jettyId;
+    }
 }
 ```
 
 **字段约束：**
 - `eid`：128 bit EID 标识，字符串格式。仅 NPU 端口携带 EID 信息。
+- `upi`：UPI 标识，仅 NPU 端口携带，用于源/目的 UPI 一致性校验（`planPath` §9 Step 0）。
+- `jettyId`：NPU→L1SW 选路 hash 的物理端口标识，取值范围 **`[32, 1023]`**（`HashUtils.JETTY_ID_MIN = 32`，`HashUtils.JETTY_ID_MAX = 1023`），每个 NPU 物理端口一个。仅 `planPathsCoverageEx` 使用（作为 `(DstCNA, jettyId)` 二元组的 jettyId 字段，见 §8 路径规划算法）；`planPath` 与 `planPathsCoverage` 不使用。拓扑输入缺失或越界时由 `CoveragePlanEngine.jettyIdOf` 回落 `32 + portId` 并累加 `exJettyFallback` 诊断计数。
 - NpuPortEntity 存储于 `NpuForwardingChip.ports`（`Map<String, NpuPortEntity>`，§4.4.1），通过 `getNpuPorts()` 直接获取精确类型，无需 instanceof/cast。
+
+##### 4.5.1.a jettyId 取值规则（planPathsCoverageEx）
+
+| 项 | 说明 |
+|:---|:---|
+| 取值范围 | `[32, 1023]`，由 `HashUtils.JETTY_ID_MIN` / `HashUtils.JETTY_ID_MAX` 定义；越界由 `HashUtils.isValidJettyId` 校验，抛 `IllegalArgumentException` |
+| topo 输入字段 | 超节点 JSON `jettyId`（由 `TestDataLoader` 解析）；模板 JSON `jetty_id`（`128_npu_rack.json`，由 `PortLoader`/`SncPort` 承载）；`FullRackTopologyGenerator` 用固定分配 `JETTY_ID_BASE + portIndex`（32..39，每次生成完全一致，由 `FullRackTopologyJettyIdTest` 钉死） |
+| 缺失回落 | jettyId 为 null 或越界时，`CoveragePlanEngine.jettyIdOf(port)` 回落 `HashUtils.JETTY_ID_MIN + (port.id == null ? 0 : port.id)`，并累加诊断计数 `exJettyFallback`，保证旧拓扑输入（未携带 jettyId）仍可完成选路 |
+| hash 使用 | `HashUtils.nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc)` 调用原生库 `ubswitch_Hash_dieEcmp`（CRC-8/ATM），见 §8 路径规划算法 |
+| ACK 方向 | ACK 方向 NPU 选口仍使用**源 NPU 端口的 jettyId**（与正向同一 jettyId），而非目的 NPU 端口的 jettyId；DstCNA 为源 CNA |
 
 #### 4.5.2 SwPortEntity（交换端口）
 
@@ -810,6 +966,36 @@ public class SwPortEntity extends PortEntity {
 - 交换设备的端口无 CNA/EID/UPI 概念，`cna` 字段在交换端口场景下为**可选**（可为 null），不参与路径规划中的 CNA 匹配。
 - `remoteDevice` / `remotePort` 为交换端口的核心字段，用于多跳拓扑路径还原。
 - SwPortEntity 存储于 `SwForwardingChip.ports`（`Map<String, SwPortEntity>`，§4.4.2），通过 `getSwPorts()` 直接获取精确类型，无需 instanceof/cast。
+
+#### 4.5.3 LinkEvent（链路事件实体）
+
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+@ToString
+public class LinkEvent {
+    /** 链路所属设备名 -- 必填，对应 SuperNode 的 npuDevices/swDevices key */
+    private String deviceName;
+
+    /** 端口名 -- 必填，对应 ForwardingChip.ports key */
+    private String portName;
+
+    /** 事件类型："up" / "down" -- 必填，大小写敏感；其他值抛 IllegalArgumentException */
+    private String eventType;
+
+    /** 事件时间戳（毫秒，epoch） -- 必填；用于更新 PortEntity.updateAt */
+    private long eventTime;
+}
+```
+
+**字段约束：**
+- `eventType` 仅接受 `"up"` 或 `"down"`，其他值抛 `IllegalArgumentException`。
+- `eventTime` 用于更新 `PortEntity.updateAt`（用于后续审计 / 路由收敛快照）。
+- `deviceName` + `portName` 必须能在 SuperNode 拓扑中定位到具体的 `PortEntity`；找不到时抛 `IllegalStateException`。
+- 处理流程见 §7.2 `notifyLinkEvent` 方法说明与 §8 路由收敛算法。
 
 ---
 
@@ -1044,27 +1230,49 @@ RoutePrefix 作为路由条目在 `RoutingTable.routes` Map 中的 key。`equals
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 @EqualsAndHashCode
 @ToString
 public class RoutingEntry {
     /** 目标前缀结构体 -- 包含目的地址(dstAddress)和掩码长度(maskLength) */
     private RoutePrefix prefix;
 
-    /** 出端口信息Map -- 支持多出端口（ECMP），Map的key为portName，必填字段 */
-    private Map<String, OutPortInfo> outPortInfos;
+    /** 出端口信息Map -- 支持多出端口（ECMP），Map的key为portName，必填字段；
+     *  内部使用 LinkedHashMap 维护插入顺序，setOutPortInfos 会拷贝入参到 LinkedHashMap */
+    private Map<String, OutPortInfo> outPortInfos = new LinkedHashMap<>();
+
+    /** 路由可达性：表示 outPortInfos 中是否存在 convergedFlag==0 的有效出端口；
+     *  默认 true；由 refreshReachable() 在链路事件收敛时刷新（§8 路由收敛算法） */
+    private boolean reachable = true;
+
+    public RoutingEntry(RoutePrefix prefix, Map<String, OutPortInfo> outPortInfos, boolean reachable) {
+        this.prefix = prefix;
+        this.reachable = reachable;
+        this.outPortInfos = new LinkedHashMap<>();
+        if (outPortInfos != null) {
+            this.outPortInfos.putAll(outPortInfos);
+        }
+    }
+
+    /** 遍历 outPortInfos，若存在任一 convergedFlag==0 的端口则 reachable=true，否则 false */
+    public void refreshReachable();
+
+    /** 深拷贝：拷贝 prefix、outPortInfos（含每个 OutPortInfo 实例）与 reachable */
+    public static RoutingEntry copy(RoutingEntry src);
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |:-----|:-----|:-----|
 | prefix | RoutePrefix | 目标前缀结构体，包含目的地址和掩码长度 |
-| outPortInfos | Map\<String, OutPortInfo\> | 出端口信息Map，key为portName，支持多出端口（ECMP），必填字段 |
+| outPortInfos | Map\<String, OutPortInfo\> | 出端口信息Map，key为portName，支持多出端口（ECMP），必填字段；内部 LinkedHashMap 维护顺序 |
+| reachable | boolean | 路由可达性。默认 true；链路事件收敛时由 `refreshReachable()` 刷新：只要有一个出端口 `convergedFlag==0`（有效）则 true，否则 false |
 
 **说明：**
 - `RoutingEntry` 存储在 `RoutingTable.routes` 中，以 `RoutePrefix` 对象为 key。
 - 路径规划时，将 CNA 补齐为 32 bit 的 `targetAddr`（见 §4.8.1），从 `RoutingTable.maskLengths` 中取已知掩码，按从长到短逐级构造 key 做 O(1) 查找（§8）。
 - 例如 `1.1.1.0/24` 和 `1.1.1.0/20` 是不同的路由，因为掩码不同导致 `RoutePrefix` 不同。
+- `reachable` 字段在 `notifyLinkEvent`（§7.2）触发的 BFS 路由收敛流程中被刷新，影响后续 `getNodeRoute` 查询返回的路由表状态。
+- `RoutingEntry.copy(src)` 用于 `RouteInstantiationService.deepCopyRoutingEntry`，保证 `makeRoutes` 返回的实例化路由表与内部 `instantiationRouteMap` 互不影响。
 
 #### 4.9.1 OutPortInfo（出端口信息）
 
@@ -1078,11 +1286,27 @@ public class RoutingEntry {
 @EqualsAndHashCode
 @ToString
 public class OutPortInfo {
+    /** 链路 down 收敛被动标志：链路事件 down 时设置 */
+    public static final int FLAG_PASSIVE_CONVERRGED = 1 << 0;
+
+    /** 主动收敛标志：用于路由策略二维维护 */
+    public static final int FLAG_ACTIVE_CONVERRGED = 1 << 1;
+
     private String portName;         // 出接口名称 -- 必填字段
     private String nextHop;          // 下一跳IP
     private Integer preference;      // 路由优先级(1-255,默认60)
     private Integer tag;             // 路由标签
     private String protocol;         // 路由协议类型
+    private int convergedFlag;       // 收敛标志位，按位组合 FLAG_PASSIVE_CONVERRGED / FLAG_ACTIVE_CONVERRGED
+
+    /** 判断该出端口是否处于收敛状态（不再参与转发） */
+    public boolean isConverged() { return convergedFlag != 0; }
+
+    /** 在 convergedFlag 上置位指定 flag（不影响其他位） */
+    public void setFlag(int flag) { this.convergedFlag |= flag; }
+
+    /** 在 convergedFlag 上清零指定 flag（不影响其他位） */
+    public void clearFlag(int flag) { this.convergedFlag &= ~flag; }
 }
 ```
 
@@ -1093,13 +1317,20 @@ public class OutPortInfo {
 | preference | Integer | 路由优先级(1-255,默认60) |
 | tag | Integer | 路由标签 |
 | protocol | String | 路由协议类型 |
+| convergedFlag | int | 收敛标志位（按位组合）：`FLAG_PASSIVE_CONVERRGED`（链路 down 时置位）、`FLAG_ACTIVE_CONVERRGED`（路由策略主动收敛时置位）。`isConverged()` 返回 `convergedFlag != 0`，表示该出端口不参与转发 |
+
+**收敛标志位使用规则：**
+- 链路 down 事件：`notifyLinkEvent` → `LinkEventService` 定位端口所属 chip 路由表 → 找到包含该端口的 `RoutingEntry` → `OutPortInfo.setFlag(FLAG_PASSIVE_CONVERRGED)` → `RoutingEntry.refreshReachable()`。
+- 链路 up 事件：`OutPortInfo.clearFlag(FLAG_PASSIVE_CONVERRGED)` → `RoutingEntry.refreshReachable()`。
+- 路由策略主动收敛：`OutPortInfo.setFlag(FLAG_ACTIVE_CONVERRGED)` / `clearFlag(FLAG_ACTIVE_CONVERRGED)`。
+- `RoutingEntry.refreshReachable()` 遍历 `outPortInfos`，只要存在一个 `convergedFlag == 0` 的端口，`reachable = true`，否则 `false`。
 
 **说明：**
 - 掩码长度已迁移至 `RoutePrefix` 结构体，`OutPortInfo` 不再包含 `maskLength` 字段。
-- 上述五个字段统一封装在 `OutPortInfo`，作为 `RoutingEntry.outPortInfos` Map 的 value；Map 的 key 为 `portName`，支持 O(1) 查找和遍历，覆盖 ECMP 场景。
+- 上述字段统一封装在 `OutPortInfo`，作为 `RoutingEntry.outPortInfos` Map 的 value；Map 的 key 为 `portName`，支持 O(1) 查找和遍历，覆盖 ECMP 场景。
 
 
-## 5  纯内部数据结构
+## 5 纯内部数据结构
 
 ### 5.1 InternalPathInfo（内部路径信息）
 
@@ -1335,8 +1566,7 @@ public class RouteSelectionRecord {
 
 **记录规则：**
 - 出端口数量 == 1：不记录 `RouteSelectionRecord`，直接进入下一跳。
-- 出端口数量 > 1 且设备不支持逐流 → 不记录，返回错误码 **1011**。
-- 出端口数量 > 1 且设备支持逐流 → 记录一条 `RouteSelectionRecord`，其中 `candidateOutPorts` 包含所有候选出接口（ECMP 所有路径），与 `interDevices` 指定出端口一致的标记为 `selected=true`（目标端口），其余为 `false`。进入下一跳。
+- 出端口数量 > 1：记录一条 `RouteSelectionRecord`，其中 `candidateOutPorts` 包含所有候选出接口（ECMP 所有路径），与 `interDevices` 指定出端口一致的标记为 `selected=true`（目标端口），其余为 `false`。进入下一跳。SNC 通过 `HopInfo.multiPath=true` 与 `PathPlanResult.spray=true` 通知调用方该路径包含 ECMP 多路径，由调用方自行决定逐流策略；不再返回 MULTI_PATH_NOT_SUPPORTED 错误码。
 
 **消费关系：**
 ```
@@ -1541,7 +1771,215 @@ public class HopInfo {
 
 ---
 
-### 6.3 北向数据结构与内部数据结构的关系
+### 6.3 覆盖规划 DTO
+
+#### 6.3.1 CoveragePathsRequest（覆盖规划请求）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveragePathsRequest {
+    /** 超节点名称 -- 必填，对应 SuperNode.name（§4.1） */
+    private String superNodeName;
+
+    /** 覆盖要求；null 时按 MIN_COVERAGE（§6.3.6 CoverageRequirement） */
+    private CoverageRequirement coverageRequirement;
+}
+```
+
+> planPathsCoverage 与 planPathsCoverageEx 共用本 DTO，覆盖域差异由方法名决定，不由 request 字段控制。
+
+#### 6.3.2 CoveragePathsResult（覆盖规划响应）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveragePathsResult {
+    /** 覆盖域：L1_L2（planPathsCoverage）/ NPU_L1_L2（planPathsCoverageEx） */
+    private CoverageLinkScope scope;
+
+    /** 状态：SUCCESS / COVERAGE_INCOMPLETE / TOPO_NOT_FOUND */
+    private PathPlanResult.PlanStatus status;
+
+    /** 错误消息；status=SUCCESS 时为 null */
+    private String errorMessage;
+
+    /** 选出的 EID 对列表 */
+    private List<CoveredEidPair> eidPairs;
+
+    /** 所有覆盖链路（去重后），按 layer 分组排列 */
+    private List<CoverageLink> coverageLinks;
+
+    /** 合计统计（覆盖域全集） */
+    private CoverageStats totalStats;
+
+    /** 分层统计；planPathsCoverage 返回 null，planPathsCoverageEx 返回 NPU_L1 + L1_L2 两层 */
+    private List<CoverageLayerStats> layerStats;
+}
+```
+
+**字段约束：**
+- `scope`：SUCCESS 时必填，TOPO_NOT_FOUND 时可为 null。
+- `eidPairs`：SUCCESS / COVERAGE_INCOMPLETE 时必填（可能为部分覆盖结果）；TOPO_NOT_FOUND 时为空列表。
+- `coverageLinks[*].layer`：planPathsCoverage 为 null；planPathsCoverageEx ∈ {NPU_L1, L1_L2}。
+- `coverageLinks[*].deviceType`：planPathsCoverage 为 null；planPathsCoverageEx ∈ {"NPU", "SW"}。
+- `eidPairs[*].type`：planPathsCoverage 为 null；planPathsCoverageEx ∈ {CROSS_L2, LOCAL_L1}。
+
+#### 6.3.3 CoverageLinkScope（覆盖域枚举）
+
+```java
+public enum CoverageLinkScope {
+    /** planPathsCoverage：仅覆盖 L1SW↔L2SW 出端口 */
+    L1_L2,
+    /** planPathsCoverageEx：覆盖 NPU↔L1SW↔L2SW 出端口（含 jettyId hash 选路） */
+    NPU_L1_L2
+}
+```
+
+#### 6.3.4 CoverageLinkLayer（链路分层枚举）
+
+```java
+public enum CoverageLinkLayer {
+    /** NPU↔L1SW 链路层（仅 planPathsCoverageEx 使用） */
+    NPU_L1,
+    /** L1SW↔L2SW 链路层 */
+    L1_L2
+}
+```
+
+#### 6.3.5 CoveragePathType（路径类型枚举）
+
+```java
+public enum CoveragePathType {
+    /** 跨机框：源/目的 NPU 在不同机框，4 跳路径 NPU→L1SW→L2SW→L1SW→NPU */
+    CROSS_L2,
+    /** 同机框：源/目的 NPU 在同一机框，2 跳路径 NPU→L1SW→NPU */
+    LOCAL_L1
+}
+```
+
+#### 6.3.6 CoverageRequirement（覆盖要求枚举）
+
+```java
+public enum CoverageRequirement {
+    /** 最低覆盖：每个出端口至少被 1 个 EID 对覆盖（coverCount >= 1） */
+    MIN_COVERAGE,
+    /** 冗余覆盖：每个出端口至少被 2 个 EID 对覆盖（coverCount >= 2） */
+    REDUNDANT
+}
+```
+
+#### 6.3.7 CoverageStats（覆盖合计统计）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageStats {
+    /** 当前覆盖域出端口总数 */
+    private int totalLinks;
+    /** 已被覆盖的出端口数 */
+    private int coveredLinks;
+    /** 覆盖率 = coveredLinks / totalLinks */
+    private double coverageRate;
+    /** 被覆盖 ≥ 2 次的出端口数 */
+    private int redundantLinks;
+    /** 重复率 = redundantLinks / totalLinks */
+    private double redundantRate;
+    /** EID 对总数 */
+    private int eidPairCount;
+    /** EID 均匀度：每个出端口被覆盖次数的标准差，越低越均匀 */
+    private double eidUniformity;
+}
+```
+
+#### 6.3.8 CoverageLayerStats（分层统计）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageLayerStats {
+    /** 所属分层 */
+    private CoverageLinkLayer layer;
+    /** 该层的统计（结构与 CoverageStats 相同） */
+    private CoverageStats stats;
+}
+```
+
+> planPathsCoverage 返回 `layerStats = null`；planPathsCoverageEx 返回 `[NPU_L1 层统计, L1_L2 层统计]`。
+
+#### 6.3.9 CoverageLink（覆盖链路）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoverageLink {
+    /** 链路所属设备名 */
+    private String deviceName;
+    /** 链路所属芯片编号 */
+    private int chipIndex;
+    /** 出端口名称 */
+    private String outPortName;
+    /** 出端口 ID */
+    private int outPortId;
+    /** 对端设备名（PortEntity.remoteDevice） */
+    private String remoteDevice;
+    /** 对端端口名（PortEntity.remotePort） */
+    private String remotePort;
+    /** 被覆盖次数（被几个 EID 对命中） */
+    private int coverCount;
+    /** 链路分层；planPathsCoverage 为 null，planPathsCoverageEx ∈ {NPU_L1, L1_L2} */
+    private CoverageLinkLayer layer;
+    /** 设备类型；planPathsCoverage 为 null，planPathsCoverageEx ∈ {"NPU", "SW"} */
+    private String deviceType;
+}
+```
+
+#### 6.3.10 CoveredEidPair（覆盖的 EID 对）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveredEidPair {
+    /** 源 EID（128 bit 字符串） */
+    private String srcEid;
+    /** 目的 EID（128 bit 字符串） */
+    private String dstEid;
+    /** 该 EID 对覆盖的链路列表（按 layer 分组排列，正反向合并） */
+    private List<CoverageLink> coveredLinks;
+    /** 路径类型；planPathsCoverage 为 null，planPathsCoverageEx ∈ {CROSS_L2, LOCAL_L1} */
+    private CoveragePathType type;
+}
+```
+
+> `coveredLinks` 内链路顺序：正向路径按源→目的顺序，反向路径按目的→源顺序追加；同 EID 对的 4 条（planPathsCoverage）或 4/8 条（planPathsCoverageEx）覆盖链路在 list 中连续存放。
+
+#### 6.3.11 CoveredEidPairRef（EID 对引用）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class CoveredEidPairRef {
+    /** 源 EID */
+    private String srcEid;
+    /** 目的 EID */
+    private String dstEid;
+}
+```
+
+> 用作 CoveragePlanEngine 内部候选 EID 对枚举的轻量引用，避免在搜索阶段提前构造完整 CoveredEidPair。
+
+#### 6.3.12 LinkEvent（链路事件）
+
+```java
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @EqualsAndHashCode @ToString
+public class LinkEvent {
+    /** 链路所属设备名 -- 必填 */
+    private String deviceName;
+    /** 端口名 -- 必填 */
+    private String portName;
+    /** 事件类型："up" / "down" -- 必填，大小写敏感 */
+    private String eventType;
+    /** 事件时间戳（毫秒，epoch） -- 必填 */
+    private long eventTime;
+}
+```
+
+---
+
+### 6.4 北向数据结构与内部数据结构的关系
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -1578,7 +2016,7 @@ public class HopInfo {
 
 ### 7.1 接口概述
 
-SNC 模块对外暴露统一的北向接口 `SNCService`，位于包 `com.huawei.umdk.snc`。调用方（上层编排器/管理系统）通过该接口完成**初始化、数据下发、路径规划、去初始化**四个阶段的操作。
+SNC 模块对外暴露统一的北向接口 `SNCService`，位于包 `com.huawei.umdk.snc`。调用方（上层编排器/管理系统）通过该接口完成**初始化、数据下发、路径规划、覆盖规划、链路事件与路由管理、去初始化**六个阶段的操作。
 
 ```
 北向接口 (SNCService)
@@ -1595,10 +2033,18 @@ SNC 模块对外暴露统一的北向接口 `SNCService`，位于包 `com.huawei
     ├── removeSuperNode(String) → void             // 拓扑数据删除
     │
     ├── planPath(PathPlanRequest) → PathPlanResult     // 路径规划（单路径）
+    ├── planPathsCoverage(CoveragePathsRequest) → CoveragePathsResult       // 覆盖规划（L1↔L2）
+    ├── planPathsCoverageEx(CoveragePathsRequest) → CoveragePathsResult     // 覆盖规划扩展（NPU↔L1↔L2）
+    │
+    ├── notifyLinkEvent(SuperNode, LinkEvent) → void                     // 链路 up/down 通知 + BFS 路由收敛
+    ├── routeCalculate() → void                                          // 路由模板计算（幂等，先于 makeRoutes）
+    ├── makeRoutes(SuperNode) → Map<String, Map<String, RoutingEntry>>   // 路由实例化
+    ├── getNodeRoute(String, int) → Map<String, RoutingEntry>            // 查询单设备单芯片路由表
+    │
     └── uninit() → void                                // 去初始化
 ```
 
-> **数据结构引用：** 接口涉及的 `PathPlanRequest`、`PathPlanResult`、`PathInfo`、`HopInfo`、`PlanStatus` 等北向数据结构完整定义见 [§6 北向数据结构](#6-北向数据结构)。
+> **数据结构引用：** 接口涉及的 `PathPlanRequest`、`PathPlanResult`、`PathInfo`、`HopInfo`、`PlanStatus`、`CoveragePathsRequest`、`CoveragePathsResult`、`CoverageLink`、`CoverageLinkScope`、`CoverageLinkLayer`、`CoveragePathType`、`CoverageRequirement`、`CoverageStats`、`CoverageLayerStats`、`CoveredEidPair`、`CoveredEidPairRef`、`LinkEvent` 等北向数据结构完整定义见 [§6 北向数据结构](#6-北向数据结构dto)。
 
 ---
 
@@ -1611,6 +2057,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.huawei.umdk.snc.entity.*;
+import com.huawei.umdk.snc.dto.*;
 import com.huawei.umdk.snc.config.SNCConfig;
 
 /**
@@ -1625,6 +2072,12 @@ import com.huawei.umdk.snc.config.SNCConfig;
  *   sncService.removeDevices("A5-superPod-1", List.of("rack1#os0#npu1")); // 5. 增量：批量移除设备
  *   sncService.addRoutingEntries("A5-superPod-1", "rack1#os0#npu1", 0, List.of(entry)); // 6. 增量：批量添加路由
  *   sncService.planPath(request);               // 7. 路径规划（可多次并发调用）
+ *   sncService.planPathsCoverage(req);          // 7a. 覆盖规划（L1↔L2）
+ *   sncService.planPathsCoverageEx(req);        // 7b. 覆盖规划（NPU↔L1↔L2，含 jettyId）
+ *   sncService.routeCalculate();                // 7c. 路由模板计算（幂等，必须先于 makeRoutes）
+ *   sncService.makeRoutes(superNode);           // 7d. 实例化路由表（填充 instantiationRouteMap）
+ *   sncService.getNodeRoute("rack1#os0#npu1", 0); // 7e. 查询单设备单芯片路由表
+ *   sncService.notifyLinkEvent(superNode, event); // 7f. 通知链路 up/down（触发 BFS 路由收敛）
  *   SuperNode td = sncService.getSuperNode("A5-superPod-1");   // 8. 拓扑数据查询
  *   sncService.removeSuperNode("A5-superPod-1");              // 9. 拓扑数据删除
  *   sncService.uninit();                       // 10. 去初始化
@@ -1634,9 +2087,14 @@ import com.huawei.umdk.snc.config.SNCConfig;
  * - 未 init() 调用其他接口：抛出 SNCStateException
  * - uninit() 后再次调用其他接口：抛出 SNCStateException
  * - 重复 init()：幂等处理或抛出 SNCStateException
+ * - planPath / planPathsCoverage / planPathsCoverageEx：要求状态为 DATAREADY
+ * - notifyLinkEvent / routeCalculate / makeRoutes / getNodeRoute：要求状态非 INIT/UNINIT（READY / DATAREADY 均可）
  *
  * @see PathPlanRequest
  * @see PathPlanResult
+ * @see CoveragePathsRequest
+ * @see CoveragePathsResult
+ * @see LinkEvent
  * @see SuperNode
  */
 public interface SNCService {
@@ -1804,6 +2262,163 @@ public interface SNCService {
      * @throws SNCStateException SNC 未初始化
      */
     PathPlanResult planPath(PathPlanRequest request);
+
+    // ============ 覆盖规划 ============
+
+    /**
+     * 覆盖规划（框间 L1SW↔L2SW）
+     *
+     * 给定超节点拓扑（含路由表），挑选一组 EID 对（src/dst NPU 端口），使其正反向 hash 选路
+     * 结果遍历 L1SW↔L2SW 出端口集合，输出 EID 对 → 覆盖链路映射与覆盖率/重复率/EID 均匀度统计。
+     *
+     * <h3>覆盖域</h3>
+     * <ul>
+     *   <li>L1SW→L2SW：L1SW 路由出端口中 remoteDevice ∈ L2SW 集合的全部出端口（含单端口路由）；</li>
+     *   <li>L2SW→L1SW：L2SW 路由出端口中 remoteDevice 为 L1SW 的 ECMP 出端口（非默认路由且出端口数 &gt; 1）。</li>
+     * </ul>
+     *
+     * <p>NPU↔L1SW 出端口不在此覆盖域内，NPU 出端口由候选物理绑定固定，末跳出端口取 get(0)。
+     *
+     * <h3>结果特征</h3>
+     * <ul>
+     *   <li>{@code scope = L1_L2}；</li>
+     *   <li>每个 EID 对固定 4 条覆盖链路（2 正向 + 2 反向）；</li>
+     *   <li>{@code eidPairs[*].type = null}；{@code layerStats = null}；{@code coverageLinks[*].layer = null}。</li>
+     * </ul>
+     *
+     * @param request 覆盖规划请求（§6.x），{@code superNodeName} 必填；{@code coverageRequirement} 为 null 时按 MIN_COVERAGE
+     * @return 覆盖规划结果；状态为 SUCCESS / COVERAGE_INCOMPLETE / TOPO_NOT_FOUND
+     * @throws SNCStateException 当前状态不是 DATAREADY
+     * @throws IllegalArgumentException request 为 null
+     */
+    CoveragePathsResult planPathsCoverage(CoveragePathsRequest request);
+
+    /**
+     * 覆盖规划（扩展版：含 NPU↔L1SW）
+     *
+     * 在 {@link #planPathsCoverage} 覆盖域基础上增加 NPU↔L1SW 出端口覆盖：
+     * <ul>
+     *   <li>NPU→L1SW 出端口由 {@code (DstCNA, jettyId)} 二元组 CRC-8 hash 选路（NPU 路由 LPM 命中条目的 L1SW 向出端口为 ECMP 成员集）；</li>
+     *   <li>被选中 NPU 端口的 CNA 作为下游 SCNA，参与 L1SW→L2SW、L2SW→L1SW、L1SW→NPU 的 hash 选口；</li>
+     *   <li>L1SW→NPU 末跳出端口按 hash 选择（不再取 get(0)）；</li>
+     *   <li>ACK 方向以源 NPU 端口的 jettyId 选路（与正向同一 jettyId），DstCNA 为源 CNA。</li>
+     * </ul>
+     *
+     * <h3>两阶段流程</h3>
+     * <ol>
+     *   <li>阶段 1（框间 CROSS_L2）：枚举跨机框 EID 对，追踪 4 跳正/反向路径，贪心选出覆盖 L1SW↔L2SW 的 EID 对；</li>
+     *   <li>阶段 2（框内 LOCAL_L1）：在阶段 1 结果中筛出 {@code layer == NPU_L1 && coverCount < required} 的缺口，枚举同机框 EID 对并追踪 2 跳正/反向路径补齐；</li>
+     *   <li>合并统计：阶段 1 + 阶段 2 的 EID 对合并后，在完整链路域上重算覆盖率/重复率等统计。</li>
+     * </ol>
+     *
+     * <h3>结果特征</h3>
+     * <ul>
+     *   <li>{@code scope = NPU_L1_L2}；</li>
+     *   <li>框间 EID 对 8 条覆盖链路（4 正向 + 4 反向，{@code type = CROSS_L2}）；</li>
+     *   <li>框内 EID 对 4 条覆盖链路（2 正向 + 2 反向，{@code type = LOCAL_L1}）；</li>
+     *   <li>{@code layerStats} 含 NPU_L1 / L1_L2 两个分层；{@code coverageLinks[*].layer ∈ {NPU_L1, L1_L2}}；{@code coverageLinks[*].deviceType ∈ {"NPU", "SW"}}。</li>
+     * </ul>
+     *
+     * <h3>jettyId 取值</h3>
+     * <p>取值范围 {@code [32, 1023]}，每个 NPU 物理端口一个；拓扑缺失时回落 {@code 32 + portId} 并累加诊断计数 {@code jettyIdFallback}。
+     *
+     * @param request 覆盖规划请求（与 {@link #planPathsCoverage} 复用同一 DTO，覆盖域由方法名决定）
+     * @return 覆盖规划结果（含 scope 与 layerStats 分层统计）
+     * @throws SNCStateException 当前状态不是 DATAREADY
+     * @throws IllegalArgumentException request 为 null
+     * @see CoverageLinkScope#NPU_L1_L2
+     * @see CoverageLinkLayer
+     * @see CoveragePathType
+     */
+    CoveragePathsResult planPathsCoverageEx(CoveragePathsRequest request);
+
+    // ============ 链路事件与路由管理 ============
+
+    /**
+     * 通知链路 up/down 事件
+     *
+     * 更新端口 {@code linkStatus} 与 {@code updateAt}（由 {@link LinkEventService} 处理），
+     * 并触发 BFS 路由收敛（由 {@link RouteConvergeService#converge} 处理）：在互联转发节点间
+     * 传播可达性变化，刷新 {@code OutPortInfo.convergedFlag}（down=置 PASSIVE，up=清 PASSIVE）
+     * 与 {@code RoutingEntry.reachable}。
+     *
+     * <h3>收敛算法</h3>
+     * <ol>
+     *   <li>定位事件端口所属 chip C，遍历 "device#C" 路由表中以该端口为出端口的 RoutingEntry，刷新命中的 OutPortInfo.convergedFlag；</li>
+     *   <li>调用 {@link RoutingEntry#refreshReachable()} 刷新可达性，记录 reachable 变化的路由前缀；</li>
+     *   <li>若 reachable 发生变化，则遍历 chip C 上其他 up 端口，通过 PortEntity.remoteDevice/remotePort 定位对端转发节点的入接口；</li>
+     *   <li>在远端转发节点上定位入接口所属 chip C'，在 "peerDevice#C'" 路由表中查询变化前缀，刷新出端口为入接口的 OutPortInfo 状态并刷新 reachable；</li>
+     *   <li>迭代直到没有转发节点的路由 reachable 变化需要传播（BFS）。</li>
+     * </ol>
+     *
+     * <p>同一设备不同 forwardingChip 转发隔离，收敛只在端口所属 chip 路由表内传播。
+     * 作用对象为 SNCService 持有的 {@code instantiationRouteMap}（由 {@link #makeRoutes} 填充），
+     * 收敛结果影响后续 {@link #getNodeRoute} 查询。
+     *
+     * @param supernode 链路事件所属的超节点
+     * @param event 链路事件（deviceName + portName + eventType + eventTime）
+     * @throws IllegalArgumentException supernode/event 为 null，或 event 必填字段为 null/空，或 eventType 非 "up"/"down"
+     * @throws IllegalStateException 设备或端口在拓扑中不存在
+     * @throws SNCStateException SNC 处于 INIT/UNINIT 状态
+     */
+    void notifyLinkEvent(SuperNode supernode, LinkEvent event);
+
+    /**
+     * 路由计算（基于内置拓扑模板）
+     *
+     * 同步方法（synchronized）：解析内置拓扑模板（{@code 128_npu_rack.json}、{@code 128_npu_inter_rack.json}），
+     * 调用 {@link RouteMspService#routeMsp} 按最短路径策略生成模板路由，
+     * 再调用 {@link RouteInstantiationService#instantiateXpodRoute} 按机框实例化，填充 {@code routes}。
+     *
+     * <h3>幂等性</h3>
+     * <p>已计算过则直接返回（{@code routeCalculated == true}），重复调用安全无副作用。
+     *
+     * <h3>调用顺序</h3>
+     * <p>必须在 {@link #makeRoutes} 之前调用，否则 {@code makeRoutes} 抛 {@link IllegalStateException}。
+     * 不依赖 SuperNode 已下发：可在 init 后任意时刻（非 INIT/UNINIT）调用。
+     *
+     * @throws SNCStateException SNC 处于 INIT/UNINIT 状态
+     */
+    void routeCalculate();
+
+    /**
+     * 路由实例化（基于已计算的路由模板为 SuperNode 生成实例化路由表）
+     *
+     * 遍历 SuperNode 中的 NPU/L1SW/L2SW 设备，按设备类型与机框/索引匹配模板路由标签，
+     * 由 {@link RouteInstantiationService} 转换为 {@code Map<String, RoutingEntry>}（key = 路由前缀 IP），
+     * 存入 {@code instantiationRouteMap}（key = {@code "deviceName#chipIndex"}）并返回副本。
+     *
+     * <h3>实例化规则</h3>
+     * <ul>
+     *   <li>NPU：按 {@code chassis/slot/ubpu/die} 标签匹配模板；</li>
+     *   <li>L1SW：按 {@code chassis/index} 标签匹配；</li>
+     *   <li>L2SW：按 {@code index/chip} 标签匹配，4 框实例化时 L2SW 的出端口索引/名称按框间拓扑重映射。</li>
+     * </ul>
+     *
+     * <p>深拷贝保证内部 {@code instantiationRouteMap} 与返回值互不影响
+     * （{@link RouteInstantiationService#deepCopyRoutingEntry}）。
+     *
+     * @param superNode 已下发的超节点拓扑
+     * @return 实例化路由表（key = "deviceName#chipIndex"，value = 该 chip 的路由前缀 → RoutingEntry 映射）
+     * @throws IllegalArgumentException superNode 为 null，或设备无 forwardingChips
+     * @throws IllegalStateException {@link #routeCalculate} 未调用
+     * @throws SNCStateException SNC 处于 INIT/UNINIT 状态
+     */
+    Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode);
+
+    /**
+     * 查询单设备单芯片的实例化路由表
+     *
+     * 从 {@code instantiationRouteMap} 中读取指定设备指定芯片的路由表。
+     * 典型用途：路由收敛（{@link #notifyLinkEvent}）后查询收敛后的可达性状态。
+     *
+     * @param deviceName 设备唯一标识
+     * @param chipIndex 芯片编号
+     * @return 该芯片的路由前缀 → RoutingEntry 映射
+     * @throws IllegalArgumentException deviceName 为 null，或 key 不存在
+     * @throws SNCStateException SNC 处于 INIT/UNINIT 状态
+     */
+    Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex);
 }
 ```
 
@@ -1822,6 +2437,12 @@ public interface SNCService {
 | getSuperNode | String | SuperNode | 同步 | 是（只读，可并发） | 根据 superNodeName 查询拓扑数据 |
 | removeSuperNode | String | void | 同步 | 否（写操作需串行） | 根据 superNodeName 删除拓扑数据及关联路由表 |
 | planPath | PathPlanRequest | PathPlanResult | 同步 | 是（只读，可并发） | 单路径规划 |
+| planPathsCoverage | CoveragePathsRequest | CoveragePathsResult | 同步 | 否（内部枚举 EID 对，建议串行） | 覆盖规划（L1↔L2 出端口域） |
+| planPathsCoverageEx | CoveragePathsRequest | CoveragePathsResult | 同步 | 否（两阶段枚举 EID 对，建议串行） | 覆盖规划扩展（NPU↔L1↔L2，含 jettyId hash） |
+| notifyLinkEvent | SuperNode, LinkEvent | void | 同步 | 否（修改端口状态 + 触发 BFS 路由收敛，需串行） | 通知链路 up/down 事件，刷新 OutPortInfo.convergedFlag 与 RoutingEntry.reachable |
+| routeCalculate | - | void | 同步 | 否（synchronized，幂等） | 解析内置拓扑模板，计算 MSP 模板路由；必须在 makeRoutes 之前 |
+| makeRoutes | SuperNode | Map\<String, Map\<String, RoutingEntry\>\> | 同步 | 否（填充 instantiationRouteMap，需串行） | 按机框实例化模板路由；依赖 routeCalculate 已完成 |
+| getNodeRoute | String, int | Map\<String, RoutingEntry\> | 同步 | 是（只读，可并发） | 从 instantiationRouteMap 查询单设备单芯片路由表 |
 
 ---
 
@@ -1836,11 +2457,29 @@ public interface SNCService {
    │── setSuperNode(superNode) ─────────────────────────▶│  阶段2: 拓扑下发
    │◀── void ────────────────────────────────────────│
    │                                                   │
-│── planPath(request1) ────────────────────────────▶│  阶段3: 路径规划
+│── planPath(request1) ────────────────────────────▶│  阶段3a: 路径规划
 │◀── PathPlanResult { status=0, path=... } ───────│ (可多次并发)
 │                                                   │
 │── planPath(request2) ────────────────────────────▶│
 │◀── PathPlanResult { status=1010, ... } ─────────│
+│                                                   │
+│── planPathsCoverage(req) ────────────────────────▶│  阶段3b: 覆盖规划（L1↔L2）
+│◀── CoveragePathsResult { scope=L1_L2, ... } ────│
+│                                                   │
+│── planPathsCoverageEx(req) ──────────────────────▶│  阶段3c: 覆盖规划扩展（NPU↔L1↔L2）
+│◀── CoveragePathsResult { scope=NPU_L1_L2, ... } ─│
+│                                                   │
+│── routeCalculate() ──────────────────────────────▶│  阶段3d-1: 路由模板计算（幂等）
+│◀── void ────────────────────────────────────────│  解析 128_npu_rack.json + 128_npu_inter_rack.json
+│                                                   │
+│── makeRoutes(superNode) ─────────────────────────▶│  阶段3d-2: 路由实例化
+│◀── Map<dev#chip, Map<prefix, RoutingEntry>> ────│  填充 instantiationRouteMap
+│                                                   │
+│── getNodeRoute("rack1#os0#npu1", 0) ──────────────▶│  阶段3d-3: 查询单设备路由
+│◀── Map<prefix, RoutingEntry> ───────────────────│
+│                                                   │
+│── notifyLinkEvent(superNode, event) ──────────────▶│  阶段3e: 链路事件通知
+│◀── void ────────────────────────────────────────│  触发 BFS 路由收敛
 │                                                   │
 │── getSuperNode("A5-superPod-1") ──────────────────▶│  阶段4: 数据查询
 │◀── SuperNode { name="A5-superPod-1", ... } ──────│
@@ -1853,7 +2492,11 @@ public interface SNCService {
    │                                                   │
 ```
 
-> **说明：** setSuperNode 必须在 planPath 之前完成。
+> **说明：**
+> - setSuperNode 必须在 planPath / planPathsCoverage / planPathsCoverageEx 之前完成（状态迁至 DATAREADY）。
+> - routeCalculate 必须在 makeRoutes 之前调用（幂等，可重复安全调用）；makeRoutes 完成后才能用 getNodeRoute 查询。
+> - notifyLinkEvent 依赖 makeRoutes 已填充的 instantiationRouteMap 做路由收敛。
+> - planPathsCoverage / planPathsCoverageEx 的覆盖域差异见 §7.2 方法说明。
 
 ---
 
@@ -1866,8 +2509,12 @@ SNC 服务内部维护以下生命周期状态：
   INIT ──────────▶ READY ──(setSuperNode 已完成)──▶ DATAREADY
    │                                │                                 │
    │                                │ 增量操作 (add/remove/get/…)       │ planPath (可多次并发)
-   │                                │ setSuperNode                     │ setSuperNode (可更新)
-   │                                │ uninit()                         │ 增量操作 (add/remove/get/…)
+   │                                │ setSuperNode                     │ planPathsCoverage / planPathsCoverageEx
+   │                                │ routeCalculate                   │ setSuperNode (可更新)
+   │                                │ makeRoutes                       │ 增量操作 (add/remove/get/…)
+   │                                │ getNodeRoute                     │ routeCalculate / makeRoutes / getNodeRoute
+   │                                │ notifyLinkEvent                  │ notifyLinkEvent
+   │                                │ uninit()                         │ uninit()
    │                                │                                 │
    └──── uninit() ───▶ UNINIT ◀───────────────────────────────────────┘
 ```
@@ -1875,8 +2522,8 @@ SNC 服务内部维护以下生命周期状态：
 | 状态 | 说明 | 允许的操作 |
 |:-----|:-----|:----------|
 | INIT | 初始状态（未初始化） | init()、uninit() |
-| READY | 就绪状态（已初始化，数据未就绪） | setSuperNode；所有增量操作（addNpuDevices、addSwDevices、removeDevices、addRoutingEntries、removeRoutingEntries）；所有查询操作（getSuperNode）；removeSuperNode；uninit |
-| DATAREADY | 数据就绪状态（拓扑已下发） | 同 READY，追加 planPath |
+| READY | 就绪状态（已初始化，数据未就绪） | setSuperNode；所有增量操作（addNpuDevices、addSwDevices、removeDevices、addRoutingEntries、removeRoutingEntries）；所有查询操作（getSuperNode）；removeSuperNode；routeCalculate、makeRoutes、getNodeRoute、notifyLinkEvent；uninit |
+| DATAREADY | 数据就绪状态（拓扑已下发） | 同 READY，追加 planPath、planPathsCoverage、planPathsCoverageEx |
 | UNINIT | 已去初始化 | （无，调用任何操作均抛 SNCStateException） |
 
 **状态转换规则：**
@@ -1884,7 +2531,8 @@ SNC 服务内部维护以下生命周期状态：
 - `uninit()`: INIT / READY / DATAREADY → UNINIT（INIT 状态调用仅清空状态标记，无副作用）
 - `setSuperNode()`: READY → DATAREADY（拓扑下发后自动迁移）
 - `setSuperNode()`: DATAREADY → DATAREADY（数据就绪态可继续更新数据）
-- `planPath()`: 仅在 **DATAREADY** 状态下可用，未到 DATAREADY 时返回 SNCStateException
+- `planPath()` / `planPathsCoverage()` / `planPathsCoverageEx()`: 仅在 **DATAREADY** 状态下可用，未到 DATAREADY 时返回 SNCStateException
+- `routeCalculate()` / `makeRoutes()` / `getNodeRoute()` / `notifyLinkEvent()`: **READY / DATAREADY** 均可，仅要求 SNC 已 init（非 INIT/UNINIT）；不依赖 SuperNode 已下发（routeCalculate 不读取 SuperNode；makeRoutes 需传入 SuperNode 参数）
 
 ---
 
@@ -1897,22 +2545,18 @@ SNC 服务内部维护以下生命周期状态：
 | 错误码 | 枚举常量 | 说明 | 触发阶段 |
 |:------:|:--------|:-----|:--------|
 | 0 | `SUCCESS` | 成功 | - |
-| 1 | `FAILED` | 通用失败 | - |
-| 1001 | `SRC_EID_NOT_FOUND` | 源EID 未找到 | Step 0 |
-| 1002 | `DEST_EID_NOT_FOUND` | 目的 EID 未找到 | Step 0 |
 | 1003 | `SRC_INFO_ERR` | 源信息缺失或错误 | Step 1 |
 | 1004 | `DST_INFO_ERR` | 目的信息缺失或错误 | Step 2 |
-
 | 1007 | `TOPO_INCOMPLETE` | 拓扑不完整（设备在超节点 devices 中找不到） | Step 0 / Step 3~5 |
 | 1008 | `TOPO_CONNECTION_ERROR` | 拓扑连接错误（直连验证失败） | Step 4 |
 | 1009 | `TOPO_CONNECTION_NOT_FOUND` | 未找到拓扑连接（多跳路径还原失败） | Step 5 |
 | 1010 | `ROUTE_NOT_REACHABLE` | 路由不可达（索引掩码匹配未命中或路由条目无出端口） | Step 8 |
-| 1011 | `MULTI_PATH_NOT_SUPPORTED` | 存在多路径且设备不支持逐流 | Step 9 |
-| 1012 | `TOPO_NOT_FOUND` | 拓扑数据未找到（superNodeName 为空或对应的 SuperNode 不存在） | Step 0 |
+| 1011 | `COVERAGE_INCOMPLETE` | 覆盖规划未完成：枚举完候选 EID 对仍未达到 `coverageRequirement` 所要求的最低覆盖率（仅 `planPathsCoverage` / `planPathsCoverageEx` 返回；返回时 result 仍含已选 EID 对与统计，由调用方决定是否接受） | planPathsCoverage / planPathsCoverageEx |
+| 1012 | `TOPO_NOT_FOUND` | 拓扑数据未找到（superNodeName 为空或对应的 SuperNode 不存在）；同时用于 `planPathsCoverage` / `planPathsCoverageEx` / `notifyLinkEvent` 中 SuperNode 缺失场景 | Step 0 / 覆盖规划 / 链路事件 |
 | 3002 | `SRC_AND_DST_MUST_BE_NPU` | 源和目的必须为 NPU | Step 0 |
 | 3003 | `UPI_MISMATCH` | 源和目的端口 UPI 不一致 | Step 0 |
 
-> **完整枚举定义：** [§6.2 PathPlanResult.PlanStatus](#62-pathplanresult路径规划响应)。
+> **完整枚举定义：** [§6.2 PathPlanResult.PlanStatus](#62-pathplanresult路径规划响应)。完整枚举值与 `com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus` 一一对应。
 
 **错误码编码规则：**
 - `0`：成功
@@ -2046,6 +2690,47 @@ SNCServiceImpl
     │              ├→ RouteLookupEngine.lookup()    // 路径规划 (Step 6~8)
     │              └→ 组装 PathPlanResult            // 输出构造 (Step 9~10)
     │
+    ├── planPathsCoverage(CoveragePathsRequest)
+    │     └→ PathService.planPathsCoverage(request)
+    │              ├→ SuperNodeStore.getSuperNode(superNodeName)   // 拓扑查找
+    │              ├→ new CoveragePlanEngine(superNode, hashFunc, ...)  // 构造引擎
+    │              ├→ engine.findCoverage(requirement)             // L1↔L2 覆盖
+    │              └→ 组装 CoveragePathsResult { scope=L1_L2, ... }
+    │
+    ├── planPathsCoverageEx(CoveragePathsRequest)
+    │     └→ PathService.planPathsCoverageEx(request)
+    │              ├→ SuperNodeStore.getSuperNode(superNodeName)
+    │              ├→ new CoveragePlanEngine(superNode, hashFunc, dieHashFuncSelect, ...)
+    │              ├→ engine.findCoverageEx(requirement)          // 两阶段：CROSS_L2 + LOCAL_L1
+    │              └→ 组装 CoveragePathsResult { scope=NPU_L1_L2, layerStats=[...], ... }
+    │
+    ├── notifyLinkEvent(SuperNode, LinkEvent)
+    │     └→ LinkEventService.handleLinkEvent(superNode, event)
+    │              ├→ port.setLinkStatus(LINK_UP/LINK_DOWN) + port.setUpdateAt(eventTime)
+    │              └→ RouteConvergeService.converge(superNode, deviceName, chipIndex, portName, isDown)
+    │                       ├→ OutPortInfo.setFlag/clearFlag(FLAG_PASSIVE_CONVERRGED)
+    │                       ├→ RoutingEntry.refreshReachable()
+    │                       └→ BFS 传播到对端转发节点
+    │
+    ├── routeCalculate()
+    │     └→ synchronized { if (routeCalculated) return; }
+    │              ├→ TopoTemplateService.parseTemplateFile("128_npu_rack.json")
+    │              ├→ TopoTemplateService.parseTemplateFile("128_npu_inter_rack.json")
+    │              ├→ RouteMspService.routeMsp(topoTemplate)             // BFS 最短路径
+    │              ├→ RouteInstantiationService.buildXpodRoutes(template) // 模板路由表
+    │              └→ routeCalculated = true
+    │
+    ├── makeRoutes(SuperNode)
+    │     └→ if (!routeCalculated) throw IllegalStateException
+    │     └→ RouteInstantiationService.instantiateXpodRoute(routes, superNode)
+    │              ├→ 遍历 NPU/L1SW/L2SW 设备按标签匹配模板
+    │              ├→ deepCopyRoutingEntry(...)                         // 深拷贝
+    │              └→ instantiationRouteMap.put("deviceName#chipIndex", routingEntryMap)
+    │                  返回 instantiationRouteMap 的副本
+    │
+    ├── getNodeRoute(String, int)
+    │     └→ instantiationRouteMap.get("deviceName#chipIndex")          // 直接 HashMap 查找
+    │
     └── uninit()
             └→ SuperNodeStore.clear()  // 清空数据
 ```
@@ -2056,10 +2741,14 @@ SNCServiceImpl
 
 | 非法序列                              | 错误原因                          | 建议处理            |
 |:--------------------------------------|:----------------------------------|:--------------------|
-| 未 `init()` 直接调用其他接口            | 内部数据结构未初始化               | 抛出 SNCException   |
-| `uninit()` 后再次调用其他接口          | 已去初始化，内存数据已清空         | 抛出 SNCException   |
-| 未下发拓扑数据直接调用 `planPath()`   | 查不到设备信息                     | 返回错误码 1001/1002 |
+| 未 `init()` 直接调用其他接口            | 内部数据结构未初始化               | 抛出 SNCStateException   |
+| `uninit()` 后再次调用其他接口          | 已去初始化，内存数据已清空         | 抛出 SNCStateException   |
+| 未下发拓扑数据直接调用 `planPath()` / `planPathsCoverage()` / `planPathsCoverageEx()` | 状态未到 DATAREADY | 抛出 SNCStateException |
 | 重复 `init()` 不调用 `uninit()`       | 状态机重复初始化                   | 幂等处理或抛异常     |
+| 未调用 `routeCalculate()` 直接调用 `makeRoutes()` | 模板路由未计算，无法实例化 | 抛出 IllegalStateException |
+| 未调用 `makeRoutes()` 直接调用 `getNodeRoute()` / `notifyLinkEvent()` | instantiationRouteMap 为空 | 抛出 IllegalStateException / 返回 key 不存在 |
+| `notifyLinkEvent()` 的 `deviceName` + `portName` 在拓扑中找不到 | 设备或端口不存在 | 抛出 IllegalStateException |
+| `notifyLinkEvent()` 的 `eventType` 非 "up"/"down" | 参数非法 | 抛出 IllegalArgumentException |
 
 ---
 
@@ -2205,7 +2894,7 @@ RoutingTable rt = superNodeStore.getRoutingTable(rtKey);
 
 ---
 
-## 8 路径规划算法 — 索引掩码匹配（Indexed Mask Match）
+## 8 算法
 
 ### 8.1 算法描述
 
@@ -2307,6 +2996,388 @@ public class RouteLookupEngine {
     }
 }
 ```
+
+### 8.3 覆盖规划算法（CoveragePlanEngine）
+
+> **对应 3.2 包结构中的 `engine/CoveragePlanEngine.java`**（约 2882 行）
+
+#### 8.3.1 算法概述
+
+给定超节点拓扑（含路由表）与覆盖要求（MIN_COVERAGE / REDUNDANT），从 NPU 端口 EID 笛卡尔积中贪心选择一组 EID 对，使其正反向 hash 选路路径遍历覆盖域内全部出端口。`planPathsCoverage` 与 `planPathsCoverageEx` 共用同一引擎，差异仅在覆盖域是否包含 NPU↔L1SW：
+
+| 方法 | 引擎入口 | 覆盖域 | hash 使用点 |
+|:-----|:---------|:-------|:-----------|
+| planPathsCoverage | findCoverage | L1SW↔L2SW（4 跳路径中 2 段：L1SW→L2SW、L2SW→L1SW） | H3a/H3b、H5a/H5b |
+| planPathsCoverageEx | findCoverageEx | NPU↔L1SW↔L2SW（4 跳路径全部 4 段 + 框内 2 跳路径） | H1/H2、H3a/H3b、H4、H5a/H5b、H6、H7a/H7b |
+
+#### 8.3.2 hash 使用点
+
+| ID | 位置 | 输入 | hash 函数 | 输出口 |
+|:---|:-----|:-----|:---------|:-------|
+| H1 | NPU→L1SW（正向） | `(DstCNA, jettyId)` | `ubswitch_Hash_dieEcmp`（CRC-8/ATM） | NPU 路由 LPM 命中条目的 L1SW 向 ECMP 出端口 |
+| H2 | NPU→L1SW（ACK） | `(源CNA, 源端口jettyId)` | `ubswitch_Hash_dieEcmp` | 同 H1，但 jettyId 用源 NPU 端口 |
+| H3a | L1SW→L2SW（正向） | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | L1SW 路由 LPM 命中条目的 L2SW 向出端口 |
+| H3b | L1SW→L2SW（ACK） | 同 H3a，方向反 | `ubswitch_Hash_ecmp` | - |
+| H4 | L1SW→NPU（正向，扩展版） | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | L1SW 路由 LPM 命中条目的 NPU 向出端口（不再 get(0)） |
+| H5a | L2SW→L1SW（正向） | `(DstCNA, ...)` | `ubswitch_Hash_ecmp` | L2SW 路由 LPM 命中条目的 L1SW 向 ECMP 出端口 |
+| H5b | L2SW→L1SW（ACK） | 同 H5a | `ubswitch_Hash_ecmp` | - |
+| H6 | L1SW→L2SW（框内 ACK） | `(源CNA, ...)` | `ubswitch_Hash_ecmp` | - |
+| H7a/H7b | L1SW→NPU（框内正/反） | `(DstCNA/源CNA, ...)` | `ubswitch_Hash_ecmp` | - |
+
+> 说明：planPathsCoverage 不使用 H1/H2/H4/H6/H7（仅 L1↔L2 覆盖域），末跳出端口取 get(0)。
+
+#### 8.3.3 SCNA 链接
+
+`planPathsCoverageEx` 在阶段 1 枚举框间 EID 对时，被选中 NPU 端口的 CNA（源 CNA）将作为下游 L1SW/L2SW/L1SW 路由查找的 DstCNA（即 SCNA），决定下游各跳的 hash 选口。即：源 NPU 端口 CNA → 影响 L1SW→L2SW、L2SW→L1SW、L1SW→NPU 的出端口选择。同一 EID 对的正向 DstCNA 与反向 DstCNA 不同（反向用源 CNA），导致正反向路径不必重合，从而覆盖更多链路。
+
+#### 8.3.4 两阶段覆盖（planPathsCoverageEx）
+
+**阶段 1（框间 CROSS_L2）：**
+1. 枚举跨机框 EID 对（src 在机框 A，dst 在机框 B）；
+2. 对每个 EID 对追踪 4 跳正反向路径（NPU→L1SW→L2SW→L1SW→NPU），使用 H1~H5b hash 选口；
+3. 贪心选择：每次挑选能覆盖最多未命中 L1SW↔L2SW 链路的 EID 对；
+4. 直到全部 L1SW↔L2SW 出端口 coverCount >= required（MIN_COVERAGE=1，REDUNDANT=2）或候选 EID 对耗尽。
+
+**阶段 2（框内 LOCAL_L1）：**
+1. 在阶段 1 结果中筛出 `layer == NPU_L1 && coverCount < required` 的缺口链路；
+2. 枚举同机框 EID 对（src 与 dst 在同一机框）；
+3. 对每个 EID 对追踪 2 跳正反向路径（NPU→L1SW→NPU），使用 H6/H7a/H7b hash 选口；
+4. 贪心补齐 NPU↔L1SW 未覆盖链路。
+
+**合并统计：** 阶段 1 + 阶段 2 EID 对合并后，在完整链路域上重算覆盖率 / 重复率 / EID 均匀度 / 分层统计（NPU_L1 / L1_L2）。
+
+#### 8.3.5 EID 与 outport 关系
+
+| NPU 端口字段 | 用途 | 影响范围 |
+|:---|:---|:---|
+| eid | EID 对的 srcEid/dstEid，作为 planPath 的输入参数 | 决定 EID 对集合 |
+| cna | 作为下游 hash 的 DstCNA / 反向的源 CNA（SCNA） | 决定 H3a~H7b 的 outport 选择 |
+| jettyId | 仅 planPathsCoverageEx：NPU→L1SW 选路 hash 二元组的 jettyId 字段 | 决定 H1/H2 的 outport 选择 |
+
+#### 8.3.6 路由 scope 扩展（planPathsCoverageEx）
+
+NPU 路由 LPM 命中条目的出端口集合，在 planPathsCoverage 中仅取 `get(0)` 作为末跳出端口；在 planPathsCoverageEx 中作为 ECMP 成员集，由 H1/H2 hash 选择其中一个。L1SW→NPU 同理：planPathsCoverage 取 get(0)，planPathsCoverageEx 由 H4 hash 选择。
+
+#### 8.3.7 引擎接口
+
+```java
+package com.huawei.umdk.snc.engine;
+
+public class CoveragePlanEngine {
+
+    /** JETTY_ID_MIN/MAX 与 HashUtils 一致；用于校验 jettyId 取值 */
+    public static final int JETTY_ID_MIN = HashUtils.JETTY_ID_MIN;
+    public static final int JETTY_ID_MAX = HashUtils.JETTY_ID_MAX;
+
+    /**
+     * 构造覆盖规划引擎
+     *
+     * @param superNode       超节点拓扑（含路由表）
+     * @param hashFunc        hash 函数选择（HashUtils.HASH_FUNC_CRC8_ATM 等）
+     * @param dieHashFuncSelect planPathsCoverageEx 用的 NPU→L1SW die hash 函数选择
+     * @param fixedDataUdpPort 固定数据 UDP 端口（路径规划用）
+     * @param fixedAckUdpPort  固定 ACK UDP 端口（路径规划用）
+     * @param hashTuple        hash 元组配置
+     */
+    public CoveragePlanEngine(SuperNode superNode, int hashFunc, int dieHashFuncSelect,
+                              int fixedDataUdpPort, int fixedAckUdpPort, int hashTuple);
+
+    /** planPathsCoverage 入口：仅覆盖 L1SW↔L2SW */
+    public CoveragePathsResult findCoverage(CoverageRequirement requirement);
+
+    /** planPathsCoverageEx 入口：覆盖 NPU↔L1SW↔L2SW，两阶段流程 */
+    public CoveragePathsResult findCoverageEx(CoverageRequirement requirement);
+
+    /** 获取 jettyId；缺失或越界时回落 32 + portId 并累加 exJettyFallback */
+    private int jettyIdOf(NpuPortEntity port);
+
+    /** 获取扩展版诊断计数（planPathsCoverageEx 用） */
+    public ExDiagnostics getExDiagnostics();
+}
+```
+
+**`ExDiagnostics` 字段：**
+
+| 字段 | 说明 |
+|:---|:---|
+| npuRouteFail | NPU 路由 LPM 未命中次数 |
+| npuPortFail | NPU 端口查找失败次数 |
+| jettyIdFallback | jettyId 缺失或越界回落次数 |
+| l1Fail | L1SW 路由查找/选口失败次数 |
+| l2Fail | L2SW 路由查找/选口失败次数 |
+| dstL1Fail | 目的 L1SW 查找失败次数 |
+| revNpuFail | 反向 NPU 选口失败次数 |
+| revDstL1Fail | 反向目的 L1SW 失败次数 |
+| revL2Fail | 反向 L2SW 失败次数 |
+| revSrcL1Fail | 反向源 L1SW 失败次数 |
+
+> 诊断计数用于测试与生产环境的故障定位；正常 SUCCESS 结果中所有计数应为 0 或仅 jettyIdFallback 非 0（旧拓扑输入场景）。
+
+### 8.4 路由收敛算法（RouteConvergeService）
+
+> **对应 3.2 包结构中的 `route/service/RouteConvergeService.java`**
+
+#### 8.4.1 算法概述
+
+链路 up/down 事件触发后，BFS 在互联转发节点间传播可达性变化：从事件端口所属 chip 出发，定位受影响的路由前缀，沿对端转发链路传播到下游 chip 路由表，刷新对应 OutPortInfo.convergedFlag 与 RoutingEntry.reachable。
+
+#### 8.4.2 收敛步骤
+
+1. **定位事件端口**：在 SuperNode 中按 `deviceName` 找到 DeviceEntity，遍历其 forwardingChips，找到包含 `portName` 的 chip C。
+2. **刷新本地 chip 路由表**：遍历 `"deviceName#C"` 路由表中所有 RoutingEntry，对每个 entry.outPortInfos 中 portName == eventPortName 的 OutPortInfo：
+   - down 事件：`setFlag(FLAG_PASSIVE_CONVERRGED)`
+   - up 事件：`clearFlag(FLAG_PASSIVE_CONVERRGED)`
+3. **刷新 reachable**：对步骤 2 中修改过的 RoutingEntry 调用 `refreshReachable()`，记录 reachable 变化（true→false 或 false→true）的前缀集合 `changedPrefixes`。
+4. **BFS 传播**：若 `changedPrefixes` 非空：
+   - 遍历 chip C 上其他 `linkStatus == up` 的端口 P；
+   - 通过 `P.remoteDevice` / `P.remotePort` 定位对端转发节点 N 的入接口 P'；
+   - 在 N 上找到 P' 所属的 chip C'；
+   - 在 `"N#C'"` 路由表中查询 `changedPrefixes` 中的前缀；
+   - 对命中前缀的 RoutingEntry，定位 outPortInfos 中 portName == P'.portName 的 OutPortInfo，setFlag/clearFlag `FLAG_PASSIVE_CONVERRGED`（与事件方向一致），refreshReachable；
+   - 若 N 上的 reachable 也发生变化，将 N 加入 BFS 队列继续传播。
+5. **终止条件**：BFS 队列为空（没有更多 reachable 变化需要传播）。
+
+#### 8.4.3 关键约束
+
+- 转发隔离：同一设备不同 forwardingChip 的路由表独立，收敛只在端口所属 chip 路由表内传播。
+- 作用对象：SNCService 持有的 `instantiationRouteMap`（由 `makeRoutes` 填充）；不修改 SuperNode 拓扑数据本身的 `routingTableMap`。
+- ECMP 处理：若一个 RoutingEntry 有多个出端口，down 事件只标记命中的那个出端口；reachable 由所有出端口的 convergedFlag 共同决定（任一 == 0 即 reachable=true）。
+- 幂等性：重复发送同一 down 事件不会重复置位（位运算幂等）。
+
+### 8.5 路由 MSP 计算与实例化算法
+
+#### 8.5.1 RouteMspService（模板路由 MSP 计算）
+
+> **对应 `route/service/RouteMspService.java`**
+
+基于拓扑模板（`128_npu_rack.json`、`128_npu_inter_rack.json`），使用 BFS 计算每个转发节点到其他节点的最短路径，按路径策略（shortest / secondShortest / other）生成模板路由表 `RouteTable`（`Prefix → RouteEntry`，每个 RouteEntry 含 NhpSet + 路径分类）。
+
+**BFS 最短路径策略：**
+- 每跳 cost = 1，BFS 队列保证首次到达即为最短；
+- shortest：最短路径的下一跳出端口集合；
+- secondShortest：次短路径（比最短多 1 跳）的下一跳出端口集合；
+- other：其他更长路径的出端口，用于 ECMP 多路径场景。
+
+#### 8.5.2 RouteInstantiationService（模板路由实例化）
+
+> **对应 `route/service/RouteInstantiationService.java`**
+
+按 SuperNode 的实际机框/槽位/索引将模板路由表实例化为 `Map<String, RoutingEntry>`（key = 路由前缀 IP），存入 `instantiationRouteMap`（key = `"deviceName#chipIndex"`）。
+
+**实例化规则：**
+- NPU：按 `chassis/slot/ubpu/die` 标签匹配模板节点；每个 NPU 设备生成一份路由表副本。
+- L1SW：按 `chassis/index` 标签匹配；L1SW 路由表的出端口名称按实际端口重映射。
+- L2SW：按 `index/chip` 标签匹配；4 框实例化时 L2SW 的出端口索引/名称按框间拓扑重映射。
+- 深拷贝：`deepCopyRoutingEntry` 保证 `instantiationRouteMap` 与返回值互不影响。
+
+#### 8.5.3 TopoTemplateService（模板解析）
+
+> **对应 `route/topo/template/service/TopoTemplateService.java`**
+
+解析内置拓扑模板 JSON 文件，构建 `SncTopology` 模型（含 SncNode、SncPort、Label、Address、Prefix、Bitmap、PolicyPath、PolicyPrefix 等）。由 `TemplateLoader`、`NodeLoader`、`PortLoader`、`PrefixLoader` 等加载器协作完成反序列化。
+
+### 8.6 HashUtils（hash 封装）
+
+> **对应 `util/HashUtils.java`、`util/UbSwitchHash.java`、`util/DllLoader.java`**
+
+#### 8.6.1 双 JNA 绑定
+
+HashUtils 通过 JNA 加载两个原生库接口：
+
+| 接口 | 原生函数 | 算法 | 用途 |
+|:-----|:---------|:-----|:-----|
+| `UbSwitchEcmpLibrary` | `ubswitch_Hash_ecmp` | ECMP hash（与 `ubswitch_hash.c` 对应） | L1SW/L2SW 选路（H3~H7） |
+| `UbSwitchDieLibrary` | `ubswitch_Hash_dieEcmp` | CRC-8/ATM hash（与 `ubswitch_dieHash.c` 对应） | NPU→L1SW 选路（H1/H2，二元组 `(DstCNA, jettyId)`） |
+
+**JNA 加载流程：**
+1. `DllLoader` 按 jar 同级目录、classpath 提取等顺序搜索原生库文件；
+2. `Native.load("ubswitch_hash", UbSwitchEcmpLibrary.class)` 加载 ECMP 库；
+3. `Native.load("ubswitch_dieHash", UbSwitchDieLibrary.class)` 加载 die 库；
+4. 任一加载失败时回落到 `UbSwitchHash`（纯 Java 实现，与两个 C 文件逻辑一一对应）。
+
+#### 8.6.2 Java fallback（UbSwitchHash）
+
+`UbSwitchHash` 提供 `hashEcmp` 与 `hashDieEcmp` 两个静态方法，逻辑与原生库完全一致，用于：
+- 测试环境无原生库时；
+- JNA 加载失败时自动回落；
+- 双路径一致性测试验证（同时调用 native 与 Java 实现对比结果）。
+
+#### 8.6.3 关键 API
+
+```java
+public class HashUtils {
+    public static final int JETTY_ID_MIN = 32;
+    public static final int JETTY_ID_MAX = 1023;
+
+    /** ECMP hash（L1SW/L2SW 选路） */
+    public static int nativeHash(String dstCna, int ecmpCnt, int hashFunc);
+
+    /** die hash（NPU→L1SW 选路，二元组 (DstCNA, jettyId)） */
+    public static int nativeHashDstCnaJetty(String dstCna, int jettyId, int ecmpCnt, int hashFunc);
+
+    /** 校验 jettyId 取值范围 [32, 1023] */
+    public static boolean isValidJettyId(int jettyId);
+}
+```
+
+### 8.7 覆盖规划关键设计决策
+
+> 本节合并自原《SNC NPU-L1 Coverage Path Planning Design》文档的 §12 开放问题与 §13 实施补充说明，记录 2026-09-13 落地的设计决策。
+
+#### 8.7.1 接口命名（Q1）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| 扩展接口命名 | `planPathsCoverageEx` / `planPathsCoverageWithNpuL1` / `planPathsFullCoverage` | **`planPathsCoverageEx`**（精简、保留原接口名前缀） |
+
+#### 8.7.2 SCNA 语义（Q2）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| NPU 出端口 hash 使用的 SCNA | 流的源 CNA / NPU 端口级 CNA | **流的源 CNA**（沿用既有约定；若硬件实现按出端口 CNA 参与 hash，需按实际行为调整） |
+
+#### 8.7.3 REDUNDANT 覆盖粒度（Q3）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| REDUNDANT 的 "≥2" 应用粒度 | 按层统一配置 / 按子层精细配置 | **按层统一配置**（NPU_L1 全部 ≥ 2，L1_L2 全部 ≥ 2）；如有更细粒度需求可分层配置 |
+
+#### 8.7.4 CoverageLinkScope 取值（Q4）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| 是否支持仅 NPU↔L1（不含 L1↔L2） | 加 `NPU_L1` 枚举值 / 不加 | **不加**（当前仅 `L1_L2` / `NPU_L1_L2`；如需可后续扩展） |
+
+#### 8.7.5 诊断计数实例化（Q5）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| 失败计数器是 `static` 还是实例字段 | `static`（全局共享）/ 实例字段（每次构造独立） | **实例字段**（`CoveragePlanEngine.ExDiagnostics`，每次构造引擎时重置；并发安全） |
+
+#### 8.7.6 CoverageLink 字段命名（Q6）
+
+| 决策 | 选项 | 最终采用 |
+|:---|:---|:---|
+| `CoverageLink.switchDevice` 是否改名为 `deviceName` | 改名 / 保留原名 | **改名为 `deviceName`**（与其他 DTO 字段命名一致；JSON 契约同步更新） |
+
+#### 8.7.7 路由范围扩展与接收语义
+
+**接收语义（关键前提）：** 目的 CNA 属于某 NPU 设备，该 NPU 就能接收该报文，即使报文到达的端口并不是该 CNA 自己对应的物理端口。因此路由/选口的约束从 "CNA ↔ 端口一一对应" 放宽为 "**CNA 所属 NPU 设备可达**"。
+
+| 位置 | 旧口径 | 扩展后口径 |
+|:---|:---|:---|
+| L1SW 路由 | 仅为"物理相连端口"的 CNA 建 /32 路由 | 对**有端口的每个 NPU**，为其**每个 CNA** 建 /32 路由，出端口 = 该 L1SW 到该 NPU 的**全部**端口 |
+| L2SW→L1SW 选口 | 固定用 `dst.remoteL1sw`（目的端口所在的 L1SW） | 任意"能到达目的 NPU 设备的 L1SW" |
+| L1SW→NPU 选口 | 路由仅 1 个出端口（无 ECMP） | 该 L1SW 到目的 NPU 的全部端口（≥2 → hash 可选） |
+
+**副作用（正向）：** L1SW→NPU 与 L2SW→L1SW 两跳的 ECMP 成员集不再退化，覆盖规划可以真正"踩"到这些出端口，NPU↔L1SW 层覆盖率可达 100%。
+
+#### 8.7.8 EID 与出端口的关系
+
+- `srcPort` / `srcCna` / `srcEid` 标识的是**端点身份**（哪台设备的哪个逻辑端口发起/接收该流），**不约束**报文的物理出口；
+- 源 NPU 收到报文后，按 **CRC8 `(DstCNA, jettyId)`** 在自己的上连端口（对目的所经 L1SW 的全部端口）中选择真实出口；**被选中端口的 CNA 才是后续 L1/L2 选口使用的 SCNA**；
+- 因此 `CoveredEidPair.srcPort`（选定的端点身份）与 `coveredLinks[0].outPort`（真实出口）**可以不同**，这是设计上的有意行为；
+- ACK 方向同理：`destPort` 是 ACK 的发送端点身份，真实出口由 `(srcCna, 源端口 jettyId)` 决定（jettyId 取自源 NPU 端口，与正向同一）。
+
+#### 8.7.9 原生库 CRC8 算法细节
+
+`ubswitch.c`（仓库根目录）导出符号：
+
+```c
+int ubswitch_Hash_dieEcmp(const char *dst_cna, int jetty_id, int ecmp_cnt);
+/* CRC-8/ATM: poly 0x07, init 0x00, 无反转、无最终异或
+   字节流 = DstCNA 的 ASCII（不含结尾 NUL）+ jettyId 低字节 + jettyId 高字节
+   ecmp_cnt == 0 → 返回原始 CRC（0..255）；ecmp_cnt > 0 → CRC % ecmp_cnt */
+```
+
+| 用途 | 原生符号 | Java 入口 |
+|:---|:---|:---|
+| 框间 L1SW↔L2SW 选口、L1SW→NPU 选口 | `ubswitch_Hash_ecmp` | `HashUtils.nativeHash(...)` |
+| **NPU→L1SW 选口（CRC8）** | **`ubswitch_Hash_dieEcmp`** | **`HashUtils.nativeHashDstCnaJetty(dstCna, jettyId, ecmpCnt, hashFunc)`** |
+
+二进制构建：`build_ubswitch.ps1`（MinGW `gcc -O2 -shared` 生成 `libubswitch.dll`；`clang --target={x86_64,aarch64}-unknown-linux-gnu -fuse-ld=lld -nostdlib -shared` 生成两个 `.so`），产物落在 `umdk/src/snc/src/main/resources/`。CRC8 正确性由 `HashUtilsJettyTest.crc8MatchesReference` 用 Java 参考实现逐位比对（含 `ecmpCnt` 取模）。
+
+#### 8.7.10 实测结果（2026-09-13 落地）
+
+| 场景 | 接口 | status | 框间对数 | 框内对数 | NPU_L1 覆盖率 | L1_L2 覆盖率 | 报告 |
+|:---|:---|:---|--:|--:|--:|--:|:---|
+| **全机架 4 框**（148 设备） | `planPathsCoverageEx` | **SUCCESS** | **598** | 0 | **100.00% (2048/2048)** | **100.00% (2048/2048)** | `target/coverage-rack4-report.md`（耗时 ≈189s） |
+| 2 机框子集 | `planPathsCoverage`（仅框间） | 见 `PlanPathsCoverageIntegrationTest` | — | — | — | — | 控制台输出（`CoverageMainSuccessTest`） |
+| 单机框（无 L2SW） | `planPathsCoverageEx` | SUCCESS | 0 | 18 | 100% (64/64) | 0/0 | `target/coverage-intra-chassis-report.md` |
+
+> 全机架 4 框 = `FullRackTopologyGenerator` 生成内容（128 NPU × 8 端口 + 16 L1SW + 4 L2SW），覆盖链路域 4096 条（NPU_L1 2048 = NPU→L1 1024 + L1→NPU 1024；L1_L2 2048 = L1→L2 1024 + L2→L1 1024），**全部 4096 条被 598 个框间 EID 对覆盖**，10 项引擎诊断计数全为 0、`jettyIdFallback` 为 0。
+
+#### 8.7.11 测试约定（2026-09-13）
+
+**2 机框场景只用于老接口 `planPathsCoverage` 的回归测试**（`PlanPathsCoverageIntegrationTest`、`CoverageMainSuccessTest`）；新接口 `planPathsCoverageEx` 的自动化测试全部基于 `FullRackTopologyGenerator` 生成的拓扑、裁剪为**单机框**子集：
+
+- `PlanPathsCoverageExIntegrationTest`（北向 `SncService`，类比老接口集成测试）：MIN/REDUNDANT 覆盖率 + 状态机/空参/SuperNode 不存在/uninit 四类契约用例；
+- `CoverageIntraChassisTest`（`PathService` 层）：框内 2 跳 + CRC8 选口 + SCNA 链接 + 分层统计 + 路由范围端到端校验，并产出框内覆盖率报告。
+- `FullRackTopologyJettyIdTest`：`FullRackTopologyGenerator` 用固定分配 `JETTY_ID_BASE + portIndex`（32..39，每次生成完全一致）。
+
+#### 8.7.12 框间流程示例（4 跳 + ACK）
+
+> 示例数据取自 2 机框拓扑的规划输出。按 §8.7.11 的测试约定，2 机框场景只做老接口回归，因此本示例作为**流程走查**；新接口的自动化断言见 §8.7.13（单机框）。
+
+拓扑：2 机框子集（8 NPU + 8 L1SW + 4 L2SW）。EID 对：`rack2#board1#npu1:400GUB 1/2/1` ↔ `rack1#board1#npu2:400GUB 1/4/1`。
+
+| # | 方向 | 设备 | 出端口 | 对端 | 对端端口 | layer |
+|--:|:---|:---|:---|:---|:---|:---|
+| 0 | 正向 | rack2#board1#npu1 | 400GUB 1/2/1 | rack2#l1sw1 | 400GUB 1/0/1 | NPU_L1 |
+| 1 | 正向 | rack2#l1sw1 | 400GUB 1/0/78 | l2sw1 | 400GUB 1/0/7:2 | L1_L2 |
+| 2 | 正向 | l2sw1 | 400GUB 1/0/7:2 | rack1#l1sw1 | 400GUB 1/0/78 | L1_L2 |
+| 3 | 正向 | rack1#l1sw1 | 400GUB 1/0/3 | rack1#board1#npu2 | 400GUB 1/4/1 | NPU_L1 |
+| 4 | ACK | rack1#board1#npu2 | 400GUB 1/4/2 | rack1#l1sw1 | 400GUB 1/0/4 | NPU_L1 |
+| 5 | ACK | rack1#l1sw1 | 400GUB 1/0/94 | l2sw1 | 400GUB 1/0/15:2 | L1_L2 |
+| 6 | ACK | l2sw1 | 400GUB 1/0/47:2 | rack2#l1sw1 | 400GUB 1/0/94 | L1_L2 |
+| 7 | ACK | rack2#l1sw1 | 400GUB 1/0/1 | rack2#board1#npu1 | 400GUB 1/2/1 | NPU_L1 |
+
+**流程要点：**
+1. 源 NPU 用 **CRC8 `(DstCNA, jettyId)`** 在"到目的所经 L1SW 的上连端口"里选出口（第 0 跳）；
+2. 该选中端口的 **CNA 成为 SCNA**，参与 L1SW→L2SW（第 1 跳）与 L2SW→L1SW（第 2 跳）的选口；
+3. 目的侧 L1SW 按 `DstCNA` 查表，在"到目的 NPU 的全部端口"里 hash 选出口（第 3 跳）；
+4. ACK 方向（第 4~7 跳）：`DstCNA = 源 CNA`，**jettyId = 源 NPU 端口 jettyId**（与正向同一 jettyId）。
+
+#### 8.7.13 框内流程示例（2 跳 + ACK，真实测试输出）
+
+拓扑：单机框（rack1：4 NPU + 4 L1SW，无 L2SW）→ 阶段 1 无可用 EID 对，全部由阶段 2 覆盖。
+EID 对：`rack1#board1#npu2:400GUB 1/4/1` ↔ `rack1#board1#npu1:400GUB 1/2/1`。
+
+| # | 方向 | 设备 | 出端口 | 对端 | 对端端口 | layer |
+|--:|:---|:---|:---|:---|:---|:---|
+| 0 | 正向 | rack1#board1#npu2 | 400GUB 1/4/1 | rack1#l1sw1 | 400GUB 1/0/3 | NPU_L1 |
+| 1 | 正向 | rack1#l1sw1 | 400GUB 1/0/2 | rack1#board1#npu1 | 400GUB 1/2/2 | NPU_L1 |
+| 2 | ACK | rack1#board1#npu1 | 400GUB 1/2/1 | rack1#l1sw1 | 400GUB 1/0/1 | NPU_L1 |
+| 3 | ACK | rack1#l1sw1 | 400GUB 1/0/4 | rack1#board1#npu2 | 400GUB 1/4/2 | NPU_L1 |
+
+#### 8.7.14 关键不变量
+
+| 编号 | 不变量 |
+|:---:|:---|
+| I1 | NPU↔L1 成员集只来自**路由表 LPM 命中条目**，不来自物理连接全量枚举（与硬件转发一致） |
+| I2 | 成员集 `size == 1` 时 hash 退化为确定选路，与旧接口同场景结果一致 |
+| I3 | `linkMap` key 仍为 `deviceName:outPortName`，无跨层冲突；同 key 去重取 `totalOutPorts` 较大者 |
+| I4 | `L1_L2` 域下链路域、hash 点位、`CoveredPair` 链路数、统计全部与旧实现逐位一致 |
+| I5 | `sum(layerStats[*].totalLinks) == stats.totalLinks`，`sum(layerStats[*].coveredCount) == stats.coveredCount` |
+| I6 | 每个 EID 对的正向/反向覆盖链路数相等（CROSS_L2 各 4 条共 8 条；LOCAL_L1 各 2 条共 4 条），jettyId 在两方向相同（均取自源端口） |
+| I7 | 贪心与统计逻辑不引入分层分支；分层只出现在 `collectBidirectionalLinks`（域名）与 `buildResult`（统计） |
+
+#### 8.7.15 线程安全
+
+- `CoveragePlanEngine` 本身为无状态对象，`hashFunc` / `fixedDataUdpPort` / `fixedAckUdpPort` / `hashTuple` 为 final 字段。
+- `ExDiagnostics` 诊断计数器为**实例字段**（`CoveragePlanEngine` 的内部对象），每次构造引擎时重置；同一引擎实例并发调用不安全，但每次 `planPathsCoverage` / `planPathsCoverageEx` 调用都会构造新引擎，因此北向接口层面并发安全。
+- `SncService.routeCalculate` / `makeRoutes` 通过 `synchronized` 保护 `routeCalculated` 标志与 `instantiationRouteMap` 写入；`getNodeRoute` 为只读，可并发；`notifyLinkEvent` 修改 `instantiationRouteMap` 需串行。
+- `SuperNode` / `SuperNodeStore` 由调用方保证并发安全（既有约束不变）。
+
+#### 8.7.16 配置兼容
+
+| 配置 | 是否新增 | 说明 |
+|:---|:---:|:---|
+| `SNCConfig.hashFunc` | 否 | NPU 段 hash 复用同一函数选择器 |
+| `SNCConfig.dieHashFunctionSelect` | 是 | NPU→L1SW die hash 函数选择（planPathsCoverageEx 用） |
+| `SNCConfig.fixedDataUdpPort` / `fixedAckUdpPort` | 否 | NPU 段复用固定端口（四/五元组参与 hash 时生效） |
+| `SNCConfig.hashTuple` | 否 | NPU 段复用同一元组宽度 |
+| 新增 NPU 段开关 | **不加** | 是否启用由调用哪个接口决定（`planPathsCoverage` vs `planPathsCoverageEx`） |
 
 ---
 ## 9 路径规划详细流程
@@ -2597,8 +3668,7 @@ for each (ForwardingChip chip in device.getForwardingChips().values()):
 | 条件 | 处理 |
 |:-----|:-----|
 | `outPortInfos.size() == 1` | 正常使用该出端口，进入下一跳 |
-| `outPortInfos.size() > 1 && 设备不支持自主逐流` | 返回错误码 **1011**（`MULTI_PATH_NOT_SUPPORTED`，§6.2） |
-| `outPortInfos.size() > 1 && 设备支持自主逐流` | 创建一条 `RouteSelectionRecord`（§5.2），记录选路信息，进入下一跳 |
+| `outPortInfos.size() > 1` | 创建一条 `RouteSelectionRecord`（§5.2），记录选路信息，进入下一跳；同时 `HopInfo.multiPath=true`、`PathPlanResult.spray=true` 标记该路径包含 ECMP 多路径，由调用方决定逐流策略 |
 
 **RouteSelectionRecord 创建规则（ECMP 场景）：**
 
@@ -2747,7 +3817,7 @@ if currentPhase == REVERSE:
 | 1008 | TOPO_CONNECTION_ERROR | Step 4 | 直连验证失败（端口连接关系不匹配） |
 | 1009 | TOPO_CONNECTION_NOT_FOUND | Step 5 | 多跳路径还原失败（连接关系错误） |
 | 1010 | ROUTE_NOT_REACHABLE | Step 8 | 路由不可达（无路由、无出端口或出端口与拓扑不一致） |
-| 1011 | MULTI_PATH_NOT_SUPPORTED | Step 9 | 多路径（ECMP）且设备不支持自主逐流 |
+| 1011 | COVERAGE_INCOMPLETE | 覆盖规划阶段 | 覆盖规划未达 100%（仅 planPathsCoverage/planPathsCoverageEx） |
 | 1012 | TOPO_NOT_FOUND | Step 0 | 超节点不存在 |
 | 3002 | SRC_AND_DST_MUST_BE_NPU | Step 0 | 源和目的必须为 NPU 设备 |
 | 3003 | UPI_MISMATCH | Step 0 | 源和目的端口 UPI 不一致 |
@@ -2794,10 +3864,9 @@ PathPlanRequest (§6.1)
 │                                                                           │
 │   Step 9: 出端口判断                                                     │
 │     1个出端口 → 正常进入下一跳                                            │
-│     多个出端口(不支持ECMP) → 1011                                        │
-│     多个出端口(支持ECMP) → 追加 RouteSelectionRecord                     │
+│     多个出端口 → 追加 RouteSelectionRecord + multiPath=true/spray=true     │
 │                                                                           │
-│   错误码: 1010, 1011                                                      │
+│   错误码: 1010                                                            │
 └──────────────────────────────────────────┬───────────────────────────────┘
                                            │
 ┌──────────────────────────────────────────────────────────────────────────┐

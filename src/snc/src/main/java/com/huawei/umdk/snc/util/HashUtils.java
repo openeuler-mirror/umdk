@@ -10,9 +10,12 @@ package com.huawei.umdk.snc.util;
 
 import java.util.Locale;
 
+import com.huawei.umdk.snc.log.Logger;
 import com.sun.jna.Library;
 
 public final class HashUtils {
+
+    private static final Logger LOG = new Logger(HashUtils.class);
 
     /**
      * JNA binding for {@code libubswitch} — the inter-chassis L1SW&lt;-&gt;L2SW
@@ -60,15 +63,10 @@ public final class HashUtils {
         UbSwitchEcmpLibrary ecmpLib;
         try {
             ecmpLib = DllLoader.load(ECMP_NATIVE_LIBRARY_NAME, UbSwitchEcmpLibrary.class);
+            LOG.info("loadNativeLib: lib=%s, status=loaded, path=native", ECMP_NATIVE_LIBRARY_NAME);
         } catch (Throwable t) {
-            // Native library unavailable; HashUtils falls back to the
-            // pure-Java UbSwitchHash implementation.
-            // Surface the underlying JNA/dlopen failure to stderr so that a
-            // load failure (e.g. architecture mismatch) is diagnosable from
-            // the test/build log instead of being silently swallowed.
-            System.err.println("[HashUtils] Failed to load native library '"
-                + ECMP_NATIVE_LIBRARY_NAME + "': " + t);
-            t.printStackTrace(System.err);
+            LOG.warn("loadNativeLib: lib=%s, status=failed, error=%s, fallback=UbSwitchHash.ubswitchHashEcmp",
+                ECMP_NATIVE_LIBRARY_NAME, t.toString());
             ecmpLib = null;
         }
         LIB_ECMP = ecmpLib;
@@ -76,15 +74,10 @@ public final class HashUtils {
         UbSwitchDieLibrary dieLib;
         try {
             dieLib = DllLoader.load(DIE_NATIVE_LIBRARY_NAME, UbSwitchDieLibrary.class);
+            LOG.info("loadNativeLib: lib=%s, status=loaded, path=native", DIE_NATIVE_LIBRARY_NAME);
         } catch (Throwable t) {
-            // Native library unavailable; HashUtils falls back to the
-            // pure-Java UbSwitchHash implementation.
-            // Surface the underlying JNA/dlopen failure to stderr so that a
-            // load failure (e.g. architecture mismatch) is diagnosable from
-            // the test/build log instead of being silently swallowed.
-            System.err.println("[HashUtils] Failed to load native library '"
-                + DIE_NATIVE_LIBRARY_NAME + "': " + t);
-            t.printStackTrace(System.err);
+            LOG.warn("loadNativeLib: lib=%s, status=failed, error=%s, fallback=UbSwitchHash.ubswitchHashDieEcmp",
+                DIE_NATIVE_LIBRARY_NAME, t.toString());
             dieLib = null;
         }
         LIB_DIE = dieLib;
