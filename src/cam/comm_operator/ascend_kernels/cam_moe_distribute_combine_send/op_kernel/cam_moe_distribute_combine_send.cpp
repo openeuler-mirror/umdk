@@ -16,7 +16,7 @@ using namespace AscendC;
 using namespace MoeDistributeCombineSendImpl;
 using namespace Cam;
 extern "C" __global__ __aicore__ void cam_moe_distribute_combine_send(
-    GM_ADDR expandX, GM_ADDR expandXShared, GM_ADDR commArgs, GM_ADDR batchInfo,
+    GM_ADDR expandX, GM_ADDR commArgs, GM_ADDR batchInfo,
     GM_ADDR XOut, GM_ADDR workspaceGM, GM_ADDR tilingGM)
 {
     REGISTER_TILING_DEFAULT(CamMoeDistributeCombineSendTilingData);
@@ -26,11 +26,11 @@ extern "C" __global__ __aicore__ void cam_moe_distribute_combine_send(
     GET_TILING_DATA_WITH_STRUCT(CamMoeDistributeCombineSendTilingData, tilingData, tilingGM);
     if (TILING_KEY_IS(100)) {
         CamMoeDistributeCombineSend<bfloat16_t> op;
-        op.Init(expandX, expandXShared, workspaceGM, &pipe, &tilingData, commArgs, batchInfo, isCamComm);
+        op.Init(expandX, workspaceGM, &pipe, &tilingData, commArgs, batchInfo, isCamComm);
         op.Process();
     } else if (TILING_KEY_IS(101)) {
         CamMoeDistributeCombineSend<float16_t> op;
-        op.Init(expandX, expandXShared, workspaceGM, &pipe, &tilingData, commArgs, batchInfo, isCamComm);
+        op.Init(expandX, workspaceGM, &pipe, &tilingData, commArgs, batchInfo, isCamComm);
         op.Process();
     }
 }

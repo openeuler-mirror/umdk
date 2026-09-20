@@ -168,11 +168,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     // shared memory needed by dispatch perf optimization (max ~54 KB)
     uint64_t dispatchNeedSize = MathCeil(
-        sizeof(uint32_t) * (moeRankNum + (routeExpertNumPerMoe + 1) * moeRankNum) * MAX_AIV_NUM, UB_ALIGN);
+        sizeof(uint32_t) * (moeRankNum + routeExpertNumPerMoe * moeRankNum) * MAX_AIV_NUM, UB_ALIGN);
     // combine-send flag region (max ~64 B)
     uint64_t combineSendFlagSize = MathCeil(sizeof(uint32_t) * moeRankNum, UB_ALIGN);
     // tokens returned by combine-send (max ~1008 KB)
-    uint64_t combineTokenSize = MathCeil(sizeof(int16_t) * hiddenSize * batchSize * (topk + 1), UB_ALIGN);
+    uint64_t combineTokenSize = MathCeil(sizeof(int16_t) * hiddenSize * batchSize * topk, UB_ALIGN);
     uint64_t sharedMemAttnNeedSize = dispatchNeedSize + combineSendFlagSize + combineTokenSize;
 
     OPS_ERR_IF(sharedMemSize < sharedMemAttnNeedSize,

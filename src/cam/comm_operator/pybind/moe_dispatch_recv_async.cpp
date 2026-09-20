@@ -62,37 +62,26 @@ tensor_list cam_dispatch_recv_async_impl_npu(
     TORCH_CHECK(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f,
         "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=", maxSeqLenFactor);
     int64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
-    int64_t maxTokenNumShared = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
     at::Tensor expandXOut;
-    at::Tensor expandXOutShared;
     at::Tensor dynamicScalesOut;
-    at::Tensor dynamicScalesOutShared;
     if (dynamicQuant != 0) {
         expandXOut = at::empty({maxTokenNum, hiddenSize}, x.options().dtype(at::kChar));
         dynamicScalesOut = at::empty({maxTokenNum}, x.options().dtype(at::kFloat));
-        expandXOutShared = at::empty({maxTokenNumShared, hiddenSize}, x.options().dtype(at::kChar));
-        dynamicScalesOutShared = at::empty({maxTokenNumShared}, x.options().dtype(at::kFloat));
     } else {
         expandXOut = at::empty({maxTokenNum, hiddenSize}, x.options());
         dynamicScalesOut = at::empty({1}, x.options().dtype(at::kFloat));
-        expandXOutShared = at::empty({maxTokenNumShared, hiddenSize}, x.options());
-        dynamicScalesOutShared = at::empty({1}, x.options().dtype(at::kFloat));
     }
 
-    int64_t batchInfoNum = INFO_NUM + tpSize + (routeExpertNumPerMoe + 1) * tpSize;
+    int64_t batchInfoNum = INFO_NUM + tpSize + routeExpertNumPerMoe * tpSize;
     at::Tensor batchInfoOut = at::empty({batchInfoNum}, x.options().dtype(at::kLong));
     at::Tensor epRecvCountRouted = at::empty({routeExpertNumPerMoe}, x.options().dtype(at::kLong));
-    at::Tensor epRecvCountShared = at::empty({1}, x.options().dtype(at::kLong));
     int magic = 0;
 
     tensor_list ret = {
         expandXOut,
-        expandXOutShared,
         dynamicScalesOut,
-        dynamicScalesOutShared,
         batchInfoOut,
-        epRecvCountRouted,
-        epRecvCountShared
+        epRecvCountRouted
     };
 
     EXEC_NPU_CMD(aclnnCamMoeDistributeDispatchRecv,
@@ -102,8 +91,8 @@ tensor_list cam_dispatch_recv_async_impl_npu(
         magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum,
         routeExpertNumPerMoe, moeRankId, worldSize, tpSize, dynamicQuant, groupNamePtr,
         // output
-        expandXOut, expandXOutShared, dynamicScalesOut, dynamicScalesOutShared,
-        batchInfoOut, epRecvCountRouted, epRecvCountShared);
+        expandXOut, dynamicScalesOut,
+        batchInfoOut, epRecvCountRouted);
 
     return ret;
 }
@@ -134,36 +123,25 @@ tensor_list cam_dispatch_recv_async_impl_meta(
     TORCH_CHECK(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f,
         "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=", maxSeqLenFactor);
     int64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
-    int64_t maxTokenNumShared = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
     at::Tensor expandXOut;
-    at::Tensor expandXOutShared;
     at::Tensor dynamicScalesOut;
-    at::Tensor dynamicScalesOutShared;
     if (dynamicQuant != 0) {
         expandXOut = at::empty({maxTokenNum, hiddenSize}, x.options().dtype(at::kChar));
         dynamicScalesOut = at::empty({maxTokenNum}, x.options().dtype(at::kFloat));
-        expandXOutShared = at::empty({maxTokenNumShared, hiddenSize}, x.options().dtype(at::kChar));
-        dynamicScalesOutShared = at::empty({maxTokenNumShared}, x.options().dtype(at::kFloat));
     } else {
         expandXOut = at::empty({maxTokenNum, hiddenSize}, x.options());
         dynamicScalesOut = at::empty({1}, x.options().dtype(at::kFloat));
-        expandXOutShared = at::empty({maxTokenNumShared, hiddenSize}, x.options());
-        dynamicScalesOutShared = at::empty({1}, x.options().dtype(at::kFloat));
     }
 
-    int64_t batchInfoNum = INFO_NUM + tpSize + (routeExpertNumPerMoe + 1) * tpSize;
+    int64_t batchInfoNum = INFO_NUM + tpSize + routeExpertNumPerMoe * tpSize;
     at::Tensor batchInfoOut = at::empty({batchInfoNum}, x.options().dtype(at::kLong));
     at::Tensor epRecvCountRouted = at::empty({routeExpertNumPerMoe}, x.options().dtype(at::kLong));
-    at::Tensor epRecvCountShared = at::empty({1}, x.options().dtype(at::kLong));
 
     tensor_list ret = {
         expandXOut,
-        expandXOutShared,
         dynamicScalesOut,
-        dynamicScalesOutShared,
         batchInfoOut,
-        epRecvCountRouted,
-        epRecvCountShared
+        epRecvCountRouted
     };
 
     return ret;

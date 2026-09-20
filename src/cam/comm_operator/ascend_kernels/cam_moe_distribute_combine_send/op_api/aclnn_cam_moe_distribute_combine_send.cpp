@@ -25,7 +25,6 @@ extern "C" {
 
 aclnnStatus aclnnCamMoeDistributeCombineSendGetWorkspaceSize(
     const aclTensor *expandX,
-    const aclTensor *expandXShared,
     const aclTensor *commArgs,
     const aclTensor *batchInfo,
     int64_t magic,
@@ -43,7 +42,7 @@ aclnnStatus aclnnCamMoeDistributeCombineSendGetWorkspaceSize(
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
-    return aclnnInnerCamMoeDistributeCombineSendGetWorkspaceSize(expandX, expandXShared, commArgs, batchInfo,
+    return aclnnInnerCamMoeDistributeCombineSendGetWorkspaceSize(expandX, commArgs, batchInfo,
         magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize,
         tpSize, hcclGroupName, out, workspaceSize, executor);
 }

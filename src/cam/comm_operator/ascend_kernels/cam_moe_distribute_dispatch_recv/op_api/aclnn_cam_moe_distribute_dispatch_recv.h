@@ -33,12 +33,9 @@ extern "C" {
  * dynamicQuant : required
  * hcclGroupName : required
  * expandXOut : required
- * expandXSharedOut : required
  * dynamicScalesOut : required
- * dynamicScalesSharedOut : required
  * batchInfoOut : required
  * epRecvCountRoutedOut : required
- * epRecvCountSharedOut : required
  * workspaceSize : size of workspace(output).
  * executor : executor context(output).
  */
@@ -59,12 +56,9 @@ aclnnStatus aclnnCamMoeDistributeDispatchRecvGetWorkspaceSize(
     int64_t dynamicQuant,
     char *hcclGroupName,
     const aclTensor *expandXOut,
-    const aclTensor *expandXSharedOut,
     const aclTensor *dynamicScalesOut,
-    const aclTensor *dynamicScalesSharedOut,
     const aclTensor *batchInfoOut,
     const aclTensor *epRecvCountRoutedOut,
-    const aclTensor *epRecvCountSharedOut,
     uint64_t *workspaceSize,
     aclOpExecutor **executor);
 

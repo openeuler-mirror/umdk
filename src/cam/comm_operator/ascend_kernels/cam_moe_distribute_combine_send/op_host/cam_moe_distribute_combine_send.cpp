@@ -25,8 +25,7 @@ constexpr static int ONE_DIM = 1;
 constexpr static int TWO_DIMS = 2;
 
 constexpr static int INPUT_X_INDEX = 0;
-constexpr static int INPUT_X_SHARED_INDEX = 1;
-constexpr static int INPUT_BATCH_INFO_INDEX = 3;
+constexpr static int INPUT_BATCH_INFO_INDEX = 2;
 
 constexpr static int ATTR_ENUM_MAGIC = 0;
 constexpr static int ATTR_ENUM_MAX_SEQ_LEN = 1;
@@ -97,7 +96,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t sharedMemSize = GetMaxWindowSize();
 
     const gert::StorageShape *xShape = context->GetInputShape(INPUT_X_INDEX);
-    const gert::StorageShape *xSharedShape = context->GetInputShape(INPUT_X_SHARED_INDEX);
     const gert::StorageShape *batchInfoShape = context->GetInputShape(INPUT_BATCH_INFO_INDEX);
 
     OPS_ERR_IF(maxSeqLen < LIMIT_MAX_SEQ_LEN_MIN || maxSeqLen > LIMIT_MAX_SEQ_LEN_MAX,
@@ -140,15 +138,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         OPS_LOG_E(nodeName, "xShape dim1 is invalid, must be hiddenSize=%ld, but got dim1=%u.",
             hiddenSize, xShape->GetStorageShape().GetDim(1)), return ge::GRAPH_FAILED);
 
-    OPS_ERR_IF(xSharedShape == nullptr, OPS_LOG_E(nodeName, "xSharedShape is null."), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(xSharedShape->GetStorageShape().GetDimNum() != TWO_DIMS,
-        OPS_LOG_E(nodeName, "xSharedShape dim is invalid, must be %d, but got dimNum=%u.",
-            TWO_DIMS, xSharedShape->GetStorageShape().GetDimNum()), return ge::GRAPH_FAILED);
-    OPS_ERR_IF(xSharedShape->GetStorageShape().GetDim(1) != hiddenSize,
-        OPS_LOG_E(nodeName, "xSharedShape dim1 is invalid, must be hiddenSize=%ld, but got dim1=%u.",
-            hiddenSize, xSharedShape->GetStorageShape().GetDim(1)), return ge::GRAPH_FAILED);
-
-    int64_t batchInfoNum = INFO_NUM + tpSize + (routeExpertNumPerMoe + 1) * tpSize;
+    int64_t batchInfoNum = INFO_NUM + tpSize + routeExpertNumPerMoe * tpSize;
     OPS_ERR_IF(batchInfoShape == nullptr,
         OPS_LOG_E(nodeName, "batchInfoShape is null."), return ge::GRAPH_FAILED);
     OPS_ERR_IF(batchInfoShape->GetStorageShape().GetDimNum() != ONE_DIM,
@@ -218,12 +208,6 @@ public:
     explicit CamMoeDistributeCombineSend(const char* name) : OpDef(name)
     {
         this->Input("expandX")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_BF16, ge::DT_FLOAT16, ge::DT_BF16, ge::DT_FLOAT16})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .AutoContiguous();
-        this->Input("expandXShared")
             .ParamType(REQUIRED)
             .DataType({ge::DT_BF16, ge::DT_FLOAT16, ge::DT_BF16, ge::DT_FLOAT16})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
