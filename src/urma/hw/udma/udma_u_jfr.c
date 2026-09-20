@@ -100,14 +100,50 @@ int exec_jfr_create_cmd(urma_context_t *ctx, struct udma_u_jfr *jfr,
 	return 0;
 }
 
+static void udma_u_init_ring(struct udma_u_idx_ring *ring)
+{
+	uint32_t i;
+
+	for (i = 0; i < ring->capacity; i++)
+		ring->idx[i] = i;
+
+	ring->front = 0;
+	ring->rear = i - 1;
+}
+
+static struct udma_u_idx_ring *udma_ring_alloc(uint32_t cap)
+{
+	struct udma_u_idx_ring *ring;
+	uint32_t *idx;
+
+	ring = (struct udma_u_idx_ring *)calloc(1, sizeof(*ring));
+	if (!ring) {
+		UDMA_LOG_ERR("failed to calloc idx ring.\n");
+		return NULL;
+	}
+
+	idx = (uint32_t *)calloc(cap, sizeof(*idx));
+	if (!idx) {
+		UDMA_LOG_ERR("failed to calloc idx memory.\n");
+		free(ring);
+		return NULL;
+	}
+	ring->idx = idx;
+	ring->capacity = cap;
+
+	udma_u_init_ring(ring);
+
+	return ring;
+}
+
 static int udma_u_alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 {
 	struct udma_u_jfr_idx_que *idx_que = &jfr->idx_que;
 	uint32_t buf_size;
 
 	idx_que->entry_shift = UDMA_U_ILOG32(UDMA_JFR_IDX_QUE_ENTRY_SZ);
-	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
-	if (!idx_que->bitmap)
+	idx_que->ring = udma_ring_alloc(jfr->wqe_cnt);
+	if (!idx_que->ring)
 		return ENOMEM;
 
 	buf_size = align(jfr->wqe_cnt << idx_que->entry_shift,
@@ -115,8 +151,8 @@ static int udma_u_alloc_jfr_idx_que(struct udma_u_jfr *jfr)
 	idx_que->buf.length = align(buf_size, UDMA_HW_PAGE_SIZE);
 	idx_que->buf.buf = udma_u_alloc_kernel_buf(jfr->rq.ctx, idx_que->buf.length);
 	if (!idx_que->buf.buf) {
-		udma_bitmap_free(idx_que->bitmap);
-		idx_que->bitmap = NULL;
+		udma_idx_ring_free(idx_que->ring);
+		idx_que->ring = NULL;
 		return ENOMEM;
 	}
 
@@ -128,7 +164,7 @@ static void udma_u_free_idx_que(struct udma_u_jfr_idx_que *idx_que)
 	if (!idx_que->cstm)
 		udma_u_free_buf(idx_que->buf.buf, idx_que->buf.length);
 
-	udma_bitmap_free(idx_que->bitmap);
+	udma_idx_ring_free(idx_que->ring);
 }
 
 int udma_u_insert_jfr_node(struct udma_u_context *udma_ctx, struct udma_u_jfr *jfr)
@@ -353,7 +389,7 @@ int udma_verify_modify_jfr(struct udma_u_jfr *jfr, uint32_t jfr_limit)
 
 static void udma_reset_sw_u_jfr_queue(struct udma_u_jfr *udma_jfr)
 {
-	udma_u_init_bitmap(udma_jfr->idx_que.bitmap, udma_jfr->idx_que.bitmap_cnt);
+	udma_u_init_ring(udma_jfr->idx_que.ring);
 
 	udma_jfr->rq.pi = 0;
 	udma_jfr->rq.ci = 0;
@@ -442,6 +478,15 @@ static void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe, struct udma_u_jfr
 		(void)memset(sge + cnt, 0, (jfr->max_sge - cnt) * UDMA_SGE_SIZE);
 }
 
+static void udma_ring_use_idx(struct udma_u_idx_ring *ring, uint32_t *idx)
+{
+	*idx = ring->idx[ring->front];
+
+	ring->front++;
+	if (ring->front >= ring->capacity)
+		ring->front = 0;
+}
+
 static urma_status_t post_recv_one(struct udma_u_jfr *jfr, urma_jfr_wr_t *wr)
 {
 	urma_status_t ret = URMA_SUCCESS;
@@ -460,11 +505,7 @@ static urma_status_t post_recv_one(struct udma_u_jfr *jfr, urma_jfr_wr_t *wr)
 		return URMA_ENOMEM;
 	}
 
-	if (udma_bitmap_use_idx(jfr->idx_que.bitmap, jfr->idx_que.bitmap_cnt,
-				jfr->wqe_cnt, &wqe_idx)) {
-		UDMA_LOG_ERR("failed to get JFR work queue entry index.\n");
-		return URMA_ENOMEM;
-	}
+	udma_ring_use_idx(jfr->idx_que.ring, &wqe_idx);
 	wqe = get_jfr_wqe(jfr, wqe_idx);
 
 	fill_recv_sge_to_wqe(wr, wqe, jfr);

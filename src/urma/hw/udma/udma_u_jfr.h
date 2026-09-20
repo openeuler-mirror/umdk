@@ -51,6 +51,12 @@ static inline void set_data_of_sge(struct udma_wqe_sge *sge, const urma_sge_t *s
 	sge->length = htole32(sg->len);
 }
 
+static inline void udma_idx_ring_free(struct udma_u_idx_ring *ring)
+{
+	free(ring->idx);
+	free(ring);
+}
+
 urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg);
 urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr);
 urma_status_t udma_u_delete_jfr_batch(urma_jfr_t **jfr, int jfr_cnt, urma_jfr_t **bad_jfr);

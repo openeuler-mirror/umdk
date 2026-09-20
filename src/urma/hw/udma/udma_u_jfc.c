@@ -625,6 +625,14 @@ static void udma_u_parse_opcode_for_res(struct udma_u_jfc_cqe *cqe, urma_cr_t *c
 	}
 }
 
+static void udma_ring_free_idx(struct udma_u_idx_ring *ring, uint32_t idx)
+{
+	ring->rear++;
+	if (ring->rear >= ring->capacity)
+		ring->rear = 0;
+	ring->idx[ring->rear] = idx;
+}
+
 static bool udma_u_update_jfr_idx(struct udma_u_context *udma_ctx,
 				  struct udma_u_jfc_cqe *cqe, urma_cr_t *cr,
 				  bool is_clean)
@@ -677,13 +685,14 @@ static bool udma_u_update_jfr_idx(struct udma_u_context *udma_ctx,
 	if (!is_clean && cqe->inline_en != 0)
 		handle_recv_inl_cqe(cqe, opcode, jfr, cr);
 
-	if (!jfr->lock_free)
+	udma_ring_free_idx(jfr->idx_que.ring, entry_idx);
+
+	if (is_jetty && (!jfr->lock_free))
 		(void)pthread_spin_lock(&jfr->lock);
 
-	udma_bitmap_free_idx(jfr->idx_que.bitmap, jfr->idx_que.bitmap_cnt, entry_idx);
 	queue->ci++;
 
-	if (!jfr->lock_free)
+	if (is_jetty && (!jfr->lock_free))
 		(void)pthread_spin_unlock(&jfr->lock);
 
 	return false;
