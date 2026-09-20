@@ -61,8 +61,8 @@ public final class HashUtils {
         try {
             ecmpLib = DllLoader.load(ECMP_NATIVE_LIBRARY_NAME, UbSwitchEcmpLibrary.class);
         } catch (Throwable t) {
-            // Native library unavailable; existing hash methods remain usable.
-            // nativeHash will throw IllegalStateException when called.
+            // Native library unavailable; HashUtils falls back to the
+            // pure-Java UbSwitchHash implementation.
             // Surface the underlying JNA/dlopen failure to stderr so that a
             // load failure (e.g. architecture mismatch) is diagnosable from
             // the test/build log instead of being silently swallowed.
@@ -77,11 +77,11 @@ public final class HashUtils {
         try {
             dieLib = DllLoader.load(DIE_NATIVE_LIBRARY_NAME, UbSwitchDieLibrary.class);
         } catch (Throwable t) {
-            // Native library unavailable; nativeHashDstCnaJetty will throw
-            // IllegalStateException when called. Surface the underlying
-            // JNA/dlopen failure to stderr so that a load failure (e.g.
-            // architecture mismatch) is diagnosable from the test/build log
-            // instead of being silently swallowed.
+            // Native library unavailable; HashUtils falls back to the
+            // pure-Java UbSwitchHash implementation.
+            // Surface the underlying JNA/dlopen failure to stderr so that a
+            // load failure (e.g. architecture mismatch) is diagnosable from
+            // the test/build log instead of being silently swallowed.
             System.err.println("[HashUtils] Failed to load native library '"
                 + DIE_NATIVE_LIBRARY_NAME + "': " + t);
             t.printStackTrace(System.err);
@@ -133,42 +133,41 @@ public final class HashUtils {
 
     /**
      * Computes a hash value via the native {@code libubswitch} ECMP hash
-     * function.
+     * function, falling back to the pure-Java {@link UbSwitchHash}
+     * implementation when the native library is unavailable.
      *
      * <p>The {@code ethertype}, {@code offset}, and {@code hashSeed}
      * parameters are accepted for API symmetry with other hash entry points
-     * but are intentionally ignored by the native call.
+     * but are intentionally ignored by both the native and the Java call.
      *
      * @param dip       destination IP
      * @param sip       source IP
      * @param dport     destination port
      * @param sport     source port
-     * @param ethertype ignored by the native function
+     * @param ethertype ignored
      * @param protocol  IP protocol number
-     * @param offset    ignored by the native function
+     * @param offset    ignored
      * @param ecmpCnt   ECMP member count; {@code 0} returns the raw hash,
      *                  otherwise the hash is reduced modulo {@code ecmpCnt}
      * @param hashFunc  hash function selector, mapped via {@link #mapHashMode}
-     * @param hashSeed  ignored by the native function
+     * @param hashSeed  ignored
      * @return the raw hash value when {@code ecmpCnt == 0}, otherwise
      *         {@code floorMod(rawHash, ecmpCnt)}
-     * @throws IllegalStateException if {@code libubswitch} was not loaded
      */
     public static int nativeHash(String dip, String sip, int dport, int sport,
                                  int ethertype, int protocol, int offset,
                                  int ecmpCnt, int hashFunc, int hashSeed) {
-        if (LIB_ECMP == null) {
-            throw new IllegalStateException(
-                "Native library libubswitch (" + ECMP_NATIVE_LIBRARY_NAME + ") is not loaded");
+        int mappedFunc = mapHashMode(hashFunc);
+        if (LIB_ECMP != null) {
+            int rawHash = LIB_ECMP.ubswitch_Hash_ecmp(dip, sip, dport, sport,
+                    protocol, mappedFunc, ecmpCnt);
+            if (ecmpCnt == 0) {
+                return rawHash;
+            }
+            return Math.floorMod(rawHash, ecmpCnt);
         }
-        // ethertype, offset, hashSeed are intentionally ignored per the
-        // native API contract.
-        int rawHash = LIB_ECMP.ubswitch_Hash_ecmp(dip, sip, dport, sport, protocol,
-                                           mapHashMode(hashFunc), ecmpCnt);
-        if (ecmpCnt == 0) {
-            return rawHash;
-        }
-        return Math.floorMod(rawHash, ecmpCnt);
+        return UbSwitchHash.ubswitchHashEcmp(dip, sip, dport, sport, protocol,
+                                             mappedFunc, ecmpCnt);
     }
 
     /**
@@ -186,7 +185,6 @@ public final class HashUtils {
      * @param hashFunc hash function selector, mapped via {@link #mapHashMode}
      * @return the raw hash value when {@code ecmpCnt == 0}, otherwise
      *         {@code floorMod(rawHash, ecmpCnt)}
-     * @throws IllegalStateException if {@code libubswitch} was not loaded
      */
     public static int nativeHash(String dip, String sip, int ecmpCnt, int hashFunc) {
         return nativeHash(dip, sip, 0, 0, 0, ecmpCnt, hashFunc);
@@ -214,7 +212,9 @@ public final class HashUtils {
     }
 
     /**
-     * Computes the NPU egress port index for the NPU-&gt;L1SW hop.
+     * Computes the NPU egress port index for the NPU-&gt;L1SW hop, falling
+     * back to the pure-Java {@link UbSwitchHash} implementation when the
+     * native library is unavailable.
      *
      * <p><b>Algorithm.</b> This entry point is served by the dedicated native
      * symbol {@code ubswitch_Hash_dieEcmp} (CRC-8/ATM, poly {@code 0x07},
@@ -224,11 +224,11 @@ public final class HashUtils {
      * 32-bit unsigned form of the destination CNA, and {@code lb} is the
      * low 8 bits of the jetty id.
      *
-     * <p>The jetty id is not range-checked; the native symbol folds its
+     * <p>The jetty id is not range-checked; the symbol folds its
      * low 8 bits into the CRC, so any non-negative {@code int} value is
      * accepted.
      *
-     * <p>The native call already reduces the CRC modulo {@code ecmpCnt}, so
+     * <p>The call already reduces the CRC modulo {@code ecmpCnt}, so
      * the returned value is directly the index of the selected NPU uplink
      * out-port within the ECMP member set.
      *
@@ -241,24 +241,24 @@ public final class HashUtils {
      * @param ecmpCnt         number of NPU uplink candidate ports;
      *                        {@code 0} returns the raw CRC (0..255)
      * @param hashFunc        accepted for API symmetry with the L1SW/L2SW
-     *                        entry point; ignored by the native call
+     *                        entry point; ignored by the call
      * @param functionSelect  hash function selector passed to the native
-     *                        library; {@code 0} (default) and {@code 1}
+     *                        library (or the Java fallback);
+     *                        {@code 0} (default) and {@code 1}
      *                        select CRC-8/ATM, other values return
      *                        {@code -1}
      * @return the selected out-port index, or the raw CRC when
      *         {@code ecmpCnt == 0}; {@code -1} when {@code functionSelect}
      *         is unsupported
-     * @throws IllegalStateException if {@code libubswitch-die} was not loaded
      */
     public static int nativeHashDstCnaJetty(int dstCna, int jettyId,
                                             int ecmpCnt, int hashFunc,
                                             int functionSelect) {
-        if (LIB_DIE == null) {
-            throw new IllegalStateException(
-                "Native library libubswitch-die (" + DIE_NATIVE_LIBRARY_NAME + ") is not loaded");
+        if (LIB_DIE != null) {
+            return LIB_DIE.ubswitch_Hash_dieEcmp(
+                0, dstCna, jettyId & 0xFF, ecmpCnt, functionSelect);
         }
-        return LIB_DIE.ubswitch_Hash_dieEcmp(
+        return UbSwitchHash.ubswitchHashDieEcmp(
             0, dstCna, jettyId & 0xFF, ecmpCnt, functionSelect);
     }
 
@@ -273,7 +273,6 @@ public final class HashUtils {
      * @param hashFunc accepted for API symmetry; ignored
      * @return the selected out-port index, or the raw CRC when
      *         {@code ecmpCnt == 0}
-     * @throws IllegalStateException if {@code libubswitch-die} was not loaded
      * @see #nativeHashDstCnaJetty(int, int, int, int, int)
      */
     public static int nativeHashDstCnaJetty(int dstCna, int jettyId,
@@ -299,7 +298,6 @@ public final class HashUtils {
      * @param hashFunc hash function selector, mapped via {@link #mapHashMode}
      * @return the raw hash value when {@code ecmpCnt == 0}, otherwise
      *         {@code floorMod(rawHash, ecmpCnt)}
-     * @throws IllegalStateException if {@code libubswitch} was not loaded
      */
     public static int nativeHash(String dip, String sip, int dport, int sport,
                                  int protocol, int ecmpCnt, int hashFunc) {
