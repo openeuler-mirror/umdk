@@ -48,12 +48,14 @@ static inline const uint8_t *bondp_rjetty_ext_v0_local_indices_const(const urma_
 
 static inline uint8_t *bondp_rjetty_ext_v0_target_ctx_bytes(urma_bond_jetty_ext_v0_t *ext)
 {
-    return bondp_rjetty_ext_v0_local_indices(ext) + ext->local_ctx_cnt;
+    return bondp_rjetty_ext_v0_local_indices(ext) +
+           ((ext->mask & BONDP_RJETTY_EXT_MASK_LOCAL_CTX) ? ext->local_ctx_cnt : 0);
 }
 
 static inline const uint8_t *bondp_rjetty_ext_v0_target_ctx_bytes_const(const urma_bond_jetty_ext_v0_t *ext)
 {
-    return bondp_rjetty_ext_v0_local_indices_const(ext) + ext->local_ctx_cnt;
+    return bondp_rjetty_ext_v0_local_indices_const(ext) +
+           ((ext->mask & BONDP_RJETTY_EXT_MASK_LOCAL_CTX) ? ext->local_ctx_cnt : 0);
 }
 
 static inline void bondp_set_rjetty_target_ctx_entry(urma_bond_jetty_ext_v0_t *ext, uint32_t idx,
