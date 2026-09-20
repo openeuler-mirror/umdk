@@ -295,9 +295,6 @@ inline aclTensor *ConvertType(const at::Tensor &at_tensor)
             default:
                 format = ACL_FORMAT_ND;
         }
-        if (acl_data_type != ACL_STRING) {
-            storageDims.push_back(at_tensor.storage().nbytes() / itemsize);
-        }
     }
 
     if (at_tensor.unsafeGetTensorImpl()->is_wrapped_number()) {
