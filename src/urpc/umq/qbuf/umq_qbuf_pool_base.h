@@ -629,6 +629,9 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         *info.local_buf_cnt = 0;
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
         *tls_return_buf_cnt += return_buf_cnt;
+        if (with_data) {
+            stats->sc_tls_return_buf_cnt[sc] += return_buf_cnt;
+        }
         (void)pthread_spin_unlock(&global_pool->global_mutex);
         return;
     }
@@ -648,6 +651,9 @@ static ALWAYS_INLINE void return_to_global(global_block_pool_t *global_pool, loc
         return_buf_cnt = return_list_to_pools(head, info.global_head, info.global_buf_cnt, with_data, sc);
         (void)__atomic_fetch_sub(info.local_buf_cnt, return_buf_cnt, __ATOMIC_RELAXED);
         *tls_return_buf_cnt += return_buf_cnt;
+        if (with_data) {
+            stats->sc_tls_return_buf_cnt[sc] += return_buf_cnt;
+        }
     }
 
     (void)pthread_spin_unlock(&global_pool->global_mutex);
@@ -905,7 +911,7 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
         cur_node->total_data_size = total_data_size;
         cur_node->data_size = remaining_size >= max_data_capacity ? max_data_capacity : remaining_size;
         /* Combined 4-byte write for headroom_size (lo 16 bits) +
-         * first_fragment:1 + alloc_state:1 + is_coalesced_small:1 + rsvd1:13 (top 15 bits).
+         * first_fragment:1 + alloc_state:1 + rx_fallback:1 + rsvd1:13 (top 15 bits).
          * Replaces the separate headroom_size store + first_fragment bit
          * assignment + alloc_state bit assignment with a single 4-byte store
          * (single SIMD/STP on aarch64 instead of 3 separate STR+BFI/UBFX). */
