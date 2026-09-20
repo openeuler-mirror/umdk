@@ -16,7 +16,7 @@
 #include "udma_u_buf.h"
 #include "udma_u_db.h"
 
-void udma_u_init_bitmap(uint64_t *bitmap, uint32_t bitmap_cnt)
+static void udma_u_init_bitmap(uint64_t *bitmap, uint32_t bitmap_cnt)
 {
 	for (uint32_t i = 0; i < bitmap_cnt; ++i)
 		bitmap[i] = ~(0ULL);
@@ -38,8 +38,8 @@ uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
 	return bitmap;
 }
 
-int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
-			uint32_t n_bits, uint32_t *idx)
+static void udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+				uint32_t n_bits, uint32_t *idx)
 {
 	uint32_t bit_num;
 	uint32_t i;
@@ -49,24 +49,22 @@ int udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 	if (i == bitmap_cnt) {
 		UDMA_LOG_ERR("all bitmaps have been used! bitmap count = %u\n",
 			     bitmap_cnt);
-		return ENOMEM;
+		return;
 	}
 
 	bit_num = ffsl(bitmap[i]);
 	*idx = (i << UDMA_BITS_PER_LONG_SHIFT) + bit_num - 1;
 
 	if (*idx >= n_bits) {
-		UDMA_LOG_ERR("the index exceeds the range of the bitmap!\n");
-		return ENOMEM;
+		UDMA_LOG_ERR("the index:%u exceeds the range of the bitmap:%u!\n", *idx, n_bits);
+		return;
 	}
 
 	bitmap[i] &= ~(1ULL << (bit_num - 1));
-
-	return 0;
 }
 
-void udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
-			  uint32_t idx)
+static void udma_bitmap_free_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
+				 uint32_t idx)
 {
 	uint32_t bitmap_num;
 	uint32_t bit_num;
@@ -149,8 +147,8 @@ void *udma_u_alloc_sw_db(struct udma_u_context *ctx, enum udma_db_type type)
 		goto out;
 
 found:
-	(void)udma_bitmap_use_idx(db_page->bitmap, db_page->bitmap_cnt,
-				  db_page->num_db, &npos);
+	udma_bitmap_use_idx(db_page->bitmap, db_page->bitmap_cnt,
+			    db_page->num_db, &npos);
 
 	db = (char *)db_page->buf.buf + npos * UDMA_DB_SIZE;
 	*(uint32_t *)db = 0;

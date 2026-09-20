@@ -179,12 +179,20 @@ struct udma_wqe_sge {
 	uint64_t va;
 };
 
+struct udma_u_idx_ring {
+	uint32_t *idx;
+	uint32_t front;
+	uint32_t rear;
+	uint32_t capacity;
+};
+
 struct udma_u_jfr_idx_que {
 	struct udma_u_buf buf;
 	uint32_t entry_shift;
 	uint64_t *bitmap;
 	uint32_t bitmap_cnt;
 	bool cstm;
+	struct udma_u_idx_ring *ring;
 };
 
 struct udma_u_jfr {
