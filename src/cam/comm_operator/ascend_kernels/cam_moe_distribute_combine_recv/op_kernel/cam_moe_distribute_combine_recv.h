@@ -15,6 +15,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 #include "cam_moe_distribute_combine_recv_tiling.h"
 #include "comm_args.h"
+#include "comm_group.h"
 
 #define DATA_FLUSH(_gm_tensor, _type)                                                                      \
     do {                                                                                                   \
@@ -60,7 +61,12 @@ private:
 
     __aicore__ inline GM_ADDR GetPeerAddrByRankId(const int32_t rankId)
     {
-        return (GM_ADDR)peerMemsAddrGMTensor_.GetValue(rankId);
+        // Match the HCCL windowsIn path in the AFD-bundled CAM package.
+        if (rankId == attnRankId_) {
+            return (GM_ADDR)epWinContext_->localWindowsIn;
+        }
+        return (GM_ADDR)((HcclRankRelationResV2 *)
+            epWinContext_->remoteRes[rankId].nextDevicePtr)->windowsIn;
     }
 
     __aicore__ inline int32_t GetIds(uint32_t idsIndex, bool forceLoad = false)
@@ -69,7 +75,13 @@ private:
 
         // routing-table cache page miss
         if (forceLoad || idsPageIndex != idsPageIndex_) {
-            DataCopy(idsPageTensor_, idsGMTensor_[IDS_PAGE_ELEMENT_NUM * idsPageIndex], IDS_PAGE_ELEMENT_NUM);
+            // The final page may be shorter than 64 KiB (e.g. the 4-token smoke test).
+            uint32_t pageStart = IDS_PAGE_ELEMENT_NUM * idsPageIndex;
+            uint32_t remaining = batchSize_ * topk_ - pageStart;
+            uint32_t count = remaining < IDS_PAGE_ELEMENT_NUM ? remaining : IDS_PAGE_ELEMENT_NUM;
+            DataCopyPad(idsPageTensor_, idsGMTensor_[pageStart],
+                {1U, static_cast<uint32_t>(count * sizeof(int32_t)), 0U, 0U, 0U},
+                {false, 0U, 0U, 0});
             SyncFunc<HardEvent::MTE2_S>();
             idsPageIndex_ = idsPageIndex;
         }
@@ -103,7 +115,7 @@ private:
     GlobalTensor<XOutType> xOutGMTensor_;
     GlobalTensor<int32_t> idsGMTensor_;
     GlobalTensor<float> scalesGMTensor_;
-    GlobalTensor<GM_ADDR> peerMemsAddrGMTensor_;
+    __gm__ HcclOpResParam *epWinContext_{nullptr};
 
     uint64_t ubReuseSize_{0};
 
@@ -154,7 +166,8 @@ __aicore__ inline void CamMoeDistributeCombineRecv<TemplateMC2TypeFunc>::Init(GM
     xOutGMTensor_.SetGlobalBuffer((__gm__ XOutType *)xOut);
     idsGMTensor_.SetGlobalBuffer((__gm__ int32_t *)expertIds);
     scalesGMTensor_.SetGlobalBuffer((__gm__ float *)expertScales);
-    peerMemsAddrGMTensor_.SetGlobalBuffer(&((__gm__ Moe::CommArgs *)commArgs)->peerMems[0], CAM_MAX_RANK_SIZE);
+    // commArgs is an ABI placeholder; MC2 initializes the HCCL resource context.
+    epWinContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
 
     // split work across cores
     uint32_t batchSizePerAiv = batchSize_ / aivNum_;

@@ -20,15 +20,15 @@ using tensor_list = std::vector<at::Tensor>;
 using namespace at;
 using namespace std;
 
-constexpr int64_t MAX_BATCH_SIZE = 1024 * 256;
+constexpr int LIMIT_MAX_SEQ_LEN_MAX = 1024 * 256;
 constexpr int64_t INFO_NUM = 5; // number of valid batch-info fields
-constexpr char BATCH_SIZE_FACTOR[] = "BATCH_SIZE_FACTOR";
-constexpr float DEFAULT_BATCH_SIZE_FACTOR = 1.0;
+constexpr char MAX_SEQ_LEN_FACTOR_ENV[] = "BATCH_SIZE_FACTOR";
+constexpr float DEFAULT_MAX_SEQ_LEN_FACTOR = 1.0;
 
-static inline float get_batch_size_factor()
+static inline float get_max_seq_len_factor()
 {
-    float factor = DEFAULT_BATCH_SIZE_FACTOR;
-    auto env = std::getenv(BATCH_SIZE_FACTOR);
+    float factor = DEFAULT_MAX_SEQ_LEN_FACTOR;
+    auto env = std::getenv(MAX_SEQ_LEN_FACTOR_ENV);
     if (env != nullptr) {
         try {
             std::string envStr(env);
@@ -44,7 +44,7 @@ tensor_list cam_dispatch_recv_async_impl_npu(
     const at::Tensor &x,
     const at::Tensor &commArgs,
     const int64_t commId,
-    const int64_t batchSize,
+    const int64_t maxSeqLen,
     const int64_t hiddenSize,
     const int64_t topk,
     const int64_t moeRankNum,
@@ -58,9 +58,11 @@ tensor_list cam_dispatch_recv_async_impl_npu(
 {
     const std::string groupNameStr(groupName.data(), groupName.size());
     const char* groupNamePtr = groupNameStr.c_str();
-    float batchSizeFactor = get_batch_size_factor();
-    int64_t maxTokenNum = (int64_t)(MAX_BATCH_SIZE * batchSizeFactor);
-    int64_t maxTokenNumShared = MAX_BATCH_SIZE / moeRankNum;
+    float maxSeqLenFactor = get_max_seq_len_factor();
+    TORCH_CHECK(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f,
+        "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=", maxSeqLenFactor);
+    int64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
+    int64_t maxTokenNumShared = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
     at::Tensor expandXOut;
     at::Tensor expandXOutShared;
     at::Tensor dynamicScalesOut;
@@ -97,7 +99,7 @@ tensor_list cam_dispatch_recv_async_impl_npu(
         // input
         x, commArgs,
         // attr
-        magic, batchSize, hiddenSize, topk, moeRankNum, attnRankNum,
+        magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum,
         routeExpertNumPerMoe, moeRankId, worldSize, tpSize, dynamicQuant, groupNamePtr,
         // output
         expandXOut, expandXOutShared, dynamicScalesOut, dynamicScalesOutShared,
@@ -116,7 +118,7 @@ tensor_list cam_dispatch_recv_async_impl_meta(
     const at::Tensor &x,
     const at::Tensor &commArgs,
     const int64_t commId,
-    const int64_t batchSize,
+    const int64_t maxSeqLen,
     const int64_t hiddenSize,
     const int64_t topk,
     const int64_t moeRankNum,
@@ -128,9 +130,11 @@ tensor_list cam_dispatch_recv_async_impl_meta(
     const int64_t dynamicQuant,
     c10::string_view groupName)
 {
-    float batchSizeFactor = get_batch_size_factor();
-    int64_t maxTokenNum = (int64_t)(MAX_BATCH_SIZE * batchSizeFactor);
-    int64_t maxTokenNumShared = MAX_BATCH_SIZE / moeRankNum;
+    float maxSeqLenFactor = get_max_seq_len_factor();
+    TORCH_CHECK(maxSeqLenFactor > 0.0f && maxSeqLenFactor <= 1.0f,
+        "maxSeqLenFactor is invalid, only support (0, 1], but got maxSeqLenFactor=", maxSeqLenFactor);
+    int64_t maxTokenNum = (int64_t)(LIMIT_MAX_SEQ_LEN_MAX * maxSeqLenFactor);
+    int64_t maxTokenNumShared = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
     at::Tensor expandXOut;
     at::Tensor expandXOutShared;
     at::Tensor dynamicScalesOut;
@@ -169,7 +173,7 @@ tensor_list cam_dispatch_recv_async_impl(
     const at::Tensor &x,
     const at::Tensor &commArgs,
     const int64_t commId,
-    const int64_t batchSize,
+    const int64_t maxSeqLen,
     const int64_t hiddenSize,
     const int64_t topk,
     const int64_t moeRankNum,
@@ -184,7 +188,7 @@ tensor_list cam_dispatch_recv_async_impl(
     static auto op = torch::Dispatcher::singleton()
                          .findSchemaOrThrow("umdk_cam_op_lib::moe_dispatch_recv_async", "")
                          .typed<decltype(cam_dispatch_recv_async_impl)>();
-    return op.call(x, commArgs, commId, batchSize, hiddenSize, topk, moeRankNum,
+    return op.call(x, commArgs, commId, maxSeqLen, hiddenSize, topk, moeRankNum,
         attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, dynamicQuant, groupName);
 }
 
@@ -195,7 +199,7 @@ public:
                                 const at::Tensor &x,
                                 const at::Tensor &commArgs,
                                 const int64_t commId,
-                                const int64_t batchSize,
+                                const int64_t maxSeqLen,
                                 const int64_t hiddenSize,
                                 const int64_t topk,
                                 const int64_t moeRankNum,
@@ -209,7 +213,7 @@ public:
 {
         at::AutoDispatchBelowADInplaceOrView guard;
 
-        auto result = cam_dispatch_recv_async_impl(x, commArgs, commId, batchSize, hiddenSize, topk, moeRankNum,
+        auto result = cam_dispatch_recv_async_impl(x, commArgs, commId, maxSeqLen, hiddenSize, topk, moeRankNum,
             attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, dynamicQuant, groupName);
         return result;
     }
@@ -229,7 +233,7 @@ tensor_list cam_dispatch_recv_async_impl_autograd(
     const at::Tensor &x,
     const at::Tensor &commArgs,
     const int64_t commId,
-    const int64_t batchSize,
+    const int64_t maxSeqLen,
     const int64_t hiddenSize,
     const int64_t topk,
     const int64_t moeRankNum,
@@ -241,7 +245,7 @@ tensor_list cam_dispatch_recv_async_impl_autograd(
     const int64_t dynamicQuant,
     c10::string_view groupName)
 {
-    auto result = ExtCamDispatchRecvAsync::apply(x, commArgs, commId, batchSize, hiddenSize, topk, moeRankNum,
+    auto result = ExtCamDispatchRecvAsync::apply(x, commArgs, commId, maxSeqLen, hiddenSize, topk, moeRankNum,
         attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, dynamicQuant, groupName);
     return result;
 }

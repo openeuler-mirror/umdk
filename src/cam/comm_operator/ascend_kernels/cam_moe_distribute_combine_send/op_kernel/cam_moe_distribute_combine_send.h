@@ -15,6 +15,7 @@
 #include "kernel_tiling/kernel_tiling.h"
 #include "cam_moe_distribute_combine_send_tiling.h"
 #include "comm_args.h"
+#include "comm_group.h"
 
 namespace MoeDistributeCombineSendImpl {
 constexpr uint64_t CAM_MAX_RANK_SIZE = 384;  // max NPUs supported by the Cam comm library
@@ -51,7 +52,12 @@ private:
 
     __aicore__ inline GM_ADDR GetPeerAddrByRankId(const int32_t rankId)
     {
-        return (GM_ADDR)peerMemsAddrGMTensor_.GetValue(rankId);
+        // Match the HCCL windowsIn path in the AFD-bundled CAM package.
+        if (rankId == moeRankId_) {
+            return (GM_ADDR)epWinContext_->localWindowsIn;
+        }
+        return (GM_ADDR)((HcclRankRelationResV2 *)
+            epWinContext_->remoteRes[rankId].nextDevicePtr)->windowsIn;
     }
 
     __aicore__ inline void CombineSend();
@@ -67,7 +73,7 @@ private:
     uint32_t routeExpertNumPerMoe_{0};
     uint32_t expertNumPerMoe_{0};
     uint32_t expertNum_{0};
-    uint32_t batchSize_{0};
+    uint32_t maxSeqLen_{0};
     uint32_t hiddenSize_{0};
     uint32_t topk_{0};
     uint64_t totalUbSize_{0};
@@ -78,7 +84,7 @@ private:
     GlobalTensor<ExpandXType> xGMTensor_;
     GlobalTensor<ExpandXType> xSharedGMTensor_;
     GlobalTensor<int64_t> batchInfoGMTensor_;
-    GlobalTensor<GM_ADDR> peerMemsAddrGMTensor_;
+    __gm__ HcclOpResParam *epWinContext_{nullptr};
 
     uint64_t ubReuseSize_{0};
     uint32_t maxUbTokenNum_{0};
@@ -109,7 +115,7 @@ __aicore__ inline void CamMoeDistributeCombineSend<TemplateMC2TypeFunc>::Init(GM
     routeExpertNumPerMoe_ = tilingData->moeDistributeCombineInfo.routeExpertNumPerMoe;
     expertNumPerMoe_ = sharedExpertNumPerMoe_ + routeExpertNumPerMoe_;
     expertNum_ = expertNumPerMoe_ * moeRankNum_;
-    batchSize_ = tilingData->moeDistributeCombineInfo.batchSize;
+    maxSeqLen_ = tilingData->moeDistributeCombineInfo.maxSeqLen;
     hiddenSize_ = tilingData->moeDistributeCombineInfo.hiddenSize;
     topk_ = tilingData->moeDistributeCombineInfo.topk;
     totalUbSize_ = tilingData->moeDistributeCombineInfo.totalUbSize;
@@ -120,7 +126,8 @@ __aicore__ inline void CamMoeDistributeCombineSend<TemplateMC2TypeFunc>::Init(GM
     xGMTensor_.SetGlobalBuffer((__gm__ ExpandXType*)expandX);
     xSharedGMTensor_.SetGlobalBuffer((__gm__ ExpandXType*)expandXShared);
     batchInfoGMTensor_.SetGlobalBuffer((__gm__ int64_t *)batchInfo);
-    peerMemsAddrGMTensor_.SetGlobalBuffer(&((__gm__ Moe::CommArgs *)commArgs)->peerMems[0], CAM_MAX_RANK_SIZE);
+    // commArgs is an ABI placeholder; MC2 initializes the HCCL resource context.
+    epWinContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
 
     tpipe_ = pipe;
     tpipe_->Reset();
@@ -137,7 +144,8 @@ __aicore__ inline void CamMoeDistributeCombineSend<TemplateMC2TypeFunc>::Init(GM
     tpExpertTokenNumTensor_ = ubBuffer_.GetWithOffset<uint32_t>(bufSize / sizeof(uint32_t), bufOffset);
     bufOffset += bufSize;
 
-    bufSize = MathCeil(sizeof(uint32_t) * expertNumPerMoe_ * 2, UB_ALIGN);
+    // One send counter for each TP rank.
+    bufSize = MathCeil(sizeof(uint32_t) * tpSize_, UB_ALIGN);
     tpExpertTokenSendCntTensor_ = ubBuffer_.GetWithOffset<uint32_t>(bufSize / sizeof(uint32_t), bufOffset);
     bufOffset += bufSize;
 
@@ -204,7 +212,7 @@ __aicore__ inline void CamMoeDistributeCombineSend<TemplateMC2TypeFunc>::Combine
     }
     uint32_t totalTokenNumPerAivEnd = totalTokenNumPerAivStart + totalTokenNumPerAiv;
 
-    Duplicate(tpExpertTokenSendCntTensor_, (uint32_t)0, expertNumPerMoe_ * 2);
+    Duplicate(tpExpertTokenSendCntTensor_, (uint32_t)0, tpSize_);
     SyncFunc<HardEvent::V_S>();
 
     uint32_t currSendId = 0;
@@ -297,7 +305,7 @@ __aicore__ inline void CamMoeDistributeCombineSend<TemplateMC2TypeFunc>::Combine
     }
     uint32_t totalTokenNumPerAivEnd = totalTokenNumPerAivStart + totalTokenNumPerAiv;
 
-    Duplicate(tpExpertTokenSendCntTensor_, (uint32_t)0, expertNumPerMoe_ * 2);
+    Duplicate(tpExpertTokenSendCntTensor_, (uint32_t)0, tpSize_);
     SyncFunc<HardEvent::V_S>();
 
     for (uint32_t i = 0; i < tpSize_; ++i) {

@@ -16,7 +16,7 @@
 namespace Cam {
 struct CamMoeDistributeDispatchRecvInfo {
     int64_t magic;
-    uint32_t batchSize;
+    uint32_t maxSeqLen;
     uint32_t hiddenSize;
     uint32_t topk;
     uint32_t moeRankNum;
