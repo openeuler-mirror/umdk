@@ -215,7 +215,7 @@ Full KV 可驻留 Host（`empty_with_swapped_memory`），Selected KV 在 HBM；
 |actual_seq_lengths_query|Tensor|必选|形状：`[B]`，int32；TND **累计**结束位置（decode 典型 `[1,2,...,B]`）|query 有效长度元数据|
 |full_kv_actual_seq|Tensor|必选|形状：`[B]`，int32；各 batch Full KV 有效 token 数（非累计）|Full KV 有效长度|
 |sinks|Tensor|可选|本版仅允许 `None`|schema 保留|
-|scale_value|float|可选|默认 `1.0`；须为有限正数|attention logits 缩放|
+|scale_value|float|可选|默认 `1.0`；须为有限正数。Python 传入整型（如 `1`）时会自动转换为 float，**不视为类型错误**（Torch schema 为 `float`，dispatcher 隐式转换）|attention logits 缩放|
 |其余属性|见取值说明|可选|`sparse_mode` 仅 `0/3`；其余本版固定：`key/value_quant_mode=2`、`sparse_block_size=1`、`layout_query=TND`、`layout_kv=PA_BSND`、`attention_mode=2`、`quant_scale_repo_mode=1`、`tile_size=128`、`rope_head_dim=64`、`selection_topk_block_size=1`|接口保留字段，勿当自由调参扫描|
 ##### 2.1.2.4 返回值
 | **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
