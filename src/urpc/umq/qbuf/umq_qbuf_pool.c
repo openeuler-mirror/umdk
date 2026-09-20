@@ -3079,6 +3079,7 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt)
     arg->sc = sc;
     arg->g_buf_cnt = g_buf_cnt;
     if (pthread_create(&tid, NULL, async_expand_global_pool_callback, arg) != 0) {
+        free(arg);
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);
     } else {
