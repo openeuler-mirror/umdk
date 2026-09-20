@@ -186,6 +186,10 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
             h, shareGmm1OriginShape.GetDim(gmm1WeightDims-2)),
         return ge::GRAPH_FAILED);
     uint64_t shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(gmm1WeightDims-1));
+    bool isMxFp4 = tilingData.fusedDeepMoeInfo.mxActStorageFp4 == MX_FP4_QUANT_MODE;
+    if (isMxFp4) {
+        shareGmm1HLen = shareGmm1HLen * MX_FP4_ELEMENTS_PER_BYTE;
+    }
     tilingData.fusedDeepMoeInfo.shareGmm1HLen = shareGmm1HLen;
     OPS_ERR_IF(shareGmm1HLen < MIN_GMM1_HIDDEN || shareGmm1HLen > MAX_GMM1_HIDDEN,
         OPS_LOG_E(nodeName, "shareGmm1 hidden size is invalid. Only support [%u, %u].",
@@ -195,11 +199,6 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
         OPS_LOG_E(nodeName, "shareGmm1 hidden size must be divisible by %u, but got %lu.",
             GMM1_HIDDEN_ALIGN, shareGmm1HLen),
         return ge::GRAPH_FAILED);
-    bool isMxFp4 = tilingData.fusedDeepMoeInfo.mxActStorageFp4 == MX_FP4_QUANT_MODE;
-    if (isMxFp4) {
-        tilingData.fusedDeepMoeInfo.shareGmm1HLen =
-            tilingData.fusedDeepMoeInfo.shareGmm1HLen * MX_FP4_ELEMENTS_PER_BYTE;
-    }
 
     return ge::GRAPH_SUCCESS;
 }
