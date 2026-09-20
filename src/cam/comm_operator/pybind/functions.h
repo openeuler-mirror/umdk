@@ -167,7 +167,6 @@ at::Tensor cam_combine_recv_async_impl_autograd(
 
 at::Tensor cam_combine_send_async_impl_autograd(
     const at::Tensor &expandX,
-    const at::Tensor &expandXShared,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
     const int64_t commId,

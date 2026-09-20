@@ -39,12 +39,9 @@ constexpr static int ATTR_ENUM_DYNAMIC_QUANT = 10;
 constexpr static int ATTR_ENUM_HCCL_GROUP_NAME = 11;
 
 constexpr static int OUTPUT_EXPAND_X = 0;
-constexpr static int OUTPUT_EXPAND_X_SHARED = 1;
-constexpr static int OUTPUT_DYNAMIC_SCALES = 2;
-constexpr static int OUTPUT_DYNAMIC_SCALES_SHARED = 3;
-constexpr static int OUTPUT_BATCH_INFO = 4;
-constexpr static int OUTPUT_EP_RECV_COUNT_ROUTED = 5;
-constexpr static int OUTPUT_EP_RECV_COUNT_SHARED = 6;
+constexpr static int OUTPUT_DYNAMIC_SCALES = 1;
+constexpr static int OUTPUT_BATCH_INFO = 2;
+constexpr static int OUTPUT_EP_RECV_COUNT_ROUTED = 3;
 
 constexpr static int TILING_KEY_BF16 = 100;
 constexpr static int TILING_KEY_FP16 = 101;
@@ -155,7 +152,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     // 64 B, info sent by dispatch send
     uint64_t dispatchInfoSize = MathCeil(sizeof(int64_t) * BATCH_INFO_VAL_NUM, UB_ALIGN);
     // max ~96 B, token count received per expert / chunk flag for whether expert already processed
-    uint64_t expertTokenCntSize = MathCeil(sizeof(int32_t) * (routeExpertNumPerMoe + 1), UB_ALIGN);
+    uint64_t expertTokenCntSize = MathCeil(sizeof(int32_t) * routeExpertNumPerMoe, UB_ALIGN);
     // max ~112 KB, real tokens received
     uint64_t dispatchTokenSize = 0;
     if (dynamicQuant == 1) {
@@ -164,7 +161,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         dispatchTokenSize = MathCeil(sizeof(int16_t) * hiddenSize * limitMaxSeqLenPerRank, UB_ALIGN);
     }
     // max ~144 KB, offsets of received tokens
-    uint64_t tokenAddrSize = MathCeil(sizeof(uint16_t) * limitMaxSeqLenPerRank * (topk + 1), UB_ALIGN);
+    uint64_t tokenAddrSize = MathCeil(sizeof(uint16_t) * limitMaxSeqLenPerRank * topk, UB_ALIGN);
     // min shared memory needed on the moe side
     uint64_t sharedMemMoeNeedSize =
         (dispatchInfoSize + expertTokenCntSize * 2 + dispatchTokenSize + tokenAddrSize) * attnRankNum;
@@ -242,13 +239,6 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     expandXOutShape->SetDim(0, maxTokenNum);
     expandXOutShape->SetDim(1, hiddenSize);
 
-    // max token count a shared expert can receive
-    int64_t maxSharedTokenNum = LIMIT_MAX_SEQ_LEN_MAX / moeRankNum;
-    gert::Shape *expandXOutSharedShape = context->GetOutputShape(OUTPUT_EXPAND_X_SHARED);
-    expandXOutSharedShape->SetDimNum(2);
-    expandXOutSharedShape->SetDim(0, maxSharedTokenNum);
-    expandXOutSharedShape->SetDim(1, hiddenSize);
-
     // scales for tokens received by routing experts
     gert::Shape *dynamicScalesOutShape = context->GetOutputShape(OUTPUT_DYNAMIC_SCALES);
     dynamicScalesOutShape->SetDimNum(1);
@@ -258,16 +248,7 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
         dynamicScalesOutShape->SetDim(0, 1);
     }
 
-    // scales for tokens received by shared experts
-    gert::Shape *dynamicScalesOutSharedShape = context->GetOutputShape(OUTPUT_DYNAMIC_SCALES_SHARED);
-    dynamicScalesOutSharedShape->SetDimNum(1);
-    if (dynamicQuant != 0) {
-        dynamicScalesOutSharedShape->SetDim(0, maxSharedTokenNum);
-    } else {
-        dynamicScalesOutSharedShape->SetDim(0, 1);
-    }
-
-    int64_t batchInfoNum = INFO_NUM + tpSize + (routeExpertNumPerMoe + 1) * tpSize;
+    int64_t batchInfoNum = INFO_NUM + tpSize + routeExpertNumPerMoe * tpSize;
     gert::Shape *batchInfoOutShape = context->GetOutputShape(OUTPUT_BATCH_INFO);
     batchInfoOutShape->SetDimNum(1);
     batchInfoOutShape->SetDim(0, batchInfoNum);
@@ -275,10 +256,6 @@ static ge::graphStatus InferShape(gert::InferShapeContext* context)
     gert::Shape *epRecvCountRoutedOutShape = context->GetOutputShape(OUTPUT_EP_RECV_COUNT_ROUTED);
     epRecvCountRoutedOutShape->SetDimNum(1);
     epRecvCountRoutedOutShape->SetDim(0, routeExpertNumPerMoe);
-
-    gert::Shape *epRecvCountOutSharedShape = context->GetOutputShape(OUTPUT_EP_RECV_COUNT_SHARED);
-    epRecvCountOutSharedShape->SetDimNum(1);
-    epRecvCountOutSharedShape->SetDim(0, 1);
 
     return ge::GRAPH_SUCCESS;
 }
@@ -292,17 +269,13 @@ static ge::graphStatus InferDataType(gert::InferDataTypeContext *context)
 
     if (dynamicQuant != 0) {
         context->SetOutputDataType(OUTPUT_EXPAND_X, ge::DT_INT8);
-        context->SetOutputDataType(OUTPUT_EXPAND_X_SHARED, ge::DT_INT8);
     } else {
         context->SetOutputDataType(OUTPUT_EXPAND_X, xDtype);
-        context->SetOutputDataType(OUTPUT_EXPAND_X_SHARED, xDtype);
     }
 
     context->SetOutputDataType(OUTPUT_DYNAMIC_SCALES, ge::DT_FLOAT);
-    context->SetOutputDataType(OUTPUT_DYNAMIC_SCALES_SHARED, ge::DT_FLOAT);
     context->SetOutputDataType(OUTPUT_BATCH_INFO, ge::DT_INT64);
     context->SetOutputDataType(OUTPUT_EP_RECV_COUNT_ROUTED, ge::DT_INT64);
-    context->SetOutputDataType(OUTPUT_EP_RECV_COUNT_SHARED, ge::DT_INT64);
 
     return ge::GRAPH_SUCCESS;
 }
@@ -330,17 +303,7 @@ public:
             .DataType({ge::DT_BF16, ge::DT_INT8, ge::DT_FLOAT16, ge::DT_INT8})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Output("expandXShared")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_BF16, ge::DT_INT8, ge::DT_FLOAT16, ge::DT_INT8})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         this->Output("dynamicScales")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_FLOAT, ge::DT_FLOAT, ge::DT_FLOAT, ge::DT_FLOAT})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Output("dynamicScalesShared")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT, ge::DT_FLOAT, ge::DT_FLOAT})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
@@ -351,11 +314,6 @@ public:
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         this->Output("epRecvCountRouted")
-            .ParamType(REQUIRED)
-            .DataType({ge::DT_INT64, ge::DT_INT64, ge::DT_INT64, ge::DT_INT64})
-            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
-            .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Output("epRecvCountShared")
             .ParamType(REQUIRED)
             .DataType({ge::DT_INT64, ge::DT_INT64, ge::DT_INT64, ge::DT_INT64})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})

@@ -24,7 +24,6 @@ constexpr int KERNEL_PARAM_CNT = 3;
 
 at::Tensor cam_combine_send_async_impl_npu(
     const at::Tensor &expandX,
-    const at::Tensor &expandXShared,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
     const int64_t commId,
@@ -47,7 +46,7 @@ at::Tensor cam_combine_send_async_impl_npu(
     // inputs first, then attrs, then output
     EXEC_NPU_CMD(aclnnCamMoeDistributeCombineSend,
         // input
-        expandX, expandXShared, commArgs, batchInfo,
+        expandX, commArgs, batchInfo,
         // attr
         magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe,
         moeRankId, worldSize, tpSize, groupNamePtr,
@@ -64,7 +63,6 @@ std::tuple<at::Tensor, at::Tensor> cam_combine_send_async_backward_impl_npu(cons
 
 at::Tensor cam_combine_send_async_impl_meta(
     const at::Tensor &expandX,
-    const at::Tensor &expandXShared,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
     const int64_t commId,
@@ -85,7 +83,6 @@ at::Tensor cam_combine_send_async_impl_meta(
 
 at::Tensor cam_combine_send_async_impl(
     const at::Tensor &expandX,
-    const at::Tensor &expandXShared,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
     const int64_t commId,
@@ -103,7 +100,7 @@ at::Tensor cam_combine_send_async_impl(
     static auto op = torch::Dispatcher::singleton()
                          .findSchemaOrThrow("umdk_cam_op_lib::moe_combine_send_async", "")
                          .typed<decltype(cam_combine_send_async_impl)>();
-    return op.call(expandX, expandXShared, commArgs, batchInfo, commId, maxSeqLen,
+    return op.call(expandX, commArgs, batchInfo, commId, maxSeqLen,
         hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, groupName);
 }
 
@@ -112,7 +109,6 @@ class ExtCamCombineSendAsync : public torch::autograd::Function<ExtCamCombineSen
 public:
     static at::Tensor forward(AutogradContext *ctx,
                               const at::Tensor &expandX,
-                              const at::Tensor &expandXShared,
                               const at::Tensor &commArgs,
                               const at::Tensor &batchInfo,
                               const int64_t commId,
@@ -129,7 +125,7 @@ public:
     {
         at::AutoDispatchBelowADInplaceOrView guard;
 
-        auto result = cam_combine_send_async_impl(expandX, expandXShared, commArgs, batchInfo, commId, maxSeqLen,
+        auto result = cam_combine_send_async_impl(expandX, commArgs, batchInfo, commId, maxSeqLen,
             hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, groupName);
         return result;
     }
@@ -146,13 +142,15 @@ public:
                 at::Tensor(),
                 at::Tensor(),
                 at::Tensor(),
+                at::Tensor(),
+                at::Tensor(),
+                at::Tensor(),
                 at::Tensor()};
     }
 };
 
 at::Tensor cam_combine_send_async_impl_autograd(
     const at::Tensor &expandX,
-    const at::Tensor &expandXShared,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
     const int64_t commId,
@@ -167,7 +165,7 @@ at::Tensor cam_combine_send_async_impl_autograd(
     const int64_t tpSize,
     c10::string_view groupName)
 {
-    auto result = ExtCamCombineSendAsync::apply(expandX, expandXShared, commArgs, batchInfo, commId, maxSeqLen,
+    auto result = ExtCamCombineSendAsync::apply(expandX, commArgs, batchInfo, commId, maxSeqLen,
         hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize, tpSize, groupName);
     return result;
 }

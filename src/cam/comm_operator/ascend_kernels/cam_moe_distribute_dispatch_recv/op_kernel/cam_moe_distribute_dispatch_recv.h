@@ -48,9 +48,9 @@ class CamMoeDistributeDispatchRecv {
 public:
     __aicore__ inline CamMoeDistributeDispatchRecv() {};
 
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR expandXOut, GM_ADDR expandXOutShared,
-                                GM_ADDR dynamicScalesOut, GM_ADDR dynamicScalesShared,
-                                GM_ADDR batchInfoOut, GM_ADDR epRecvCountRoutedOut, GM_ADDR epRecvCountSharedOut,
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR expandXOut,
+                                GM_ADDR dynamicScalesOut,
+                                GM_ADDR batchInfoOut, GM_ADDR epRecvCountRoutedOut,
                                 GM_ADDR workspaceGM, TPipe *pipe,
                                 const CamMoeDistributeDispatchRecvTilingData *tilingData,
                                 GM_ADDR commArgs, int32_t isCamComm);
@@ -73,7 +73,6 @@ private:
     }
 
     __aicore__ inline void DispatchRecv();
-    __aicore__ inline void DispatchRecvShared(uint32_t tpAttnRankId, uint32_t tpIndex);
     __aicore__ inline void DispatchRecvRouted(uint32_t tpAttnRankId, uint32_t tpIndex,
                                                uint32_t startExpert, uint32_t endExpert);
 
@@ -87,7 +86,6 @@ private:
     uint32_t worldSize_{0};
     uint32_t attnRankNum_{0};
     uint32_t moeRankNum_{0};
-    uint32_t sharedExpertNumPerMoe_{0};
     uint32_t routeExpertNumPerMoe_{0};
     uint32_t expertNumPerMoe_{0};
     uint32_t maxSeqLen_{0};
@@ -101,11 +99,8 @@ private:
     uint16_t tpSize_{0};
 
     GlobalTensor<ExpandXOutType> xOutGMTensor_;
-    GlobalTensor<ExpandXOutType> xOutSharedGMTensor_;
     GlobalTensor<float> quantScaleGMTensor_;
-    GlobalTensor<float> quantScaleSharedGMTensor_;
     GlobalTensor<int64_t> epRecvCountRoutedGMTensor_;
-    GlobalTensor<int64_t> epRecvCountSharedGMTensor_;
     GlobalTensor<int64_t> batchInfoGMTensor_;
     __gm__ HcclOpResParam *epWinContext_{nullptr};
 
@@ -116,7 +111,7 @@ private:
     LocalTensor<int64_t> batchInfoTensor_;
     LocalTensor<int64_t> tpBatchInfoTensor_;
     LocalTensor<int64_t> epRecvCountOutTensor_;
-    // tokens received by every expert in this Moe (shared expert first)
+    // tokens received by each zero-based routed expert in this MoE rank
     LocalTensor<int32_t> expertRecvTokenNumTensor_;
     LocalTensor<int32_t> expertRecvChunkFlagTensor_;  // whether each expert has already been received
     LocalTensor<ExpandXOutType> xOutTensor_;      // staging token
@@ -133,8 +128,8 @@ private:
 
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Init(
-    GM_ADDR x, GM_ADDR expandXOut, GM_ADDR expandXOutShared, GM_ADDR dynamicScalesOut, GM_ADDR dynamicScalesShared,
-    GM_ADDR batchInfoOut, GM_ADDR epRecvCountRoutedOut, GM_ADDR epRecvCountSharedOut, GM_ADDR workspaceGM,
+    GM_ADDR x, GM_ADDR expandXOut, GM_ADDR dynamicScalesOut,
+    GM_ADDR batchInfoOut, GM_ADDR epRecvCountRoutedOut, GM_ADDR workspaceGM,
     TPipe *pipe, const CamMoeDistributeDispatchRecvTilingData *tilingData, GM_ADDR commArgs, int32_t isCamComm)
 {
     aivId_ = GetBlockIdx();
@@ -143,9 +138,8 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Init(
     worldSize_ = tilingData->moeDistributeDispatchInfo.worldSize;
     attnRankNum_ = tilingData->moeDistributeDispatchInfo.attnRankNum;
     moeRankNum_ = tilingData->moeDistributeDispatchInfo.moeRankNum;
-    sharedExpertNumPerMoe_ = 1;
     routeExpertNumPerMoe_ = tilingData->moeDistributeDispatchInfo.routeExpertNumPerMoe;
-    expertNumPerMoe_ = sharedExpertNumPerMoe_ + routeExpertNumPerMoe_;
+    expertNumPerMoe_ = routeExpertNumPerMoe_;
     maxSeqLen_ = tilingData->moeDistributeDispatchInfo.maxSeqLen;
     hiddenSize_ = tilingData->moeDistributeDispatchInfo.hiddenSize;
     topk_ = tilingData->moeDistributeDispatchInfo.topk;
@@ -164,18 +158,15 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Init(
     } else {
         tokenWorkspaceSize = MathCeil(sizeof(XType) * hiddenSize_ * maxSeqLenPerRank, UB_ALIGN);
     }
-    uint64_t tokenAddrWorkspaceSize = MathCeil(sizeof(uint16_t) * maxSeqLenPerRank * (topk_ + 1), UB_ALIGN);
+    uint64_t tokenAddrWorkspaceSize = MathCeil(sizeof(uint16_t) * maxSeqLenPerRank * topk_, UB_ALIGN);
     uint64_t totalWorkspaceSize = batchInfoWorkspaceSize + expertRecvTokenNumWorkspaceSize +
-        expertRecvChunkFlagWorkspaceSize + tokenWorkspaceSize + tokenAddrWorkspaceSize;
+    expertRecvChunkFlagWorkspaceSize + tokenWorkspaceSize + tokenAddrWorkspaceSize;
     workspaceSizePerAttn_ = UB_ALIGN * (totalWorkspaceSize / UB_ALIGN);
 
 
     xOutGMTensor_.SetGlobalBuffer((__gm__ ExpandXOutType *)expandXOut);
-    xOutSharedGMTensor_.SetGlobalBuffer((__gm__ ExpandXOutType *)expandXOutShared);
     quantScaleGMTensor_.SetGlobalBuffer((__gm__ float *)dynamicScalesOut);
-    quantScaleSharedGMTensor_.SetGlobalBuffer((__gm__ float *)dynamicScalesShared);
     epRecvCountRoutedGMTensor_.SetGlobalBuffer((__gm__ int64_t *)epRecvCountRoutedOut);
-    epRecvCountSharedGMTensor_.SetGlobalBuffer((__gm__ int64_t *)epRecvCountSharedOut);
     batchInfoGMTensor_.SetGlobalBuffer((__gm__ int64_t *)batchInfoOut);
     // commArgs is an ABI placeholder; MC2 initializes the HCCL resource context.
     epWinContext_ = (__gm__ HcclOpResParam *)AscendC::GetHcclContext<HCCL_GROUP_ID_0>();
@@ -288,15 +279,18 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
     SyncFunc<HardEvent::MTE2_S>();
     SyncFunc<HardEvent::S_MTE2>();
 
-    uint32_t startExpert = 0;  // left-open
-    uint32_t endExpert = 0;    // right-open
+    // expertNumPerMoe_ is an invalid ID; expert 0 is a valid routed expert.
+    uint32_t startExpert = expertNumPerMoe_;  // inclusive once selected
+    uint32_t endExpert = expertNumPerMoe_;    // inclusive once selected
+    bool foundExpert = false;
     uint32_t tokenCnt = 0;
-    for (uint32_t i = 1; i < expertNumPerMoe_; ++i) {
+    for (uint32_t i = 0; i < expertNumPerMoe_; ++i) {
         if (expertRecvChunkFlagTensor_(i) == 0) {
-            if (startExpert == 0) {
-                startExpert = i;
-            }
             if (tokenCnt + tpExpertRecvTokenNumTensor_(i) <= maxTokenNum_) {
+                if (!foundExpert) {
+                    startExpert = i;
+                    foundExpert = true;
+                }
                 tokenCnt += tpExpertRecvTokenNumTensor_(i);
                 endExpert = i;
             } else {
@@ -304,14 +298,17 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
             }
         }
     }
+    // Whole-expert chunking requires each pending expert to fit maxTokenNum_.
+    // All AIVs see the same counts/flags. Do not treat an unselected chunk as
+    // expert 0, read an invalid expert, or publish a completion for missing data.
+    if (!foundExpert) {
+        isError_ = true;
+        return;
+    }
     SyncAll<true>();
 
 
     for (uint32_t tpIndex = 0; tpIndex < tpSize_; ++tpIndex) {
-        // shared/routing expert output buffers are separate; only the first round handles the shared expert
-        if (startExpert == 1) {
-            DispatchRecvShared(tpAttnRankId, tpIndex);
-        }
         DispatchRecvRouted(tpAttnRankId, tpIndex, startExpert, endExpert);
     }
 
@@ -334,14 +331,7 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
             // final count each expert receives
             epRecvCountOutTensor_(i) = tpExpertRecvTokenNumTensor_(expertNumPerMoe_ + i);
         }
-        SyncFunc<HardEvent::S_MTE3>();
-        DataCopyPad(epRecvCountSharedGMTensor_, epRecvCountOutTensor_,
-            {1U, (uint32_t)(sizeof(int64_t) * sharedExpertNumPerMoe_), 0U, 0U, 0U});
-        SyncFunc<HardEvent::MTE3_S>();
 
-        for (uint32_t i = 0; i < routeExpertNumPerMoe_; ++i) {
-            epRecvCountOutTensor_(i) = epRecvCountOutTensor_(i + 1);
-        }
         SyncFunc<HardEvent::S_MTE3>();
         DataCopyPad(epRecvCountRoutedGMTensor_, epRecvCountOutTensor_,
             {1U, (uint32_t)(sizeof(int64_t) * routeExpertNumPerMoe_), 0U, 0U, 0U});
@@ -351,7 +341,7 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
         GlobalTensor<int64_t> dstBatchInfoGMTensor;
         dstBatchInfoGMTensor.SetGlobalBuffer((__gm__ int64_t *)(dstGM + (totalWorkspaceSize_ - UB_ALIGN)));
         // all experts received this round; start over next time
-        if (endExpert == expertNumPerMoe_ - sharedExpertNumPerMoe_) {
+        if (endExpert == expertNumPerMoe_ - 1) {
             batchInfoTensor_(0) = (tpAttnRankId + tpSize_) % attnRankNum_;
         } else {
             batchInfoTensor_(0) = tpAttnRankId;
@@ -360,122 +350,6 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
         DataCopy(dstBatchInfoGMTensor, batchInfoTensor_, UB_ALIGN / sizeof(int64_t));
         SyncFunc<HardEvent::MTE3_S>();
     }
-}
-
-template <TemplateMC2TypeClass>
-__aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::DispatchRecvShared(
-    uint32_t tpAttnRankId, uint32_t tpIndex)
-{
-    uint32_t maxSeqLenPerRank = maxSeqLen_ / tpSize_;
-    uint32_t attnRankId = tpAttnRankId + tpIndex;
-    uint64_t attnWorkspaceOffset = workspaceSizePerAttn_ * attnRankId;
-    uint64_t expertRecvTokenNumOffset =
-        attnWorkspaceOffset + MathCeil(sizeof(int64_t) * BATCH_INFO_VAL_NUM, UB_ALIGN);
-    uint64_t expertRecvChunkFlagOffset =
-        expertRecvTokenNumOffset + MathCeil(sizeof(int32_t) * expertNumPerMoe_, UB_ALIGN);
-    uint64_t tokenStoreOffset = expertRecvChunkFlagOffset + MathCeil(sizeof(int32_t) * expertNumPerMoe_, UB_ALIGN);
-    uint64_t tokenAddrStoreOffset = 0;
-    if constexpr (DynamicQuant) {
-        tokenAddrStoreOffset = tokenStoreOffset
-            + MathCeil((sizeof(ExpandXOutType) * hiddenSize_ + UB_ALIGN) * maxSeqLenPerRank, UB_ALIGN);
-    } else {
-        tokenAddrStoreOffset = tokenStoreOffset + MathCeil(sizeof(XType) * hiddenSize_ * maxSeqLenPerRank, UB_ALIGN);
-    }
-
-    uint32_t moeSelfRankId = moeRankId_;
-    GM_ADDR dstGM = GetPeerAddrByRankId(moeSelfRankId);
-
-    // reload batchInfoTensor_
-    GlobalTensor<int64_t> dstBatchInfoGMTensor;
-    dstBatchInfoGMTensor.SetGlobalBuffer((__gm__ int64_t *)(dstGM + attnWorkspaceOffset));
-    DataCopyPad(batchInfoTensor_, dstBatchInfoGMTensor,
-        {1U, (uint32_t)(sizeof(int64_t) * BATCH_INFO_VAL_NUM), 0U, 0U, 0U}, {false, 0U, 0U, 0U});
-    SyncFunc<HardEvent::MTE2_S>();
-    SyncFunc<HardEvent::S_MTE2>();
-
-    // reload expertRecvTokenNumTensor_
-    GlobalTensor<int32_t> dstExpertRecvTokenNumGMTensor;
-    dstExpertRecvTokenNumGMTensor.SetGlobalBuffer((__gm__ int32_t *)(dstGM + expertRecvTokenNumOffset));
-    DataCopyPad(expertRecvTokenNumTensor_, dstExpertRecvTokenNumGMTensor,
-        {1U, (uint32_t)(sizeof(int32_t) * expertNumPerMoe_), 0U, 0U, 0U}, {false, 0U, 0U, 0U});
-    SyncFunc<HardEvent::MTE2_S>();
-    SyncFunc<HardEvent::S_MTE2>();
-
-    tpBatchInfoTensor_(INFO_NUM + tpSize_ + expertNumPerMoe_ * tpIndex) = expertRecvTokenNumTensor_(0);
-
-    uint32_t tokenNumSum = expertRecvTokenNumTensor_(0);
-    uint32_t tokenNumPerAiv = tokenNumSum / aivNum_;
-    uint32_t tokenNumPerAivRemain = tokenNumSum % aivNum_;
-    uint32_t tokenNumPerAivStart = tokenNumPerAiv * aivId_;
-    if (aivId_ < tokenNumPerAivRemain) {
-        tokenNumPerAiv += 1;
-        tokenNumPerAivStart += aivId_;
-    } else {
-        tokenNumPerAivStart += tokenNumPerAivRemain;
-    }
-    uint32_t tokenNumPerAivEnd = tokenNumPerAivStart + tokenNumPerAiv;
-
-
-    GlobalTensor<ExpandXOutType> dstTokenStoreGMTensor;
-    GlobalTensor<uint16_t> dstTokenAddrOffsetGMTensor;
-    dstTokenStoreGMTensor.SetGlobalBuffer((__gm__ ExpandXOutType *)(dstGM + tokenStoreOffset));
-    dstTokenAddrOffsetGMTensor.SetGlobalBuffer((__gm__ uint16_t *)(dstGM + tokenAddrStoreOffset));
-
-    DataCopyPad(tokenAddrOffsetTensor_, dstTokenAddrOffsetGMTensor[tokenNumPerAivStart],
-        {1U, (uint32_t)(sizeof(uint16_t) * tokenNumPerAiv), 0U, 0U, 0U}, {false, 0U, 0U, 0U});
-    SyncFunc<HardEvent::MTE2_S>();
-    SyncFunc<HardEvent::S_MTE2>();
-
-    uint32_t currExpertId = 0;
-    uint32_t currExpertTokenNum = 0;
-    // second buffer: how many tokens each expert received from this attn
-    uint32_t nextExpertTokenNum = expertRecvTokenNumTensor_(currExpertId);
-    uint32_t preExpertTokenNum = 0;  // total tokens received by experts before the current one
-    while (nextExpertTokenNum < tokenNumPerAivStart) {
-        // tpExpertRecvTokenNumTensor_: how many each received from the tp-group attn
-        preExpertTokenNum += tpExpertRecvTokenNumTensor_(currExpertId);
-        currExpertTokenNum += expertRecvTokenNumTensor_(currExpertId);
-        ++currExpertId;
-        nextExpertTokenNum += expertRecvTokenNumTensor_(currExpertId);
-    }
-
-    for (uint32_t expertSlotOffset = tokenNumPerAivStart; expertSlotOffset < tokenNumPerAivEnd; ++expertSlotOffset) {
-        while (expertSlotOffset >= nextExpertTokenNum) {
-            preExpertTokenNum += tpExpertRecvTokenNumTensor_(currExpertId);
-            currExpertTokenNum += expertRecvTokenNumTensor_(currExpertId);
-            ++currExpertId;
-            nextExpertTokenNum += expertRecvTokenNumTensor_(currExpertId);
-        }
-        uint32_t tpExpertSlotOffset = preExpertTokenNum + tpExpertRecvTokenNumTensor_(expertNumPerMoe_ + currExpertId) +
-            // sent by prior experts + sent by current expert + current offset to send
-            (expertSlotOffset - currExpertTokenNum);
-
-        // fourth buffer: which slot in the token buffer to read from
-        uint16_t moeTokenSendIdx = tokenAddrOffsetTensor_(expertSlotOffset - tokenNumPerAivStart);
-
-        if constexpr (DynamicQuant) {
-            DataCopy(xOutTensor_, dstTokenStoreGMTensor[hiddenSizeQuant_ * moeTokenSendIdx], hiddenSizeQuant_);
-            SyncFunc<HardEvent::MTE2_S>();
-            SyncFunc<HardEvent::S_MTE2>();
-
-            SyncFunc<HardEvent::S_MTE3>();
-            DataCopy(xOutSharedGMTensor_[hiddenSize_ * tpExpertSlotOffset], xOutTensor_, hiddenSize_);
-            SyncFunc<HardEvent::MTE3_S>();
-            DataCopyPad(quantScaleSharedGMTensor_[tpExpertSlotOffset], xOutFloatTensor_[hiddenSize_ / sizeof(float)],
-                {1U, sizeof(float), 0U, 0U, 0U});
-            SyncFunc<HardEvent::MTE3_S>();
-        } else {
-            DataCopy(xOutTensor_, dstTokenStoreGMTensor[hiddenSize_ * moeTokenSendIdx], hiddenSize_);
-            SyncFunc<HardEvent::MTE2_S>();
-            SyncFunc<HardEvent::S_MTE2>();
-
-            SyncFunc<HardEvent::S_MTE3>();
-            DataCopy(xOutSharedGMTensor_[hiddenSize_ * tpExpertSlotOffset], xOutTensor_, hiddenSize_);
-            SyncFunc<HardEvent::MTE3_S>();
-        }
-    }
-
-    tpExpertRecvTokenNumTensor_(expertNumPerMoe_) += expertRecvTokenNumTensor_(0);
 }
 
 template <TemplateMC2TypeClass>
@@ -546,10 +420,13 @@ __aicore__ inline void CamMoeDistributeDispatchRecv<TemplateMC2TypeFunc>::Dispat
     dstTokenStoreGMTensor.SetGlobalBuffer((__gm__ ExpandXOutType *)(dstGM + tokenStoreOffset));
     dstTokenAddrOffsetGMTensor.SetGlobalBuffer((__gm__ uint16_t *)(dstGM + tokenAddrStoreOffset));
 
-    DataCopyPad(tokenAddrOffsetTensor_, dstTokenAddrOffsetGMTensor[tokenNumPerAivStart + preTokenNumSum],
-        {1U, (uint32_t)(sizeof(uint16_t) * tokenNumPerAiv), 0U, 0U, 0U}, {false, 0U, 0U, 0U});
-    SyncFunc<HardEvent::MTE2_S>();
-    SyncFunc<HardEvent::S_MTE2>();
+    // Empty AIV slices must not issue a zero-byte token-address DMA.
+    if (tokenNumPerAiv > 0) {
+        DataCopyPad(tokenAddrOffsetTensor_, dstTokenAddrOffsetGMTensor[tokenNumPerAivStart + preTokenNumSum],
+            {1U, (uint32_t)(sizeof(uint16_t) * tokenNumPerAiv), 0U, 0U, 0U}, {false, 0U, 0U, 0U});
+        SyncFunc<HardEvent::MTE2_S>();
+        SyncFunc<HardEvent::S_MTE2>();
+    }
 
     // each aiv starts from startExpert to find its tokenNumPerAivStart; meanwhile determine
     // which expert each token goes to and how many prior cores sent to each expert, for offset calc

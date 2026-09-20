@@ -95,7 +95,6 @@ private:
     uint32_t worldSize_{0};
     uint32_t attnRankNum_{0};
     uint32_t moeRankNum_{0};
-    uint32_t sharedExpertNumPerMoe_{0};
     uint32_t routeExpertNumPerMoe_{0};
     uint32_t expertNumPerMoe_{0};
     uint32_t expertNum_{0};
@@ -119,15 +118,15 @@ private:
     TBuf<> ubBuffer_;
     LocalTensor<int32_t> idsPageTensor_;  // routing table
     LocalTensor<int64_t> batchInfoTensor_;  // output
-    // tokens received by every expert in the current Moe (shared expert first)
+    // tokens received by each routed expert, grouped by MoE rank
     LocalTensor<int32_t> expertRecvTokenNumTensor_;  // output
     LocalTensor<XType> xTensor_;                   // output
     LocalTensor<ExpandXOutType> xOutTensor_;       // output
     LocalTensor<float> xOutFloatTensor_;           // output
 
-    // pre-token count received by every expert in the current Moe (shared expert first)
+    // prefix token count before each routed expert within its MoE rank
     LocalTensor<uint32_t> expertPrefixOffsetTensor_;
-    // token position on receive for every expert in the current Moe, replacing idx (shared expert first)
+    // starting token index for each routed expert on the receiving MoE rank
     LocalTensor<uint16_t> expertSendStartIdxTensor_;
     LocalTensor<uint32_t> moeRecvTokenNumTensor_;
     LocalTensor<uint16_t> moeSendStartOffsetTensor_;
@@ -201,9 +200,8 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::Init(
     worldSize_ = tilingData->moeDistributeDispatchInfo.worldSize;
     attnRankNum_ = tilingData->moeDistributeDispatchInfo.attnRankNum;
     moeRankNum_ = tilingData->moeDistributeDispatchInfo.moeRankNum;
-    sharedExpertNumPerMoe_ = 1;
     routeExpertNumPerMoe_ = tilingData->moeDistributeDispatchInfo.routeExpertNumPerMoe;
-    expertNumPerMoe_ = sharedExpertNumPerMoe_ + routeExpertNumPerMoe_;
+    expertNumPerMoe_ = routeExpertNumPerMoe_;
     expertNum_ = expertNumPerMoe_ * moeRankNum_;
     maxBatchSizePerRank_ = tilingData->moeDistributeDispatchInfo.maxBatchSize;
     batchSize_ = tilingData->moeDistributeDispatchInfo.batchSize;
@@ -223,9 +221,9 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::Init(
     } else {
         tokenWorkspaceSize = MathCeil(sizeof(XType) * hiddenSize_ * maxBatchSizePerRank_, UB_ALIGN);
     }
-    uint64_t tokenAddrWorkspaceSize = MathCeil(sizeof(uint16_t) * maxBatchSizePerRank_ * (topk_ + 1), UB_ALIGN);
-    uint64_t totalWorkspaceSize = batchInfoWorkspaceSize + expertRecvTokenNumWorkspaceSize +
-        expertChunkFlagWorkspaceSize + tokenWorkspaceSize + tokenAddrWorkspaceSize;
+    uint64_t tokenAddrWorkspaceSize = MathCeil(sizeof(uint16_t) * maxBatchSizePerRank_ * topk_, UB_ALIGN);
+    uint64_t totalWorkspaceSize = batchInfoWorkspaceSize + expertRecvTokenNumWorkspaceSize
+                           + expertChunkFlagWorkspaceSize + tokenWorkspaceSize + tokenAddrWorkspaceSize;
     workspaceSizePerAttn_ = UB_ALIGN * (totalWorkspaceSize / UB_ALIGN);
 
 
@@ -361,13 +359,11 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::Dispat
     for (uint32_t expertId = 0; expertId < expertNum_; ++expertId) {
         moeRecvTokenNumTensor_(expertId / expertNumPerMoe_) += expertRecvTokenNumTensor_(expertId);
 
-        // skip the shared expert
-        if ((expertId % expertNumPerMoe_) == 0) {
-            continue;
+        // Each MoE rank's first routed expert starts at token-address offset 0.
+        if ((expertId % expertNumPerMoe_) != 0) {
+            expertPrefixOffsetTensor_(expertId) =
+                expertPrefixOffsetTensor_(expertId - 1) + expertRecvTokenNumTensor_(expertId - 1);
         }
-
-        expertPrefixOffsetTensor_(expertId) =
-            expertPrefixOffsetTensor_(expertId - 1) + expertRecvTokenNumTensor_(expertId - 1);
     }
 
 
@@ -397,16 +393,7 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::Dispat
 
     GlobalTensor<ExpandXOutType> dstTokenGMTensor;
     GlobalTensor<uint16_t> dstTokenAddrOffsetGMTensor;
-    uint32_t currSharedMoeRankId = 0;
-    uint32_t accumSharedTokenNum = 0;
-    uint32_t nextSharedTokenNum = expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-    // locate the range this aiv owns, found via the shared-expert send count
-    while (nextSharedTokenNum < batchSizePerAivStart_) {
-        accumSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-        ++currSharedMoeRankId;
-        nextSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-    }
-    // process topk entries of one token at a time
+    // Send one address entry per routed assignment and deduplicate payloads per rank.
     for (uint32_t topkId = (topk_ * batchSizePerAivStart_); topkId < (topk_ * batchSizePerAivEnd_); ++topkId) {
         uint32_t tokenId = topkId / topk_;  // corresponding token id
         if (topkId % topk_ == 0) {  // first read of the token
@@ -430,48 +417,18 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::Dispat
                 tokenSentFlagTensor_(moeRankId) = 0;  // whether sent to this moe
             }
 
-            // send token to the shared expert
-            if (tokenId == nextSharedTokenNum) {  // time for the next card
-                accumSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-                ++currSharedMoeRankId;
-                if (currSharedMoeRankId < moeRankNum_) {
-                    nextSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-                }
-            }
-            // tokens sent to the shared expert of this moe card
-            uint32_t expertSlotOffset = tokenId - accumSharedTokenNum;
-            // how many prior aivs sent to this moe; +1 after each send
-            uint16_t moeTokenSendIdx = moeSendStartOffsetTensor_(currSharedMoeRankId);
-
-            // send the token
-            uint32_t dstRankId = attnRankNum_ + currSharedMoeRankId;  // attention rank num + shared-expert rank id
-            GM_ADDR dstGM = GetPeerAddrByRankId(dstRankId);
-            // start of the token region reserved for attn
-            dstTokenGMTensor.SetGlobalBuffer((__gm__ ExpandXOutType*)(dstGM + tokenStoreOffset));
-            if constexpr (DynamicQuant) {
-                DataCopy(dstTokenGMTensor[hiddenSizeQuant_ * moeTokenSendIdx], xOutTensor_, hiddenSizeQuant_);
-                SyncFunc<HardEvent::MTE3_S>();
-            } else {
-                DataCopy(dstTokenGMTensor[hiddenSize_ * moeTokenSendIdx], xOutTensor_, hiddenSize_);
-                SyncFunc<HardEvent::MTE3_S>();
-            }
-            tokenSentFlagTensor_(currSharedMoeRankId) = 1;  // sent
-
-
-            // where the expert fetches the token from
-            PushExpertTokenOffset(expertNumPerMoe_ * currSharedMoeRankId, moeTokenSendIdx,
-                expertSlotOffset, tokenAddrStoreOffset);
+            // First routed destination performs the physical token send.
         }
 
         // send token to the routing expert
         uint32_t routeExpertId = GetIds(topkId);  // routing expert id
         uint32_t moeRankId = routeExpertId / routeExpertNumPerMoe_;  // which rank to send to
-        // how many prior aivs sent to this moe; +1 after each send; skip if shared already sent
+        // how many prior AIVs sent to this MoE; deduplicate routed destinations
         uint32_t moeTokenSendIdx = moeSendStartOffsetTensor_(moeRankId);
         uint32_t dstRankId = attnRankNum_ + moeRankId;
         GM_ADDR dstGM = GetPeerAddrByRankId(dstRankId);
-        // global expert id
-        uint32_t expertId = (expertNumPerMoe_ * moeRankId) + 1 + (routeExpertId % routeExpertNumPerMoe_);
+        // The compact protocol uses the input's zero-based global expert ID.
+        uint32_t expertId = routeExpertId;
         // tokens received by experts before expertId on its card
         uint32_t expertPrefixOffset = expertPrefixOffsetTensor_(expertId);
         // how many prior aivs sent to this expert; +1 after each send
@@ -534,47 +491,21 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::PrePro
     Duplicate(aivStatTensor, (uint32_t)0, statEntriesPerAiv * aivNum_);
     SyncFunc<HardEvent::V_S>();
 
-    // count tokens received by shared experts (how many this attn sends to each)
-    uint32_t sharedTokenNumPerMoe = batchSize_ / moeRankNum_;
-    uint32_t sharedTokenNumPerMoeRemain = batchSize_ % moeRankNum_;
-    for (uint32_t moeRankId = 0; moeRankId < moeRankNum_; ++moeRankId) {
-        if (moeRankId < sharedTokenNumPerMoeRemain) {
-            expertRecvTokenNumTensor_(expertNumPerMoe_ * moeRankId) = sharedTokenNumPerMoe + 1;
-        } else {
-            expertRecvTokenNumTensor_(expertNumPerMoe_ * moeRankId) = sharedTokenNumPerMoe;
-        }
-    }
-
-    // count tokens received by routing experts
-    uint32_t currSharedMoeRankId = 0;
-    uint32_t nextSharedTokenNum = expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-    while (nextSharedTokenNum < batchSizePerAivStart_) {
-        ++currSharedMoeRankId;
-        nextSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-    }
-
     // each aiv counts the quantity it is responsible for sending
     for (uint32_t topkId = (topk_ * batchSizePerAivStart_); topkId < (topk_ * batchSizePerAivEnd_); ++topkId) {
         if (topkId % topk_ == 0) {  // a new token
             // clear the send table
-            for (uint32_t moeRankId = 0; moeRankId < moeRankNum_; ++moeRankId) {  // share + route
+            for (uint32_t moeRankId = 0; moeRankId < moeRankNum_; ++moeRankId) {  // routed destinations only
                 tokenSentFlagTensor_(moeRankId) = 0;
             }
 
-            // send shared expert
-            if (topkId / topk_ == nextSharedTokenNum) {
-                ++currSharedMoeRankId;
-                nextSharedTokenNum += expertRecvTokenNumTensor_(expertNumPerMoe_ * currSharedMoeRankId);
-            }
-            aivStatTensor(moeRankNum_ + expertNumPerMoe_ * currSharedMoeRankId)++;
-            tokenSentFlagTensor_(currSharedMoeRankId) = 1;
+            // Only routed destinations participate in the per-token send table.
         }
 
         {
             uint32_t routeExpertId = GetIds(topkId);
             uint32_t moeRankId = routeExpertId / routeExpertNumPerMoe_;
-            uint32_t expertId = (expertNumPerMoe_ * moeRankId) + 1 + (routeExpertId % routeExpertNumPerMoe_);
-            aivStatTensor(moeRankNum_ + (expertNumPerMoe_ * moeRankId) + 1 + (routeExpertId % routeExpertNumPerMoe_))++;
+            aivStatTensor(moeRankNum_ + routeExpertId)++;
 
             if (tokenSentFlagTensor_(moeRankId) == 0) {
                 tokenSentFlagTensor_(moeRankId) = 1;
@@ -639,10 +570,7 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::PrePro
     if (aivId_ == 0) {
         for (uint32_t col = moeRankNum_; col < statEntriesPerAiv; ++col) {
             uint32_t expertId = col - moeRankNum_;
-            if (expertId % expertNumPerMoe_ != 0) {
-                // token count sent to the routing expert
-                expertRecvTokenNumTensor_(expertId) = aivStatTensor(statEntriesPerAiv * lastRowIdx + col);
-            }
+            expertRecvTokenNumTensor_(expertId) = aivStatTensor(statEntriesPerAiv * lastRowIdx + col);
         }
     } else {
         for (uint32_t col = 0; col < statEntriesPerAiv; ++col) {
@@ -650,10 +578,7 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::PrePro
                 moeSendStartOffsetTensor_(col) += aivStatTensor(statEntriesPerAiv * (aivId_ - 1) + col);
             } else {
                 uint32_t expertId = col - moeRankNum_;
-                if (expertId % expertNumPerMoe_ != 0) {
-                    // token count sent to the routing expert
-                    expertRecvTokenNumTensor_(expertId) = aivStatTensor(statEntriesPerAiv * lastRowIdx + col);
-                }
+                expertRecvTokenNumTensor_(expertId) = aivStatTensor(statEntriesPerAiv * lastRowIdx + col);
                 expertSendStartIdxTensor_(expertId) = aivStatTensor(statEntriesPerAiv * (aivId_ - 1) + col);
             }
         }

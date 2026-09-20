@@ -39,20 +39,17 @@ aclnnStatus aclnnCamMoeDistributeDispatchRecvGetWorkspaceSize(
     int64_t dynamicQuant,
     char *hcclGroupName,
     const aclTensor *expandXOut,
-    const aclTensor *expandXSharedOut,
     const aclTensor *dynamicScalesOut,
-    const aclTensor *dynamicScalesSharedOut,
     const aclTensor *batchInfoOut,
     const aclTensor *epRecvCountRoutedOut,
-    const aclTensor *epRecvCountSharedOut,
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
 {
     return aclnnInnerCamMoeDistributeDispatchRecvGetWorkspaceSize(x, commArgs,
         magic, maxSeqLen, hiddenSize, topk, moeRankNum, attnRankNum, routeExpertNumPerMoe, moeRankId, worldSize,
         tpSize, dynamicQuant, hcclGroupName,
-        expandXOut, expandXSharedOut, dynamicScalesOut, dynamicScalesSharedOut, batchInfoOut, epRecvCountRoutedOut,
-        epRecvCountSharedOut, workspaceSize, executor);
+        expandXOut, dynamicScalesOut, batchInfoOut, epRecvCountRoutedOut,
+        workspaceSize, executor);
 }
 
 aclnnStatus aclnnCamMoeDistributeDispatchRecv(

@@ -14,6 +14,8 @@
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
+    // Identifies the Python ABI; install matching CANN kernels separately.
+    m.attr("CAM_ROUTED_ONLY_CONTRACT") = pybind11::str("cam_async_routed_only_compact_v2");
     m.def("fused_deep_moe", &FusedDeepMoeImplAutograd, "fused_deep_moe");
     m.def("all2_all_detour", &all2_all_detour_impl_autograd, "all2_all_detour");
     m.def("reduce_scatter_detour", &reduce_scatter_detour_impl_autograd, "reduce_scatter_detour");
@@ -112,7 +114,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     int comm_id, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, str group_name) -> Tensor");
-    m.def("moe_combine_send_async(Tensor expand_x, Tensor expand_x_shared, Tensor comm_args, Tensor batch_info, \
+    m.def("moe_combine_send_async(Tensor expand_x, Tensor comm_args, Tensor batch_info, \
     int comm_id, int max_seq_len, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int moe_rank_id, \
     int world_size, int tp_size, str group_name) -> Tensor");

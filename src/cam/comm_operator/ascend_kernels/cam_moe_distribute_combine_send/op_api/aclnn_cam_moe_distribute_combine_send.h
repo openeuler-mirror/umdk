@@ -19,7 +19,6 @@ extern "C" {
 /* function: aclnnCamMoeDistributeCombineSendGetWorkspaceSize
  * parameters :
  * expandX : required
- * expandXShared : required
  * commArgs : required
  * batchInfo : required
  * magic : required
@@ -40,7 +39,6 @@ extern "C" {
 __attribute__((visibility("default")))
 aclnnStatus aclnnCamMoeDistributeCombineSendGetWorkspaceSize(
     const aclTensor *expandX,
-    const aclTensor *expandXShared,
     const aclTensor *commArgs,
     const aclTensor *batchInfo,
     int64_t magic,
