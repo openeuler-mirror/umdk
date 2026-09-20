@@ -248,6 +248,75 @@ class SuperNodeServiceTest {
     }
 
     @Test
+    @DisplayName("addNpuDevices rolls back already-added devices on failure")
+    void addNpuDevices_rollbackOnFailure() {
+        service.importSuperNode(createSuperNode("superNode1"));
+        NpuDevice npu2 = createNpu("npu2");
+        NpuDevice npu3 = createNpu("npu3");
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addNpuDevices("superNode1", Arrays.asList(npu2, null, npu3)));
+        assertNull(service.getSuperNode("superNode1").getNpuDevices().get("npu2"),
+            "npu2 should be rolled back (removed)");
+        assertNull(service.getSuperNode("superNode1").getNpuDevices().get("npu3"),
+            "npu3 should not have been added");
+    }
+
+    @Test
+    @DisplayName("addNpuDevices rollback restores previous device on overwrite")
+    void addNpuDevices_rollbackRestoresPrevious() {
+        service.importSuperNode(createSuperNode("superNode1"));
+        NpuDevice npu1New = createNpu("npu1");
+        npu1New.setOsName("os-updated");
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addNpuDevices("superNode1", Arrays.asList(npu1New, null)));
+        NpuDevice restored = service.getSuperNode("superNode1").getNpuDevices().get("npu1");
+        assertNotNull(restored, "npu1 should still exist after rollback");
+        assertEquals("os", restored.getOsName(),
+            "previous npu1 should be restored after rollback");
+    }
+
+    @Test
+    @DisplayName("addSwDevices rolls back already-added devices on failure")
+    void addSwDevices_rollbackOnFailure() {
+        service.importSuperNode(createSuperNode("superNode1"));
+        SwDevice sw1 = createSw("sw1");
+        SwDevice sw2 = createSw("sw2");
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addSwDevices("superNode1", Arrays.asList(sw1, null, sw2)));
+        assertNull(service.getSuperNode("superNode1").getSwDevices().get("sw1"),
+            "sw1 should be rolled back (removed)");
+        assertNull(service.getSuperNode("superNode1").getSwDevices().get("sw2"),
+            "sw2 should not have been added");
+    }
+
+    @Test
+    @DisplayName("addSwDevices rollback restores previous device on overwrite")
+    void addSwDevices_rollbackRestoresPrevious() {
+        SuperNode sn = createSuperNode("superNode1");
+        SwDevice originalSw = createSw("sw1");
+        sn.setSwDevices(new HashMap<>(Map.of("sw1", originalSw)));
+        service.importSuperNode(sn);
+
+        SwDevice newSw = createSw("sw1");
+        newSw.setIndex(99);
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addSwDevices("superNode1", Arrays.asList(newSw, null)));
+        SwDevice restored = service.getSuperNode("superNode1").getSwDevices().get("sw1");
+        assertNotNull(restored, "sw1 should still exist after rollback");
+        assertEquals(0, restored.getIndex(),
+            "previous sw1 should be restored after rollback");
+    }
+
+    @Test
+    @DisplayName("addSwDevices adds devices to existing superNode")
+    void addSwDevices() {
+        service.importSuperNode(createSuperNode("superNode1"));
+        SwDevice newDev = createSw("sw1");
+        service.addSwDevices("superNode1", List.of(newDev));
+        assertSame(newDev, service.getSuperNode("superNode1").getSwDevices().get("sw1"));
+    }
+
+    @Test
     @DisplayName("removeDevices with empty superNodeName throws IllegalArgumentException")
     void removeDevices_emptySuperNodeName() {
         assertThrows(IllegalArgumentException.class,
@@ -342,6 +411,14 @@ class SuperNodeServiceTest {
         dev.setBoardId(0);
         dev.setModuleId(1);
         dev.setBoardIndex(2);
+        return dev;
+    }
+
+    private static SwDevice createSw(String name) {
+        SwDevice dev = new SwDevice();
+        dev.setDeviceName(name);
+        dev.setSwitchLevel(SwitchLevel.L1);
+        dev.setIndex(0);
         return dev;
     }
 }

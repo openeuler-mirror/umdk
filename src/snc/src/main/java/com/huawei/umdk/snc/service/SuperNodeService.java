@@ -8,7 +8,10 @@
  */
 package com.huawei.umdk.snc.service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.entity.DeviceEntity;
@@ -59,13 +62,49 @@ public class SuperNodeService {
             throw new IllegalArgumentException("devices must not be null");
         }
         LOG.info("addNpuDevices: superNode=%s, count=%d", superNodeName, devices.size());
-        for (NpuDevice device : devices) {
-            if (device == null) {
-                LOG.error("addNpuDevices: error=device in list must not be null");
-                throw new IllegalArgumentException("device in list must not be null");
+
+        List<NpuDevice> addedDevices = new ArrayList<>();
+        Map<String, NpuDevice> previousDevices = new HashMap<>();
+        try {
+            for (NpuDevice device : devices) {
+                if (device == null) {
+                    throw new IllegalArgumentException("device in list must not be null");
+                }
+                SuperNode sn = store.getSuperNode(superNodeName);
+                NpuDevice previous = (sn != null && sn.getNpuDevices() != null)
+                    ? sn.getNpuDevices().get(device.getDeviceName()) : null;
+                previousDevices.put(device.getDeviceName(), previous);
+                LOG.debug("addNpuDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
+                store.addNpuDevice(superNodeName, device);
+                addedDevices.add(device);
             }
-            LOG.debug("addNpuDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
-            store.addNpuDevice(superNodeName, device);
+        } catch (RuntimeException e) {
+            rollbackNpuDevices(superNodeName, addedDevices, previousDevices, e);
+            throw e;
+        }
+    }
+
+    private void rollbackNpuDevices(String superNodeName, List<NpuDevice> addedDevices,
+                                     Map<String, NpuDevice> previousDevices, RuntimeException cause) {
+        if (addedDevices.isEmpty()) {
+            return;
+        }
+        LOG.error("addNpuDevices: rollback superNode=%s, addedCount=%d, cause=%s",
+            superNodeName, addedDevices.size(), cause.getMessage());
+        for (int i = addedDevices.size() - 1; i >= 0; i--) {
+            NpuDevice device = addedDevices.get(i);
+            String deviceName = device.getDeviceName();
+            NpuDevice previous = previousDevices.get(deviceName);
+            try {
+                if (previous != null) {
+                    store.addNpuDevice(superNodeName, previous);
+                } else {
+                    store.removeDevice(superNodeName, deviceName);
+                }
+            } catch (RuntimeException re) {
+                LOG.error("addNpuDevices: rollback failed for device=%s, superNode=%s, error=%s",
+                    deviceName, superNodeName, re.getMessage());
+            }
         }
     }
 
@@ -79,13 +118,49 @@ public class SuperNodeService {
             throw new IllegalArgumentException("devices must not be null");
         }
         LOG.info("addSwDevices: superNode=%s, count=%d", superNodeName, devices.size());
-        for (SwDevice device : devices) {
-            if (device == null) {
-                LOG.error("addSwDevices: error=device in list must not be null");
-                throw new IllegalArgumentException("device in list must not be null");
+
+        List<SwDevice> addedDevices = new ArrayList<>();
+        Map<String, SwDevice> previousDevices = new HashMap<>();
+        try {
+            for (SwDevice device : devices) {
+                if (device == null) {
+                    throw new IllegalArgumentException("device in list must not be null");
+                }
+                SuperNode sn = store.getSuperNode(superNodeName);
+                SwDevice previous = (sn != null && sn.getSwDevices() != null)
+                    ? sn.getSwDevices().get(device.getDeviceName()) : null;
+                previousDevices.put(device.getDeviceName(), previous);
+                LOG.debug("addSwDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
+                store.addSwDevice(superNodeName, device);
+                addedDevices.add(device);
             }
-            LOG.debug("addSwDevices: device=%s, superNode=%s", device.getDeviceName(), superNodeName);
-            store.addSwDevice(superNodeName, device);
+        } catch (RuntimeException e) {
+            rollbackSwDevices(superNodeName, addedDevices, previousDevices, e);
+            throw e;
+        }
+    }
+
+    private void rollbackSwDevices(String superNodeName, List<SwDevice> addedDevices,
+                                    Map<String, SwDevice> previousDevices, RuntimeException cause) {
+        if (addedDevices.isEmpty()) {
+            return;
+        }
+        LOG.error("addSwDevices: rollback superNode=%s, addedCount=%d, cause=%s",
+            superNodeName, addedDevices.size(), cause.getMessage());
+        for (int i = addedDevices.size() - 1; i >= 0; i--) {
+            SwDevice device = addedDevices.get(i);
+            String deviceName = device.getDeviceName();
+            SwDevice previous = previousDevices.get(deviceName);
+            try {
+                if (previous != null) {
+                    store.addSwDevice(superNodeName, previous);
+                } else {
+                    store.removeDevice(superNodeName, deviceName);
+                }
+            } catch (RuntimeException re) {
+                LOG.error("addSwDevices: rollback failed for device=%s, superNode=%s, error=%s",
+                    deviceName, superNodeName, re.getMessage());
+            }
         }
     }
 
