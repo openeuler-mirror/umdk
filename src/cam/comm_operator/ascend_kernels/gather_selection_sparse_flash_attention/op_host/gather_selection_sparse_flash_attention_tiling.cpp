@@ -2150,16 +2150,19 @@ ge::graphStatus QSFAInfoParser::Parse(QSFATilingInfo &qsfaInfo)
              OPS_LOG_E(opName_,
                        "sparse_block_size and selection_topk_block_size must both be 1 for the fused MergeKv path"),
              return ge::GRAPH_FAILED);
-    // status last dim is topk+1; leading dims must cover the selection rows (T or B*S).
-    OP_CHECK(statusShape.GetDimNum() < DIM_NUM_TWO ||
-                    statusShape.GetDim(statusShape.GetDimNum() - 1) != sparseBlockCount_ + 1,
-                OPS_LOG_E(opName_, "selection_kv_block_status last dim must be topk+1 (%ld)",
-                        static_cast<long>(sparseBlockCount_ + 1)),
-                return ge::GRAPH_FAILED);
-    const int64_t statusRows = statusShape.GetShapeSize() / (sparseBlockCount_ + 1);
-    OP_CHECK(statusRows < static_cast<int64_t>(bSize_),
-                OPS_LOG_E(opName_, "selection_kv_block_status rows (%ld) must cover batch/token rows (%u)",
-                        static_cast<long>(statusRows), bSize_),
+    // status must match topk TND layout [B, N, TOPK+1]: kernel addresses row * last_dim,
+    // so the middle head dim is not free padding. dim0 is strictly batch/token rows (== B).
+    OP_CHECK(statusShape.GetDimNum() != DIM_NUM_THREE ||
+                    statusShape.GetDim(0) != static_cast<int64_t>(bSize_) ||
+                    statusShape.GetDim(0) != sparseIndicesShape_.GetDim(0) ||
+                    statusShape.GetDim(1) != sparseIndicesShape_.GetDim(1) ||
+                    statusShape.GetDim(2) != sparseBlockCount_ + 1,
+                OPS_LOG_E(opName_,
+                          "selection_kv_block_status must be [B,N,TOPK+1]=[%u,%ld,%ld] and match "
+                          "selection_topk_indices on T/N (got dimNum=%zu)",
+                          bSize_, static_cast<long>(sparseIndicesShape_.GetDim(1)),
+                          static_cast<long>(sparseBlockCount_ + 1),
+                          static_cast<size_t>(statusShape.GetDimNum())),
                 return ge::GRAPH_FAILED);
     // topk: positive and within QSFA sparse limit (not hard-coded to exactly 2048).
     OP_CHECK(sparseBlockCount_ <= 0 || sparseBlockCount_ > static_cast<int64_t>(SPARSE_LIMIT),
@@ -2182,11 +2185,44 @@ ge::graphStatus QSFAInfoParser::Parse(QSFATilingInfo &qsfaInfo)
                     fullPhysicalBlockCount > std::numeric_limits<uint32_t>::max(),
                 OPS_LOG_E(opName_, "selection/full KV physical block counts must fit in uint32 and be positive"),
                 return ge::GRAPH_FAILED);
+    // Same safety lower-bound as gather: one distinct physical block per logical table slot.
+    // Over-allocation (S_BLOCK_NUM larger) remains legal; under-allocation causes forced aliasing.
+    const int64_t minSelectionPhysicalBlocks =
+        static_cast<int64_t>(bSize_) * static_cast<int64_t>(maxBlockNumPerBatch_);
+    OP_CHECK(selectionPhysicalBlockCount < minSelectionPhysicalBlocks,
+                OPS_LOG_E(opName_,
+                          "selection_kv_cache physical block count (%ld) must be >= B(%u)*S_MAX_BLOCK_NUM(%u)=%ld",
+                          static_cast<long>(selectionPhysicalBlockCount), bSize_, maxBlockNumPerBatch_,
+                          static_cast<long>(minSelectionPhysicalBlocks)),
+                return ge::GRAPH_FAILED);
     OP_CHECK(fullBlockTableShape.GetDimNum() != DIM_NUM_TWO ||
                     fullBlockTableShape.GetDim(0) != static_cast<int64_t>(bSize_) ||
                     fullBlockTableShape.GetDim(1) <= 0 ||
                     fullBlockTableShape.GetDim(1) > std::numeric_limits<uint32_t>::max(),
                 OPS_LOG_E(opName_, "full_kv_block_table must be [T, positive_max_blocks]"),
+                return ge::GRAPH_FAILED);
+    // Full-side capacity lower-bounds (parallel to selected):
+    // - physical pool: F_BLOCK_NUM >= B * F_MAX (unique backing per logical table slot)
+    // - logical tokens: F_MAX * F_BLOCK_SIZE >= TOPK (must at least address topk token IDs)
+    const int64_t fullMaxBlockNum = fullBlockTableShape.GetDim(1);
+    const int64_t fullBlockSize = fullKvShape.GetDim(1);
+    const uint64_t minFullPhysicalBlocks =
+        static_cast<uint64_t>(bSize_) * static_cast<uint64_t>(fullMaxBlockNum);
+    OP_CHECK(static_cast<uint64_t>(fullPhysicalBlockCount) < minFullPhysicalBlocks,
+                OPS_LOG_E(opName_,
+                          "full_kv_cache physical block count (%ld) must be >= B(%u)*F_MAX_BLOCK_NUM(%ld)=%llu",
+                          static_cast<long>(fullPhysicalBlockCount), bSize_,
+                          static_cast<long>(fullMaxBlockNum),
+                          static_cast<unsigned long long>(minFullPhysicalBlocks)),
+                return ge::GRAPH_FAILED);
+    const uint64_t fullLogicalCapacity =
+        static_cast<uint64_t>(fullMaxBlockNum) * static_cast<uint64_t>(fullBlockSize);
+    OP_CHECK(fullLogicalCapacity < static_cast<uint64_t>(sparseBlockCount_),
+                OPS_LOG_E(opName_,
+                          "full_kv capacity F_MAX(%ld)*F_BLOCK_SIZE(%ld)=%llu must cover topk (%ld)",
+                          static_cast<long>(fullMaxBlockNum), static_cast<long>(fullBlockSize),
+                          static_cast<unsigned long long>(fullLogicalCapacity),
+                          static_cast<long>(sparseBlockCount_)),
                 return ge::GRAPH_FAILED);
 
     if (ge::GRAPH_SUCCESS != GetActualseqInfo()) {

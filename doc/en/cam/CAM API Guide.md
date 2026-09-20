@@ -167,3 +167,72 @@ The function returns `selection_kv_actual_seq`.
 |F_MAX_BLOCK_NUM|Maximum number of logical blocks mounted for one batch on the full side, i.e. column count of `full_kv_block_table`|
 |K_ROPE|RoPE dimension, corresponding to `qk_rope_head_dim`; stored separately in non-int8 cases|
 |KV_CACHE|Last-dimension length of KV / NoPE; approximately `kv_lora_rank` for non-int8, and NoPE + RoPE + scale packed length for int8|
+
+ #### 2.1.2 gather_selection_sparse_flash_attention ▶
+##### 2.1.2.1 Prototype
+```python
+umdk_cam_op_lib.gather_selection_sparse_flash_attention(
+    Tensor query,
+    Tensor selection_kv_cache,          # in-place
+    Tensor selection_kv_block_table,
+    Tensor selection_kv_block_status,   # in-place
+    Tensor selection_topk_indices,
+    Tensor full_kv_cache,
+    Tensor full_kv_block_table,
+    Tensor actual_seq_lengths_query,
+    Tensor full_kv_actual_seq,
+    *,
+    Tensor? sinks=None,
+    float scale_value=1.0,
+    int key_quant_mode=2,
+    int value_quant_mode=2,
+    int sparse_block_size=1,
+    str layout_query="TND",
+    str layout_kv="PA_BSND",
+    int sparse_mode=3,
+    int pre_tokens=9223372036854775807,
+    int next_tokens=9223372036854775807,
+    int attention_mode=2,
+    int quant_scale_repo_mode=1,
+    int tile_size=128,
+    int rope_head_dim=64,
+    int selection_topk_block_size=1
+) -> (Tensor attention_out, Tensor selection_kv_actual_seq)
+```
+##### 2.1.2.2 Description
+A3-only MIX AIC/AIV fused op: selected-KV cache service plus MLA sparse flash attention.
+Full KV may reside on Host (`empty_with_swapped_memory`); Selected KV is on HBM. Hit/miss follows TopK vs status; misses load from Full KV and write back to the selected side.
+No separate `selection_k_rope` / `full_k_rope` in this version (RoPE is packed into INT8 row width 656).
+##### 2.1.2.3 Inputs
+| **📌Parameter** | **🔧Type** | **✅Required** | **📋Value / Shape** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|query|Tensor|Required|`[T,N,576]`, fp16/bf16; `N` = query heads (typical 128)|TND query|
+|selection_kv_cache|Tensor|Required|`[S_BLOCK_NUM,S_BLOCK_SIZE,1,656]`, int8; require `S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM` (larger over-allocation OK)|HBM selected PA pool; also attention key/value; in-place|
+|selection_kv_block_table|Tensor|Required|`[B,S_MAX_BLOCK_NUM]`, int32; column count is capacity (larger OK)|logical → physical block IDs|
+|selection_kv_block_status|Tensor|Required|Shape `[B,1,TOPK+1]`: `dim0` must equal B, and match `selection_topk_indices` on `T`/middle head; last dim `TOPK+1`; int32|per-slot resident token IDs; last entry = valid count|
+|selection_topk_indices|Tensor|Required|`[T,1,TOPK]`, int32; `T` and middle head dim must match query/KV contract; `TOPK` is defined by this tensor’s last dim|TopK token IDs in Full-KV coordinates|
+|full_kv_cache|Tensor|Required|`[F_BLOCK_NUM,F_BLOCK_SIZE,1,656]`, int8; require `F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM` and `F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK` (larger OK; `F_BLOCK_SIZE` may differ from selected)|Host or HBM full PA KV; `dim2=1` and `dim3` must match selected packed D|
+|full_kv_block_table|Tensor|Required|`[B,F_MAX_BLOCK_NUM]`, int32; `dim0` must equal B; `F_MAX_BLOCK_NUM>0` (larger OK)|Full logical → physical IDs|
+|actual_seq_lengths_query|Tensor|Required|`[B]`, int32; TND **cumulative** ends (decode typically `[1,2,...,B]`)|query length metadata|
+|full_kv_actual_seq|Tensor|Required|`[B]`, int32; per-batch Full KV valid token count (not cumulative)|Full KV lengths|
+|sinks|Tensor|Optional|Must be `None` in this version|schema placeholder|
+|scale_value|float|Optional|Default `1.0`; finite and > 0|attention logit scale|
+|other attrs|see notes|Optional|`sparse_mode` in `{0,3}`; other attrs fixed for this A3 path as listed in the prototype defaults|do not treat as free knobs|
+##### 2.1.2.4 Returns
+| **📌Parameter** | **🔧Type** | **📋Shape** | **📝Details** |
+|----------|----------|--------------|----------|
+|attention_out|Tensor|`[T,N,512]`, same dtype as query|fused attention output|
+|selection_kv_actual_seq|Tensor|`[B]`, int32|selected valid KV count (also written to status last entry)|
+`gather_selection_sparse_flash_attention_functional` returns a 5-tuple (cloned selected state); not equivalent to the 2-return in-place API.
+##### 2.1.2.5 Constraints ⚠️
+1. Ascend910 A3 (`ascend910_93`) only.
+2. Query D=576, out D=512, packed KV D=656, KV head=1; query heads ∈ `{1,2,4,8,16,32,64,128}`.
+3. `B>0`, `0<TOPK≤2048`; decode integration assumes one token per batch (`S=1,T=B`).
+4. Selected `S_BLOCK_SIZE` ∈ `(0,1024]` and 16-aligned; `S_MAX_BLOCK_NUM*S_BLOCK_SIZE ≥ TOPK`.
+5. **Shape-check policy (capacity lower-bounds, same spirit as gather — not everywhere exact-equal)**:
+   - **Strict (mismatch should fail)**: head dim `=1` and packed D `=656` on both caches (full D must equal selected); block-table `dim0=B`; `selection_kv_block_status` must be `[B,N,TOPK+1]` (`dim0` strictly equals B), matching `selection_topk_indices` on `T`/`N` with last dim `=TOPK+1`; topk `T` must equal B and middle head dim must match the query/KV contract.
+   - **Capacity lower-bounds (too small must fail; larger / +1 need not fail)**: `S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM`; `S_MAX_BLOCK_NUM×S_BLOCK_SIZE ≥ TOPK`; `F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM`; `F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK` (Full is independently addressed; `F_BLOCK_SIZE` need not equal selected).
+6. Selected/Full pools must meet the bounds above; table entries must be valid IDs in their pools.
+7. Hit semantics remain slot-stable: `status[row,i]==topk[row,i]`.
+##### 2.1.2.6 Symbols
+Same as 2.1.1.6; additionally `S_BLOCK_SIZE` / `F_BLOCK_SIZE` are selected / full PA token capacities (may differ in this API).
