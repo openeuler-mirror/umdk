@@ -412,9 +412,8 @@ struct umq_buf {
     uint16_t headroom_size;      // size of umq buf headroom
     uint16_t first_fragment : 1; // first piece of each batch buf
     uint16_t alloc_state : 1;    // 0: free; 1: allocated
-    uint16_t is_coalesced_small : 1; // 1: coalesced SMALL_DATA buf (no brpc Block to DecRef in CQE)
     uint16_t rx_fallback : 1;    // 1: RX pool exhausted, fallback alloc from normal pool
-    uint16_t rsvd1 : 12;
+    uint16_t rsvd1 : 13;
 
     uint32_t token_id : 20;            // token_id for reference operation
     uint32_t mempool_without_data : 1; // 0 : with data, 1 : without data
@@ -715,10 +714,10 @@ typedef struct umq_tp_resource_create_option {
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
 
 /* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
- * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~973B
- * uncompressed; 1024B covers it with slack, so one umq build runs against
+ * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~101B
+ * uncompressed; 128B covers it with slack, so one umq build runs against
  * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 1024u)
+#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 128u)
 
 #ifdef __cplusplus
 }

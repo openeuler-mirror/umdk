@@ -761,6 +761,10 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
 
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
+        if (s->type == UMQ_QBUF_POOL_TYPE_TINY) {
+            /* Tiny has no without-data alloc path; skip its all-zero rows. */
+            continue;
+        }
         total_tls_capacity_without_data += s->capacity_without_data;
         total_tls_buf_cnt_without_data += s->buf_cnt_without_data;
         total_tls_fetch_cnt_without_data += s->tls_fetch_cnt_without_data;
@@ -778,6 +782,10 @@ int umq_qbuf_pool_stats_to_str(const umq_qbuf_pool_stats_t *qbuf_pool_stats, cha
 
     for (uint32_t i = 0; i < qbuf_pool_stats->local_qbuf_pool_num; i++) {
         const umq_local_qbuf_pool_stats_t *s = &qbuf_pool_stats->local_qbuf_pool_stats[i];
+        if (s->type == UMQ_QBUF_POOL_TYPE_TINY) {
+            /* Tiny has no without-data alloc path; skip its all-zero rows. */
+            continue;
+        }
         UMQ_DFX_SNPRINTF_BUF(
             buf, max_buf_len, str_size, "%-10s %-8lu %-8lu %-8lu %-11lu %-11lu %-11lu %-11lu %-11lu %-11lu\n",
             umq_qbuf_pool_type_name(s->type), s->tid, s->capacity_without_data, s->buf_cnt_without_data,

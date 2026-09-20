@@ -1823,7 +1823,15 @@ void umq_ub_ack_interrupt_impl(uint64_t umqh_tp, uint32_t nevents, umq_interrupt
 
 int umq_ub_get_cq_event_impl(uint64_t umqh_tp, umq_interrupt_option_t *option)
 {
-    return umq_ub_wait_interrupt_impl(umqh_tp, -1, option);
+    /* Non-blocking (time_out=0): the JFCE fd is registered with EPOLLET
+     * (edge-triggered). umq_get_cq_event must consume/clear the JFCE
+     * pending state so that urma_rearm_jfc can produce a new edge
+     * (unreadable → readable) for the next CQE arrival. With time_out=-1
+     * (blocking), the caller blocks until a CQE arrives — incompatible
+     * with the epoll event loop model where the thread must return to
+     * epoll_wait. time_out=0 returns immediately: 0 if no events pending
+     * (EAGAIN), >0 if events were consumed. */
+    return umq_ub_wait_interrupt_impl(umqh_tp, 0, option);
 }
 
 int umq_ub_wait_interrupt_impl(uint64_t wait_umqh_tp, int time_out, umq_interrupt_option_t *option)
@@ -3424,6 +3432,7 @@ int umq_ub_plus_stats_flow_control_get_impl(uint64_t umqh_tp, umq_flow_control_s
 int umq_ub_stats_qbuf_pool_get_impl(uint64_t umqh_tp, umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
     qbuf_pool_stats->num = 0;
+    qbuf_pool_stats->local_qbuf_pool_num = 0;
     int ret = umq_qbuf_pool_info_get(qbuf_pool_stats);
     if (ret != UMQ_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ, "umq_qbuf pool info get failed\n");
