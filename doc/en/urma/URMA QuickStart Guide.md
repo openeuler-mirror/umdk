@@ -189,6 +189,8 @@ yum install -y openssl-devel
 yum install -y glib2-devel
 yum install -y libnl3-devel
 yum install -y kernel-devel  # ubcore dependency, from the openEuler kernel
+# The following dependencies are required to build and run RPM packages with UDMA enabled by default
+yum install -y libummu-devel libummu
 ```
 
 ## 2.3 User-mode Installation
@@ -310,6 +312,7 @@ modprobe ubagg
 
 - **Runtime Dependencies**:
   - liburma.so, liburma_common.so, liburma_ubagg.so (user-mode libraries)
+  - libummu (required when the UDMA user-mode driver is enabled)
   - ubcore.ko, ubagg.ko, uburma.ko (kernel modules)
 
 ---
