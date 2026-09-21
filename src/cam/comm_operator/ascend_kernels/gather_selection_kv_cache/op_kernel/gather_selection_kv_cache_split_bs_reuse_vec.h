@@ -26,6 +26,8 @@ constexpr int32_t TOPK_NUMS = 8;
 constexpr int32_t SORT_OFFSET = 4;
 constexpr int32_t SORTED_STAT_TOPK_IDX_OFFSET = 3;
 constexpr int32_t SORTED_STAT_TOPK_OFFSET = 2;
+constexpr int32_t MASK_U64_NUM = 2;
+constexpr int32_t VECTOR_REPEAT_STRIDE = 8;
 
 template <typename T>
 class GatherSelectionKvCacheSplitBsReuseVec {
@@ -243,8 +245,8 @@ private:
             uint64_t mask0 = UINT64_MAX;
             mask0 = mask0 << duplicateNum;
             mask0 = mask0 & (UINT64_MAX >> ONE_REPEAT_SORT_NUM);
-            uint64_t mask[2] = {mask0, 0}; // 2 two mask
-            AscendC::Duplicate(tmpBlockStatLocal[duplicateIndex], -1, mask, 1, 1, 8); // 8 means repeat strides
+            uint64_t mask[MASK_U64_NUM] = {mask0, 0};
+            AscendC::Duplicate(tmpBlockStatLocal[duplicateIndex], -1, mask, 1, 1, VECTOR_REPEAT_STRIDE);
             PipeBarrier<PIPE_V>();
         }
 
@@ -289,18 +291,35 @@ private:
         AscendC::Cast(topkFloatLocal, srcTopkLocal, RoundMode::CAST_ROUND, validNum);
         PipeBarrier<PIPE_V>();
 
+        int64_t sortAlignNum = CeilAlign(validNum, ONE_REPEAT_SORT_NUM);
         int64_t duplicateNum = validNum % ONE_REPEAT_SORT_NUM;
         if (duplicateNum > 0) {
+            // Pad the partial last 32-element sort block with DISTINCT descending
+            // negatives (-1 - laneIndex). AscendC full Sort<float, true> loses exactly
+            // one element when this block is padded with a single repeated sentinel
+            // (validNum % 32 != 0); distinct keys avoid that while staying < 0 so the
+            // FindTopkHit two-pointer merge still treats them as invalid. Every write
+            // starts at the 32-aligned block base (duplicateIndex) to stay legal.
             int duplicateIndex = validNum - duplicateNum;
             uint64_t mask0 = UINT64_MAX;
             mask0 = mask0 << duplicateNum;
             mask0 = mask0 & (UINT64_MAX >> ONE_REPEAT_SORT_NUM);
-            uint64_t mask[2] = {mask0, 0}; // 2 two mask
-            AscendC::Duplicate(topkFloatLocal[duplicateIndex], -1.0f, mask, 1, 1, 8); // 8 means repeat strides
+            uint64_t mask[MASK_U64_NUM] = {mask0, 0};
+            // tail lanes -> -1.0f
+            AscendC::Duplicate(topkFloatLocal[duplicateIndex], -1.0f, mask, 1, 1, VECTOR_REPEAT_STRIDE);
+            PipeBarrier<PIPE_V>();
+            // Per-lane offset in tempTensor: 0 on the real front lanes, laneIndex on the
+            // pad tail lanes. Then topkFloat_tail = (-1) - laneIndex = distinct negatives.
+            LocalTensor<int32_t> rampIdxLocal = idxLocal.template ReinterpretCast<int32_t>();
+            AscendC::Cast(tempTensor[duplicateIndex], rampIdxLocal[duplicateIndex], RoundMode::CAST_ROUND,
+                ONE_REPEAT_SORT_NUM);
+            PipeBarrier<PIPE_V>();
+            AscendC::Duplicate(tempTensor[duplicateIndex], 0.0f, static_cast<int32_t>(duplicateNum));
+            PipeBarrier<PIPE_V>();
+            AscendC::Sub(topkFloatLocal[duplicateIndex], topkFloatLocal[duplicateIndex], tempTensor[duplicateIndex],
+                ONE_REPEAT_SORT_NUM);
             PipeBarrier<PIPE_V>();
         }
-
-        int64_t sortAlignNum = CeilAlign(validNum, ONE_REPEAT_SORT_NUM);
 
         LocalTensor<float> concatLocal = topkFloatLocal;
         AscendC::Concat(concatLocal, topkFloatLocal, tempTensor, sortAlignNum / ONE_REPEAT_SORT_NUM);

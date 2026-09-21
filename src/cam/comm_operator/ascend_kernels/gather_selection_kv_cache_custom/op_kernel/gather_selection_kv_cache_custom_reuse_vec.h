@@ -471,15 +471,31 @@ private:
         LocalTensor<float> topkFloatLocal = srcTopkLocal.template ReinterpretCast<float>();
         Cast(topkFloatLocal, srcTopkLocal, RoundMode::CAST_ROUND, validNum);
         PipeBarrier<PIPE_V>();
+        const int64_t sortAlignNum = CeilAlign(validNum, ONE_REPEAT_SORT_NUM);
         const int64_t remainder = validNum % ONE_REPEAT_SORT_NUM;
         if (remainder > 0) {
+            // Pad the partial last 32-element sort block with DISTINCT descending
+            // negatives (-1 - laneIndex). AscendC full Sort<float, true> loses exactly
+            // one element when this block is padded with a single repeated sentinel
+            // (validNum % 32 != 0); distinct keys avoid that while staying < 0 so the
+            // FindTopkHit two-pointer merge still treats them as invalid. Every write
+            // starts at the 32-aligned block base (duplicateIndex) to stay legal.
             const int64_t duplicateIndex = validNum - remainder;
             uint64_t mask0 = (UINT64_MAX << remainder) & (UINT64_MAX >> ONE_REPEAT_SORT_NUM);
             uint64_t mask[MASK_U64_NUM] = {mask0, 0};
             Duplicate(topkFloatLocal[duplicateIndex], INVALID_FLOAT_VALUE, mask, 1, 1, VECTOR_REPEAT_STRIDE);
             PipeBarrier<PIPE_V>();
+            // Per-lane offset in tempTensor: 0 on the real front lanes, laneIndex on the
+            // pad tail lanes. Then topkFloat_tail = (-1) - laneIndex = distinct negatives.
+            LocalTensor<int32_t> rampIdxLocal = idxLocal.template ReinterpretCast<int32_t>();
+            Cast(tempTensor[duplicateIndex], rampIdxLocal[duplicateIndex], RoundMode::CAST_ROUND, ONE_REPEAT_SORT_NUM);
+            PipeBarrier<PIPE_V>();
+            Duplicate(tempTensor[duplicateIndex], 0.0f, static_cast<int32_t>(remainder));
+            PipeBarrier<PIPE_V>();
+            Sub(topkFloatLocal[duplicateIndex], topkFloatLocal[duplicateIndex], tempTensor[duplicateIndex],
+                ONE_REPEAT_SORT_NUM);
+            PipeBarrier<PIPE_V>();
         }
-        const int64_t sortAlignNum = CeilAlign(validNum, ONE_REPEAT_SORT_NUM);
         LocalTensor<float> concatLocal = topkFloatLocal;
         Concat(concatLocal, topkFloatLocal, tempTensor, sortAlignNum / ONE_REPEAT_SORT_NUM);
         PipeBarrier<PIPE_V>();
