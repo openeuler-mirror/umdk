@@ -621,20 +621,30 @@ urma_status_t urma_deactive_jfc(urma_jfc_t *jfc)
     return URMA_SUCCESS;
 }
 
+/*
+ * Protocol-level interception at create time. Create does not know the TP type
+ * (it is decided later when the TP is set up), so only the trans_mode and
+ * order_type combination can be validated here.
+ *
+ *   URMA_TM_RM / URMA_TM_RC: OI, OL and OT are allowed, NO is intercepted.
+ *   URMA_TM_UM:               OL and NO are allowed, OI and OT are intercepted.
+ */
 static inline int urma_check_order_type(urma_transport_mode_t trans_mode,
     uint32_t order_type)
 {
     if (order_type > URMA_NO) {
         return -1;
     }
-    if ((trans_mode != URMA_TM_RC && order_type == URMA_OT) ||
-        (trans_mode != URMA_TM_RC && order_type == URMA_OL) ||
-        (trans_mode != URMA_TM_RM && order_type == URMA_OI) ||
-        (trans_mode == URMA_TM_RM && order_type == URMA_NO)) {
-        return -1;
-    }
 
-    return 0;
+    switch (trans_mode) {
+        case URMA_TM_RM:
+        case URMA_TM_RC:
+            return (order_type == URMA_NO) ? -1 : 0;
+        case URMA_TM_UM:
+            return (order_type == URMA_OI || order_type == URMA_OT) ? -1 : 0;
+        default:
+            return -1;
+    }
 }
 
 static int urma_convert_order_type(urma_transport_mode_t trans_mode, uint32_t *order_type)
@@ -1041,14 +1051,39 @@ urma_status_t urma_deactive_jfs(urma_jfs_t *jfs)
     return URMA_SUCCESS;
 }
 
-static inline int urma_check_tp_type_valid(urma_transport_mode_t trans_mode, uint32_t tp_type)
+/*
+ * Protocol-level interception at import time. Unlike create, import knows the
+ * TP type, so the full trans_mode + tp_type + order_type triple is validated.
+ *
+ *   URMA_TM_RM / URMA_TM_RC: UTP with OI, OL or OT is intercepted.
+ *   URMA_TM_UM:               RTP with OL or NO, CTP with NO and UTP with OL
+ *                             are intercepted.
+ */
+static inline int urma_check_import_order_type(urma_transport_mode_t trans_mode,
+    uint32_t tp_type, uint32_t order_type)
 {
-    if (tp_type > URMA_UTP || (trans_mode != URMA_TM_UM && tp_type == URMA_UTP) ||
-        (trans_mode == URMA_TM_UM && tp_type == URMA_RTP)) {
+    if (tp_type > URMA_UTP || order_type > URMA_NO) {
         return -1;
     }
 
-    return 0;
+    switch (trans_mode) {
+        case URMA_TM_RM:
+        case URMA_TM_RC:
+            if (tp_type == URMA_UTP &&
+                (order_type == URMA_OI || order_type == URMA_OL || order_type == URMA_OT)) {
+                return -1;
+            }
+            return 0;
+        case URMA_TM_UM:
+            if ((tp_type == URMA_RTP && (order_type == URMA_OL || order_type == URMA_NO)) ||
+                (tp_type == URMA_CTP && order_type == URMA_NO) ||
+                (tp_type == URMA_UTP && order_type == URMA_OL)) {
+                return -1;
+            }
+            return 0;
+        default:
+            return -1;
+    }
 }
 
 urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *jfr_cfg)
@@ -1274,18 +1309,18 @@ urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urm
         return NULL;
     }
 
-    if (!urma_check_trans_mode_valid(rjfr->trans_mode) ||
-        urma_check_tp_type_valid(rjfr->trans_mode, rjfr->tp_type) != 0) {
-        URMA_LOG_ERR("Invalid transport mode or TP type.\n");
+    if (!urma_check_trans_mode_valid(rjfr->trans_mode)) {
+        URMA_LOG_ERR("Invalid transport mode, trans_mode=%d.\n", (int)rjfr->trans_mode);
         errno = EINVAL;
         return NULL;
     }
 
     uint32_t order_type = rjfr->flag.bs.order_type;
-    if (urma_check_order_type(rjfr->trans_mode, order_type) != 0 ||
-        urma_convert_order_type(rjfr->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)rjfr->trans_mode, rjfr->flag.bs.order_type);
+    if (urma_convert_order_type(rjfr->trans_mode, &order_type) != 0 ||
+        urma_check_order_type(rjfr->trans_mode, order_type) != 0 ||
+        urma_check_import_order_type(rjfr->trans_mode, rjfr->tp_type, order_type) != 0) {
+        URMA_LOG_ERR("Invalid tp_type/order_type for trans_mode=%d, tp_type=%u, order_type=%u.\n",
+                     (int)rjfr->trans_mode, rjfr->tp_type, order_type);
         errno = EINVAL;
         return NULL;
     }
@@ -1313,18 +1348,18 @@ urma_target_jetty_t *urma_import_jfr_ex(urma_context_t *ctx, urma_rjfr_t *rjfr, 
         return NULL;
     }
 
-    if (!urma_check_trans_mode_valid(rjfr->trans_mode) ||
-        urma_check_tp_type_valid(rjfr->trans_mode, rjfr->tp_type) != 0) {
-        URMA_LOG_ERR("Invalid transport mode or TP type.\n");
+    if (!urma_check_trans_mode_valid(rjfr->trans_mode)) {
+        URMA_LOG_ERR("Invalid transport mode, trans_mode=%d.\n", (int)rjfr->trans_mode);
         errno = EINVAL;
         return NULL;
     }
 
     uint32_t order_type = rjfr->flag.bs.order_type;
-    if (urma_check_order_type(rjfr->trans_mode, order_type) != 0 ||
-        urma_convert_order_type(rjfr->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)rjfr->trans_mode, rjfr->flag.bs.order_type);
+    if (urma_convert_order_type(rjfr->trans_mode, &order_type) != 0 ||
+        urma_check_order_type(rjfr->trans_mode, order_type) != 0 ||
+        urma_check_import_order_type(rjfr->trans_mode, rjfr->tp_type, order_type) != 0) {
+        URMA_LOG_ERR("Invalid tp_type/order_type for trans_mode=%d, tp_type=%u, order_type=%u.\n",
+                     (int)rjfr->trans_mode, rjfr->tp_type, order_type);
         errno = EINVAL;
         return NULL;
     }
@@ -2020,23 +2055,16 @@ urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjett
         return NULL;
     }
 
-    if (urma_check_order_type(rjetty->trans_mode, rjetty->flag.bs.order_type) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return NULL;
-    }
-
     uint32_t order_type = rjetty->flag.bs.order_type;
-    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)rjetty->trans_mode, rjetty->flag.bs.order_type);
+    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0 ||
+        urma_check_order_type(rjetty->trans_mode, order_type) != 0 ||
+        urma_check_import_order_type(rjetty->trans_mode, rjetty->tp_type, order_type) != 0) {
+        URMA_LOG_ERR("Invalid tp_type/order_type for trans_mode=%d, tp_type=%u, order_type=%u.\n",
+                     (int)rjetty->trans_mode, rjetty->tp_type, order_type);
+        errno = EINVAL;
         return NULL;
     }
     rjetty->flag.bs.order_type = order_type;
-
-    if (urma_check_tp_type_valid(rjetty->trans_mode, rjetty->tp_type) != 0) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return NULL;
-    }
 
     urma_ops_t *ops = ctx->ops;
     if (urma_check_ctrlplane_compat(ops->import_jetty)) {
@@ -2060,10 +2088,19 @@ urma_target_jetty_t *urma_import_jetty_ex(urma_context_t *ctx, urma_rjetty_t *rj
         return NULL;
     }
 
+    if (urma_check_trans_mode_valid(rjetty->trans_mode) != true) {
+        URMA_LOG_ERR("Invalid parameter, trans_mode=%d.\n", (int)rjetty->trans_mode);
+        errno = EINVAL;
+        return NULL;
+    }
+
     uint32_t order_type = rjetty->flag.bs.order_type;
-    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0) {
-        URMA_LOG_ERR("Failed to convert order_type for trans_mode=%d, order_type=%u.\n",
-                     (int)rjetty->trans_mode, rjetty->flag.bs.order_type);
+    if (urma_convert_order_type(rjetty->trans_mode, &order_type) != 0 ||
+        urma_check_order_type(rjetty->trans_mode, order_type) != 0 ||
+        urma_check_import_order_type(rjetty->trans_mode, rjetty->tp_type, order_type) != 0) {
+        URMA_LOG_ERR("Invalid tp_type/order_type for trans_mode=%d, tp_type=%u, order_type=%u.\n",
+                     (int)rjetty->trans_mode, rjetty->tp_type, order_type);
+        errno = EINVAL;
         return NULL;
     }
     rjetty->flag.bs.order_type = order_type;

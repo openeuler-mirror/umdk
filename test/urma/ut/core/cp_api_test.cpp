@@ -162,9 +162,10 @@ TEST(UrmaCoreTest, CpApiJfsJfrCreateAndActiveCoverStableBoundaryBranches)
     urma_jfr_cfg_t jfrCfg = fixture.jfr.jfr_cfg;
 
     fixture.ops.create_jfs = MockCreateJfs;
-    jfsCfg.flag.bs.order_type = URMA_OT;
+    jfsCfg.flag.bs.order_type = URMA_NO;
     jfsCfg.trans_mode = URMA_TM_RM;
     EXPECT_EQ(nullptr, urma_create_jfs(&fixture.ctx, &jfsCfg));
+    jfsCfg.flag.bs.order_type = URMA_OL;
     jfsCfg.trans_mode = URMA_TM_RC;
     jfsCfg.depth = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_depth + 1;
     EXPECT_EQ(nullptr, urma_create_jfs(&fixture.ctx, &jfsCfg));
@@ -188,10 +189,10 @@ TEST(UrmaCoreTest, CpApiJfsJfrCreateAndActiveCoverStableBoundaryBranches)
     fixture.jfs.jfs_cfg.trans_mode = static_cast<urma_transport_mode_t>(0xff);
     EXPECT_EQ(URMA_EINVAL, urma_active_jfs(&fixture.jfs));
     fixture.jfs.jfs_cfg.trans_mode = URMA_TM_RM;
-    fixture.jfs.jfs_cfg.flag.bs.order_type = URMA_OT;
+    fixture.jfs.jfs_cfg.flag.bs.order_type = URMA_NO;
     EXPECT_EQ(URMA_EINVAL, urma_active_jfs(&fixture.jfs));
     fixture.jfs.jfs_cfg.trans_mode = URMA_TM_RC;
-    fixture.jfs.jfs_cfg.flag.bs.order_type = URMA_NO;
+    fixture.jfs.jfs_cfg.flag.bs.order_type = URMA_OL;
     fixture.jfs.jfs_cfg.depth = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_depth + 1;
     EXPECT_EQ(URMA_EINVAL, urma_active_jfs(&fixture.jfs));
     fixture.jfs.jfs_cfg.depth = 4;
@@ -707,6 +708,15 @@ TEST(UrmaCoreTest, CpApiTargetJettyAndNotifierApisValidateAndDispatch)
     EXPECT_EQ(nullptr, urma_import_jfr(&fixture.ctx, &rjfr, &tokenValue));
     rjfr.flag.bs.share_tp = 0;
     EXPECT_NE(nullptr, urma_import_jfr(&fixture.ctx, &rjfr, &tokenValue));
+    rjfr.trans_mode = URMA_TM_UM;
+    rjfr.tp_type = URMA_RTP;
+    rjfr.flag.bs.order_type = URMA_NO;
+    EXPECT_EQ(nullptr, urma_import_jfr(&fixture.ctx, &rjfr, &tokenValue));
+    rjfr.tp_type = URMA_UTP;
+    EXPECT_NE(nullptr, urma_import_jfr(&fixture.ctx, &rjfr, &tokenValue));
+    rjfr.trans_mode = URMA_TM_RM;
+    rjfr.tp_type = URMA_RTP;
+    rjfr.flag.bs.order_type = URMA_DEF_ORDER;
     fixture.ops.import_jfr_ex = nullptr;
     fixture.ops.import_jfr = MockImportJfr;
     EXPECT_NE(nullptr, urma_import_jfr(&fixture.ctx, &rjfr, &tokenValue));
@@ -745,6 +755,11 @@ TEST(UrmaCoreTest, CpApiTargetJettyAndNotifierApisValidateAndDispatch)
     EXPECT_EQ(nullptr, urma_import_jetty(&fixture.ctx, &rjetty, &tokenValue));
     rjetty.flag.bs.share_tp = 0;
     EXPECT_NE(nullptr, urma_import_jetty(&fixture.ctx, &rjetty, &tokenValue));
+    rjetty.tp_type = URMA_UTP;
+    rjetty.flag.bs.order_type = URMA_OI;
+    EXPECT_EQ(nullptr, urma_import_jetty(&fixture.ctx, &rjetty, &tokenValue));
+    rjetty.tp_type = URMA_RTP;
+    rjetty.flag.bs.order_type = URMA_DEF_ORDER;
     fixture.ops.import_jetty_ex = nullptr;
     fixture.ops.import_jetty = MockImportJetty;
     EXPECT_NE(nullptr, urma_import_jetty(&fixture.ctx, &rjetty, &tokenValue));
@@ -958,7 +973,7 @@ TEST(UrmaCoreTest, CpApiProviderNullAndStateFailuresCoverStableBranches)
 
     fixture.ops.create_jfs = MockCreateJfsNull;
     EXPECT_EQ(nullptr, urma_create_jfs(&fixture.ctx, &jfsCfg));
-    jfsCfg.flag.bs.order_type = URMA_OT;
+    jfsCfg.flag.bs.order_type = URMA_NO;
     jfsCfg.trans_mode = URMA_TM_RM;
     EXPECT_EQ(nullptr, urma_create_jfs(&fixture.ctx, &jfsCfg));
     fixture.jfs.urma_jfs_opt.is_actived = false;
