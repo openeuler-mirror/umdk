@@ -79,7 +79,7 @@ Return value is a list of tensors，which stores combine_x and expert_token_nums
 1. Input Shape should satisfy the shape definition above.
 2. Current interface supports Ascend950 only.
 3. Current interface does not support concurrent usage.In extreme cases, repeatedly calling the same operator in a single forward pass may result in undefined behavior. To avoid potential asynchronous timing issues in such scenarios, torch.npu.synchronize() should be added between operator executions.
-4. Support aclgraph only when graph in on.
+4. Support aclgraph only when graph in on. Please note that the input data type and layout format of the operator must remain unchanged in the graph mode, or else the function may malfunction.
 5. Do not support external shared experts, that is, shared experts are deployed on dedicated cards .
 6. The performance may decline when batch_size is lower than 16 or only one routed expert is deployed on each card, as it is not the target scenario.
 7. When the weight data type is fp8_e4m3, both ND and NZ data layouts are supported; when the weight data type is fp4_e2m1 or fp8_e5m2, only ND layout is supported.
