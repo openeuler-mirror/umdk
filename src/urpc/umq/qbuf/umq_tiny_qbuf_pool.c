@@ -243,6 +243,11 @@ umq_buf_t *umq_tiny_qbuf_data_to_head(void *data)
 
 int umq_tiny_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
+    if (qbuf_pool_stats == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool stats parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!g_tiny_qbuf_pool.inited) {
         return UMQ_SUCCESS;
     }
