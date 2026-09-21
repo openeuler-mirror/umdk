@@ -59,6 +59,8 @@
 
 #define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
 #define QBUF_POOL_SHRINK_DECAY_SLICE_MS (100) // decay sleep slice: bounds pthread_join wait in uninit
+#define QBUF_POOL_SHRINK_DECAY_MS_MAX (1800000) // decay window upper bound: 30min (aligns with ubsocket env)
+#define QBUF_POOL_SHRINK_DECAY_MS_DEFAULT (300000) // fallback decay: 5min (aligns with ubsocket default)
 #define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
 
 // Magic-number replacements (G.CNS.02)
@@ -2295,7 +2297,13 @@ static int init_size_class_config(const qbuf_pool_cfg_t *cfg, uint64_t max_umq_b
         cfg->expansion_threshold > QBUF_POOL_EXPANSION_THRESHOLD_MAX) ?
         QBUF_POOL_DEFAULT_EXPANSION_THRESHOLD : cfg->expansion_threshold;
     g_qbuf_pool.disable_malloc_escape = cfg->disable_malloc_escape;
-    g_qbuf_pool.shrink_decay_ms = cfg->shrink_decay_ms;
+    if (cfg->shrink_decay_ms > QBUF_POOL_SHRINK_DECAY_MS_MAX) {
+        UMQ_VLOG_WARN(VLOG_UMQ, "shrink_decay_ms %u out of range [0, %u], will use default %u\n",
+            cfg->shrink_decay_ms, QBUF_POOL_SHRINK_DECAY_MS_MAX, QBUF_POOL_SHRINK_DECAY_MS_DEFAULT);
+        g_qbuf_pool.shrink_decay_ms = QBUF_POOL_SHRINK_DECAY_MS_DEFAULT;
+    } else {
+        g_qbuf_pool.shrink_decay_ms = cfg->shrink_decay_ms;
+    }
 
     for (uint32_t i = 0; i < count; i++) {
         g_qbuf_pool.per_sc_block_counts[i] = cfg->per_sc_block_counts[i];
@@ -3963,6 +3971,11 @@ static void dfx_copy_timing(umq_dfx_timing_stats_t *dst, qbuf_expansion_pool_t *
 
 int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
+    if (qbuf_pool_stats == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool stats parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!g_qbuf_pool.inited) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
