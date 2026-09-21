@@ -19,6 +19,9 @@
         - [1.2.1 trans_mode、tp_type、order_type 组合拦截总表](#121-trans_modetp_typeorder_type-组合拦截总表)
         - [1.2.2 校验规则说明](#122-校验规则说明)
         - [1.2.3 其他约束](#123-其他约束)
+    - [1.3 使用流程约束](#13-使用流程约束)
+        - [1.3.1 一般约束](#131-一般约束)
+        - [1.3.2 内核态用户约束](#132-内核态用户约束)
 
 - [2 URMA用户态API](#2-urma用户态api)
     - [2.1 编程示例](#21-编程示例)
@@ -730,6 +733,25 @@ URMA 在创建 JFS、JFR、Jetty 以及导入远端 Jetty 等资源时会校验 
 - UM 模式（`URMA_TM_UM`）下的 WR 不支持 fence、place_order 和 comp_order。
 - 完成乱序模式（`outorder_comp=1`）下的 WR 不支持 fence、place_order 和 comp_order。
 
+## 1.3 使用流程约束
+
+本节描述导入/解绑等控制面接口在使用流程上的约束。感知TP用户需通过 `get_tp_list` 或 `create_tpid` 获取可用TP列表后再调用带 `import_jfr_ex` 或 `import_jetty_ex` 的扩展接口完成建链；不感知TP的用户直接调用`import_jetty`接口即可。
+
+### 1.3.1 一般约束
+
+针对感知TP的用户态用户（通过 [2.3.3.3 urma_get_tp_list](#2333-urma_get_tp_list) 获取TP）, urma 因无法明确用户释放逻辑，会统一在unimport后释放tpid资源，并在get_tp_list中分配tp资源，因此不支持在unimport后直接调用import接口：
+
+- 感知用户在调用 [2.3.1.6.8 urma_unimport_jetty](#23168-urma_unimport_jetty)、[2.3.1.5.8 urma_unimport_jfr](#23158-urma_unimport_jfr)、[2.3.1.6.13 urma_unbind_jetty](#231613-urma_unbind_jetty) 之后，不能直接调用 [2.3.1.6.7 urma_import_jetty_ex](#23167-urma_import_jetty_ex)、[2.3.1.5.7 urma_import_jfr_ex](#23157-urma_import_jfr_ex)、[2.3.1.6.12 urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)。
+- 必须重新调用 [2.3.3.3 urma_get_tp_list](#2333-urma_get_tp_list) -> [2.3.1.6.7 urma_import_jetty_ex](#23167-urma_import_jetty_ex) 的流程，否则可能因TP句柄失效导致建链异常。
+- 针对直接调用 [2.3.1.6.6 urma_import_jetty](#23166-urma_import_jetty) 接口的不感知用户没有该限制。
+
+### 1.3.2 内核态用户约束
+
+针对使用ubcore接口的内核态感知用户（通过 [3.13.2 ubcore_get_tp_list](#3132-ubcore_get_tp_list) 获取TP后，调用带 `active_tp_cfg` 的扩展接口）：
+
+- 必须完整调用 [3.13.2 ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.3.7 ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex) / [3.4.4.8 ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex) / [3.4.4.11 ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex) -> [3.4.3.8 ubcore_unimport_jfr](#3438-ubcore_unimport_jfr) / [3.4.4.9 ubcore_unimport_jetty](#3449-ubcore_unimport_jetty) / [3.4.4.12 ubcore_unbind_jetty](#34412-ubcore_unbind_jetty) 的流程，否则会有tp资源残留。
+- 内核态不感知用户（直接调用 [3.4.3.6 ubcore_import_jfr](#3436-ubcore_import_jfr) / [3.4.4.7 ubcore_import_jetty](#3447-ubcore_import_jetty) / [3.4.4.10 ubcore_bind_jetty](#34410-ubcore_bind_jetty) 等接口）没有该约束。
+
 ---
 
 # 2 URMA用户态API
@@ -1180,7 +1202,7 @@ Return: pointer array of urma_device; NULL means no device returned.
 
 Note: urma_free_device_list() needs to be called to free memory.
 
-7.  [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext)
+7.  [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext)<a id="_ZH-CN_TOPIC_0000002521872497-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1195,7 +1217,7 @@ typedef struct urma_device {
 } urma_device_t;
 ```
 
-8.  [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext)
+8.  [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext)<a id="_ZH-CN_TOPIC_0000002489912702-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1207,7 +1229,7 @@ typedef enum urma_transport_type {
 } urma_transport_type_t;
 ```
 
-9.  [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)
+9.  [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)<a id="_ZH-CN_TOPIC_0000002489752726-chtext"></a>
 
 定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
@@ -1229,7 +1251,7 @@ typedef struct urma_provider_ops {
 } urma_provider_ops_t;
 ```
 
-10. [urma_match_entry_t](#_ZH-CN_TOPIC_0000002496889932-chtext)
+10. [urma_match_entry_t](#_ZH-CN_TOPIC_0000002496889932-chtext)<a id="_ZH-CN_TOPIC_0000002496889932-chtext"></a>
 
 定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
@@ -1240,7 +1262,7 @@ typedef struct urma_match_entry {
 } urma_match_entry_t;
 ```
 
-11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)
+11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)<a id="_ZH-CN_TOPIC_0000002521992509-chtext"></a>
 
 定义文件: [urma_private.h](../../../src/urma/lib/urma/core/urma_private.h)
 
@@ -1261,7 +1283,7 @@ typedef struct urma_sysfs_dev {
 } urma_sysfs_dev_t;
 ```
 
-12. [urma_driver_t](#_ZH-CN_TOPIC_0000002496570596-chtext)
+12. [urma_driver_t](#_ZH-CN_TOPIC_0000002496570596-chtext)<a id="_ZH-CN_TOPIC_0000002496570596-chtext"></a>
 
 ```c
 typedef struct urma_driver {
@@ -1270,7 +1292,7 @@ typedef struct urma_driver {
 } urma_driver_t;
 ```
 
-13. [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext)
+13. [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext)<a id="_ZH-CN_TOPIC_0000002528650589-chtext"></a>
 
 ```c
 struct ub_list {
@@ -1382,7 +1404,7 @@ Return: pointer of urma_device; NULL means no device returned.
 
 Return: 0 on success, other value on error.
 
-6.  [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext)
+6.  [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext)<a id="_ZH-CN_TOPIC_0000002521872503-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1397,7 +1419,7 @@ typedef struct urma_device_attr {
 } urma_device_attr_t;
 ```
 
-7.  [urma_guid_t](#_ZH-CN_TOPIC_0000002489752730-chtext)
+7.  [urma_guid_t](#_ZH-CN_TOPIC_0000002489752730-chtext)<a id="_ZH-CN_TOPIC_0000002489752730-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1407,7 +1429,7 @@ typedef struct urma_guid {
 } urma_guid_t;
 ```
 
-8.  [urma_device_cap_t](#_ZH-CN_TOPIC_0000002521992515-chtext)
+8.  [urma_device_cap_t](#_ZH-CN_TOPIC_0000002521992515-chtext)<a id="_ZH-CN_TOPIC_0000002521992515-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1457,7 +1479,7 @@ typedef struct urma_device_cap {
 } urma_device_cap_t;
 ```
 
-9.  [urma_device_feature_t](#_ZH-CN_TOPIC_0000002489912708-chtext)
+9.  [urma_device_feature_t](#_ZH-CN_TOPIC_0000002489912708-chtext)<a id="_ZH-CN_TOPIC_0000002489912708-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1490,7 +1512,7 @@ typedef union urma_device_feature {
 } urma_device_feature_t;
 ```
 
-10. [urma_atomic_feature_t](#_ZH-CN_TOPIC_0000002489752732-chtext)
+10. [urma_atomic_feature_t](#_ZH-CN_TOPIC_0000002489752732-chtext)<a id="_ZH-CN_TOPIC_0000002489752732-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1510,7 +1532,7 @@ typedef union urma_atomic_feature {
 } urma_atomic_feature_t;
 ```
 
-11. [urma_sub_trans_mode_cap_t](#_ZH-CN_TOPIC_0000002528411323-chtext)
+11. [urma_sub_trans_mode_cap_t](#_ZH-CN_TOPIC_0000002528411323-chtext)<a id="_ZH-CN_TOPIC_0000002528411323-chtext"></a>
 
 ```c
 typedef enum urma_sub_trans_mode_cap {
@@ -1520,7 +1542,7 @@ typedef enum urma_sub_trans_mode_cap {
 } urma_sub_trans_mode_cap_t;
 ```
 
-12. [urma_congestion_ctrl_alg_t](#_ZH-CN_TOPIC_0000002528409915-chtext)
+12. [urma_congestion_ctrl_alg_t](#_ZH-CN_TOPIC_0000002528409915-chtext)<a id="_ZH-CN_TOPIC_0000002528409915-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1538,7 +1560,7 @@ typedef enum urma_congestion_ctrl_alg {
 } urma_congestion_ctrl_alg_t;
 ```
 
-13. [urma_order_type_cap_t](#_ZH-CN_TOPIC_0000002491667086-chtext)
+13. [urma_order_type_cap_t](#_ZH-CN_TOPIC_0000002491667086-chtext)<a id="_ZH-CN_TOPIC_0000002491667086-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1555,7 +1577,7 @@ typedef union urma_order_type_cap {
 } urma_order_type_cap_t;
 ```
 
-14. [urma_tp_type_cap_t](#_ZH-CN_TOPIC_0000002491827052-chtext)
+14. [urma_tp_type_cap_t](#_ZH-CN_TOPIC_0000002491827052-chtext)<a id="_ZH-CN_TOPIC_0000002491827052-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1571,7 +1593,7 @@ typedef union urma_tp_type_cap {
 } urma_tp_type_cap_t;
 ```
 
-15. [urma_tp_feature_t](#_ZH-CN_TOPIC_0000002523906825-chtext)
+15. [urma_tp_feature_t](#_ZH-CN_TOPIC_0000002523906825-chtext)<a id="_ZH-CN_TOPIC_0000002523906825-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1586,7 +1608,7 @@ typedef union urma_tp_feature {
 } urma_tp_feature_t;
 ```
 
-16. [urma_port_attr_t](#_ZH-CN_TOPIC_0000002521872505-chtext)
+16. [urma_port_attr_t](#_ZH-CN_TOPIC_0000002521872505-chtext)<a id="_ZH-CN_TOPIC_0000002521872505-chtext"></a>
 
 一个URMA物理设备可包含一个或者多个port。active mtu不能超过max mtu之值。
 
@@ -1602,7 +1624,7 @@ typedef struct urma_port_attr {
 } urma_port_attr_t;
 ```
 
-17. [urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext)
+17. [urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext)<a id="_ZH-CN_TOPIC_0000002521872507-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1617,7 +1639,7 @@ typedef enum urma_mtu {
 } urma_mtu_t;
 ```
 
-18. [urma_port_state_t](#_ZH-CN_TOPIC_0000002521992517-chtext)
+18. [urma_port_state_t](#_ZH-CN_TOPIC_0000002521992517-chtext)<a id="_ZH-CN_TOPIC_0000002521992517-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1632,7 +1654,7 @@ typedef enum urma_port_state {
 } urma_port_state_t;
 ```
 
-19. [urma_link_width_t](#_ZH-CN_TOPIC_0000002489752734-chtext)
+19. [urma_link_width_t](#_ZH-CN_TOPIC_0000002489752734-chtext)<a id="_ZH-CN_TOPIC_0000002489752734-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1647,7 +1669,7 @@ typedef enum urma_link_width {
 } urma_link_width_t;
 ```
 
-20. [urma_speed_t](#_ZH-CN_TOPIC_0000002489912710-chtext)
+20. [urma_speed_t](#_ZH-CN_TOPIC_0000002489912710-chtext)<a id="_ZH-CN_TOPIC_0000002489912710-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1702,7 +1724,7 @@ typedef enum urma_speed {
 
 If it succeeds, it will return the eid_info array pointer. If it fails, it will return NULL.
 
-6.  [urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext)
+6.  [urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext)<a id="_ZH-CN_TOPIC_0000002489912704-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1713,7 +1735,7 @@ typedef struct urma_eid_info {
 } urma_eid_info_t;
 ```
 
-7.  [urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext)
+7.  [urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext)<a id="_ZH-CN_TOPIC_0000002521872509-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1924,7 +1946,7 @@ Return: 0 on success, other value on error.
 
 Return: urma context pointer on success, NULL on error.
 
-6.  [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext)
+6.  [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext)<a id="_ZH-CN_TOPIC_0000002489912714-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1943,7 +1965,7 @@ typedef struct urma_context {
 } urma_context_t;
 ```
 
-7.  [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)
+7.  [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)<a id="_ZH-CN_TOPIC_0000002524152197-chtext"></a>
 
 定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
@@ -2053,7 +2075,7 @@ typedef struct urma_ops {
 } urma_ops_t;
 ```
 
-8.  [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext)
+8.  [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext)<a id="_ZH-CN_TOPIC_0000002524072163-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2067,7 +2089,7 @@ typedef struct urma_ref {
 } urma_ref_t;
 ```
 
-9.  [urma_context_aggr_mode_t](#_ZH-CN_TOPIC_0000002528412247-chtext)
+9.  [urma_context_aggr_mode_t](#_ZH-CN_TOPIC_0000002528412247-chtext)<a id="_ZH-CN_TOPIC_0000002528412247-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2137,7 +2159,7 @@ Return: 0 on success, other value on error.
 
 Return: 0 on success, other value on error.
 
-6.  [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext)
+6.  [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext)<a id="_ZH-CN_TOPIC_0000002492112452-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2175,7 +2197,7 @@ typedef enum urma_context_opt_name {
 
 Return: pointer of net address list; NULL on error。
 
-6.  [urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext)
+6.  [urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext)<a id="_ZH-CN_TOPIC_0000002489752786-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2186,7 +2208,7 @@ typedef struct urma_net_addr_info {
 } urma_net_addr_info_t;
 ```
 
-7.  [urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext)
+7.  [urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext)<a id="_ZH-CN_TOPIC_0000002489912762-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2370,7 +2392,7 @@ Return: 0 on success, other value on error
 
 Return: the handle of created jfc, not NULL on success; NULL on error.
 
-6.  [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext)
+6.  [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext)<a id="_ZH-CN_TOPIC_0000002489912716-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2385,7 +2407,7 @@ typedef struct urma_jfc_cfg {
 } urma_jfc_cfg_t;
 ```
 
-7.  [urma_jfc_flag_t](#_ZH-CN_TOPIC_0000002489752740-chtext)
+7.  [urma_jfc_flag_t](#_ZH-CN_TOPIC_0000002489752740-chtext)<a id="_ZH-CN_TOPIC_0000002489752740-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2402,7 +2424,7 @@ typedef union urma_jfc_flag {
 } urma_jfc_flag_t;
 ```
 
-8.  [urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext)
+8.  [urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext)<a id="_ZH-CN_TOPIC_0000002489752796-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2414,7 +2436,7 @@ typedef struct urma_jfce {
 } urma_jfce_t;
 ```
 
-9.  [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext)
+9.  [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext)<a id="_ZH-CN_TOPIC_0000002521872513-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2431,7 +2453,7 @@ typedef struct urma_jfc {
 } urma_jfc_t;
 ```
 
-10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)
+10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)<a id="_ZH-CN_TOPIC_0000002521992525-chtext"></a>
 
 typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
 
@@ -2794,7 +2816,7 @@ Return: 0 on success, other value on error
 
 Return: 0 on success, other value on error.
 
-6.  [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext)
+6.  [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext)<a id="_ZH-CN_TOPIC_0000002489752798-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2816,7 +2838,7 @@ typedef struct urma_async_event {
 } urma_async_event_t;
 ```
 
-7.  [urma_async_event_type_t](#_ZH-CN_TOPIC_0000002521872571-chtext)
+7.  [urma_async_event_type_t](#_ZH-CN_TOPIC_0000002521872571-chtext)<a id="_ZH-CN_TOPIC_0000002521872571-chtext"></a>
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -2894,7 +2916,7 @@ Return: void
 
 Return: the handle of created jfs, not NULL on success, NULL on error.
 
-6.  [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext)
+6.  [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext)<a id="_ZH-CN_TOPIC_0000002521992529-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2924,7 +2946,7 @@ typedef struct urma_jfs_cfg {
 
 err_timeout取值范围0\~31，实际超时值计算方法：Timeout=4.096us*（2^ err_timeout）
 
-7.  [urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext)
+7.  [urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext)<a id="_ZH-CN_TOPIC_0000002489912722-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2973,7 +2995,7 @@ typedef enum urma_order_type {
 } urma_order_type_t;
 ```
 
-9.  [urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext)
+9.  [urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext)<a id="_ZH-CN_TOPIC_0000002489752746-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2991,7 +3013,7 @@ typedef struct urma_jfs {
 
 > 说明：上述结构体定义未列出 `urma_jfs_opt` 成员；当前实现会访问 `jfs->urma_jfs_opt.is_actived` 和 `jfs->urma_jfs_opt.jfs_opt_mask`。
 
-10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
+10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)<a id="_ZH-CN_TOPIC_0000002521872519-chtext"></a>
 
 typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
 
@@ -3021,7 +3043,7 @@ typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_i
 
 Return: 0 on success, other value on error.
 
-6.  [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext)
+6.  [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext)<a id="_ZH-CN_TOPIC_0000002489912724-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3042,7 +3064,7 @@ typedef enum urma_jfs_attr_mask {
 } urma_jfs_attr_mask_t;
 ```
 
-8.  [urma_jfs_state_t](#_ZH-CN_TOPIC_0000002521872521-chtext)
+8.  [urma_jfs_state_t](#_ZH-CN_TOPIC_0000002521872521-chtext)<a id="_ZH-CN_TOPIC_0000002521872521-chtext"></a>
 
 typedef urma_jetty_state_t urma_jfs_state_t;
 
@@ -3358,7 +3380,7 @@ Return: 0 on success, other value on error.
 
 Return: the handle of created jfr, not NULL on success, NULL on error.
 
-6.  [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext)
+6.  [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext)<a id="_ZH-CN_TOPIC_0000002489752752-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3414,7 +3436,7 @@ min_rnr_timer的值对应的时间定义如下：
 
 5'b01111 :1.92ms 5'b11111 :491.52ms
 
-7.  [urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext)
+7.  [urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext)<a id="_ZH-CN_TOPIC_0000002521872525-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3440,7 +3462,7 @@ typedef union urma_jfr_flag {
 } urma_jfr_flag_t;
 ```
 
-8.  [urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext)
+8.  [urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext)<a id="_ZH-CN_TOPIC_0000002521992519-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3452,7 +3474,7 @@ typedef enum urma_transport_mode {
 } urma_transport_mode_t;
 ```
 
-9.  [urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext)
+9.  [urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext)<a id="_ZH-CN_TOPIC_0000002521992537-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3469,7 +3491,7 @@ typedef struct urma_jfr {
 } urma_jfr_t;
 ```
 
-10. [urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext)
+10. [urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext)<a id="_ZH-CN_TOPIC_0000002489912730-chtext"></a>
 
 typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
@@ -3499,7 +3521,7 @@ typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
 Return: 0 on success, other value on error.
 
-6.  [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext)
+6.  [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext)<a id="_ZH-CN_TOPIC_0000002521872527-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3522,7 +3544,7 @@ typedef enum urma_jfr_attr_mask {
 } urma_jfr_attr_mask_t;
 ```
 
-8.  [urma_jfr_state_t](#_ZH-CN_TOPIC_0000002489912732-chtext)
+8.  [urma_jfr_state_t](#_ZH-CN_TOPIC_0000002489912732-chtext)<a id="_ZH-CN_TOPIC_0000002489912732-chtext"></a>
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -3656,7 +3678,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 Return: the address of target jfr, not NULL on success, NULL on error.
 
-6.  [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext)
+6.  [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext)<a id="_ZH-CN_TOPIC_0000002489752758-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3669,7 +3691,7 @@ typedef struct urma_rjfr {
 } urma_rjfr_t;
 ```
 
-7.  [urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext)
+7.  [urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext)<a id="_ZH-CN_TOPIC_0000002491952470-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3693,7 +3715,7 @@ typedef union urma_import_jetty_flag {
 } urma_import_jetty_flag_t;
 ```
 
-8.  [urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext)
+8.  [urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext)<a id="_ZH-CN_TOPIC_0000002524152199-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3705,7 +3727,7 @@ typedef enum urma_tp_type {
 } urma_tp_type_t;
 ```
 
-9.  [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)
+9.  [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)<a id="_ZH-CN_TOPIC_0000002521992545-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3723,7 +3745,7 @@ typedef struct urma_target_jetty {
 } urma_target_jetty_t;
 ```
 
-10. [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext)
+10. [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext)<a id="_ZH-CN_TOPIC_0000002492112454-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3735,7 +3757,7 @@ typedef struct urma_jetty_id {
 } urma_jetty_id_t;
 ```
 
-11. [urma_tp_t](#_ZH-CN_TOPIC_0000002489912738-chtext)
+11. [urma_tp_t](#_ZH-CN_TOPIC_0000002489912738-chtext)<a id="_ZH-CN_TOPIC_0000002489912738-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3745,7 +3767,7 @@ typedef struct urma_tp {
 } urma_tp_t;
 ```
 
-12. [urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext)
+12. [urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext)<a id="_ZH-CN_TOPIC_0000002489752762-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3757,7 +3779,7 @@ typedef enum urma_target_type {
 } urma_target_type_t;
 ```
 
-13. [urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext)
+13. [urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext)<a id="_ZH-CN_TOPIC_0000002524072165-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3784,6 +3806,12 @@ typedef enum urma_jetty_grp_policy {
 
 [3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23156-urma_import_jfr)()扩展接口，增加入参urma_import_jfr_ex_cfg_t *cfg。
 
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用[3.3.1.5.8](#23158-urma_unimport_jfr) [urma_unimport_jfr](#23158-urma_unimport_jfr)之后，不能直接调用本接口，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_import_jfr_ex](#23157-urma_import_jfr_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。
+
+如果import_jfr_ex失败，urma并不清楚用户是否会重试，也会统一释放tp资源，防止资源泄露。因此，如果import_jfr_ex接口失败，仍需重新调用urma_get_tp_list接口获取tp资源，再执行import_jfr_ex接口。
+
 4.  参数
 
 @param[in] [Required] ctx: the urma context created before;
@@ -3798,11 +3826,11 @@ typedef enum urma_jetty_grp_policy {
 
 Return: the address of target jfr, not NULL on success, NULL on error
 
-6.  [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext)
+6.  [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext)<a id="_ZH-CN_TOPIC_0000002521872535-chtext"></a>
 
 typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jfr_ex_cfg_t;
 
-7.  [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext)
+7.  [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext)<a id="_ZH-CN_TOPIC_0000002525470775-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3815,7 +3843,7 @@ typedef struct urma_active_tp_cfg {
 } urma_active_tp_cfg_t;
 ```
 
-8.  [urma_active_tp_attr_t](#_ZH-CN_TOPIC_0000002528696683-chtext)
+8.  [urma_active_tp_attr_t](#_ZH-CN_TOPIC_0000002528696683-chtext)<a id="_ZH-CN_TOPIC_0000002528696683-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3850,6 +3878,10 @@ unimport远端JFR。操作成功后，进程不可访问这个远端JFR。
 ![](figures/urma_notice.png)
 
 由调用者保证参数target_jfr来自[3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23156-urma_import_jfr)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用本接口之后，不能直接调用[3.3.1.5.7](#23157-urma_import_jfr_ex) [urma_import_jfr_ex](#23157-urma_import_jfr_ex)，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_import_jfr_ex](#23157-urma_import_jfr_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。直接调用[urma_import_jfr](#23156-urma_import_jfr)的不感知用户没有该限制。
 
 5.  返回值
 
@@ -4137,7 +4169,7 @@ Return: 0 on success, other value on error.
 
 Return: the handle of created jetty, not NULL on success, NULL on error.
 
-6.  [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext)
+6.  [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext)<a id="_ZH-CN_TOPIC_0000002489752766-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4160,7 +4192,7 @@ typedef struct urma_jetty_cfg {
 } urma_jetty_cfg_t;
 ```
 
-7.  [urma_jetty_flag_t](#_ZH-CN_TOPIC_0000002521872541-chtext)
+7.  [urma_jetty_flag_t](#_ZH-CN_TOPIC_0000002521872541-chtext)<a id="_ZH-CN_TOPIC_0000002521872541-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4179,7 +4211,7 @@ typedef union urma_jetty_flag {
 
 UB设备只支持share_jfr指定为URMA_SHARE \_JFR.
 
-8.  [urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext)
+8.  [urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext)<a id="_ZH-CN_TOPIC_0000002524152201-chtext"></a>
 
 ```c
 struct urma_jetty_grp {
@@ -4196,7 +4228,7 @@ struct urma_jetty_grp {
 };
 ```
 
-9.  [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext)
+9.  [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext)<a id="_ZH-CN_TOPIC_0000002527065929-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4212,7 +4244,7 @@ typedef struct urma_jetty_grp_cfg {
 } urma_jetty_grp_cfg_t;
 ```
 
-10. [urma_jetty_grp_flag_t](#_ZH-CN_TOPIC_0000002521872565-chtext)
+10. [urma_jetty_grp_flag_t](#_ZH-CN_TOPIC_0000002521872565-chtext)<a id="_ZH-CN_TOPIC_0000002521872565-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4230,7 +4262,7 @@ typedef union urma_jetty_grp_flag {
 } urma_jetty_grp_flag_t;
 ```
 
-11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)
+11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)<a id="_ZH-CN_TOPIC_0000002489912746-chtext"></a>
 
 ```c
 typedef struct urma_jetty {
@@ -4277,7 +4309,7 @@ UB设备的Jetty只支持使用共享JFR，不支持修改Jetty水线。
 
 Return: 0 on success, other value on error.
 
-6.  [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext)
+6.  [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext)<a id="_ZH-CN_TOPIC_0000002521872543-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4300,7 +4332,7 @@ typedef enum urma_jetty_attr_mask {
 } urma_jetty_attr_mask_t;
 ```
 
-8.  [urma_jetty_state_t](#_ZH-CN_TOPIC_0000002489912748-chtext)
+8.  [urma_jetty_state_t](#_ZH-CN_TOPIC_0000002489912748-chtext)<a id="_ZH-CN_TOPIC_0000002489912748-chtext"></a>
 
 定义文件: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -4441,7 +4473,7 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 ubcore等待UVS的最大响应时间为30s，如果import任务发送给UVS后30秒内得不到响应，就会返回import失败给用户。
 
-6.  [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext)
+6.  [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext)<a id="_ZH-CN_TOPIC_0000002489912752-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4472,6 +4504,10 @@ typedef struct urma_rjetty {
 
 [3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty)的扩展接口，增加参数[urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) *cfg。
 
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用[3.3.1.6.8](#23168-urma_unimport_jetty) [urma_unimport_jetty](#23168-urma_unimport_jetty)之后，不能直接调用本接口，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_import_jetty_ex](#23167-urma_import_jetty_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。
+
 4.  参数
 
 @param[in] [Required] ctx: the urma context created before;
@@ -4486,7 +4522,7 @@ typedef struct urma_rjetty {
 
 Return: the address of target jetty, not NULL on success, NULL on error.
 
-6.  [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext)
+6.  [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext)<a id="_ZH-CN_TOPIC_0000002521872549-chtext"></a>
 
 typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
 
@@ -4513,6 +4549,12 @@ unimport远端Jetty信息。操作成功后，进程不可访问这个远端jett
 ![](figures/urma_info.png)
 
 由调用者保证参数tjetty来自[3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty)接口返回，参数内部指针等合法性由这些接口保证，本接口不再重复进行校验；否则可能导致调用者进程异常退出。
+
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用本接口之后，不能直接调用[3.3.1.6.7](#23167-urma_import_jetty_ex) [urma_import_jetty_ex](#23167-urma_import_jetty_ex)，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_import_jetty_ex](#23167-urma_import_jetty_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。直接调用[urma_import_jetty](#23166-urma_import_jetty)的不感知用户没有该限制。
+
+如果import_jetty_ex失败，urma并不清楚用户是否会重试，也会统一释放tp资源，防止资源泄露。因此，如果import_jetty_ex接口失败，仍需重新调用urma_get_tp_list接口获取tp资源，再执行import_jetty_ex接口。
 
 5.  返回值
 
@@ -4632,7 +4674,13 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 3.  描述
 
-[3.3.1.6.9](#23169-urma_bind_jetty) [urma_bind_jetty](#23169-urma_bind_jetty)扩展接口，增加参数urma_bind_jetty_ex_cfg_t *cfg。
+[3.3.1.6.11](#231611-urma_bind_jetty) [urma_bind_jetty](#231611-urma_bind_jetty)扩展接口，增加参数urma_bind_jetty_ex_cfg_t *cfg。
+
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用[3.3.1.6.13](#231613-urma_unbind_jetty) [urma_unbind_jetty](#231613-urma_unbind_jetty)之后，不能直接调用本接口，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。
+
+如果bind_jetty_ex失败，urma并不清楚用户是否会重试，也会统一释放tp资源，防止资源泄露。因此，如果bind_jetty_ex接口失败，仍需重新调用urma_get_tp_list接口获取tp资源，再执行bind_jetty_ex接口。
 
 4.  参数
 
@@ -4646,7 +4694,7 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-6.  [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext)
+6.  [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext)<a id="_ZH-CN_TOPIC_0000002524072167-chtext"></a>
 
 typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
 
@@ -4673,6 +4721,10 @@ typedef struct [urma_active_tp_cfg](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_
 2\. 解绑定成功后，Jetty无法发送任何消息，需等待重新和某个target Jetty建立新的绑定关系，才可以通过该Jetty发送消息。
 
 3\. 支持多线程操作重入操作
+
+![](figures/urma_notice.png)
+
+使用流程约束：感知TP的用户在调用本接口之后，不能直接调用[3.3.1.6.12](#231612-urma_bind_jetty_ex) [urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)，必须重新调用[3.3.3.3](#2333-urma_get_tp_list) [urma_get_tp_list](#2333-urma_get_tp_list) -> [urma_bind_jetty_ex](#231612-urma_bind_jetty_ex)的流程，详见[1.3.1](#131-一般约束) [一般约束](#131-一般约束)。直接调用[urma_bind_jetty](#231611-urma_bind_jetty)的不感知用户没有该限制。
 
 4.  参数
 
@@ -4802,7 +4854,7 @@ void
 
 Return: the address of target jetty, not NULL on success, NULL on error.
 
-6.  [urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext)
+6.  [urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext)<a id="_ZH-CN_TOPIC_0000002524152205-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4852,7 +4904,7 @@ Return: 0 on success, other value on error.
 
 3.  描述
 
-[3.3.1.6.9](#23169-urma_bind_jetty) [urma_bind_jetty](#23169-urma_bind_jetty)的异步版本。
+[3.3.1.6.11](#231611-urma_bind_jetty) [urma_bind_jetty](#231611-urma_bind_jetty)的异步版本。
 
 4.  参数
 
@@ -4988,7 +5040,7 @@ int urma_wait_notify([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *n
 
 Return: the number of target jetty returned, 0 means no target jetty returned, -1 on error.
 
-6.  [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext)
+6.  [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext)<a id="_ZH-CN_TOPIC_0000002492112460-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -5004,7 +5056,7 @@ typedef struct urma_notify {
 } urma_notify_t;
 ```
 
-7.  [urma_notify_type_t](#_ZH-CN_TOPIC_0000002524072171-chtext)
+7.  [urma_notify_type_t](#_ZH-CN_TOPIC_0000002524072171-chtext)<a id="_ZH-CN_TOPIC_0000002524072171-chtext"></a>
 
 定义文件: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -7016,7 +7068,7 @@ typedef enum urma_vlog_level {
 
 2.  原型
 
-void urma_log_set_level([3.5.2.3.1](#25231-urma_vlog_level_t) [urma_vlog_level_t](#25231-urma_vlog_level_t) level)
+void urma_log_set_level([3.5.2.4.1](#25241-urma_vlog_level_t) [urma_vlog_level_t](#25241-urma_vlog_level_t) level)
 
 定义文件: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -10700,6 +10752,12 @@ ubcore_udata *udata);
 
 导入RM类型的JFR隐含与远端节点建链功能。导入UM类型的JFR隐含创建unreliable tp（其实是远端地址句柄）功能，记录在target jetty的tp中。
 
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用[3.4.3.8](#3438-ubcore_unimport_jfr) [ubcore_unimport_jfr](#3438-ubcore_unimport_jfr)之后，不能直接调用本接口，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.3.7](#3437-ubcore_import_jfr_ex) [ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex) -> [3.4.3.8](#3438-ubcore_unimport_jfr) [ubcore_unimport_jfr](#3438-ubcore_unimport_jfr)的流程，否则会有tp资源残留。内核态不感知用户（直接调用[3.4.3.6](#3436-ubcore_import_jfr) [ubcore_import_jfr](#3436-ubcore_import_jfr)）没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
+
 4.  参数
 
 @param[in] dev: the ubcore device handle;
@@ -10750,6 +10808,12 @@ int ubcore_unimport_jfr([4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#34365
 反导入远端JFR。unimport JFR时，隐含：减少tp的引用计数，减到零时触发拆链流程。
 
 反导入target jetty将会释放tjfr结构体，应用需要保证已经使用target JFR发起的请求都已经poll JFC得到完成记录（包括错误）。
+
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用本接口之后，不能直接调用[3.4.3.7](#3437-ubcore_import_jfr_ex) [ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex)，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.3.7](#3437-ubcore_import_jfr_ex) [ubcore_import_jfr_ex](#3437-ubcore_import_jfr_ex) -> [3.4.3.8](#3438-ubcore_unimport_jfr) [ubcore_unimport_jfr](#3438-ubcore_unimport_jfr)的流程，否则会有tp资源残留。内核态不感知用户没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
 
 4.  参数
 
@@ -11070,6 +11134,12 @@ ubcore_udata *udata);
 
 当导入jetty_group，只支持导入RM和UM类型的jetty group。如果导入RM模式的jetty，如果尚未与对端建链，隐含与对端建链，创建的tp指针保存在target jetty指针中。如果导入UM类的数据结构，将会创建目的地址句柄。支持多次导入相同配置的jetty group。应用需要保证jetty group配置真实有效，否则数据面无法将数据通过tjetty发送到对端。
 
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用[3.4.4.9](#3449-ubcore_unimport_jetty) [ubcore_unimport_jetty](#3449-ubcore_unimport_jetty)之后，不能直接调用本接口，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.4.8](#3448-ubcore_import_jetty_ex) [ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex) -> [3.4.4.9](#3449-ubcore_unimport_jetty) [ubcore_unimport_jetty](#3449-ubcore_unimport_jetty)的流程，否则会有tp资源残留。内核态不感知用户（直接调用[3.4.4.7](#3447-ubcore_import_jetty) [ubcore_import_jetty](#3447-ubcore_import_jetty)）没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
+
 4.  参数
 
 @param[in] dev: the ubcore device handle;
@@ -11099,6 +11169,12 @@ int ubcore_unimport_jetty([4.4.3.6.5](#34365-ubcore_tjetty) [ubcore_tjetty](#343
 反导入远端jetty或者jetty group。unimport Jetty隐含：减少tjetty保存的tp的引用计数，减到零时触发拆链流程。
 
 反导入target jetty将会释放tjetty结构体，应用需要保证已经使用target jetty发起的请求都已经poll JFC得到完成记录（包括错误）。
+
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用本接口之后，不能直接调用[3.4.4.8](#3448-ubcore_import_jetty_ex) [ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex)，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.4.8](#3448-ubcore_import_jetty_ex) [ubcore_import_jetty_ex](#3448-ubcore_import_jetty_ex) -> [3.4.4.9](#3449-ubcore_unimport_jetty) [ubcore_unimport_jetty](#3449-ubcore_unimport_jetty)的流程，否则会有tp资源残留。内核态不感知用户没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
 
 4.  参数
 
@@ -11159,6 +11235,12 @@ ubcore_active_tp_cfg *active_tp_cfg, ubcore_udata *udata);
 
 bind可以一方单独完成，不依赖对端已经导入jetty，也不要求对端同时调用bind jetty接口。bind功能还隐含创建RC类型TP，保存在tjetty中。主动调用bind完成者才具有发送和接收功能。被动响应bind请求的一方，底层会创建RC类型的TP与jetty关联，能接收消息、但不能发送消息。
 
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用[3.4.4.12](#34412-ubcore_unbind_jetty) [ubcore_unbind_jetty](#34412-ubcore_unbind_jetty)之后，不能直接调用本接口，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.4.11](#34411-ubcore_bind_jetty_ex) [ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex) -> [3.4.4.12](#34412-ubcore_unbind_jetty) [ubcore_unbind_jetty](#34412-ubcore_unbind_jetty)的流程，否则会有tp资源残留。内核态不感知用户（直接调用[3.4.4.10](#34410-ubcore_bind_jetty) [ubcore_bind_jetty](#34410-ubcore_bind_jetty)）没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
+
 4.  参数
 
 @param[in] jetty: local jetty to bind;
@@ -11190,6 +11272,12 @@ int ubcore_unbind_jetty([4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34413-u
 3.  描述
 
 解除本地jetty与远端jetty的绑定关系。通信的双方必须各自调用该接口，解除已经建立的绑定关系。隐含销毁jetty关联的RC TP（保存在tjetty中），但不销毁对端的RC TP。
+
+![](figures/urma_notice.png)
+
+一般约束：感知TP的用户态用户在调用本接口之后，不能直接调用[3.4.4.11](#34411-ubcore_bind_jetty_ex) [ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex)，必须重新调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex)的流程。
+
+内核态用户约束：针对使用ubcore接口的内核态感知用户，必须完整调用[3.13.2](#3132-ubcore_get_tp_list) [ubcore_get_tp_list](#3132-ubcore_get_tp_list) -> [3.4.4.11](#34411-ubcore_bind_jetty_ex) [ubcore_bind_jetty_ex](#34411-ubcore_bind_jetty_ex) -> [3.4.4.12](#34412-ubcore_unbind_jetty) [ubcore_unbind_jetty](#34412-ubcore_unbind_jetty)的流程，否则会有tp资源残留。内核态不感知用户没有该约束，详见[1.3.2](#132-内核态用户约束) [内核态用户约束](#132-内核态用户约束)。
 
 4.  参数
 
