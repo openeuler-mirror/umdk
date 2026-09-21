@@ -3636,5 +3636,10 @@ int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats)
     stats->acc_alloc_num = pool_stats.acc_alloc_num;
     stats->acc_free_num = pool_stats.acc_free_num;
     stats->acc_miss_num = pool_stats.acc_miss_num;
+    stats->recovering_num = pool_stats.recovering_num;
+    stats->deprecated_num = pool_stats.deprecated_num;
+    stats->acc_probe_num = pool_stats.acc_probe_num;
+    stats->acc_revive_num = pool_stats.acc_revive_num;
+    stats->acc_all_dead_num = pool_stats.acc_all_dead_num;
     return UMQ_SUCCESS;
 }

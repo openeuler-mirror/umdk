@@ -521,7 +521,7 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     }
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
-        if (jetty_node->is_jetty_err) {
+        if (jetty_node->is_jetty_err || jetty_node->is_jetty_recovering) {
             ret = -UMQ_ERR_EINVAL;
             failed_num = wr_cnt_limit;
             goto RECOVER_JETTY_NODE;
@@ -1880,6 +1880,12 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
     if (ret > 0 && option != NULL) {
         option->tp_handle_free_num++;
     }
+    // A node was just returned to the pool (pool is churning): proactively revive any recovered
+    // nodes in recover_q to active_q so future allocs avoid an EMLINK miss. Fast-path skips when
+    // recover_q is empty (no lock taken). See umq_ub_jetty_pool_revive_recover_q.
+    if (ret > 0) {
+        umq_ub_jetty_pool_revive_recover_q();
+    }
 }
 
 // IO borrow: ensure a jetty node is borrowed for Logic UMQ IO send path.
@@ -1970,22 +1976,31 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
 }
 
 static void umq_ub_process_cr_err_for_jetty_pool(ub_queue_t *queue, urma_cr_t *cr,
-    uint32_t tp_handle_idx, umq_io_option_t *option)
+    jetty_pool_node_t *node, ub_queue_jetty_index_t jetty_idx)
 {
-    // bond vjetty will rebuild pjetty
-    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR ||
-        is_umq_ub_bonding_dev(umq_ub_queue_cfg_get(queue)->dev_ctx->urma_ctx->dev->name)) {
+    // Only ACK_TIMEOUT carries actionable info about jetty health; bail out otherwise.
+    // node is NULL for queues that own their jetty (no pool) — nothing to mark.
+    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR || node == NULL) {
         return;
     }
-
-    umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
-    if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag) &&
-        ((option != NULL) && (option->flag & UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX) != 0 && jetty_node_list != NULL &&
-        tp_handle_idx < jetty_node_list->list_len)) {
-        umq_ub_jetty_node_mark_err(jetty_node_list->node_list[tp_handle_idx]);
-    } else if (is_umq_ub_logic_queue(queue->create_flag)) {
-        umq_ub_jetty_node_mark_err((jetty_pool_node_t*)(uintptr_t)queue->jetty_node);
+    bool is_bond = is_umq_ub_bonding_dev(umq_ub_queue_cfg_get(queue)->dev_ctx->urma_ctx->dev->name);
+    if (!is_bond) {
+        // Non-bond: terminal error, isolate the node in relay_q (unchanged behavior).
+        umq_ub_jetty_node_mark_err(node);
+        return;
     }
+    // Bond: check the specific jetty that hit ACK_TIMEOUT. If its async rebuild already
+    // finished, keep the node allocable; otherwise mark recovering so it is parked in
+    // recover_q for a later miss-driven probe. node ref_cnt is held, so jetty[] stays valid.
+    if (umq_symbol_urma()->bondp_jetty_is_available(node->jetty[jetty_idx])) {
+        return;
+    }
+    urma_jetty_t *jetty = node->jetty[jetty_idx];
+    urma_eid_t *eid = &jetty->jetty_id.eid;
+    uint32_t jid = jetty->jetty_id.id;
+    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "UMQ(ID:%u), bond jetty[%d] get cqe URMA_CR_ACK_TIMEOUT_ERR, eid: " EID_FMT
+        ", jetty_id: %u, mark recovering\n", queue->umq_id, jetty_idx, EID_ARGS(*eid), jid);
+    umq_ub_jetty_node_mark_recovering(node);
 }
 
 static int32_t umq_ub_fill_fc_tx_buf(
@@ -2033,8 +2048,10 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
         UMQ_UB_FLOW_CONTORL_JETTY_DEPTH : buf_count;
 
     urma_jfc_t *jfs_jfc = queue->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL];
-    if (is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag)) {
-        umq_ub_jetty_node_list_t *jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
+    umq_ub_jetty_node_list_t *jetty_node_list = NULL;
+    bool is_main_share = is_umq_ub_main_queue(queue->create_flag) && is_umq_ub_share_transport(queue->create_flag);
+    if (is_main_share) {
+        jetty_node_list = umq_ub_queue_jetty_node_list_get(queue);
         if (jetty_node_list->bitmap != NULL && tp_handle_idx < jetty_node_list->list_len &&
             urpc_bitmap_is_set(jetty_node_list->bitmap, tp_handle_idx)) {
             jfs_jfc = jetty_node_list->node_list[tp_handle_idx]->jfs_jfc[UB_QUEUE_JETTY_FLOW_CONTROL];
@@ -2071,7 +2088,17 @@ int umq_ub_poll_fc_tx(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count, ui
                     "cr[%d] status[%d] local_id[%u]\n", EID_ARGS(*eid), id, i, (int)cr[i].status, cr[i].local_id);
                 continue;
             }
-            umq_ub_process_cr_err_for_jetty_pool(queue, &cr[i], tp_handle_idx, option);
+            // Resolve the jetty_pool_node the CQE belongs to, same logic the poll used to pick jfs_jfc.
+            // main+share_transport: node_list[tp_handle_idx] (main queue owns it, non-pooled borrow).
+            // logic queue: queue->jetty_node. NULL for queues that own their jetty (no pool).
+            jetty_pool_node_t *fc_node = NULL;
+            if (is_main_share && jetty_node_list != NULL && tp_handle_idx < jetty_node_list->list_len &&
+                urpc_bitmap_is_set(jetty_node_list->bitmap, tp_handle_idx)) {
+                fc_node = jetty_node_list->node_list[tp_handle_idx];
+            } else if (is_umq_ub_logic_queue(queue->create_flag)) {
+                fc_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
+            }
+            umq_ub_process_cr_err_for_jetty_pool(queue, &cr[i], fc_node, UB_QUEUE_JETTY_FLOW_CONTROL);
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc reports tx cr[%d] "
                 "status[%d] local_id[%u]\n", EID_ARGS(*eid), id, i, (int)cr[i].status, cr[i].local_id);
             bool is_fatal = (cr[i].status == URMA_CR_ACK_TIMEOUT_ERR || cr[i].status == URMA_CR_RNR_RETRY_CNT_EXC_ERR);
@@ -2244,7 +2271,7 @@ int umq_ub_poll_tx_single(ub_queue_t *queue, umq_buf_t **buf, uint32_t buf_count
 
             if (cr[i].status != BOND_CR_FLOW_CONTROL_NOTIFY) {
                 umq_opcode_t opcode = umq_ub_cr_opcode_get(&cr[i]);
-                umq_ub_process_cr_err_for_jetty_pool(queue, &cr[i], tp_handle_idx, option);
+                umq_ub_process_cr_err_for_jetty_pool(queue, &cr[i], polling_node, UB_QUEUE_JETTY_IO);
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "UMQ(ID:%u), eid: " EID_FMT ", jetty_id: %u, urma_poll_jfc "
                     "reports tx cr[%d] status: %d, opcode: %u, local_id: %u\n", umq_id, EID_ARGS(*eid), id, i,
                     cr[i].status, opcode, cr[i].local_id);

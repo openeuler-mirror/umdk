@@ -12,10 +12,11 @@
 
 #include "perf.h"
 #include "umq_dfx_types.h"
-#include "umq_vlog.h"
 #include "umq_errno.h"
-#include "urpc_thread_closure.h"
+#include "umq_symbol_private.h"
 #include "umq_ub_private.h"
+#include "umq_vlog.h"
+#include "urpc_thread_closure.h"
 #include "umq_ub_jetty_pool.h"
 
 #define THREAD_LOCAL_JETTY_CACHE_SIZE 0
@@ -27,12 +28,14 @@
 #define UMQ_JETTY_NODE_BORROW_LIMIT_RATIO 1024
 #define UMQ_UB_WAIT_JETTY_IDLE_TIMEOUT_US 1000
 #define UMQ_UB_WAIT_JETTY_IDLE_RETRY_CNT 3
+#define UMQ_UB_JETTY_PROBE_BATCH  8   // Max nodes probed per EMLINK miss from recover_q (bond pool ~100, ~13 rounds)
 
 typedef struct jetty_pool {
     umq_ub_jetty_node_list_t jetty_node_list;
     urpc_list_t free_q;             // Pre-allocated nodes NOT assigned to any Sub UMQ
     urpc_list_t active_q;           // Nodes assigned to Sub UMQ, available for Logic UMQ
     urpc_list_t relay_q;
+    urpc_list_t recover_q;          // bond ACK_TIMEOUT nodes awaiting urma async rebuild (not terminal)
     urpc_list_t thread_cache_list;  // Registry of all active thread-local caches
     urpc_list_t avail_cb_list;      // Registered availability callbacks (fired when active_count rises)
     util_external_mutex_lock *avail_cb_lock;  // Protects avail_cb_list (separate from pool lock)
@@ -41,11 +44,17 @@ typedef struct jetty_pool {
 
     uint32_t free_count;            // Current count in free_q (protected by lock)
     uint32_t active_count;          // Current count in active_q (protected by lock)
+    uint32_t deprecated_count;      // Nodes parked in relay_q awaiting urma destroy (protected by lock)
+    uint32_t recover_count;         // Current count in recover_q (protected by lock)
+    jetty_pool_node_t *probe_cursor; // Last probe stop position in recover_q (protected by lock)
     uint64_t in_use_count;          // Nodes currently borrowed by a Logic UMQ (state == IN_USE)
     uint64_t err_count;             // Nodes marked with is_jetty_err == true
     uint64_t acc_alloc_count;        // Cumulative allocs (nodes borrowed by Logic UMQ)
     uint64_t acc_free_count;         // Cumulative frees (nodes returned to pool)
     uint64_t acc_miss_count;         // Cumulative allocation misses (no available jetty)
+    uint64_t acc_probe_count;       // Cumulative bondp_jetty_is_available probes
+    uint64_t acc_revive_count;      // Cumulative nodes revived from recover_q
+    uint64_t acc_all_dead_count;    // Cumulative all-recover-dead events (entire pool dead -> ENOSR)
     uint32_t node_count;            // Total allocated nodes
     uint32_t max_nodes;             // Max nodes allowed in pool (0 means use default JETTY_POOL_MAX_NODES)
 
@@ -81,6 +90,29 @@ static ALWAYS_INLINE void recycle_node_to_relay_q(jetty_pool_t *pool, jetty_pool
     __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
     node->in_global_pool = true;
     urpc_list_push_back(&pool->relay_q, &node->node);
+    pool->deprecated_count++;
+}
+
+static ALWAYS_INLINE void recycle_node_to_recover_q(jetty_pool_t *pool, jetty_pool_node_t *node)
+{
+    __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
+    node->in_global_pool = true;
+    urpc_list_push_back(&pool->recover_q, &node->node);
+    pool->recover_count++;
+}
+
+// Detach a node from recover_q and advance probe_cursor past it if the cursor was pointing at
+// it (otherwise the cursor would dangle / walk into the wrong list). Caller must hold pool->lock
+// and the node must currently be in recover_q (is_jetty_recovering == true).
+static ALWAYS_INLINE void detach_from_recover_q(jetty_pool_t *pool, jetty_pool_node_t *node)
+{
+    urpc_list_t *next_field = (node->node.next == &pool->recover_q) ? NULL : node->node.next;
+    if (pool->probe_cursor == node) {
+        pool->probe_cursor = (next_field != NULL) ?
+            CONTAINER_OF_FIELD(next_field, jetty_pool_node_t, node) : NULL;
+    }
+    urpc_list_remove(&node->node);
+    pool->recover_count--;
 }
 
 static ALWAYS_INLINE thread_local_jetty_cache_t *get_thread_jetty_cache(void)
@@ -234,8 +266,12 @@ int umq_ub_jetty_pool_init(jetty_pool_config_t *config)
     urpc_list_init(&g_jetty_pool.free_q);
     urpc_list_init(&g_jetty_pool.active_q);
     urpc_list_init(&g_jetty_pool.relay_q);
+    urpc_list_init(&g_jetty_pool.recover_q);
     urpc_list_init(&g_jetty_pool.thread_cache_list);
     urpc_list_init(&g_jetty_pool.avail_cb_list);
+    g_jetty_pool.deprecated_count = 0;
+    g_jetty_pool.recover_count = 0;
+    g_jetty_pool.probe_cursor = NULL;
 
     int event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (event_fd < 0) {
@@ -333,6 +369,13 @@ void umq_ub_jetty_pool_uninit(void)
         urpc_list_remove(&iter->node);
         free(iter);
     }
+    URPC_LIST_FOR_EACH_SAFE(iter, tmp, node, &g_jetty_pool.recover_q) {
+        urpc_list_remove(&iter->node);
+        free(iter);
+    }
+    g_jetty_pool.deprecated_count = 0;
+    g_jetty_pool.recover_count = 0;
+    g_jetty_pool.probe_cursor = NULL;
 
     (void)close(g_jetty_pool.event_fd);
     g_jetty_pool.event_fd = -1;
@@ -437,9 +480,19 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
 
     (void)pthread_spin_lock(&pool->lock);
     if (node->in_global_pool) {
-        // Node in active_q: return to free_q for reassignment.
-        urpc_list_remove(&node->node);
-        pool->active_count--;
+        // Recovering nodes live in recover_q (detach_from_recover_q also advances probe_cursor);
+        // terminal-err nodes live in relay_q (decrement deprecated_count, NOT active_count);
+        // otherwise in active_q. urpc_list_remove is self-pointer based and list-agnostic.
+        if (node->is_jetty_recovering) {
+            detach_from_recover_q(pool, node);
+            node->is_jetty_recovering = false;
+        } else if (node->is_jetty_err) {
+            urpc_list_remove(&node->node);
+            pool->deprecated_count--;
+        } else {
+            urpc_list_remove(&node->node);
+            pool->active_count--;
+        }
         recycle_node_to_free_q(pool, node);
     }
     pool->node_count--;
@@ -448,6 +501,131 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
         (void)__atomic_sub_fetch(&pool->err_count, 1, __ATOMIC_RELAXED);
     }
     return UMQ_SUCCESS;
+}
+
+static ALWAYS_INLINE bool node_jettys_available(const jetty_pool_node_t *node)
+{
+    if (!umq_symbol_urma()->bondp_jetty_is_available(node->jetty[UB_QUEUE_JETTY_IO])) {
+        return false;
+    }
+    return node->jetty[UB_QUEUE_JETTY_FLOW_CONTROL] == NULL ||
+           umq_symbol_urma()->bondp_jetty_is_available(node->jetty[UB_QUEUE_JETTY_FLOW_CONTROL]);
+}
+
+// Detach a node confirmed available from recover_q and reset its recovery bookkeeping
+// (clear the recovering flag, bump the revive counter, restore the baseline borrow_limit).
+// The caller then places the node: IN_USE+borrow (alloc-miss probe) or IDLE+active_q (poll-path revive).
+static ALWAYS_INLINE void prepare_revived_node(jetty_pool_t *pool, jetty_pool_node_t *node)
+{
+    detach_from_recover_q(pool, node);
+    node->is_jetty_recovering = false;
+    pool->acc_revive_count++;
+    node->borrow_limit = pool->baseline.tx_depth;
+}
+
+// Disposition for a node just revived off recover_q, run under the pool lock. Returns true to
+// take ownership of the node (borrow it, IN_USE) and stop the batch scan; false to place it back
+// in the pool (IDLE, active_q) and keep scanning. ctx carries caller-specific state.
+typedef bool (*revived_dispose_fn)(jetty_pool_node_t *node, void *ctx);
+
+// Scan recover_q from probe_cursor for up to UMQ_UB_JETTY_PROBE_BATCH nodes. Each available node
+// is revived (prepare_revived_node) then handed to dispose. A dispose returning true borrows the
+//  node and stops the scan; otherwise the node is pooled and the scan continues.
+static jetty_pool_node_t *scan_recover_q(revived_dispose_fn dispose, void *ctx, bool *all_recover_dead)
+{
+    if (all_recover_dead != NULL) {
+        *all_recover_dead = false;
+    }
+    if (__atomic_load_n(&g_jetty_pool.recover_count, __ATOMIC_ACQUIRE) == 0) {
+        return NULL;
+    }
+
+    (void)pthread_spin_lock(&g_jetty_pool.lock);
+    uint32_t remaining = UMQ_UB_JETTY_PROBE_BATCH;
+    urpc_list_t *head = &g_jetty_pool.recover_q;
+    // Resume from the cursor; is_jetty_recovering guards against a stale cursor whose node
+    // was detached (revived/relayed/removed) since the last probe.
+    jetty_pool_node_t *node = g_jetty_pool.probe_cursor;
+    if (node == NULL || !node->is_jetty_recovering) {
+        node = urpc_list_is_empty(head) ? NULL :
+               CONTAINER_OF_FIELD(head->next, jetty_pool_node_t, node);
+    }
+
+    jetty_pool_node_t *borrowed = NULL;
+    while (node != NULL && remaining > 0) {
+        // Snapshot next before any detach so the cursor survives reviving this node.
+        urpc_list_t *next_field = (node->node.next == head) ? NULL : node->node.next;
+        jetty_pool_node_t *next = (next_field != NULL) ?
+            CONTAINER_OF_FIELD(next_field, jetty_pool_node_t, node) : NULL;
+
+        if (node_jettys_available(node)) {
+            prepare_revived_node(&g_jetty_pool, node);
+            if (dispose(node, ctx)) {
+                borrowed = node;
+                break;
+            }
+        } else {
+            (void)__atomic_add_fetch(&g_jetty_pool.acc_probe_count, 1, __ATOMIC_RELAXED);
+        }
+        remaining--;
+        node = next;
+    }
+
+    // NULL = reached tail, wraps to head next round.
+    g_jetty_pool.probe_cursor = node;
+    // all_recover_dead: active_q empty (active_count==0) AND no borrowed node in flight that
+    // could return and repopulate active_q (in_use_count==0) AND recover_q yielded nothing
+    // revivable (borrowed==NULL). Only then is the entire pool dead -> ENOSR. recover_count==0
+    // early-returned above, so reaching here means recover_q is non-empty but all unavailable.
+    if (all_recover_dead != NULL && borrowed == NULL && urpc_list_is_empty(&g_jetty_pool.active_q) &&
+        __atomic_load_n(&g_jetty_pool.in_use_count, __ATOMIC_RELAXED) == 0) {
+        *all_recover_dead = true;
+        (void)__atomic_add_fetch(&g_jetty_pool.acc_all_dead_count, 1, __ATOMIC_RELAXED);
+    }
+    (void)pthread_spin_unlock(&g_jetty_pool.lock);
+    return borrowed;
+}
+
+// Borrow the first revived node directly (alloc-miss path). *all_recover_dead is set true only
+// when the batch yields nothing AND active_count == 0 AND in_use_count == 0 (entire pool dead,
+// no borrowed node can return); otherwise the caller returns EMLINK and retries.
+static bool borrow_revived(jetty_pool_node_t *node, void *ctx)
+{
+    (void)ctx;
+    node->in_global_pool = false;
+    __atomic_store_n(&node->state, JETTY_POOL_NODE_IN_USE, __ATOMIC_RELEASE);
+    return true;
+}
+
+static jetty_pool_node_t *umq_ub_jetty_pool_probe_recover_q(bool *all_recover_dead)
+{
+    jetty_pool_node_t *node = scan_recover_q(borrow_revived, NULL, all_recover_dead);
+    if (node != NULL) {
+        umq_ub_jetty_fire_avail_callbacks();
+    }
+    return node;
+}
+
+// Pool every revived node (poll-path proactive revive). Called from the poll path after a node is
+// returned to the pool, ctx points to the revived counter.
+static bool pool_revived(jetty_pool_node_t *node, void *ctx)
+{
+    uint32_t *revived = (uint32_t *)ctx;
+    node->in_global_pool = true;
+    __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
+    urpc_list_push_back(&g_jetty_pool.active_q, &node->node);
+    g_jetty_pool.active_count++;
+    (*revived)++;
+    return false;
+}
+
+void umq_ub_jetty_pool_revive_recover_q(void)
+{
+    uint32_t revived = 0;
+    (void)scan_recover_q(pool_revived, &revived, NULL);
+    if (revived > 0) {
+        umq_ub_jetty_fire_avail_callbacks();
+    }
 }
 
 jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
@@ -498,8 +676,12 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
                 continue;
             } else if (node->is_jetty_err) {
                 (void)pthread_spin_lock(&pool->lock);
-                pool->active_count++;
                 recycle_node_to_relay_q(pool, node);
+                (void)pthread_spin_unlock(&pool->lock);
+                continue;
+            } else if (node->is_jetty_recovering) {
+                (void)pthread_spin_lock(&pool->lock);
+                recycle_node_to_recover_q(pool, node);
                 (void)pthread_spin_unlock(&pool->lock);
                 continue;
             }
@@ -512,10 +694,25 @@ jetty_pool_node_t *umq_ub_jetty_node_alloc(void)
         }
     }
 
+    // 3.5 Normal channels exhausted: probe recover_q for a revived node.
+    bool all_recover_dead = false;
+    jetty_pool_node_t *revived = umq_ub_jetty_pool_probe_recover_q(&all_recover_dead);
+    if (revived != NULL) {
+        (void)__atomic_add_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
+        (void)__atomic_add_fetch(&pool->acc_alloc_count, 1, __ATOMIC_RELAXED);
+        umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE, start_timestamp);
+        return revived;
+    }
+
     // 3. No available jettys.
     (void)__atomic_add_fetch(&pool->acc_miss_count, 1, __ATOMIC_RELAXED);
     UMQ_LIMIT_VLOG_DEBUG(VLOG_UMQ, "No available jetty\n");
-    errno = UMQ_ERR_EMLINK;
+    // all_recover_dead: entire pool dead -> ENOSR (degrade). Otherwise EMLINK (transient retry).
+    if (all_recover_dead) {
+        errno = UMQ_ERR_ENOSR;
+    } else {
+        errno = UMQ_ERR_EMLINK;
+    }
     umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_ALLOC_JETTY_NODE, start_timestamp);
     return NULL;
 }
@@ -537,12 +734,22 @@ int umq_ub_jetty_node_free(jetty_pool_node_t *node, bool should_report_event)
     jetty_pool_t *pool = &g_jetty_pool;
     (void)__atomic_sub_fetch(&pool->in_use_count, 1, __ATOMIC_RELAXED);
     (void)__atomic_add_fetch(&pool->acc_free_count, 1, __ATOMIC_RELAXED);
+    if (node->is_jetty_recovering) {
+        (void)pthread_spin_lock(&pool->lock);
+        // re-check under lock: mark_recovering may have been cleared by a concurrent probe revive.
+        if (node->is_jetty_recovering) {
+            recycle_node_to_recover_q(pool, node);
+            (void)pthread_spin_unlock(&pool->lock);
+            umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
+            return UMQ_SUCCESS;
+        }
+        (void)pthread_spin_unlock(&pool->lock);
+    }
     if (node->is_jetty_err) {
         (void)pthread_spin_lock(&pool->lock);
         // re-check under lock: is_jetty_err may have been rolled back by a concurrent
         // modify_err_and_to_relay EBUSY path between the unlocked read and the lock.
         if (node->is_jetty_err) {
-            pool->active_count++;
             recycle_node_to_relay_q(pool, node);
             (void)pthread_spin_unlock(&pool->lock);
             umq_perf_record_write(UMQ_PERF_RECORD_TRANSPORT_FREE_JETTY_NODE, start_timestamp);
@@ -707,6 +914,30 @@ void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node)
     (void)__atomic_add_fetch(&g_jetty_pool.err_count, 1, __ATOMIC_RELAXED);
 }
 
+void umq_ub_jetty_node_mark_recovering(jetty_pool_node_t *node)
+{
+    // CAS the flag (idempotent): only the first marker proceeds to move the node.
+    bool expected = false;
+    if (!__atomic_compare_exchange_n(&node->is_jetty_recovering, &expected, true, false,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return; // already marked recovering
+    }
+    // IDLE nodes still in the global pool (active_q) move to recover_q so they're no longer
+    // allocable. IN_USE / TLS-cache-resident nodes (in_global_pool == false) stay put and are
+    // routed to recover_q by free/alloc when later returned/taken. Mirrors the free path's
+    // is_jetty_err handling (§5.2).
+    if (node->in_global_pool) {
+        (void)pthread_spin_lock(&g_jetty_pool.lock);
+        // re-check under lock: the node may have been borrowed or recycled since the unlocked read.
+        if (node->in_global_pool && !node->is_jetty_err) {
+            urpc_list_remove(&node->node);
+            g_jetty_pool.active_count--;
+            recycle_node_to_recover_q(&g_jetty_pool, node);
+        }
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
+    }
+}
+
 int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
 {
     if (node == NULL) {
@@ -761,7 +992,16 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
         }
         if (node->in_global_pool) {
             umq_ub_jetty_node_mark_err(node);
-            urpc_list_remove(&node->node);
+            // Recovering nodes live in recover_q: detach (advances probe_cursor) before relaying.
+            if (node->is_jetty_recovering) {
+                detach_from_recover_q(&g_jetty_pool, node);
+                node->is_jetty_recovering = false;
+            } else {
+                // Node is in active_q (in_global_pool, not recovering): remove + active_count--,
+                // then relay (deprecated_count++ inside recycle). Mirrors mark_recovering.
+                urpc_list_remove(&node->node);
+                g_jetty_pool.active_count--;
+            }
             recycle_node_to_relay_q(&g_jetty_pool, node);
             (void)pthread_spin_unlock(&g_jetty_pool.lock);
             return UMQ_SUCCESS;
@@ -779,7 +1019,16 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
         (void)pthread_spin_unlock(&g_jetty_pool.lock);
         return UMQ_SUCCESS;
     }
-    urpc_list_remove(&node->node);
+    // Recovering nodes live in recover_q: detach (advances probe_cursor) before relaying.
+    if (node->is_jetty_recovering) {
+        detach_from_recover_q(&g_jetty_pool, node);
+        node->is_jetty_recovering = false;
+    } else {
+        // Node is in active_q (in_global_pool, not recovering): remove + active_count--,
+        // then relay (deprecated_count++ inside recycle). Mirrors mark_recovering.
+        urpc_list_remove(&node->node);
+        g_jetty_pool.active_count--;
+    }
     recycle_node_to_relay_q(&g_jetty_pool, node);
     (void)pthread_spin_unlock(&g_jetty_pool.lock);
     return UMQ_SUCCESS;
@@ -834,6 +1083,8 @@ int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats)
     (void)pthread_spin_lock(&pool->lock);
     stats->total_num = pool->node_count;
     stats->global_num = pool->active_count;
+    stats->recovering_num = pool->recover_count;
+    stats->deprecated_num = pool->deprecated_count;
     uint32_t thread_cache_total = 0;
     thread_local_jetty_cache_t *cache = NULL;
     URPC_LIST_FOR_EACH(cache, registry_node, &pool->thread_cache_list) {
@@ -846,6 +1097,9 @@ int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats)
     stats->acc_alloc_num = __atomic_load_n(&pool->acc_alloc_count, __ATOMIC_RELAXED);
     stats->acc_free_num = __atomic_load_n(&pool->acc_free_count, __ATOMIC_RELAXED);
     stats->acc_miss_num = __atomic_load_n(&pool->acc_miss_count, __ATOMIC_RELAXED);
+    stats->acc_probe_num = __atomic_load_n(&pool->acc_probe_count, __ATOMIC_RELAXED);
+    stats->acc_revive_num = __atomic_load_n(&pool->acc_revive_count, __ATOMIC_RELAXED);
+    stats->acc_all_dead_num = __atomic_load_n(&pool->acc_all_dead_count, __ATOMIC_RELAXED);
     return UMQ_SUCCESS;
 }
 

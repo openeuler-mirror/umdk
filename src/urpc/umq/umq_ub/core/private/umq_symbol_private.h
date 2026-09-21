@@ -60,6 +60,9 @@ typedef urma_status_t (*urma_post_jfr_wr_t)(urma_jfr_t *jfr, urma_jfr_wr_t *wr, 
 typedef urma_status_t (*urma_get_rjetty_t)(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length);
 typedef void (*urma_put_rjetty_t)(urma_rjetty_t *rjetty);
 
+// === URMA function pointer types - Bondp ===
+typedef bool (*bondp_jetty_is_available_t)(const urma_jetty_t *jetty);
+
 // === URMA function pointer types - Segment ===
 typedef urma_target_seg_t* (*urma_register_seg_t)(urma_context_t *ctx, urma_seg_cfg_t *seg_cfg);
 typedef urma_status_t (*urma_unregister_seg_t)(urma_target_seg_t *target_seg);
@@ -138,6 +141,9 @@ typedef struct umq_symbol_urma {
     urma_post_jfr_wr_t urma_post_jfr_wr;
     urma_get_rjetty_t urma_get_rjetty;
     urma_put_rjetty_t urma_put_rjetty;
+
+    // Bondp
+    bondp_jetty_is_available_t bondp_jetty_is_available;
 
     // Segment
     urma_register_seg_t urma_register_seg;

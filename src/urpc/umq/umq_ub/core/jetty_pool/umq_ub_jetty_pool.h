@@ -84,6 +84,12 @@ umq_ub_jetty_node_list_t *umq_ub_jetty_pool_get_jetty_node_list(void);
 uint32_t umq_ub_jetty_pool_put_jetty_node_list(umq_ub_jetty_node_list_t *jetty_node_list);
 void umq_ub_jetty_node_mark_err(jetty_pool_node_t *node);
 int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node);
+// Mark a node as recovering (bond ACK_TIMEOUT, urma async rebuild in flight). Idempotent CAS on
+// is_jetty_recovering. IDLE-in-pool nodes are moved to recover_q under the pool lock; IN_USE and
+// TLS-cache-resident nodes stay put and are routed to recover_q by free/alloc. See design §5.2.
+void umq_ub_jetty_node_mark_recovering(jetty_pool_node_t *node);
+
+void umq_ub_jetty_pool_revive_recover_q(void);
 
 // Enforce that a main umq's tx_depth and tx_buf_size match the jetty pool baseline.
 // The first main+share_transport umq to call establishes the baseline; every subsequent caller must match it
@@ -102,6 +108,11 @@ typedef struct umq_ub_jetty_pool_stats {
     uint64_t acc_alloc_num;     // Cumulative allocs (nodes borrowed by Logic UMQ)
     uint64_t acc_free_num;      // Cumulative frees (nodes returned to pool)
     uint64_t acc_miss_num;      // Cumulative allocation misses (no available jetty)
+    uint64_t recovering_num;    // Nodes currently parked in recover_q (bond rebuild pending)
+    uint64_t deprecated_num;    // Nodes parked in relay_q awaiting urma destroy (terminal err)
+    uint64_t acc_probe_num;     // Cumulative bondp_jetty_is_available calls
+    uint64_t acc_revive_num;    // Cumulative nodes revived from recover_q
+    uint64_t acc_all_dead_num;  // Cumulative all-recover-dead events (entire pool dead -> ENOSR)
 } umq_ub_jetty_pool_stats_t;
 
 int umq_ub_jetty_pool_stats_get(umq_ub_jetty_pool_stats_t *stats);
