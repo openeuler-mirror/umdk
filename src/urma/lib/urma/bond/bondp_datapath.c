@@ -35,7 +35,8 @@
 
 bool bondp_jetty_is_available(const urma_jetty_t *jetty)
 {
-    if (jetty == NULL) {
+    if (jetty == NULL || jetty->urma_ctx == NULL || jetty->urma_ctx->dev == NULL ||
+        !urma_is_bonding_dev(jetty->urma_ctx->dev->name)) {
         return false;
     }
 
@@ -50,6 +51,11 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
 
 bondp_port_id_t bondp_get_cr_local_port_id(const urma_cr_t *cr)
 {
+    if (cr == NULL) {
+        bondp_port_id_t invalid_id = {.value = UINT16_MAX};
+        return invalid_id;
+    }
+
     uint32_t port_idx = bondp_get_cr_port_idx(cr);
     if (port_idx == UINT32_MAX) {
         bondp_port_id_t invalid_id = {.value = UINT16_MAX};
