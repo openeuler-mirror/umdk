@@ -3971,6 +3971,11 @@ static void dfx_copy_timing(umq_dfx_timing_stats_t *dst, qbuf_expansion_pool_t *
 
 int umq_qbuf_pool_info_get(umq_qbuf_pool_stats_t *qbuf_pool_stats)
 {
+    if (qbuf_pool_stats == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool stats parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (!g_qbuf_pool.inited) {
         UMQ_VLOG_ERR(VLOG_UMQ, "qbuf pool has not been inited\n");
         return -UMQ_ERR_ENOMEM;
