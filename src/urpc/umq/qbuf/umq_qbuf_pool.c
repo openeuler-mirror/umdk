@@ -813,28 +813,6 @@ void qbuf_log_non_pool_pointer(const char *caller, void *data)
     UMQ_VLOG_ERR(VLOG_UMQ, "  rx_pool tiny_pool_inited=%d\n",
         g_qbuf_pool.inited);
 
-    /* Dump first 32 bytes at data pointer to inspect Block header layout.
-     * If data is a valid IOBuf::Block, we should see:
-     *   offset  0: nshared (int32), offset 4: flags (uint16), offset 6: abi_check (uint16)
-     *   offset  8: size (uint32), offset 12: cap (uint32)
-     *   offset 16: u.portal_next/data_meta (ptr/uint64), offset 24: data (ptr)
-     * If flags has IOBUF_BLOCK_FLAGS_UB (bit 2) set, this Block was created by
-     * create_ub_block and should have been found in the pool. */
-    if (data != NULL) {
-        uint64_t *raw = (uint64_t *)data;
-        uint16_t flags = *((uint16_t *)((char *)data + 4));
-        UMQ_VLOG_ERR(VLOG_UMQ,
-            "  raw data: flags=0x%04x (UB=%d TINY=%d ESCAPE=%d USER_DATA=%d)\n"
-            "  [0]=0x%016llx [1]=0x%016llx [2]=0x%016llx [3]=0x%016llx\n",
-            flags,
-            (flags >> QBUF_BLOCK_FLAG_BIT_UB) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_TINY) & 1,
-            (flags >> QBUF_BLOCK_FLAG_BIT_ESCAPE) & 1, (flags >> QBUF_BLOCK_FLAG_BIT_USER_DATA) & 1,
-            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_HDR],
-            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_SIZE_CAP],
-            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_META],
-            (unsigned long long)raw[QBUF_BLOCK_RAW_WORD_DATA_PTR]);
-    }
-
     /* Dump call stack. Build has -rdynamic (CMakeLists.txt:19) so
      * backtrace_symbols_fd will produce function names; otherwise use
      * `addr2line <binary> <addr>` to resolve. */
