@@ -216,7 +216,7 @@ No separate `selection_k_rope` / `full_k_rope` in this version (RoPE is packed i
 |actual_seq_lengths_query|Tensor|Required|`[B]`, int32; TND **cumulative** ends (decode typically `[1,2,...,B]`)|query length metadata|
 |full_kv_actual_seq|Tensor|Required|`[B]`, int32; per-batch Full KV valid token count (not cumulative)|Full KV lengths|
 |sinks|Tensor|Optional|Must be `None` in this version|schema placeholder|
-|scale_value|float|Optional|Default `1.0`; finite and > 0|attention logit scale|
+|scale_value|float|Optional|Default `1.0`; finite and > 0. A Python `int` (e.g. `1`) is accepted and converted to float — **not a type error** (Torch schema is `float`; the dispatcher coerces)|attention logit scale|
 |other attrs|see notes|Optional|`sparse_mode` in `{0,3}`; other attrs fixed for this A3 path as listed in the prototype defaults|do not treat as free knobs|
 ##### 2.1.2.4 Returns
 | **📌Parameter** | **🔧Type** | **📋Shape** | **📝Details** |
