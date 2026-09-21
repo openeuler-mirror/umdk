@@ -166,3 +166,72 @@ umdk_cam_op_lib.gather_selection_kv_cache(
 |F_MAX_BLOCK_NUM|单个 batch 在 full 侧最多挂载的逻辑 block 数，即 `full_kv_block_table` 列数|
 |K_ROPE|RoPE 维度，对应 `qk_rope_head_dim`；非 int8 场景独立存储|
 |KV_CACHE|KV / NoPE 最后一维长度；非 int8 时约等于 `kv_lora_rank`，int8 时为 NoPE + RoPE + scale 拼接后的长度|
+
+ #### 2.1.2 gather_selection_sparse_flash_attention ▶
+##### 2.1.2.1 接口原型
+```python
+umdk_cam_op_lib.gather_selection_sparse_flash_attention(
+    Tensor query,
+    Tensor selection_kv_cache,          # 原地更新
+    Tensor selection_kv_block_table,    # schema 可变
+    Tensor selection_kv_block_status,   # 原地更新
+    Tensor selection_topk_indices,
+    Tensor full_kv_cache,
+    Tensor full_kv_block_table,
+    Tensor actual_seq_lengths_query,
+    Tensor full_kv_actual_seq,
+    *,
+    Tensor? sinks=None,
+    float scale_value=1.0,
+    int key_quant_mode=2,
+    int value_quant_mode=2,
+    int sparse_block_size=1,
+    str layout_query="TND",
+    str layout_kv="PA_BSND",
+    int sparse_mode=3,
+    int pre_tokens=9223372036854775807,
+    int next_tokens=9223372036854775807,
+    int attention_mode=2,
+    int quant_scale_repo_mode=1,
+    int tile_size=128,
+    int rope_head_dim=64,
+    int selection_topk_block_size=1
+) -> (Tensor attention_out, Tensor selection_kv_actual_seq)
+```
+##### 2.1.2.2 接口描述
+A3 专用 MIX AIC/AIV 融合算子：在 selected KV cache 服务之上融合 MLA sparse flash attention。
+Full KV 可驻留 Host（`empty_with_swapped_memory`），Selected KV 在 HBM；按 TopK / status 判定 hit/miss，miss 从 Full KV 读入并写回 selected 侧。
+本版无独立 `selection_k_rope` / `full_k_rope`（RoPE 已打进 packed INT8 行宽 656）。
+##### 2.1.2.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|query|Tensor|必选|形状：`[T,N,576]`，fp16/bf16；`N` 为 query head 数（典型 128）|TND query|
+|selection_kv_cache|Tensor|必选|形状：`[S_BLOCK_NUM,S_BLOCK_SIZE,1,656]`，int8；须满足 `S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM`（允许更大过分配）|HBM selected 物理池，兼作 attention key/value，原地更新|
+|selection_kv_block_table|Tensor|必选|形状：`[B,S_MAX_BLOCK_NUM]`，int32；`S_MAX_BLOCK_NUM` 为列容量（允许更大）|selected 逻辑 block → 物理 ID|
+|selection_kv_block_status|Tensor|必选|形状：`[B,1,TOPK+1]`（`dim0` 必须等于 B，且与 `selection_topk_indices` 的 `T`、中间 head 维一致；末维为 `TOPK+1`），int32|各 selected slot 当前 token ID；末项为有效数量|
+|selection_topk_indices|Tensor|必选|形状：`[T,1,TOPK]`，int32；`T`、中间维须与 query/KV head 契约一致；`TOPK` 由该 tensor 末维定义|Full KV 坐标系下的 TopK token ID|
+|full_kv_cache|Tensor|必选|形状：`[F_BLOCK_NUM,F_BLOCK_SIZE,1,656]`，int8；须满足 `F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM` 且 `F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK`（允许更大过分配；`F_BLOCK_SIZE` 可与 selected 不同）|Host 或 HBM 全量 PA KV；`dim2=1`、`dim3` 须与 selected packed D 一致|
+|full_kv_block_table|Tensor|必选|形状：`[B,F_MAX_BLOCK_NUM]`，int32；`dim0` 必须等于 B，`F_MAX_BLOCK_NUM>0`（允许更大）|Full 逻辑 block → 物理 ID|
+|actual_seq_lengths_query|Tensor|必选|形状：`[B]`，int32；TND **累计**结束位置（decode 典型 `[1,2,...,B]`）|query 有效长度元数据|
+|full_kv_actual_seq|Tensor|必选|形状：`[B]`，int32；各 batch Full KV 有效 token 数（非累计）|Full KV 有效长度|
+|sinks|Tensor|可选|本版仅允许 `None`|schema 保留|
+|scale_value|float|可选|默认 `1.0`；须为有限正数|attention logits 缩放|
+|其余属性|见取值说明|可选|`sparse_mode` 仅 `0/3`；其余本版固定：`key/value_quant_mode=2`、`sparse_block_size=1`、`layout_query=TND`、`layout_kv=PA_BSND`、`attention_mode=2`、`quant_scale_repo_mode=1`、`tile_size=128`、`rope_head_dim=64`、`selection_topk_block_size=1`|接口保留字段，勿当自由调参扫描|
+##### 2.1.2.4 返回值
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|attention_out|Tensor|形状：`[T,N,512]`，dtype 与 query 一致|融合 attention 结果|
+|selection_kv_actual_seq|Tensor|形状：`[B]`，int32|本次 selected 有效 KV 数（同时写入 status 末项）|
+另注册 `gather_selection_sparse_flash_attention_functional`，返回五元组（含 clone 后的三个 selected 状态）；与两返回值原地接口不等价。
+##### 2.1.2.5 约束和注意事项 ⚠️
+1. 仅支持 Ascend910 A3（`ascend910_93`）。
+2. Query D=576、输出 D=512、packed KV D=656、KV head=1；query head ∈ `{1,2,4,8,16,32,64,128}`。
+3. `B>0`，`0<TOPK≤2048`；decode 集成契约为单 token（`S=1,T=B`）。
+4. Selected `S_BLOCK_SIZE` ∈ `(0,1024]` 且 16 对齐；`S_MAX_BLOCK_NUM*S_BLOCK_SIZE ≥ TOPK`。
+5. **形状校验策略（与 gather 一致：容量下界，非处处精确相等）**：
+   - **须严格对齐（不一致应报错）**：`selection_kv_cache` / `full_kv_cache` 的 head 维 `=1`、packed D `=656`（full 的 D 还须等于 selected）；`selection_kv_block_table` / `full_kv_block_table` 的 `dim0=B`；`selection_kv_block_status` 必须为 `[B,N,TOPK+1]`（`dim0` 严格等于 B），且与 `selection_topk_indices` 的 `T`、`N` 一致、末维 `=TOPK+1`；`selection_topk_indices` 的 `T` 须等于 B、中间 head 维须匹配 query/KV 契约。
+   - **容量下界（偏小应报错，偏大/某一维 +1 不必报错）**：`S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM`；`S_MAX_BLOCK_NUM×S_BLOCK_SIZE ≥ TOPK`；`F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM`；`F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK`（Full 独立寻址，不要求 `F_BLOCK_SIZE` 等于 selected）。
+6. Full / Selected 物理池须满足上述下界；table 项须为各自池内有效物理 ID。
+7. 本版命中语义为 slot-stable：`status[row,i]==topk[row,i]` 才视为命中。
+##### 2.1.2.6 符号说明
+沿用 2.1.1.6；另：`S_BLOCK_SIZE` / `F_BLOCK_SIZE` 分别为 selected / full 侧 PA 物理 block 的 token 容量（本接口二者可不同）。
