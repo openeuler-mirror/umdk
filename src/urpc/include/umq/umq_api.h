@@ -320,7 +320,7 @@ int umq_mempool_state_refresh(uint64_t umqh, uint32_t mempool_id);
  * bigdata READ path).
  * @param[in]  umqh: umq handle
  * @param[in]  mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
- * @param[out] mempool_info: caller-allocated buffer (>= UMQ_MEMPOOL_INFO_MAX_SIZE)
+ * @param[out] mempool_info: caller-allocated buffer (>= UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE or UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE)
  * @param[in]  mempool_info_size: buffer capacity
  * @param[out] mempool_info_len: actual byte length written (set on success)
  * Return: 0 on success, other value on error

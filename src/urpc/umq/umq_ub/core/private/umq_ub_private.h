@@ -130,6 +130,7 @@ typedef struct ub_import_mempool_info {
 _Static_assert(sizeof(ub_import_mempool_info_t) == 72, "ub_import_mempool_info_t must be 72B");
 _Static_assert(offsetof(ub_import_mempool_info_t, seg) == 24,
                "seg must follow the 24B aligned offset (20B header + 4B padding)");
+_Static_assert(sizeof(urma_user_tseg_t) == 12, "urma_user_tseg_t must be 12B");
 
 /* Fixed header before the variable-length seg blob. Entry total size =
  * UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + entry->seg_size. */

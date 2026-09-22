@@ -712,12 +712,16 @@ typedef struct umq_tp_resource_create_option {
  * compute wire budgets without seeing the struct; the value is pinned by
  * static_asserts in umq_ub_private.h. */
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
-
+#define UMQ_USER_TSEG_SIZE 12u  /* sizeof(urma_user_tseg_t)*/
+#define UMQ_IMPORT_MEMPOOL_INFO_EXTERN 128u
+#define UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN 64u
 /* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
  * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~101B
  * uncompressed; 128B covers it with slack, so one umq build runs against
  * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 128u)
+#define UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + UMQ_IMPORT_MEMPOOL_INFO_EXTERN)
+#define UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE \
+    (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_USER_TSEG_SIZE + UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN)
 
 #ifdef __cplusplus
 }
