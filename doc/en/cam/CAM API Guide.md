@@ -233,6 +233,6 @@ No separate `selection_k_rope` / `full_k_rope` in this version (RoPE is packed i
    - **Strict (mismatch should fail)**: head dim `=1` and packed D `=656` on both caches (full D must equal selected); block-table `dim0=B`; `selection_kv_block_status` must be `[B,N,TOPK+1]` (`dim0` strictly equals B), matching `selection_topk_indices` on `T`/`N` with last dim `=TOPK+1`; topk `T` must equal B and middle head dim must match the query/KV contract.
    - **Capacity lower-bounds (too small must fail; larger / +1 need not fail)**: `S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM`; `S_MAX_BLOCK_NUM×S_BLOCK_SIZE ≥ TOPK`; `F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM`; `F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK` (Full is independently addressed; `F_BLOCK_SIZE` need not equal selected).
 6. Selected/Full pools must meet the bounds above; table entries must be valid IDs in their pools.
-7. Hit semantics remain slot-stable: `status[row,i]==topk[row,i]`.
+7. Hit semantics remain slot-stable: `status[row,i]==topk[row,i]`, except for the newest tokens just written into full KV in this step.
 ##### 2.1.2.6 Symbols
 Same as 2.1.1.6; additionally `S_BLOCK_SIZE` / `F_BLOCK_SIZE` are selected / full PA token capacities (may differ in this API).

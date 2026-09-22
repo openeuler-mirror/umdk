@@ -88,7 +88,8 @@ public:
                                         uint32_t combineBytes, uint32_t combineDim, uint32_t combineDimAlign);
     __aicore__ inline int64_t GetSelectionBNBOffset(int64_t logicalS2Idx, int64_t topkGmBaseOffset);
     __aicore__ inline int64_t GetFullBNBOffset(int64_t topkId, const RunInfo &runInfo);
-    __aicore__ inline bool IsSelectionHit(int64_t logicalS2Idx, int64_t topkId);
+    __aicore__ inline int64_t GetMaxValidCacheId(const RunInfo &runInfo);
+    __aicore__ inline bool IsSelectionHit(int64_t logicalS2Idx, int64_t topkId, int64_t maxValidCacheId);
     __aicore__ inline bool IssueSelectionMissCopies(const LocalTensor<KV_T> &srcTensor, int64_t dealRow,
                                                     int64_t logicalStart, int64_t topkGmBaseOffset,
                                                     const RunInfo &runInfo);
@@ -742,8 +743,35 @@ __aicore__ inline int64_t QSFAVectorService<QSFAT>::GetS2IdLimit(const RunInfo &
 }
 
 template <typename QSFAT>
-__aicore__ inline bool QSFAVectorService<QSFAT>::IsSelectionHit(int64_t logicalS2Idx, int64_t topkId)
+__aicore__ inline int64_t QSFAVectorService<QSFAT>::GetMaxValidCacheId(const RunInfo &runInfo)
 {
+    // Same rule as gather vec (topk > 32): a status match is a hit only for positions
+    // strictly before this step's new tail. With query length S the tail is the last S
+    // tokens, so reusable ids are <= full_seq - S - 1. The curSeq terms cancel and every
+    // query in the step shares that bound. selection_topk_block_size is 1, so an id is
+    // one token. A non-positive bound clamps to 0, matching gather.
+    int64_t curSeq = static_cast<int64_t>(runInfo.gS1Idx / constInfo.gSize);
+    int64_t actS1 = static_cast<int64_t>(runInfo.actS1Size);
+    int64_t offset = actS1 - 1 - curSeq;
+    if (offset < 0) {
+        offset = 0;
+    }
+    int64_t visible = static_cast<int64_t>(runInfo.curActualSeqLenOri) - offset;
+    if (visible < 0) {
+        visible = 0;
+    }
+    int64_t maxSelectionId = visible - 1;
+    int64_t cacheId = maxSelectionId - curSeq - 1;
+    return cacheId > 0 ? cacheId : 0;
+}
+
+template <typename QSFAT>
+__aicore__ inline bool QSFAVectorService<QSFAT>::IsSelectionHit(int64_t logicalS2Idx, int64_t topkId,
+                                                                int64_t maxValidCacheId)
+{
+    if (topkId > maxValidCacheId) {
+        return false;
+    }
     return GetStagedStatusId(logicalS2Idx) == topkId;
 }
 
@@ -789,6 +817,7 @@ __aicore__ inline bool QSFAVectorService<QSFAT>::CopyInKvChunk(int64_t &mte2Size
     uint32_t combineDimAlign = CeilAlign(combineBytes, ConstInfo::BUFFER_SIZE_BYTE_32B) / sizeof(KV_T);
     int64_t logicalEnd = logicalStart + logicalCount;
     bool compactPrefixContinues = true;
+    int64_t maxValidCacheId = GetMaxValidCacheId(runInfo);
 
     for (int64_t logicalS2Idx = logicalStart; logicalS2Idx < logicalEnd;) {
         int64_t topkId = logicalS2Idx < constInfo.sparseBlockCount ? GetStagedTopkId(logicalS2Idx) : -1;
@@ -801,7 +830,7 @@ __aicore__ inline bool QSFAVectorService<QSFAT>::CopyInKvChunk(int64_t &mte2Size
             continue;
         }
 
-        bool hit = IsSelectionHit(logicalS2Idx, topkId);
+        bool hit = IsSelectionHit(logicalS2Idx, topkId, maxValidCacheId);
         if (unlikely(!hit)) {
             int64_t sourceBNBOffset = GetFullBNBOffset(topkId, runInfo);
             CopyInMissKv(mte2Size, mte3Size, mergeMte3Idx, logicalS2Idx, topkId, sourceBNBOffset,
@@ -827,7 +856,8 @@ __aicore__ inline bool QSFAVectorService<QSFAT>::CopyInKvChunk(int64_t &mte2Size
                 compactPrefixContinues = false;
                 break;
             }
-            if (unlikely(nextTopkId >= s2IdLimit || !IsSelectionHit(nextLogicalS2Idx, nextTopkId))) {
+            if (unlikely(nextTopkId >= s2IdLimit ||
+                         !IsSelectionHit(nextLogicalS2Idx, nextTopkId, maxValidCacheId))) {
                 break;
             }
             ++runLength;
