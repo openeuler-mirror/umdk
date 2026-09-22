@@ -3170,7 +3170,7 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
      * blob (urma_seg_t + has_user_info ext tail on bonding), so the peer imports
      * via the has_user_info=true branch and reads peer_p_seg[] directly from
      * the extension — no reliance on the kernel driver reconstructing it. The
-     * caller's buffer (sized to UMQ_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
+     * caller's buffer (sized to UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
      * slack for the worst-case extension tail. */
     uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
                                            import_mempool_info, cap);
@@ -3191,7 +3191,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     if (qcfg->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_info == NULL ||
         mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t) ||
-        mempool_info_len > UMQ_MEMPOOL_INFO_MAX_SIZE) {
+        mempool_info_len > UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
