@@ -232,6 +232,6 @@ Full KV 可驻留 Host（`empty_with_swapped_memory`），Selected KV 在 HBM；
    - **须严格对齐（不一致应报错）**：`selection_kv_cache` / `full_kv_cache` 的 head 维 `=1`、packed D `=656`（full 的 D 还须等于 selected）；`selection_kv_block_table` / `full_kv_block_table` 的 `dim0=B`；`selection_kv_block_status` 必须为 `[B,N,TOPK+1]`（`dim0` 严格等于 B），且与 `selection_topk_indices` 的 `T`、`N` 一致、末维 `=TOPK+1`；`selection_topk_indices` 的 `T` 须等于 B、中间 head 维须匹配 query/KV 契约。
    - **容量下界（偏小应报错，偏大/某一维 +1 不必报错）**：`S_BLOCK_NUM ≥ B×S_MAX_BLOCK_NUM`；`S_MAX_BLOCK_NUM×S_BLOCK_SIZE ≥ TOPK`；`F_BLOCK_NUM ≥ B×F_MAX_BLOCK_NUM`；`F_MAX_BLOCK_NUM×F_BLOCK_SIZE ≥ TOPK`（Full 独立寻址，不要求 `F_BLOCK_SIZE` 等于 selected）。
 6. Full / Selected 物理池须满足上述下界；table 项须为各自池内有效物理 ID。
-7. 本版命中语义为 slot-stable：`status[row,i]==topk[row,i]` 才视为命中。
+7. 本版命中语义为 slot-stable：`status[row,i]==topk[row,i]` 才视为命中，但本步刚写入 full KV 的那几个最新 token 除外。
 ##### 2.1.2.6 符号说明
 沿用 2.1.1.6；另：`S_BLOCK_SIZE` / `F_BLOCK_SIZE` 分别为 selected / full 侧 PA 物理 block 的 token 容量（本接口二者可不同）。
