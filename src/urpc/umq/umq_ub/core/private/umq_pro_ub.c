@@ -488,12 +488,27 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
             goto RECOVER_WINDOW;
         }
         jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
+        /* Reserve borrow slots as one atomic step. A split load-check-then-add sequence
+         * lets two posters on the same jetty node both pass the borrow_limit check before
+         * either increments, over-committing the jfs SQ and failing urma_post_jetty_send_wr
+         * with SQ full (status 12). The CAS loop revalidates against the freshest
+         * tx_outstanding on every retry; room is clamped at 0 so a transiently
+         * over-limit counter (e.g. FC control +1) yields ENOBUFS instead of
+         * underflowing wr_cnt_limit. */
+        uint32_t requested = wr_cnt_limit;
         uint32_t tx_outstanding = __atomic_load_n(&jetty_node->tx_outstanding, __ATOMIC_ACQUIRE);
-        uint32_t total = tx_outstanding + wr_cnt_limit;
-        if (total > jetty_node->borrow_limit) {
-            uint32_t excess = total - jetty_node->borrow_limit;
-            wr_cnt_limit -= excess;
-        }
+        do {
+            wr_cnt_limit = requested;
+            uint32_t room = (jetty_node->borrow_limit > tx_outstanding) ?
+                (jetty_node->borrow_limit - tx_outstanding) : 0;
+            if (wr_cnt_limit > room) {
+                wr_cnt_limit = room;
+            }
+            if (wr_cnt_limit == 0) {
+                break;
+            }
+        } while (!__atomic_compare_exchange_n(&jetty_node->tx_outstanding, &tx_outstanding,
+            tx_outstanding + wr_cnt_limit, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
     }
 
     if (wr_cnt_limit == 0) {
@@ -506,7 +521,6 @@ int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_
     }
     if (is_umq_ub_logic_queue(queue->create_flag)) {
         jetty_pool_node_t *jetty_node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
-        (void)__atomic_add_fetch(&jetty_node->tx_outstanding, wr_cnt_limit, __ATOMIC_ACQ_REL);
         if (jetty_node->is_jetty_err) {
             ret = -UMQ_ERR_EINVAL;
             failed_num = wr_cnt_limit;
