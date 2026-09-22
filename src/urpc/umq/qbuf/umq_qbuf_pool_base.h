@@ -287,6 +287,13 @@ static ALWAYS_INLINE local_block_pool_t *get_thread_local_cache(thread_local_qbu
             thread_cache->block_pool.buf_cnt_with_data[i] = 0;
             thread_cache->block_pool.capacity_with_data[i] = 0;
         }
+        /* Single-level pools via base (tiny/rx/shm) enforce a fixed TLS depth
+         * (tls_qbuf_pool_depth, set at pool init) and have no dynamic admission
+         * or self-shrink. Seed sc=0 capacity with that fixed depth so the DFX
+         * CurCap column shows the real TLS cache cap instead of a permanently
+         * zero placeholder. Normal pool bypasses this helper (has its own
+         * dynamic capacity maintenance in umq_qbuf_pool.c). */
+        thread_cache->block_pool.capacity_with_data[0] = pools->tls_qbuf_pool_depth;
         thread_cache->block_pool.capacity_without_data = 0;
         QBUF_LIST_INIT(&thread_cache->block_pool.head_without_data);
         thread_cache->block_pool.buf_cnt_without_data = 0;
