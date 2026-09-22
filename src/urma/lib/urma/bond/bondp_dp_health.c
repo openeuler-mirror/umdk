@@ -315,14 +315,7 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
         return;
     }
     bondp_target_jetty_t *bdp_tjetty = path->tjetty;
-    bool prev = true;
-    if (bdp_tjetty != NULL) {
-        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(bdp_tjetty,
-                                                                           (uint32_t)local_idx,
-                                                                           target_idx);
-        prev = (p_tjetty != NULL) ? atomic_load(&p_tjetty->valid) : true;
-    }
-    atomic_store(&path->valid, ok);
+    bool prev = atomic_exchange(&path->valid, ok);
     path->no_cqe_round = 0;
     path->probe_checked = true;
 
