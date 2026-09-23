@@ -23,7 +23,6 @@
       "gather_selection_kv_cache",
       "gather_selection_kv_cache_custom",
       "gather_selection_sparse_flash_attention",
-      "grouped_matmul_swiglu_quant_v2_layered",
       "swiglu_clip_quant"
     ],
     "ascend950": [
@@ -82,9 +81,6 @@
     },
     "moe_notify_dispatch_zb": {
       "requires_shmem": true
-    },
-    "grouped_matmul_swiglu_quant_v2_layered": {
-      "requires_shmem": false
     }
   }
 }

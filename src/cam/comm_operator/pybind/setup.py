@@ -170,7 +170,6 @@ sources = [
     "./moe_combine_send_async.cpp",
     "./moe_dispatch_recv_async.cpp",
     "./moe_dispatch_send_async.cpp",
-    "./gmm_swiglu_quant_v2_layered.cpp",
 ]
 
 
