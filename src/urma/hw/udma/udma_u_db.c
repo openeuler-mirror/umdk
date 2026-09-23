@@ -133,8 +133,8 @@ static void udma_clear_db_page(struct udma_u_db_page *db_page)
 void *udma_u_alloc_sw_db(struct udma_u_context *ctx, enum udma_db_type type)
 {
 	struct udma_u_db_page *db_page;
+	uint32_t npos = 0;
 	void *db = NULL;
-	uint32_t npos;
 
 	(void)pthread_mutex_lock(&ctx->db_list_mutex);
 
