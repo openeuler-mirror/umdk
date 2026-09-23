@@ -94,6 +94,8 @@
 #define ASYNC_FLAG_NON_BLOCK_NOT_POLL 2
 
 #define MAX_DMC_CNT 169
+#define PRIORITY_BUF_LEN 8192
+#define MAX_PRIORITY_NUM 16
 
 typedef struct ref_read_idx {
     uint32_t dma_cnt;
@@ -432,6 +434,7 @@ int start_ipv4_server(char *ipv4_addr, uint16_t port);
 int start_ipv6_client(char *ipv6_addr, uint16_t port);
 int start_ipv4_client(char *ipv4_addr, uint16_t port);
 log_file_info_t *test_create_file(const char *file_name);
+uint8_t test_get_urpc_normal_priority(test_urpc_ctx_t *ctx);
 
 #define NS_PER_SEC 1000000000UL
 #define MS_PER_SEC 1000
