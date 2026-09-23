@@ -46,8 +46,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_send_async", &cam_combine_send_async_impl_autograd, "moe_combine_send_async");
     m.def("moe_dispatch_recv_async", &cam_dispatch_recv_async_impl_autograd, "moe_dispatch_recv_async");
     m.def("moe_dispatch_send_async", &cam_dispatch_send_async_impl_autograd, "moe_dispatch_send_async");
-    m.def("gmm_swiglu_quant_v2_layered", &cam_gmm_swiglu_quant_v2_layered_impl_autograd,
-          "gmm_swiglu_quant_v2_layered");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -128,7 +126,4 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     int comm_id, int max_seq_len, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, int layer_index, int tp_size, int dynamic_quant, str group_name) -> Tensor");
-    m.def("gmm_swiglu_quant_v2_layered(Tensor x, Tensor[] all_weight, Tensor[] all_weight_scale, \
-    Tensor[] all_weight_assist_matrix, Tensor x_scale, Tensor group_list, Tensor layer_index, \
-    int dequant_mode=0, int quant_mode=0, int group_list_type=0, int[]? tuning_config=None) -> Tensor[]");
 }

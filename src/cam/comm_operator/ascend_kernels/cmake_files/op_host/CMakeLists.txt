@@ -56,53 +56,8 @@ if(DEFINED ENV{SHMEM_HOME_PATH})
     include_directories($ENV{SHMEM_HOME_PATH}/shmem/include)
 endif()
 
-# Host-side include paths:
-#  - ${CMAKE_CURRENT_SOURCE_DIR}: op_host root, so operators with nested op_tiling/ sources can
-#    resolve shared headers copied into op_host/ (utils/op_host: tiling_base/, err/) via -I.
-#  - pkg_inc/op_common: CANN-shipped op_host common headers (log/log.h, util/math_util.h, ...),
-#    used by migrated ops-transformer operators. Skipped silently when absent (older CANN).
-#  - include/aclnn: opdev/* headers for the l0op-style op_api layer (aclnnGroupedMatmul*).
-# The same three paths are also appended to CODE_GEN_COMPILE_OPTS: npu_op_code_gen compiles
-# all op_host sources in a separate process (compile_ascendc_all_ops_so.py) that does NOT
-# inherit include_directories(), so they must be passed via --compile-options as well.
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-set(CANN_ARCH_DIR "")
-foreach(cand "aarch64-linux" "x86_64-linux" "linux")
-    if(EXISTS "${CANN_ROOT}/${cand}/pkg_inc/op_common")
-        set(CANN_ARCH_DIR "${CANN_ROOT}/${cand}")
-        break()
-    endif()
-endforeach()
-list(APPEND CODE_GEN_COMPILE_OPTS -I${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT "${CANN_ARCH_DIR}" STREQUAL "")
-    include_directories("${CANN_ARCH_DIR}/pkg_inc/op_common")
-    list(APPEND CODE_GEN_COMPILE_OPTS -I${CANN_ARCH_DIR}/pkg_inc/op_common)
-    # migrated op_host sources include "util/math_util.h" (pkg_inc/op_common/op_host/util)
-    if(EXISTS "${CANN_ARCH_DIR}/pkg_inc/op_common/op_host")
-        include_directories("${CANN_ARCH_DIR}/pkg_inc/op_common/op_host")
-        list(APPEND CODE_GEN_COMPILE_OPTS -I${CANN_ARCH_DIR}/pkg_inc/op_common/op_host)
-    endif()
-    # log/log.h (pkg_inc/op_common) includes "op_common/op_host/util/opbase_export.h" (needs -I pkg_inc)
-    # and "dlog_pub.h" (pkg_inc/base)
-    if(EXISTS "${CANN_ARCH_DIR}/pkg_inc")
-        include_directories("${CANN_ARCH_DIR}/pkg_inc")
-        list(APPEND CODE_GEN_COMPILE_OPTS -I${CANN_ARCH_DIR}/pkg_inc)
-    endif()
-    if(EXISTS "${CANN_ARCH_DIR}/pkg_inc/base")
-        include_directories("${CANN_ARCH_DIR}/pkg_inc/base")
-        list(APPEND CODE_GEN_COMPILE_OPTS -I${CANN_ARCH_DIR}/pkg_inc/base)
-    endif()
-endif()
-if(EXISTS "${CANN_ROOT}/include/aclnn")
-    include_directories("${CANN_ROOT}/include/aclnn")
-    list(APPEND CODE_GEN_COMPILE_OPTS -I${CANN_ROOT}/include/aclnn)
-endif()
-
-# Collect all host-side source files (recursive: operators may keep upstream op_tiling/ subdirs)
-file(GLOB_RECURSE ops_srcs
-    ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/*.cc
-)
+# Collect all host-side source files
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} ops_srcs)
 
 # =====================================================
 # Step 1: Generate ACLNN stubs, op_proto.cc, fallback files
@@ -132,13 +87,6 @@ file(GLOB aclnn_src ${ASCEND_AUTOGEN_PATH}/aclnn*.cpp)
 npu_op_library(cust_opapi ACLNN
     ${aclnn_src}
 )
-# The migrated ops-transformer aclnn sources use the l0op composite pattern
-# (l0op::Contiguous / ReFormat / TransData / ViewCopy live in the CANN built-in
-# libopapi.so). The ACLNN target template only links nnopbase/ascendcl, so add
-# libopapi as a direct dependency: it becomes a DT_NEEDED entry of
-# libcust_opapi.so and the loader resolves the l0op builtins from it no matter
-# whether torch_npu has libopapi in the global dlopen scope.
-target_link_libraries(cust_opapi PRIVATE opapi)
 target_compile_options(cust_opapi PRIVATE
     -fvisibility=hidden
 )
