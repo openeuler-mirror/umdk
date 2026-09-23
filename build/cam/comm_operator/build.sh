@@ -27,7 +27,7 @@ ENABLE_RUN_ONLY=0    # -r 标志：1=只编 run 包，跳过 whl
 ENABLE_CAM_COMM_ONLY=0  # -m 标志：1=只编 cam_comm 库(build_cam_comm)，跳过算子/whl
 ENABLE_CAM_COMM_BUILD=1
 OP_SELECT=""        # -a 指定的算子列表（分号分隔），为空=全量
-USE_W4A8=0          # -q 标志：1=编译 fused_deep_moe_w4a8 量化变体
+USE_W4A8=1          # 默认编译 fused_deep_moe_w4a8 量化变体（fused_deep_moe 已移除）
 
 build_cam_comm() {
     cd "$MODULE_SRC_PATH"
@@ -66,9 +66,9 @@ print_help() {
     -a Semicolon-separated operator list to compile (requires -c). Names must
        match the SOC support list in operator_registry.json. Omit to compile
        the full SOC set.
-    -q Select the fused_deep_moe_w4a8 (quantization) variant instead of
-       fused_deep_moe. The two share source filenames and are mutually exclusive.
-       fused_deep_moe_fwk is independent and can coexist with either.
+    -q Select the fused_deep_moe_w4a8 (quantization) variant (enabled by
+       default; the fused_deep_moe base variant has been removed).
+       fused_deep_moe_fwk is independent and can coexist.
     -d Enable debug
     -t Enable UT build
     -p Build only the pybind (whl) package; skip the run package build

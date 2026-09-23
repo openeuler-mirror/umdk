@@ -10,7 +10,6 @@
       "cam_moe_distribute_dispatch_recv",
       "cam_moe_distribute_dispatch_send",
       "e2a",
-      "fused_deep_moe",
       "fused_deep_moe_fwk",
       "fused_deep_moe_w4a8",
       "moe_combine_lowlatency_zb",
@@ -41,11 +40,6 @@
     },
     "cam_moe_distribute_dispatch_send": {
       "requires_shmem": false
-    },
-    "fused_deep_moe": {
-      "requires_shmem": true,
-      "family": "fused_deep_moe",
-      "variant": "base"
     },
     "fused_deep_moe_w4a8": {
       "requires_shmem": false,

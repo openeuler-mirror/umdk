@@ -160,7 +160,6 @@ sources = [
     "./ext_utils.cpp",
     "./all2_all_detour.cpp",
     "./reduce_scatter_detour.cpp",
-    "./buffer.cpp",
     "./gather_selection_kv_cache.cpp",
     "./gather_selection_kv_cache_custom.cpp",
     "./gather_selection_sparse_flash_attention.cpp",
