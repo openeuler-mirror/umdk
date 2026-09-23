@@ -300,21 +300,34 @@ static int udma_u_set_jfc_flag(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_
 {
 	urma_jfc_flag_t *flag = (urma_jfc_flag_t *)buf;
 	urma_cmd_udrv_priv_t udata = {};
+	int ret;
+
+	ret = urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("failed to set jfc flag, len = %u, ret = %d.\n", len, ret);
+		return ret;
+	}
 
 	jfc->jfc_cfg.flag = *flag;
 
-	return urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	return URMA_SUCCESS;
 }
 
 static int udma_u_set_jfc_cqe_base_addr(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
 {
 	struct udma_u_jfc *ujfc = to_udma_u_jfc(jfc);
 	urma_cmd_udrv_priv_t udata = {};
+	int ret;
 
+	ret = urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	if (ret) {
+		UDMA_LOG_ERR("failed to set jfc cqe base addr, ret = %d.\n", ret);
+		return ret;
+	}
 	ujfc->cq.qbuf = (void*)*(uint64_t *)buf;
 	ujfc->cq.cstm = true;
 
-	return urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	return URMA_SUCCESS;
 }
 
 static int udma_u_set_jfc_id(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
@@ -336,13 +349,19 @@ static int udma_u_set_jfc_db_addr(urma_jfc_t *jfc, uint64_t opt, void *buf, uint
 	struct udma_u_jfc *ujfc = to_udma_u_jfc(jfc);
 	urma_cmd_udrv_priv_t udata = {};
 	uint64_t addr = 0;
+	int ret;
 
+	ret = urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	if (ret) {
+        UDMA_LOG_ERR("failed to set jfc db addr, ret = %d.\n", ret);
+        return ret;
+	}
 	memcpy(&addr, buf, sizeof(addr));
 
 	ujfc->sw_db = (uint32_t *)(uintptr_t)addr;
 	ujfc->db_cstm = true;
 
-	return urma_cmd_set_jfc_opt(jfc, opt, buf, len, &udata);
+	return ret;
 }
 
 static int udma_u_get_jfc_opt_from_kernel(urma_jfc_t *jfc, uint64_t opt, void *buf, uint32_t len)
