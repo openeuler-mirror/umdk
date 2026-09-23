@@ -42,7 +42,13 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
 
     const bondp_comp_t *comp = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
-        if (comp->p_jetty[i] != NULL && atomic_load(&comp->valid[i])) {
+        /*
+         * hc_valid is set after a rebuilt path passes health checking.  The
+         * next post will call try_failback() and promote it to valid, so the
+         * virtual jetty is already usable before that first post.
+         */
+        if (comp->p_jetty[i] != NULL &&
+            (atomic_load(&comp->valid[i]) || atomic_load(&comp->hc_valid[i]))) {
             return true;
         }
     }
