@@ -4,6 +4,7 @@
     "ascend910_93": [
       "dispatch_layout",
       "fused_deep_moe",
+      "fused_deep_moe_zb",
       "moe_combine_normal",
       "moe_combine_normal_zb",
       "moe_dispatch_layout_zb",
@@ -21,6 +22,11 @@
       "requires_shmem": false,
       "family": "fused_deep_moe",
       "variant": "base"
+    },
+    "fused_deep_moe_zb": {
+      "requires_shmem": true,
+      "family": "fused_deep_moe",
+      "variant": "zb"
     },
     "moe_combine_normal": {
       "requires_shmem": false
