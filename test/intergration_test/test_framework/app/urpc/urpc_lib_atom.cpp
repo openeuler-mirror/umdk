@@ -3486,8 +3486,13 @@ uint8_t test_get_urpc_normal_priority(test_urpc_ctx_t *ctx)
     }
     const char *p = NULL;
     const char *target = "  RTP";
-    p = strchr(tp_type_start, ':') + 1;
-    
+    // p = strchr(tp_type_start, ':') + 1;
+    const char *colon = strchr(tp_type_start, ':');
+    if (colon == NULL) {
+        return 0;
+    }
+
+    p = colon + 1;
     for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
         if (*p == '\n' || *p == '\0') {
             break;
