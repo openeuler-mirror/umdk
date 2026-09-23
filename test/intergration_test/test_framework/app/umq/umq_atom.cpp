@@ -238,7 +238,6 @@ void test_umq_uninit(test_umq_ctx_t *ctx)
 uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
 {
     char buf[PRIORITY_BUF_LEN];
-    char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN] = {0};
     exec_cmd(buf, PRIORITY_BUF_LEN, "urma_admin show --whole -d %s", ctx->ctx->device_name);
 
     const char *tp_type_start = strstr(buf, "tp_type");
