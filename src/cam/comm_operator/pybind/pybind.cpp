@@ -30,7 +30,16 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
         .def("dispatch", &cam_zb::ZbBuffer::dispatch, pybind11::arg("x"), pybind11::arg("topk_idx"),
             pybind11::arg("send_token_idx"), pybind11::arg("num_tokens_per_expert"), pybind11::arg("quant_mode"))
         .def("combine", &cam_zb::ZbBuffer::combine, pybind11::arg("expert_out"), pybind11::arg("topk_weights"),
-            pybind11::arg("topk_idx"), pybind11::arg("handle"));
+            pybind11::arg("topk_idx"), pybind11::arg("handle"))
+        .def("zb_fused_deep_moe", &cam_zb::ZbBuffer::zb_fused_deep_moe, pybind11::arg("x"), pybind11::arg("expert_ids"),
+            pybind11::arg("gmm1_weight"), pybind11::arg("gmm1_weight_scale"), pybind11::arg("gmm2_weight"),
+            pybind11::arg("gmm2_weight_scale"), pybind11::arg("expert_scales"), pybind11::arg("share_gmm1_weight"),
+            pybind11::arg("share_gmm1_weight_scale"), pybind11::arg("share_gmm2_weight"),
+            pybind11::arg("share_gmm2_weight_scale"), pybind11::arg("expert_smooth_scales"),
+            pybind11::arg("share_smooth_scales"), pybind11::arg("x_active_mask"), pybind11::arg("gmm1_bias"),
+            pybind11::arg("gmm2_bias"), pybind11::arg("share_gmm1_bias"), pybind11::arg("share_gmm2_bias"),
+            pybind11::arg("group_ep"), pybind11::arg("ep_rank_size"), pybind11::arg("ep_rank_id"),
+            pybind11::arg("moe_expert_num"), pybind11::arg("quant_mode"), pybind11::arg("global_bs"));
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m)

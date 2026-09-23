@@ -186,6 +186,20 @@ build_ascend_proj() {
         fi
         KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-I${CATLASS_HOME_PATH}/include"
     fi
+    # Some catlass versions guard the BlockMmad primary template behind the CATLASS_ARCH
+    # macro (e.g. cam_feature's locked 83073fed wraps it in `#if CATLASS_ARCH == 2201`).
+    # Pass the per-SOC macro explicitly so the primary template stays visible to the kernel.
+    if [[ "$soc_version" == "ascend950" ]]; then
+        if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
+            KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} "
+        fi
+        KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-DCATLASS_ARCH=3510"
+    else
+        if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
+            KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS} "
+        fi
+        KERNEL_COMPILE_OPTS="${KERNEL_COMPILE_OPTS}-DCATLASS_ARCH=2201"
+    fi
     if [ -n "${KERNEL_COMPILE_OPTS}" ]; then
         echo "Patching kernel compile options: ${KERNEL_COMPILE_OPTS}"
         find build_out/op_kernel/CMakeFiles -name "build.make" -exec sed -i "s|--compile-options=\"\"|--compile-options=\\\"${KERNEL_COMPILE_OPTS}\\\"|g" {} +

@@ -29,6 +29,7 @@ constexpr int64_t SEND_PER_GROUP = 1;
 constexpr int64_t MIN_EP_WORLD_SIZE = 2;  // ZB needs at least two EP ranks
 constexpr int64_t TOPK_IDX_DIM = 2;       // topk_idx shape: [num_tokens, topk]
 constexpr int LOCAL_RANK_SIZE = 8;
+constexpr uint32_t DIM_TWO = 2;  // x / expertIds are required to be 2D
 
 #ifdef SHMEM_ENABLED
 inline int32_t SetShmemAttr(int32_t myPe, int32_t nPes, uint64_t localMemSize, const char *ipPort,
@@ -143,6 +144,7 @@ void ZbBuffer::InitShmem(int64_t localMemSize, const std::string &ipPort)
         throw std::runtime_error("ZbBuffer: shmem not initialized");
     }
 
+    localMemSize_ = localMemSize;
     metaPtr_ = aclshmem_malloc(META_BYTES);
     if (metaPtr_ == nullptr) {
         throw std::runtime_error("ZbBuffer: aclshmem_malloc meta failed");
@@ -167,6 +169,12 @@ void ZbBuffer::PreallocateLayoutNotifySlots(c10::Device device)
     numTokensPerExpert_.zero_();
 
     recvData_ = CreateTensorFromShmem({R, E}, at::kInt, device);
+
+    // 记录固定预分配的槽位字节数（按 512 对齐，覆盖 aclshmem_malloc 内部对齐的余量），
+    // EnsureShmemWorkspace 从整个 SHMEM 池中减去这部分，避免重复 malloc 耗尽池。
+    auto alignUp = [](int64_t v) { return (v + 511) / 512 * 512; };
+    layoutNotifyBytes_ = alignUp(E * static_cast<int64_t>(sizeof(int32_t))) +
+                         alignUp(R * E * static_cast<int64_t>(sizeof(int32_t)));
 }
 
 void ZbBuffer::EnsureDispatchCombineSlots(at::ScalarType dtype, c10::Device device, int64_t topk)
@@ -225,6 +233,11 @@ void ZbBuffer::FreeSlots()
     if (metaPtr_ != nullptr) {
         aclshmem_free(metaPtr_);
         metaPtr_ = nullptr;
+    }
+    if (shmemWorkspacePtr_ != nullptr) {
+        aclshmem_free(shmemWorkspacePtr_);
+        shmemWorkspacePtr_ = nullptr;
+        shmemWorkspaceSize_ = 0;
     }
 #endif
 }
@@ -366,6 +379,104 @@ at::Tensor ZbBuffer::combine(const at::Tensor &expertOut, const at::Tensor &topk
     EXEC_NPU_CMD(aclnnMoeCombineNormalZb, shmemX, epRecvCounts, topkWeights, topkIdx, sendTokenIdxOpt, commMetaPtrU64,
         epWorldSize, epRankId, tpWorldSize, tpRankId, moeExpertNum, globalBs, combinedX, sendCostStats);
     return combinedX;
+}
+
+// Allocate (once) the SHMEM workspace consumed by aclnnFusedDeepMoeZb.
+// 整个 SHMEM 池中扣除 meta 与构造函数固定预分配的 layout/notify 槽位，
+// 只把剩余部分分配给 fused，避免重复 malloc 耗尽池。
+uint64_t ZbBuffer::EnsureShmemWorkspace()
+{
+#ifdef SHMEM_ENABLED
+    if (shmemWorkspacePtr_ != nullptr) {
+        return shmemWorkspaceSize_;
+    }
+
+    shmemWorkspaceSize_ = static_cast<uint64_t>(localMemSize_) - META_BYTES -
+                          static_cast<uint64_t>(std::max<int64_t>(layoutNotifyBytes_, 0));
+    shmemWorkspacePtr_ = aclshmem_malloc(shmemWorkspaceSize_);
+    if (shmemWorkspacePtr_ == nullptr) {
+        shmemWorkspaceSize_ = 0;
+        throw std::runtime_error(
+            "ZbBuffer: aclshmem_malloc zb_fused_deep_moe workspace failed; increase local_mem_size");
+    }
+    return shmemWorkspaceSize_;
+#else
+    throw std::runtime_error(
+        "ZbBuffer requires SHMEM. Export SHMEM_HOME_PATH and rebuild umdk_cam_op_lib.");
+#endif
+}
+
+std::tuple<at::Tensor, at::Tensor, at::Tensor> ZbBuffer::zb_fused_deep_moe(
+    const at::Tensor &x, const at::Tensor &expertIds, const std::vector<at::Tensor> &gmm1Weight,
+    const std::vector<at::Tensor> &gmm1WeightScale, const std::vector<at::Tensor> &gmm2Weight,
+    const std::vector<at::Tensor> &gmm2WeightScale, const at::Tensor &expertScales,
+    const c10::optional<at::Tensor> &shareGmm1WeightOptional,
+    const c10::optional<at::Tensor> &shareGmm1WeightScaleOptional,
+    const c10::optional<at::Tensor> &shareGmm2WeightOptional,
+    const c10::optional<at::Tensor> &shareGmm2WeightScaleOptional,
+    const c10::optional<at::Tensor> &expertSmoothScalesOptional,
+    const c10::optional<at::Tensor> &shareSmoothScalesOptional,
+    const c10::optional<at::Tensor> &xActiveMaskOptional,
+    const std::vector<at::Tensor> &gmm1BiasOptional, const std::vector<at::Tensor> &gmm2BiasOptional,
+    const c10::optional<at::Tensor> &shareGmm1BiasOptional,
+    const c10::optional<at::Tensor> &shareGmm2BiasOptional, c10::string_view groupEp,
+    int64_t epRankSize, int64_t epRankId, int64_t moeExpertNum, int64_t quantMode, int64_t globalBs)
+{
+    if (!initialized_) {
+        throw std::runtime_error("ZbBuffer: not initialized");
+    }
+    TORCH_BIND_ASSERT(x.dim() == DIM_TWO);
+    TORCH_BIND_ASSERT(expertIds.dim() == DIM_TWO);
+    if (epRankSize <= 0 || moeExpertNum <= 0 || moeExpertNum % epRankSize != 0) {
+        throw std::runtime_error("ZbBuffer: invalid ep_rank_size / moe_expert_num");
+    }
+
+    auto xShape = x.sizes();
+    auto expertIdsShape = expertIds.sizes();
+    int64_t bs = xShape[0];
+    int64_t h = xShape[1];
+    int64_t topk = expertIdsShape[1];
+
+    at::Tensor output = at::empty({bs, h}, x.options());
+    at::Tensor shareOutput = at::empty({bs, h}, x.options());
+    int64_t localExpertNum = moeExpertNum / epRankSize;
+    auto opts = expertIds.options().dtype(at::kLong);
+    at::Tensor expertTokenNums = at::empty({localExpertNum}, opts);
+
+    // 与 cam_feature 一致：整个剩余 SHMEM 池（扣除 meta 与已预分配的 layout/notify 槽位）
+    // 作为 workspace，大小由 op_host 自行推导。
+    EnsureShmemWorkspace();
+
+    // 与 cam_feature 保持一致：vector 声明 → at::TensorList 传给 aclnn。
+    auto gmm1WeightList = at::TensorList(gmm1Weight);
+    auto gmm1WeightScaleList = at::TensorList(gmm1WeightScale);
+    auto gmm2WeightList = at::TensorList(gmm2Weight);
+    auto gmm2WeightScaleList = at::TensorList(gmm2WeightScale);
+    auto gmm1BiasList = at::TensorList(gmm1BiasOptional);
+    auto gmm2BiasList = at::TensorList(gmm2BiasOptional);
+
+    const std::string groupEpStr(groupEp.data(), groupEp.size());
+    const char *groupEpPtr = groupEpStr.c_str();
+    int64_t extInfo = reinterpret_cast<int64_t>(metaPtr_);
+    int64_t shmemWorkspace = reinterpret_cast<int64_t>(shmemWorkspacePtr_);
+    int64_t shmemWorkspaceSize = static_cast<int64_t>(shmemWorkspaceSize_);
+
+    // 必须对齐 aclnn_fused_deep_moe_zb: 先 input 再 attr，然后 output
+    EXEC_NPU_CMD(aclnnFusedDeepMoeZb,
+        // input
+        x, expertIds, gmm1WeightList, gmm1WeightScaleList, gmm2WeightList, gmm2WeightScaleList,
+        expertScales,
+        shareGmm1WeightOptional, shareGmm1WeightScaleOptional,
+        shareGmm2WeightOptional, shareGmm2WeightScaleOptional,
+        expertSmoothScalesOptional, shareSmoothScalesOptional, xActiveMaskOptional,
+        gmm1BiasList, gmm2BiasList,
+        shareGmm1BiasOptional, shareGmm2BiasOptional,
+        // attr
+        groupEpPtr, epRankSize, epRankId, moeExpertNum, quantMode, globalBs,
+        extInfo, shmemWorkspace, shmemWorkspaceSize,
+        // output
+        output, shareOutput, expertTokenNums);
+    return std::make_tuple(output, shareOutput, expertTokenNums);
 }
 
 }  // namespace cam_zb
