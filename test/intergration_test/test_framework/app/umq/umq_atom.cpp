@@ -235,29 +235,6 @@ void test_umq_uninit(test_umq_ctx_t *ctx)
     ctx->ctx_flag &= ~CTX_FLAG_UMQ_INIT;
 }
 
-void parse_priority_sl_tp_type_map(const char *input_str, char priority_list[MAX_PRIORITY_NUM][TP_TYPE_LEN])
-{
-    memset(priority_list, 0, sizeof(priority_list));
-    const char *tp_type_start = strstr(input_str, "tp_type  :");
-    if (tp_type_start == NULL) {
-        TEST_LOG_ERROR("错误：未找到tp_type行\n");
-        return;
-    }
-
-    const char *colon = strchr(tp_type_start, ':');
-    const char *p = colon + 1;
-
-    for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
-        if (strncmp(p, "  RTP", 5) == 0) {
-            strcpy(priority_list[i], "RTP");
-        } else {
-            strcpy(priority_list[i], "CTP");
-        }
-        p += 5;
-    }
-
-}
-
 uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
 {
     char buf[PRIORITY_BUF_LEN];
