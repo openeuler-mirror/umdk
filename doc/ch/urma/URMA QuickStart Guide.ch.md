@@ -189,6 +189,8 @@ yum install -y openssl-devel
 yum install -y glib2-devel
 yum install -y libnl3-devel
 yum install -y kernel-devel  # ubcore依赖，来自openEuler内核
+# 以下依赖用于默认启用 UDMA 的 RPM 构建及运行
+yum install -y libummu-devel libummu
 ```
 
 ## 2.3 用户态安装
@@ -310,6 +312,7 @@ modprobe ubagg
 
 - **运行时依赖**：
   - liburma.so、liburma_common.so、liburma_ubagg.so（用户态库）
+  - libummu（启用 UDMA 用户态驱动时需要）
   - ubcore.ko、ubagg.ko、uburma.ko（内核模块）
 
 ---
