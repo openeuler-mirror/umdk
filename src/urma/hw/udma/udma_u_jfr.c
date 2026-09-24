@@ -297,10 +297,10 @@ static void udma_u_free_jfr_prepare(urma_jfr_t *jfr)
 	if (jfr->jfr_cfg.jfc)
 		udma_u_clean_jfc(jfr->jfr_cfg.jfc, jfr->jfr_id.id);
 
-	udma_u_free_sw_db(udma_ctx, (uint32_t *)udma_jfr->long_sleeptime, UDMA_JFR_PAYLOAD);
-
-	if (!udma_jfr->swdb_cstm)
+	if (!udma_jfr->swdb_cstm) {
+		udma_u_free_sw_db(udma_ctx, (uint32_t *)udma_jfr->long_sleeptime, UDMA_JFR_PAYLOAD);
 		udma_u_free_sw_db(udma_ctx, udma_jfr->sw_db, UDMA_JFR_TYPE_DB);
+	}
 
 	udma_u_free_queue_buf(&udma_jfr->rq);
 	udma_u_free_idx_que(&udma_jfr->idx_que);
@@ -460,13 +460,13 @@ static void fill_wqe_idx(struct udma_u_jfr *jfr, uint32_t wqe_idx)
 static void fill_recv_sge_to_wqe(urma_jfr_wr_t *wr, void *wqe, struct udma_u_jfr *jfr)
 {
 	struct udma_wqe_sge *sge = (struct udma_wqe_sge *)wqe;
-	uint32_t total_len = 0;
+	uint64_t total_len = 0;
 	uint32_t i, cnt;
 
 	for (i = 0, cnt = 0; i < wr->src.num_sge; i++) {
 		if (!wr->src.sge[i].len)
 			continue;
-		total_len += wr->src.sge[i].len;
+		total_len += (uint64_t)wr->src.sge[i].len;
 		set_data_of_sge(sge + cnt, wr->src.sge + i);
 		cnt++;
 	}
