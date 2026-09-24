@@ -243,8 +243,10 @@ static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t loca
     UB_LIST_FOR_EACH (bdp_tjetty, hc_entry, &node->tjetty_list) {
         bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
         if (p_tjetty != NULL) {
-            atomic_store(&p_tjetty->valid, true);
-            recovered_cnt++;
+            bool expected = false;
+            if (atomic_compare_exchange_strong(&p_tjetty->valid, &expected, true)) {
+                recovered_cnt++;
+            }
         }
     }
     pthread_rwlock_unlock(&node->lock);
@@ -315,7 +317,7 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
         return;
     }
     bondp_target_jetty_t *bdp_tjetty = path->tjetty;
-    bool prev = atomic_exchange(&path->valid, ok);
+    atomic_store(&path->valid, ok);
     path->no_cqe_round = 0;
     path->probe_checked = true;
 
@@ -325,8 +327,7 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     }
     pthread_rwlock_unlock(&node->lock);
 
-    if (ok && !prev) {
-        URMA_LOG_WARN("Health probe link [%d, %d] recovered.\n", local_idx, target_idx);
+    if (ok) {
         hc_set_tjetty_list_target_valid(node, (uint32_t)local_idx, target_idx);
     }
     if (bdp_ctx != NULL) {
