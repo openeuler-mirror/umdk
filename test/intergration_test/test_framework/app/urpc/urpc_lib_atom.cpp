@@ -214,7 +214,7 @@ test_urpc_ctx_t *test_urpc_ctx_init(int argc, char *argv[], int thread_num)
     g_test_urpc_ctx.queue_cfg->rx_buf_size = DEFAULT_RX_BUF_SIZE;
     g_test_urpc_ctx.queue_cfg->rx_depth = DEFAULT_RX_DEPTH;
     g_test_urpc_ctx.queue_cfg->tx_depth = DEFAULT_TX_DEPTH;
-    g_test_urpc_ctx.queue_cfg->priority = CLOUD_STORAGE_PRIORITY;
+    g_test_urpc_ctx.queue_cfg->priority = test_get_urpc_normal_priority(&g_test_urpc_ctx);
     g_test_urpc_ctx.server_num = DEFAULT_SERVER_NUM;
 
     g_test_urpc_ctx.cp_is_ipv6 = 0;
@@ -3109,7 +3109,7 @@ uint64_t create_original_queue(urpc_queue_trans_mode_t trans_mode)
     urpc_qcfg_get_t qcfg_get_cfg = {0};
     memset(&queue_cfg, 0, sizeof(urpc_qcfg_create_t));
     queue_cfg.create_flag = QCREATE_FLAG_TX_DEPTH | QCREATE_FLAG_PRIORITY | QCREATE_FLAG_RX_BUF_SIZE | QCREATE_FLAG_RX_DEPTH | QCREATE_FLAG_MAX_RX_SGE | QCREATE_FLAG_MAX_TX_SGE;
-    queue_cfg.priority = CLOUD_STORAGE_PRIORITY;
+    queue_cfg.priority = g_test_urpc_ctx.queue_cfg->priority;
     queue_cfg.tx_depth = DEFAULT_TX_DEPTH;
     queue_cfg.rx_buf_size = DEFAULT_RX_BUF_SIZE;
     queue_cfg.rx_depth = DEFAULT_RX_DEPTH;
@@ -3133,7 +3133,7 @@ uint64_t create_original_queue(urpc_queue_trans_mode_t trans_mode)
     CHKERR_JUMP(qcfg_get_cfg.rx_buf_size != DEFAULT_RX_BUF_SIZE, "check rx_buf_size", EXIT);
     CHKERR_JUMP(qcfg_get_cfg.max_rx_sge != MAX_RX_SGE, "check max_rx_sge", EXIT);
     CHKERR_JUMP(qcfg_get_cfg.max_tx_sge != MAX_TX_SGE, "check max_tx_sge", EXIT);
-    CHKERR_JUMP(qcfg_get_cfg.priority != CLOUD_STORAGE_PRIORITY , "check priority", EXIT);
+    CHKERR_JUMP(qcfg_get_cfg.priority != g_test_urpc_ctx.queue_cfg->priority , "check priority", EXIT);
     CHKERR_JUMP(qcfg_get_cfg.tx_depth != DEFAULT_TX_DEPTH, "check tx_depth", EXIT);
 
     return queue_handler;
@@ -3153,7 +3153,7 @@ uint64_t create_share_rq_queue(uint64_t share_rq_handler, urpc_queue_trans_mode_
     memset(&queue_cfg, 0, sizeof(urpc_qcfg_create_t));
     queue_cfg.create_flag |= QCREATE_FLAG_TX_DEPTH | QCREATE_FLAG_PRIORITY | QCREATE_FLAG_QH_SHARE_RQ;
     queue_cfg.tx_depth = DEFAULT_TX_DEPTH;
-    queue_cfg.priority = CLOUD_STORAGE_PRIORITY;
+    queue_cfg.priority = g_test_urpc_ctx.queue_cfg->priority;
     queue_cfg.urpc_qh_share_rq = share_rq_handler;
     if (g_test_urpc_ctx.queue_ops.is_epoll) {
         queue_cfg.create_flag |= QCREATE_FLAG_MODE;
@@ -3178,7 +3178,7 @@ uint64_t create_share_rq_queue(uint64_t share_rq_handler, urpc_queue_trans_mode_
     CHKERR_JUMP(qcfg_get_cfg1.rx_buf_size != qcfg_get_cfg2.rx_buf_size, "check rx_buf_size", EXIT);
     CHKERR_JUMP(qcfg_get_cfg1.max_rx_sge != qcfg_get_cfg2.max_rx_sge, "check max_rx_sge", EXIT);
     CHKERR_JUMP(qcfg_get_cfg1.max_tx_sge != qcfg_get_cfg2.max_tx_sge, "check max_tx_sge", EXIT);
-    CHKERR_JUMP(qcfg_get_cfg1.priority != CLOUD_STORAGE_PRIORITY , "check priority", EXIT);
+    CHKERR_JUMP(qcfg_get_cfg1.priority != g_test_urpc_ctx.queue_cfg->priority , "check priority", EXIT);
     CHKERR_JUMP(qcfg_get_cfg1.tx_depth != DEFAULT_TX_DEPTH, "check tx_depth", EXIT);
 
     return queue_handler;
@@ -3475,56 +3475,34 @@ log_file_info_t *test_create_file(const char *file_name)
     return log_file_info;
 }
 
+uint8_t test_get_urpc_normal_priority(test_urpc_ctx_t *ctx)
+{
+    char buf[PRIORITY_BUF_LEN];
+    exec_cmd(buf, PRIORITY_BUF_LEN, "urma_admin show --whole -d %s", ctx->ctx->device_name);
 
+    const char *tp_type_start = strstr(buf, "tp_type");
+    if (tp_type_start == NULL) {
+        return 0;
+    }
+    const char *p = NULL;
+    const char *target = "  RTP";
+    const char *colon = strchr(tp_type_start, ':');
+    if (colon == NULL) {
+        return 0;
+    }
 
+    p = colon + 1;
+    for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
+        if (*p == '\n' || *p == '\0') {
+            break;
+        }
+        if (strncmp(p, target, 5) == 0) {
+            TEST_LOG_INFO("urpc priority:%d.\n", i);
+            return i;
+        }
+        p += 5;
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return 0;
+}
 
