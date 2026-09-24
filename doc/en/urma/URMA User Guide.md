@@ -1490,6 +1490,8 @@ The bonding device is TP-unaware.
 
 6. The aggregation-device fault failback scheme requires the user's send and receive Jetty resources to be isolated. A Jetty used for sending must not be exposed as a receive resource that peers can import, and must not be imported by other processes for receive operations. If a Jetty needs to be imported by a peer and used for receive, use a separate receive Jetty to avoid external references to send-side resources during failback rebuild.
 
+7. Aggregation devices do not support deleting a Segment while traffic is active. Wait for traffic to stop, or delete the associated Jetty, before unregistering the Segment with `urma_unregister_seg`.
+
 - **Aggregation Device Feature List**
 
   1.  Aggregation Device Feature List
