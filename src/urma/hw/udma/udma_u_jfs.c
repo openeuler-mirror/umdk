@@ -1259,7 +1259,7 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
 	struct udma_u_jfs *udma_jfs;
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
@@ -1283,7 +1283,7 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 
 urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
 {
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	ret = urma_cmd_free_jfs(jfs, &udata);
@@ -1300,7 +1300,7 @@ urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
 urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
 {
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	urma_status_t verify_ret;
 	urma_status_t urma_ret;
 	int ret;
@@ -1332,7 +1332,7 @@ urma_status_t udma_u_set_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint32_t len)
 {
 	struct udma_u_jfs *udma_jfs = to_udma_u_jfs(jfs);
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	urma_status_t urma_ret;
 	int ret;
 
@@ -1438,7 +1438,7 @@ err_active_jfs_cmd:
 
 urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs)
 {
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	ret = urma_cmd_deactive_jfs(jfs, &udata);

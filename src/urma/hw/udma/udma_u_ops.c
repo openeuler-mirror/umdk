@@ -286,7 +286,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	}
 
 	if (pthread_mutex_init(&udma_ctx->hugepage_lock, NULL)) {
-		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
+		UDMA_LOG_ERR("Failed to init hugepage list mutex.\n");
 		goto err_hugepage_lock;
 	}
 	udma_ctx->hugepage_list = NULL;
@@ -349,7 +349,8 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	urma_status_t ret = URMA_SUCCESS;
 
 	udma_u_destroy_jt_table(udma_ctx);
-	udma_u_free_reserved_sq();
+	if (udma_ctx->sq_reserved)
+		udma_u_free_reserved_sq();
 	udma_u_free_db(ctx, &udma_ctx->db);
 	if (udma_ctx->dtu_enable) {
 		udma_ctx->dtu_munmap_fun_ptr(&g_dtu_va, udma_ctx->dtu_va_size, &g_dtu_va_refcount);

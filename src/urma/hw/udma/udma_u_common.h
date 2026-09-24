@@ -86,7 +86,7 @@ typedef int (*dtu_u_mmap_func)(uint64_t va_base, uint64_t va_size, void **dtu_va
 typedef void (*dtu_u_munmap_func)(void **g_dtu_va, uint64_t va_size, uint32_t *dtu_va_refcount);
 
 /* 32 */
-#define UDMA_JETTY_TABLE_NUM 1 << 5
+#define UDMA_JETTY_TABLE_NUM (1 << 5)
 
 struct udma_u_context {
 	urma_context_t		urma_ctx;
