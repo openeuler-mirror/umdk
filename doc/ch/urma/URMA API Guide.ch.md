@@ -3624,6 +3624,10 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 导入远端JFR信息，包括注册其token到本地。
 
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_import_jfr接口urma默认开启tp复用，如果进程unimport_jfr过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
+
 4.  参数
 
 @param[in] [Required] ctx: the urma context created before;
@@ -4402,6 +4406,10 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 支持多线程操作重入操作。
 
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_import_jetty接口urma默认开启tp复用，如果进程unimport_jetty过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
+
 4.  参数
 
 @param[in] [Required] ctx: the urma context created before;
@@ -4576,6 +4584,10 @@ Return: 0 on success, other value on error.
 3\. 连接成功后，从Jetty发出的所有消息将发送到tjetty指定的节点。
 
 4\. 支持多线程操作重入操作。
+
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_bind_jetty接口urma默认开启tp复用，如果进程unbind_jetty过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
 
 4.  参数
 
@@ -10371,6 +10383,10 @@ int ubcore_delete_jfr_batch([4.4.3.1.3](#34313-ubcore_jfr) [ubcore_jfr](#34313-u
 
 导入RM类型的JFR隐含与远端节点建链功能。导入UM类型的JFR隐含创建unreliable tp（其实是远端地址句柄）功能，记录在target jetty的tp中。
 
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_import_jfr/ubcore_import_jfr接口urma默认开启tp复用，如果进程unimport_jfr过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
+
 4.  参数
 
 @param[in] [Required] dev：ubcore_device指针;
@@ -10900,6 +10916,10 @@ Return: the number of completion record returned, 0 means no completion record r
 
 当导入jetty_group，只支持导入RM和UM类型的jetty group。如果导入RM模式的jetty，如果尚未与对端建链，隐含与对端建链，创建的tp指针保存在target jetty指针中。如果导入UM类的数据结构，将会创建目的地址句柄。支持多次导入相同配置的jetty group。应用需要保证jetty group配置真实有效，否则数据面无法将数据通过tjetty发送到对端。
 
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_import_jetty/ubcore_import_jetty接口urma默认开启tp复用，如果进程unimport_jetty过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
+
 4.  参数
 
 @param[in] [Required] dev：the ubcore device handle;
@@ -10985,6 +11005,10 @@ int ubcore_bind_jetty(struct [4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34
 bind接口针对RC类型的jetty，将本端RC类型jetty指针与已经导入的RC类型target jetty指针，进行一对一绑定。
 
 bind可以一方单独完成，不依赖对端已经导入jetty，也不要求对端同时调用bind jetty接口。bind功能还隐含创建RC类型TP，保存在tjetty中。主动调用bind完成者才具有发送和接收功能。被动响应bind请求的一方，底层会创建RC类型的TP与jetty关联，能接收消息、但不能发送消息。
+
+![](figures/urma_notice.png)
+
+多进程并发建链时，当前urma_bind_jetty/ubcore_bind_jetty接口urma默认开启tp复用，如果进程unbind_jetty过快有可能导致复用失败；如果是复用失败，urma侧会返回-EAGAIN错误码，用户可以选择有限次重试，来尝试解决此问题，复用失败不会影响重试import的成功性。
 
 4.  参数
 
