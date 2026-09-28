@@ -3663,6 +3663,10 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 Import remote JFR information, including registering its token locally.
 
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_import_jfr interface. If a process calls unimport_jfr too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
+
 4. Parameters
 
 @param[in] [Required] ctx: the urma context created before;
@@ -4452,6 +4456,10 @@ Supports import operations for both connectionless and connection-type jetties. 
 
 Supports reentrant multi-threaded operations.
 
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_import_jetty interface. If a process calls unimport_jetty too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
+
 4. Parameters
 
 @param[in] [Required] ctx: the urma context created before;
@@ -4634,6 +4642,10 @@ Bind a remote target Jetty to establish a connection.
 3. After a successful connection, all messages sent from the Jetty will be sent to the node specified by tjetty.
 
 4. Supports reentrant multi-threaded operations.
+
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_bind_jetty interface. If a process calls unbind_jetty too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
 
 4. Parameters
 
@@ -10550,6 +10562,10 @@ Import user-specified remote JFR information, including jfr id (containing eid),
 
 Importing an RM-type JFR implicitly establishes a link with the remote node. Importing a UM-type JFR implicitly creates an unreliable tp (essentially a remote address handle), which is recorded in the tp of the target jetty.
 
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_import_jfr/ubcore_import_jfr interfaces. If a process calls unimport_jfr too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
+
 4.  Parameters
 
 @param[in] [Required] dev: ubcore_device pointer;
@@ -11091,6 +11107,10 @@ The user inputs remote jetty or jetty group information, including jetty id (con
 
 When importing a jetty group, only RM and UM type jetty groups are supported. If importing an RM-mode jetty and no link has been established with the peer, a link is implicitly established. The created tp pointer is stored in the target jetty pointer. If importing a UM data structure, a destination address handle is created. Supports importing the same jetty group configuration multiple times. The application must ensure that the jetty group configuration is valid; otherwise, the data plane cannot send data to the peer through the tjetty.
 
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_import_jetty/ubcore_import_jetty interfaces. If a process calls unimport_jetty too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
+
 4.  Parameters
 
 @param[in] [Required] dev: the ubcore device handle;
@@ -11188,6 +11208,10 @@ int ubcore_bind_jetty(struct [4.4.4.1.3](#34413-ubcore_jetty) [ubcore_jetty](#34
 The bind interface is for RC-type jetties. It binds a local RC-type jetty pointer with an already imported RC-type target jetty pointer in a one-to-one relationship.
 
 Binding can be done one-sidedly, without depending on the peer having already imported the jetty, and without requiring the peer to call the bind jetty interface simultaneously. The bind function also implicitly creates an RC-type TP, which is stored in the tjetty. Only the party that actively calls bind has send and receive capabilities. The party that passively responds to the bind request will have an RC-type TP created and associated with the jetty at the lower layer, enabling message reception but not message transmission.
+
+![](figures/urma_notice.png)
+
+Currently, urma enables TP reuse by default for the urma_bind_jetty/ubcore_bind_jetty interfaces. If a process calls unbind_jetty too quickly, TP reuse may fail. In this case, urma returns the -EAGAIN error code. The user can retry a limited number of times to reduce the possibility of link establishment failure in TP reuse scenarios.
 
 4.  Parameters
 
