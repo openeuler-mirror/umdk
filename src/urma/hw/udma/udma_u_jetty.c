@@ -33,7 +33,6 @@ static int exec_jetty_active_cmd(struct udma_u_jetty *jetty, urma_jetty_cfg_t *c
 
 	cmd.buf_addr = (uintptr_t)jetty->sq.qbuf;
 	cmd.buf_len = jetty->sq.qbuf_size;
-	cmd.db_addr = (uintptr_t)jetty->sq.db.addr;
 	cmd.jetty_addr = (uintptr_t)&jetty->sq;
 	cmd.sqe_bb_cnt = jetty->sq.sqe_bb_cnt;
 	cmd.pi_type = jetty->sq.pi_type;
@@ -76,7 +75,6 @@ int exec_jetty_create_cmd(urma_context_t *ctx, struct udma_u_jetty *jetty,
 
 	cmd.buf_addr = (uintptr_t)jetty->sq.qbuf;
 	cmd.buf_len = jetty->sq.qbuf_size;
-	cmd.db_addr = (uintptr_t)jetty->sq.db.addr;
 	cmd.jetty_addr = (uintptr_t)&jetty->sq;
 	cmd.sqe_bb_cnt = jetty->sq.sqe_bb_cnt;
 	cmd.pi_type = jetty->sq.pi_type;
@@ -245,7 +243,7 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg)
 
 	jetty->jetty_type = UDMA_URMA_NORMAL_JETTY_TYPE;
 	if (exec_jetty_create_cmd(ctx, jetty, cfg)) {
-		if(jetty->sq.dtu_en) {
+		if (jetty->sq.dtu_en) {
 			jetty->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&jetty->sq, jetty->sq.sqe_bb_cnt * cfg->jfs_cfg.depth,
 			    UDMA_JFS_WQEBB, jetty->sq.aligned_size, true)) {
@@ -758,7 +756,7 @@ urma_status_t udma_u_alloc_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg,
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
 	struct udma_u_jetty *udma_jetty;
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	udma_jetty = (struct udma_u_jetty *)calloc(1, sizeof(struct udma_u_jetty));
@@ -782,7 +780,7 @@ urma_status_t udma_u_alloc_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg,
 
 urma_status_t udma_u_free_jetty(urma_jetty_t *jetty)
 {
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	ret = urma_cmd_free_jetty(jetty, &udata);
@@ -947,7 +945,7 @@ urma_status_t udma_u_set_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt
 urma_status_t udma_u_set_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len)
 {
 	struct udma_u_jetty *udma_jetty = to_udma_u_jetty(jetty);
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	urma_status_t verify_ret;
 	urma_status_t urma_ret;
 	int ret;
@@ -1065,7 +1063,7 @@ static void udma_u_get_jetty_cfg_field(urma_jetty_cfg_t *jetty_cfg, uint64_t opt
 urma_status_t udma_u_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf, uint32_t len)
 {
 	struct udma_u_jetty *udma_jetty = to_udma_u_jetty(jetty);
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	urma_status_t urma_ret;
 	int ret;
 
@@ -1190,7 +1188,7 @@ err_active_jetty_cmd:
 
 urma_status_t udma_u_deactive_jetty(urma_jetty_t *jetty)
 {
-	urma_cmd_udrv_priv_t udata;
+	urma_cmd_udrv_priv_t udata = {};
 	int ret;
 
 	ret = udma_u_delete_jetty_prepare(jetty);
