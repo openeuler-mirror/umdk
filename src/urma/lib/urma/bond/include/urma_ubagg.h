@@ -36,6 +36,23 @@ extern "C" {
 
 #define URMA_FAILOVER_LINK_NUM        (IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE)
 
+#define BONDP_WR_HINT_VERSION_V0 0
+#define BONDP_HAS_POST_JETTY_SEND_WR_HINT BONDP_HAS_POST_JETTY_SEND_WR_HINT
+
+typedef enum bondp_wr_hint_mask {
+    BONDP_WR_HINT_MASK_SRC_CHIP_ID = 1ULL << 0,
+    BONDP_WR_HINT_MASK_SRC_DIE_ID = 1ULL << 1,
+    BONDP_WR_HINT_MASK_SRC_PORT_ID = 1ULL << 2,
+    BONDP_WR_HINT_MASK_DST_CHIP_ID = 1ULL << 3,
+    BONDP_WR_HINT_MASK_DST_DIE_ID = 1ULL << 4,
+    BONDP_WR_HINT_MASK_DST_PORT_ID = 1ULL << 5,
+} bondp_wr_hint_mask_t;
+
+#define BONDP_WR_HINT_MASK_ALL \
+        (BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | \
+         BONDP_WR_HINT_MASK_SRC_PORT_ID | BONDP_WR_HINT_MASK_DST_CHIP_ID | \
+         BONDP_WR_HINT_MASK_DST_DIE_ID | BONDP_WR_HINT_MASK_DST_PORT_ID)
+
 typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_SET_BONDING_MODE_LEGACY = 4,
     BONDP_USER_CTL_ENABLE_SEG_CACHE,
@@ -173,6 +190,15 @@ typedef union bondp_port_id {
     } bs;
     uint16_t value;
 } bondp_port_id_t;
+
+typedef struct bondp_wr_hint {
+    uint32_t version;         /* 必须为BONDP_WR_HINT_VERSION_V0 */
+    uint32_t size;            /* 调用方头文件中的 sizeof(bondp_wr_hint_p) */
+    uint64_t mask;            /* 0表示不指定，完全走bondp内部调度 */
+    bondp_port_id_t src_id;   /* chip/die/port坐标; 子字段有效性由SRC_*位决定 */
+    bondp_port_id_t dst_id;   /* chip/die/port坐标; 子字段有效性由DST_*位决定 */
+    uint64_t reserved[4];     /* 必须为0，预留给后续拓展 */
+} bondp_wr_hint_t;
 
 // BONDP_USER_CTL_SET_BONDING_PORT
 // The port_ids config for this opcode should be the same as the port_ids
@@ -342,6 +368,19 @@ typedef struct bondp_path {
     uint32_t target_idx;
     uint32_t least_load;
 } bondp_path_t;
+
+urma_status_t bondp_post_jfs_wr_hint(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
+    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
+urma_status_t bondp_post_jetty_send_wr_hint(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
+urma_status_t bondp_post_jfr_wr_hint(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
+    urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+urma_status_t bondp_post_jetty_recv_wr_hint(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+    urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+urma_status_t bondp_modify_jfr_hint(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+    bondp_wr_hint_t *hint);
+urma_status_t bondp_get_async_event_hint(urma_context_t *ctx, urma_async_event_t *event,
+    bondp_port_id_t *port_id);
 
 /* Return true when a bonding jetty has at least one valid physical jetty. */
 bool bondp_jetty_is_available(const urma_jetty_t *jetty);
