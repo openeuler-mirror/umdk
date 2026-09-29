@@ -267,7 +267,10 @@ umq_buf_t *umq_ub_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_nu
     (void)umqh_tp;
     umq_buf_list_t head;
     QBUF_LIST_INIT(&head);
-    if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+    int ret = umq_qbuf_alloc(request_size, request_qbuf_num, option, &head);
+    if (ret != UMQ_SUCCESS) {
+        // UMQ_ERR_* codes mirror errno values (umq_errno.h)
+        errno = -ret;
         return NULL;
     }
     return QBUF_LIST_FIRST(&head);
@@ -279,7 +282,10 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
     (void)umqh_tp;
     umq_buf_list_t head;
     QBUF_LIST_INIT(&head);
-    if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+    int ret = umq_qbuf_alloc(request_size, request_qbuf_num, option, &head);
+    if (ret != UMQ_SUCCESS) {
+        // UMQ_ERR_* codes mirror errno values (umq_errno.h)
+        errno = -ret;
         return NULL;
     }
     return QBUF_LIST_FIRST(&head);
