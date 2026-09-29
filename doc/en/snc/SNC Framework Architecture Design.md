@@ -3041,6 +3041,11 @@ Given a super node topology (including routing tables) and coverage requirement 
 
 When `planPathsCoverageEx` enumerates inter-chassis EID pairs in Phase 1, the selected NPU port's CNA (source CNA) serves as the DstCNA (i.e., SCNA) for downstream L1SW/L2SW/L1SW route lookup, determining the downstream hops' hash port selection. That is: source NPU port CNA → affects L1SW→L2SW, L2SW→L1SW, L1SW→NPU out port selection. The forward DstCNA and reverse DstCNA of the same EID pair are different (reverse uses source CNA), causing forward and reverse paths to not necessarily coincide, thereby covering more links.
 
+`planPathsCoverage`'s SCNA chaining is simpler:
+- **Forward**: hop1 (NPU→L1SW) is physical direct with fixed port, SCNA = `src.cna` (source port CNA); hop2 (L1SW→L2SW) and hop3 (L2SW→L1SW) use `(scna=src.cna, dcna=dst.cna)`; hop4 (L1SW→NPU) takes `get(0)` and records the actual hit L1SW-side peer port CNA into `PathTrace.dstNpuEntryCna` (i.e., dst NPU's actual entry port CNA).
+- **Reverse**: hop1 (NPU→L1SW) is physical direct; hop2/hop3 use `(scna=revScna, dcna=src.cna)`, where `revScna = fwdTrace.dstNpuEntryCna != null ? fwdTrace.dstNpuEntryCna : dst.cna`; hop4 takes `get(0)`.
+- **Design intent**: The reverse SCNA takes the peer CNA of the port actually hit by forward hop4, so the reverse path naturally continues the physical link of forward hop4 (i.e., forward and reverse traverse the same NPU↔L1SW last-hop link), without additional symmetry enforcement checks (the old `dstNpuKey`/`l1swMatch`/`portMatch` checks in `traceReversePath` have been removed).
+
 #### 8.3.4 Two-Phase Coverage (planPathsCoverageEx)
 
 **Phase 1 (inter-chassis CROSS_L2):**
@@ -3275,13 +3280,17 @@ public class HashUtils {
 
 **Reception Semantics (Key Premise):** The destination CNA belongs to a certain NPU device, and that NPU can receive the packet, even if the packet arrives at a port that is not the CNA's own corresponding physical port. Therefore the route/port selection constraint is relaxed from "CNA ↔ port one-to-one correspondence" to "**the NPU device owning the CNA is reachable**".
 
-| Location | Old Definition | Extended Definition |
+| Location | `planPathsCoverage` (current) | `planPathsCoverageEx` (extended) |
 |:---|:---|:---|
-| L1SW routing | Only build /32 routes for CNAs of "physically connected ports" | For **every NPU with ports**, build /32 routes for **each of its CNAs**, out port = all ports from this L1SW to that NPU |
-| L2SW→L1SW port selection | Fixed use of `dst.remoteL1sw` (L1SW where destination port is located) | Any "L1SW that can reach the destination NPU device" |
-| L1SW→NPU port selection | Route has only 1 out port (no ECMP) | All ports from this L1SW to destination NPU (≥2 → hash selectable) |
+| L1SW routing | Only build /32 routes for CNAs of "physically connected ports" (1 outport each, no ECMP) | For **every NPU with ports**, build /32 routes for **each of its CNAs**, out port = all ports from this L1SW to that NPU |
+| L2SW routing | /32 routes outports cover all 4 L1SWs in destination rack (32 ports) | Same as `planPathsCoverage` |
+| L2SW→L1SW port selection | L2SW routing LPM hit entry outports with remote being L1SW (32 ports, hash selects one) | Same as `planPathsCoverage` |
+| NPU→L1SW port selection (hop1) | **Physical direct fixed port, no hash** (NPU does not query routing table) | CRC-8 `(DstCNA, jettyId)` hash (H1/H2) |
+| L1SW→NPU port selection (hop4) | Route has only 1 out port, `get(0)` | All ports from this L1SW to destination NPU (≥2 → hash selectable, H4) |
 
-**Side Effect (forward):** The ECMP member sets for L1SW→NPU and L2SW→L1SW two hops no longer degenerate; coverage planning can truly "step on" these out ports, and NPU↔L1SW layer coverage rate can reach 100%.
+> **Historical note**: Before the L2SW→L1SW port-selection alignment fix, `planPathsCoverage` used the precomputed physical topology map (`dst.remoteL1sw` + chip-based 8 ports). The current implementation uses the L2SW routing LPM hit entry's L1SW-direction outports (32 ports), matching `planPathsCoverageEx`. hop1 (NPU→L1SW) and hop4 (L1SW→NPU) remain physically deterministic in `planPathsCoverage` as an intentional design choice (single-port binding / single-outport route).
+
+**Side Effect (forward):** The ECMP member set for the L1SW→NPU hop no longer degenerates in `planPathsCoverageEx`; coverage planning can truly "step on" these out ports, and NPU↔L1SW layer coverage rate can reach 100%. In `planPathsCoverage`, the L2SW→L1SW hop now uses 32 ECMP members (vs. the previous 8), widening the L1SW↔L2SW coverage reachable through forward+reverse paths.
 
 #### 8.7.8 EID and Out Port Relationship
 

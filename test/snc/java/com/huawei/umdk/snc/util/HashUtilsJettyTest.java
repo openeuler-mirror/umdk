@@ -42,20 +42,6 @@ class HashUtilsJettyTest {
     }
 
     @Test
-    @DisplayName("jettyId 合法区间为 [32, 1023]")
-    void jettyIdRange() {
-        assertEquals(32, HashUtils.JETTY_ID_MIN);
-        assertEquals(1023, HashUtils.JETTY_ID_MAX);
-        assertTrue(HashUtils.isValidJettyId(32));
-        assertTrue(HashUtils.isValidJettyId(1023));
-        assertTrue(HashUtils.isValidJettyId(512));
-        assertTrue(!HashUtils.isValidJettyId(31));
-        assertTrue(!HashUtils.isValidJettyId(1024));
-        assertTrue(!HashUtils.isValidJettyId(0));
-        assertTrue(!HashUtils.isValidJettyId(-1));
-    }
-
-    @Test
     @DisplayName("jettyId 不做范围校验，任意值取低 8 位参与 CRC")
     void jettyIdNoRangeCheck() {
         Assumptions.assumeTrue(nativeAvailable(), "libubswitch-die not available");
@@ -75,7 +61,7 @@ class HashUtilsJettyTest {
         Assumptions.assumeTrue(nativeAvailable(), "libubswitch-die not available");
 
         for (int ecmpCnt = 1; ecmpCnt <= 8; ecmpCnt++) {
-            for (int jetty = HashUtils.JETTY_ID_MIN; jetty <= HashUtils.JETTY_ID_MIN + 16; jetty++) {
+            for (int jetty = 32; jetty <= 48; jetty++) {
                 int idx = HashUtils.nativeHashDstCnaJetty(cnaToInt("223.223.0.145"), jetty, ecmpCnt, 1, 1);
                 assertTrue(idx >= 0 && idx < ecmpCnt,
                     "index out of range: idx=" + idx + ", ecmpCnt=" + ecmpCnt);
@@ -153,8 +139,7 @@ class HashUtilsJettyTest {
         String[] cnas = {"223.223.0.17", "223.223.0.145", "170.170.170.18", "255.255.255.103"};
         for (String cna : cnas) {
             int dstCna = cnaToInt(cna);
-            for (int jetty = HashUtils.JETTY_ID_MIN;
-                 jetty <= HashUtils.JETTY_ID_MAX; jetty += 37) {
+            for (int jetty = 32; jetty <= 1023; jetty += 37) {
                 int raw = HashUtils.nativeHashDstCnaJetty(dstCna, jetty, 0, 1, 1);
                 assertEquals(crc8Reference(0, dstCna, jetty & 0xFF), raw,
                     "CRC8 must match the reference for " + cna + " jetty=" + jetty);
@@ -180,7 +165,7 @@ class HashUtilsJettyTest {
         Set<Integer> distinct = new LinkedHashSet<>();
         for (String cna : cnaBuckets.keySet()) {
             int dstCna = cnaToInt(cna);
-            for (int jetty = HashUtils.JETTY_ID_MIN; jetty < HashUtils.JETTY_ID_MIN + 64; jetty++) {
+            for (int jetty = 32; jetty < 96; jetty++) {
                 int idx = HashUtils.nativeHashDstCnaJetty(dstCna, jetty, 2, 1, 1);
                 distinct.add(idx);
                 jettyBuckets.merge(idx, 1, Integer::sum);

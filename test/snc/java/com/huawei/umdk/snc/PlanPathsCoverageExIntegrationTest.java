@@ -15,9 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.dto.CoverageLayerStats;
 import com.huawei.umdk.snc.dto.CoverageLink;
@@ -29,6 +26,11 @@ import com.huawei.umdk.snc.dto.CoveragePathsResult;
 import com.huawei.umdk.snc.dto.CoverageRequirement;
 import com.huawei.umdk.snc.dto.CoveredEidPair;
 import com.huawei.umdk.snc.dto.PathPlanResult.PlanStatus;
+import com.huawei.umdk.snc.entity.DeviceEntity;
+import com.huawei.umdk.snc.entity.DeviceType;
+import com.huawei.umdk.snc.entity.ForwardingChip;
+import com.huawei.umdk.snc.entity.NpuPortEntity;
+import com.huawei.umdk.snc.entity.PortEntity;
 import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.exception.SNCStateException;
 
@@ -43,14 +45,15 @@ import org.junit.jupiter.api.Timeout;
  * counterpart of {@link PlanPathsCoverageIntegrationTest} for the extended
  * interface.
  *
- * <p>Fixture: the topology produced by {@link FullRackTopologyGenerator}
- * (through {@link RackTopologyLoader}), pruned to a <b>single chassis</b>
- * (rack1 NPU + rack1 L1SW, no L2SW), matching the test convention that the
- * 2-chassis scenario is reserved for the old interface. With a single chassis
- * the inter-chassis (框间) phase has no usable EID pair, so the whole NPU↔L1SW
- * coverage comes from the intra-chassis (框内) phase.
+ * <p>Fixture: the full 4-rack topology produced by {@link FullRackTopologyGenerator}
+ * (148 devices: 128 NPU + 16 L1SW + 4 L2SW), loaded through
+ * {@link RackTopologyLoader} without any pruning. With the complete rack the
+ * two-phase extended coverage runs end-to-end: phase 1 produces CROSS_L2
+ * (inter-chassis) pairs that traverse the L2 spine {@code NPU -> L1SW -> L2SW
+ * -> L1SW -> NPU}, and phase 2 fills the remaining NPU↔L1SW out-ports with
+ * LOCAL_L1 (intra-chassis) pairs {@code NPU -> L1SW -> NPU}.
  */
-@DisplayName("planPathsCoverageEx 接口集成测试（SncService 北向 + 全机架生成器单机框子集）")
+@DisplayName("planPathsCoverageEx 接口集成测试（SncService 北向 + FullRackTopologyGenerator 完整 4 机框拓扑）")
 class PlanPathsCoverageExIntegrationTest {
 
     private static final String SN_NAME = "A5-superPod-rack";
@@ -59,22 +62,10 @@ class PlanPathsCoverageExIntegrationTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        // Topology built by FullRackTopologyGenerator (148 devices), then pruned
-        // to a single chassis: rack1 NPUs + rack1 L1SWs, no L2SW at all.
+        // Full 4-rack topology (148 devices: 128 NPU + 16 L1SW + 4 L2SW) from
+        // FullRackTopologyGenerator, loaded via RackTopologyLoader without any
+        // pruning — the test exercises planPathsCoverageEx on the complete rack.
         SuperNode sn = RackTopologyLoader.loadRawTopology();
-
-        Set<String> keepNpu = new HashSet<>();
-        Set<String> keepSw = new HashSet<>();
-        for (int b = 1; b <= 2; b++) {
-            for (int n = 1; n <= 2; n++) {
-                keepNpu.add("rack1#board" + b + "#npu" + n);
-            }
-        }
-        for (int l = 1; l <= 4; l++) {
-            keepSw.add("rack1#l1sw" + l);
-        }
-        sn.getNpuDevices().keySet().removeIf(k -> !keepNpu.contains(k));
-        sn.getSwDevices().keySet().removeIf(k -> !keepSw.contains(k));
 
         sncService = new SncService();
         sncService.init(new SNCConfig());
@@ -93,7 +84,7 @@ class PlanPathsCoverageExIntegrationTest {
         return req;
     }
 
-    /** Common assertions of an extended-coverage result. */
+    /** Common assertions of an extended-coverage result on the full 4-rack topology. */
     private static void assertCoverageOk(CoveragePathsResult result, String label) {
         assertTrue(result.getStatus() == PlanStatus.SUCCESS
                 || result.getStatus() == PlanStatus.COVERAGE_INCOMPLETE,
@@ -105,19 +96,36 @@ class PlanPathsCoverageExIntegrationTest {
         assertFalse(result.getEidPairs().isEmpty(), label + ": at least one EID pair");
         assertTrue(result.getStats().getCoverageRate() > 0, label + ": coverageRate > 0");
 
-        // single chassis => every pair is 框内 with 2 forward + 2 ACK links, and
-        // the L1SW↔L2SW layer has no link at all
-        assertEquals(0, result.getLayerStats().get(CoverageLinkLayer.L1_L2)
-            .getTotalLinks().intValue(), label + ": no L1SW↔L2SW links in one chassis");
+        // Full 4-rack topology => phase 1 produces CROSS_L2 (inter-chassis) pairs
+        // that traverse the L2 spine, so the L1SW↔L2SW layer carries links. Phase 2
+        // fills any remaining NPU↔L1SW out-ports with LOCAL_L1 (intra-chassis)
+        // pairs; when phase 1 already covers all NPU↔L1SW out-ports, phase 2 has
+        // nothing to fill and produces no LOCAL_L1 pair, which is also valid.
+        assertTrue(result.getLayerStats().get(CoverageLinkLayer.L1_L2)
+                .getTotalLinks() > 0,
+            label + ": L1SW↔L2SW links must exist in the 4-rack topology");
+
+        boolean hasCrossL2 = false;
         for (CoveredEidPair p : result.getEidPairs()) {
-            assertEquals(CoveragePathType.LOCAL_L1, p.getType(), label + ": LOCAL_L1 pair");
-            assertEquals(4, p.getCoveredLinks().size(), label + ": 2 forward + 2 ACK");
             assertNotEquals(p.getSrcDevice(), p.getDestDevice(), label + ": distinct NPUs");
+            CoveragePathType type = p.getType();
+            if (type == CoveragePathType.CROSS_L2) {
+                hasCrossL2 = true;
+                assertEquals(8, p.getCoveredLinks().size(),
+                    label + ": CROSS_L2 pair = 4 forward + 4 ACK links");
+            } else if (type == CoveragePathType.LOCAL_L1) {
+                assertEquals(4, p.getCoveredLinks().size(),
+                    label + ": LOCAL_L1 pair = 2 forward + 2 ACK links");
+            }
             for (CoverageLink l : p.getCoveredLinks()) {
-                assertEquals(CoverageLinkLayer.NPU_L1, l.getLayer(),
-                    label + ": 框内 links stay in the NPU↔L1SW layer");
+                assertTrue(l.getLayer() == CoverageLinkLayer.NPU_L1
+                        || l.getLayer() == CoverageLinkLayer.L1_L2,
+                    label + ": link layer must be NPU_L1 or L1_L2");
             }
         }
+        assertTrue(hasCrossL2, label + ": at least one CROSS_L2 (inter-chassis) pair");
+        // LOCAL_L1 (phase 2) is optional: when phase 1's CROSS_L2 pairs already
+        // cover all NPU↔L1SW out-ports, phase 2 has nothing to fill.
 
         // per-layer numbers add up to the aggregate ones
         int layerTotal = result.getLayerStats().values().stream()
@@ -129,8 +137,8 @@ class PlanPathsCoverageExIntegrationTest {
     }
 
     @Test
-    @Timeout(300)
-    @DisplayName("MIN_COVERAGE：北向返回框内覆盖结果")
+    @Timeout(600)
+    @DisplayName("MIN_COVERAGE：北向返回完整 4 框覆盖结果（CROSS_L2 + LOCAL_L1）")
     void minCoverage() {
         CoveragePathsResult result = sncService.planPathsCoverageEx(
             request(CoverageRequirement.MIN_COVERAGE));
@@ -138,18 +146,19 @@ class PlanPathsCoverageExIntegrationTest {
         assertCoverageOk(result, "MIN_COVERAGE");
         assertTrue(result.getLayerStats().get(CoverageLinkLayer.NPU_L1)
             .getCoveredCount() > 0, "MIN_COVERAGE: NPU↔L1SW out-ports must be covered");
+        assertTrue(result.getLayerStats().get(CoverageLinkLayer.L1_L2)
+            .getCoveredCount() > 0, "MIN_COVERAGE: L1SW↔L2SW out-ports must be covered");
     }
 
     @Test
-    @Timeout(300)
-    @DisplayName("REDUNDANT：每条被覆盖链路至少被 2 个 EID 对覆盖")
+    @Timeout(600)
+    @DisplayName("REDUNDANT：每条被覆盖链路（NPU_L1 + L1_L2）至少被 2 个 EID 对覆盖")
     void redundant() {
         CoveragePathsResult result = sncService.planPathsCoverageEx(
             request(CoverageRequirement.REDUNDANT));
 
         assertCoverageOk(result, "REDUNDANT");
         for (CoverageLink l : result.getCoverageLinks()) {
-            if (l.getLayer() != CoverageLinkLayer.NPU_L1) continue;
             if (l.getCoverCount() == null || l.getCoverCount() == 0) continue;
             assertTrue(l.getCoverCount() >= 2,
                 "REDUNDANT: covered link must have >= 2 covers, but "
@@ -196,6 +205,51 @@ class PlanPathsCoverageExIntegrationTest {
         try {
             assertThrows(SNCStateException.class,
                 () -> svc.planPathsCoverageEx(request(CoverageRequirement.MIN_COVERAGE)));
+        } finally {
+            svc.uninit();
+        }
+    }
+
+    @Test
+    @DisplayName("NPU 端口缺少 jettyId 时返回 TOPO_INCOMPLETE")
+    void npuPortMissingJettyId() {
+        // Load the full rack topology, then null out the jettyId of one NPU
+        // port to simulate an incomplete topology input.
+        SuperNode sn = RackTopologyLoader.loadRawTopology();
+        String removedPort = null;
+        for (DeviceEntity dev : sn.getAllDevices().values()) {
+            if (dev.getDeviceType() != DeviceType.NPU || dev.getForwardingChips() == null) {
+                continue;
+            }
+            for (ForwardingChip chip : dev.getForwardingChips().values()) {
+                if (chip.getPorts() == null) continue;
+                for (PortEntity port : chip.getPorts().values()) {
+                    if (port instanceof NpuPortEntity npuPort
+                        && npuPort.getJettyId() != null) {
+                        removedPort = dev.getDeviceName() + "#" + port.getPortName();
+                        npuPort.setJettyId(null);
+                        break;
+                    }
+                }
+                if (removedPort != null) break;
+            }
+            if (removedPort != null) break;
+        }
+        assertNotNull(removedPort, "fixture must have at least one NPU port with jettyId");
+
+        SncService svc = new SncService();
+        svc.init(new SNCConfig());
+        svc.setSuperNode(sn);
+        try {
+            CoveragePathsResult result = svc.planPathsCoverageEx(
+                request(CoverageRequirement.MIN_COVERAGE));
+            assertEquals(PlanStatus.TOPO_INCOMPLETE, result.getStatus(),
+                "missing jettyId must yield TOPO_INCOMPLETE");
+            assertNotNull(result.getErrorMessage(),
+                "error message must describe the missing jettyId port");
+            assertTrue(result.getErrorMessage().contains(removedPort),
+                "error message must mention the offending port " + removedPort
+                    + ", was: " + result.getErrorMessage());
         } finally {
             svc.uninit();
         }

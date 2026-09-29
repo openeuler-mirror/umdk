@@ -9,9 +9,6 @@ package com.huawei.umdk.snc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.dto.CoveragePathsRequest;
 import com.huawei.umdk.snc.dto.CoveragePathsResult;
@@ -27,7 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-@DisplayName("planPathsCoverage 接口集成测试（基于 rack 拓扑 2 机框子集）")
+@DisplayName("planPathsCoverage 接口集成测试（基于 FullRackTopologyGenerator 完整 4 机框拓扑）")
 class PlanPathsCoverageIntegrationTest {
 
     private static final String SN_NAME = "A5-superPod-rack";
@@ -36,26 +33,10 @@ class PlanPathsCoverageIntegrationTest {
 
     @BeforeAll
     static void setUp() throws Exception {
+        // Full 4-rack topology (148 devices: 128 NPU + 16 L1SW + 4 L2SW) from
+        // FullRackTopologyGenerator, loaded via RackTopologyLoader without any
+        // pruning — the test exercises planPathsCoverage on the complete rack.
         SuperNode sn = RackTopologyLoader.loadRawTopology();
-
-        Set<String> keepNpu = new HashSet<>();
-        Set<String> keepSw = new HashSet<>();
-        for (int c = 1; c <= 2; c++) {
-            for (int b = 1; b <= 2; b++) {
-                for (int n = 1; n <= 2; n++) {
-                    keepNpu.add("rack" + c + "#board" + b + "#npu" + n);
-                }
-            }
-            for (int l = 1; l <= 4; l++) {
-                keepSw.add("rack" + c + "#l1sw" + l);
-            }
-        }
-        for (int l = 1; l <= 4; l++) {
-            keepSw.add("l2sw" + l);
-        }
-
-        sn.getNpuDevices().keySet().removeIf(k -> !keepNpu.contains(k));
-        sn.getSwDevices().keySet().removeIf(k -> !keepSw.contains(k));
 
         sncService = new SncService();
         sncService.init(new SNCConfig());
@@ -90,7 +71,7 @@ class PlanPathsCoverageIntegrationTest {
     }
 
     @Test
-    @Timeout(300)
+    @Timeout(600)
     @DisplayName("MIN_COVERAGE")
     void minCoverage() {
         CoveragePathsResult result = sncService.planPathsCoverage(
@@ -99,7 +80,7 @@ class PlanPathsCoverageIntegrationTest {
     }
 
     @Test
-    @Timeout(300)
+    @Timeout(600)
     @DisplayName("REDUNDANT")
     void redundant() {
         CoveragePathsResult result = sncService.planPathsCoverage(

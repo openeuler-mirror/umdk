@@ -132,9 +132,6 @@ class CoverageMainSuccessTest {
         }
 
         // Verify covered out-ports expose their covering EID pairs ("srcEid|dstEid").
-        // (Per-physical-link count assertions were removed together with the
-        // test-side route augmentation helpers; totalLinks now comes straight
-        // from FullRackTopologyGenerator's routing tables.)
         assertCoveredEidPairsConsistent(result);
     }
 

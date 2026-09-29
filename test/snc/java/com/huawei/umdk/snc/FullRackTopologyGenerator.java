@@ -395,7 +395,8 @@ public class FullRackTopologyGenerator {
             jb.str("remotePort", l1swPortName(l1swIdx, peerPortId));
             jb.str("cna", cnaIp(r, b, n, p));
             jb.str("eid", eidStr(r, b, n, p));
-            jb.strLast("upi", "0A0A0A01");
+            jb.str("upi", "0A0A0A01");
+            jb.numLast("jettyId", 32 + p);
             jb.dec();
             if (p < PORTS_PER_NPU - 1) {
                 jb.closeObjComma();

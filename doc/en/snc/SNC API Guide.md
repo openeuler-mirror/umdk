@@ -774,10 +774,12 @@ Aggregate statistics (covering all layers), with field semantics consistent with
 
 | Index | Location | Direction | scna / dcna | sport / dport | Member set |
 |:---:|:---|:---|:---|:---|:---|
-| H1 | `traceForwardPath` | L1SW→L2SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | Set of L1SW routing outports with remote being L2SW |
-| H2 | `traceForwardPath` | L2SW→L1SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | Set of ports on the L2SW inbound port's chip towards `dst.remoteL1sw` |
-| H3 | `traceReversePath` | L1SW→L2SW (reverse) | `dst.cna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | Set of destination L1SW routing outports with remote being L2SW |
-| H4 | `traceReversePath` | L2SW→L1SW (reverse) | `dst.cna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | Set of ports on the reverse L2SW inbound port's chip towards `src.remoteL1sw` |
+| H1 | `traceForwardPath` | L1SW→L2SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | Set of L1SW routing LPM hit entry outports with remote being L2SW |
+| H2 | `traceForwardPath` | L2SW→L1SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | Set of L2SW routing LPM hit entry outports with remote being L1SW (32 ports = 4 L1SWs in destination rack × 8 ports each) |
+| H3 | `traceReversePath` | L1SW→L2SW (reverse) | `revScna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | Set of reverse L1SW routing LPM hit entry outports with remote being L2SW |
+| H4 | `traceReversePath` | L2SW→L1SW (reverse) | `revScna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | Set of reverse L2SW routing LPM hit entry outports with remote being L1SW (32 ports) |
+
+> **Reverse SCNA (`revScna`)**: Takes the CNA of the actual L1SW-side peer port hit by forward hop4 (L1SW→NPU), i.e., the actual dst NPU entry port CNA, carried by `PathTrace.dstNpuEntryCna`; falls back to `dst.cna` if forward trace did not record it. This design makes the reverse path naturally continue the physical link of forward hop4 without additional symmetry enforcement checks.
 
 **`planPathsCoverageEx` additional hash points (H5/H6 use `nativeHashDstCnaJetty` and `nativePortIdx`):**
 
@@ -800,15 +802,19 @@ In `planPathsCoverageEx`, **the CNA of the selected NPU port serves as the SCNA*
 
 > In some topologies, Stage 2 may produce 0 pairs (inter-chassis has already covered all NPU↔L1SW outports), which is a normal result; for single-chassis (or when cross-chassis paths are unavailable), all coverage is intra-chassis.
 
-### 9.4 Route Scope Extension and Reception Semantics (`planPathsCoverageEx`)
+### 9.4 Route Scope Extension and Reception Semantics (shared by `planPathsCoverage` / `planPathsCoverageEx`)
 
 **Reception semantics (key premise)**: The destination CNA belongs to an NPU device, and that NPU can receive the packet even if the packet arrives at a port that is not the CNA's own physical port. Therefore, the routing/port selection constraint is relaxed from "CNA ↔ port one-to-one correspondence" to "the NPU device owning the CNA is reachable".
 
 | Location | `planPathsCoverage` basis | `planPathsCoverageEx` basis |
 |:---|:---|:---|
-| L1SW routing | Build /32 routes only for "physically connected ports" CNAs | For each NPU with ports, build /32 routes for each of its CNAs, outport = all ports from this L1SW to that NPU (enhanced by test fixture `CoverageRouteAugmentor.augmentL1swNpuRouting`) |
-| L2SW→L1SW port selection | Fixed to `dst.remoteL1sw` | Any "L1SW that can reach the destination NPU device" (`PrecomputedTopo.npuL1Peers` + `l2PortsTowardsL1Peers`) |
-| L1SW→NPU port selection | Route has only 1 outport (no ECMP), `get(0)` | All ports from this L1SW to the destination NPU (≥2 → hash selectable), `l1PortsTowardsDevice` + `nativePortIdx` |
+| L1SW routing | Build /32 routes only for "physically connected ports" CNAs (1 outport each, no ECMP) | For each NPU with ports, build /32 routes for each of its CNAs, outport = all ports from this L1SW to that NPU |
+| L2SW routing | /32 routes outports cover all 4 L1SWs in the destination rack (32 ports) | Same as `planPathsCoverage` |
+| L2SW→L1SW port selection | L2SW routing LPM hit entry outports with remote being L1SW (32 ports, hash selects one) | Same as `planPathsCoverage` |
+| NPU→L1SW port selection (hop1) | **Physical direct fixed port, no hash** (NPU does not query routing table) | CRC-8 `(DstCNA, jettyId)` hash (H5) |
+| L1SW→NPU port selection (hop4) | Route has only 1 outport, `get(0)` | All ports from this L1SW to the destination NPU (≥2 → hash selectable), H6 |
+
+> **hop1/hop4 remain physically deterministic in `planPathsCoverage`**: NPU→L1SW last-hop outport is fixed by the NPU candidate's physical binding (no hash); L1SW→NPU last-hop outport takes `get(0)` (route has only 1 outport, no ECMP). The two middle hops (L1SW→L2SW, L2SW→L1SW) use routing LPM + hash port selection, consistent with `planPathsCoverageEx`.
 
 ### 9.5 EID and Outport Relationship
 

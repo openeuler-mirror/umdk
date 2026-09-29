@@ -191,11 +191,11 @@ class CoverageIntraChassisTest {
         PortEntity p = portOf(dev, portName);
         if (p instanceof NpuPortEntity) {
             Integer jettyId = ((NpuPortEntity) p).getJettyId();
-            if (jettyId != null && HashUtils.isValidJettyId(jettyId)) {
+            if (jettyId != null) {
                 return jettyId;
             }
         }
-        return HashUtils.JETTY_ID_MIN + (p == null || p.getId() == null ? 0 : p.getId());
+        return 32 + (p == null || p.getId() == null ? 0 : p.getId());
     }
 
     /** L1SW-facing out-ports of an NPU route, in route iteration order. */
