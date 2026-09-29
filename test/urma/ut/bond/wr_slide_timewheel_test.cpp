@@ -51,32 +51,36 @@ TEST(UrmaBondTest, SlideWindowRejectsNullAndOutOfRangeSequence)
 
 TEST(UrmaBondTest, WrBufferAllocGetRelease)
 {
-    wr_buf_t buf = {};
+    wr_buf_t jfsBuf = {};
+    wr_buf_t jfrBuf = {};
     jfs_wr_entry_t *jfsEntry = nullptr;
     jfr_wr_entry_t *jfrEntry = nullptr;
 
-    EXPECT_EQ(-EINVAL, wr_buf_init(nullptr, 2, BONDP_MAX_SGE_NUM));
-    EXPECT_EQ(-EINVAL, wr_buf_init(&buf, 0, BONDP_MAX_SGE_NUM));
+    EXPECT_EQ(-EINVAL, jfs_wr_buf_init(nullptr, 2, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
+    EXPECT_EQ(-EINVAL, jfs_wr_buf_init(&jfsBuf, 0, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
-    jfsEntry = jfs_wr_buf_alloc(&buf);
+    ASSERT_EQ(0, jfs_wr_buf_init(&jfsBuf, 2, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
+    jfsEntry = jfs_wr_buf_alloc(&jfsBuf);
     ASSERT_NE(nullptr, jfsEntry);
     EXPECT_EQ(idx_to_wr_id(0, 1), jfsEntry->wr_id);
     EXPECT_EQ(WR_BUF_ENTRY_JFS, jfsEntry->entry_type);
-    EXPECT_TRUE(jfsEntry == jfs_wr_buf_get(&buf, jfsEntry->wr_id));
+    EXPECT_TRUE(jfsEntry == jfs_wr_buf_get(&jfsBuf, jfsEntry->wr_id));
 
-    jfrEntry = jfr_wr_buf_alloc(&buf);
+    ASSERT_NE(nullptr, jfs_wr_buf_alloc(&jfsBuf));
+    EXPECT_EQ(nullptr, jfs_wr_buf_alloc(&jfsBuf));
+    jfs_wr_buf_release(&jfsBuf, jfsEntry);
+    EXPECT_EQ(nullptr, jfs_wr_buf_get(&jfsBuf, jfsEntry->wr_id));
+    EXPECT_NE(nullptr, jfs_wr_buf_alloc(&jfsBuf));
+    wr_buf_uninit(&jfsBuf);
+
+    ASSERT_EQ(0, jfr_wr_buf_init(&jfrBuf, 2, BONDP_MAX_SGE_NUM));
+    jfrEntry = jfr_wr_buf_alloc(&jfrBuf);
     ASSERT_NE(nullptr, jfrEntry);
-    EXPECT_EQ(idx_to_wr_id(1, 1), jfrEntry->wr_id);
+    EXPECT_EQ(idx_to_wr_id(0, 1), jfrEntry->wr_id);
     EXPECT_EQ(WR_BUF_ENTRY_JFR, jfrEntry->entry_type);
-    EXPECT_TRUE(jfrEntry == jfr_wr_buf_get(&buf, jfrEntry->wr_id));
-
-    EXPECT_EQ(nullptr, jfs_wr_buf_alloc(&buf));
-    jfs_wr_buf_release(&buf, jfsEntry);
-    EXPECT_EQ(nullptr, jfs_wr_buf_get(&buf, 1));
-    EXPECT_NE(nullptr, jfs_wr_buf_alloc(&buf));
-
-    wr_buf_uninit(&buf);
+    EXPECT_TRUE(jfrEntry == jfr_wr_buf_get(&jfrBuf, jfrEntry->wr_id));
+    jfr_wr_buf_release(&jfrBuf, jfrEntry);
+    wr_buf_uninit(&jfrBuf);
 }
 
 TEST(UrmaBondTest, WrBufferReleaseJfrAndReuse)
@@ -84,7 +88,7 @@ TEST(UrmaBondTest, WrBufferReleaseJfrAndReuse)
     wr_buf_t buf = {};
     jfr_wr_entry_t *entry = nullptr;
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 1, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&buf, 1, BONDP_MAX_SGE_NUM));
     entry = jfr_wr_buf_alloc(&buf);
     ASSERT_NE(nullptr, entry);
     uint64_t wrId = entry->wr_id;
@@ -99,7 +103,8 @@ TEST(UrmaBondTest, WrBufferReleaseJfrAndReuse)
 
 TEST(UrmaBondTest, HeaderInlineHelpersCoverStablePureLogic)
 {
-    wr_buf_t buf = {};
+    wr_buf_t jfsBuf = {};
+    wr_buf_t jfrBuf = {};
     urma_seg_t seg = {};
     urma_seg_t converted = {};
     urma_seg_base_t base = {};
@@ -107,16 +112,18 @@ TEST(UrmaBondTest, HeaderInlineHelpersCoverStablePureLogic)
     urma_jfs_wr_t wr = {};
     urma_cr_t cr = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
-    jfs_wr_entry_t *jfsEntry = jfs_wr_buf_alloc(&buf);
-    jfr_wr_entry_t *jfrEntry = jfr_wr_buf_alloc(&buf);
+    ASSERT_EQ(0, jfs_wr_buf_init(&jfsBuf, 2, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&jfrBuf, 2, BONDP_MAX_SGE_NUM));
+    jfs_wr_entry_t *jfsEntry = jfs_wr_buf_alloc(&jfsBuf);
+    jfr_wr_entry_t *jfrEntry = jfr_wr_buf_alloc(&jfrBuf);
     ASSERT_NE(nullptr, jfsEntry);
     ASSERT_NE(nullptr, jfrEntry);
-    EXPECT_EQ(nullptr, jfs_wr_buf_get(&buf, 0));
-    EXPECT_EQ(jfsEntry, jfs_wr_buf_get(&buf, jfsEntry->wr_id));
-    EXPECT_EQ(jfrEntry, jfr_wr_buf_get(&buf, jfrEntry->wr_id));
-    EXPECT_EQ(nullptr, jfr_wr_buf_get(&buf, jfrEntry->wr_id + buf.max_wr_num));
-    wr_buf_uninit(&buf);
+    EXPECT_EQ(nullptr, jfs_wr_buf_get(&jfsBuf, 0));
+    EXPECT_EQ(jfsEntry, jfs_wr_buf_get(&jfsBuf, jfsEntry->wr_id));
+    EXPECT_EQ(jfrEntry, jfr_wr_buf_get(&jfrBuf, jfrEntry->wr_id));
+    EXPECT_EQ(nullptr, jfr_wr_buf_get(&jfrBuf, jfrEntry->wr_id + jfrBuf.max_wr_num));
+    wr_buf_uninit(&jfsBuf);
+    wr_buf_uninit(&jfrBuf);
 
     seg.ubva.va = 0x1000;
     seg.ubva.uasid = 0x22;
@@ -153,7 +160,7 @@ TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfs)
     wr_buf_t buf = {};
     jfs_wr_entry_t *entries[3] = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfs_wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(0U, jfs_wr_buf_alloc_batch(&buf, entries, 0));
     EXPECT_EQ(2U, jfs_wr_buf_alloc_batch(&buf, entries, 3));
     ASSERT_NE(nullptr, entries[0]);
@@ -173,7 +180,7 @@ TEST(UrmaBondTest, WrBufferBatchAllocReleaseJfrAndRejectOversizedRelease)
     jfr_wr_entry_t *jfrEntries[2] = {};
     jfs_wr_entry_t *jfsEntries[BONDP_BATCH_POST_MAX_NUM + 1] = {};
 
-    ASSERT_EQ(0, wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&buf, 2, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(0U, jfr_wr_buf_alloc_batch(&buf, jfrEntries, 0));
     EXPECT_EQ(2U, jfr_wr_buf_alloc_batch(&buf, jfrEntries, 2));
     ASSERT_NE(nullptr, jfrEntries[0]);

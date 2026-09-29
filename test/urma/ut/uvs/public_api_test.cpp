@@ -145,7 +145,7 @@ TEST_F(UrmaUvsTest, LogAndLockHelpersAreStable)
     tpsa_getenv_log_level();
     EXPECT_EQ(static_cast<unsigned>(TPSA_VLOG_LEVEL_INFO), tpsa_log_get_level());
     ASSERT_EQ(0, unsetenv("UVS_LOG_LEVEL"));
-    tpsa_log("UrmaUvsTest", __LINE__, TPSA_VLOG_LEVEL_INFO, "uvs log smoke %d", 1);
+    tpsa_log(__FILE_NAME__, __func__, __LINE__, TPSA_VLOG_LEVEL_INFO, "uvs log smoke %d", 1);
     tpsa_log_uninit();
 
     uvs_get_api_rdlock();

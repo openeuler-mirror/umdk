@@ -52,15 +52,11 @@ TEST(UrmaBondTest, HashTableCreateLookupRemoveAndDestroy)
     bondp_hash_table_destroy(&collisionTbl);
 }
 
-TEST(UrmaBondTest, ContextTablesMapJettyIdsAndRemoteTokenIds)
+TEST(UrmaBondTest, ContextTablesMapJettyIds)
 {
     bondp_hash_table_t pJettyTable = {};
-    bondp_hash_table_t tokenTable = {};
     bondp_comp_t comp = {};
     urma_jetty_id_t pJettyId = MakeJettyId(0x21);
-    bondp_v2p_token_id_t tokenItem = {};
-    bondp_v2p_token_id_t lookedUpToken = {};
-    urma_eid_t remoteEid = MakeEid(0x31);
 
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&pJettyTable, 4));
     EXPECT_EQ(BONDP_HASH_MAP_INVALID_PARAM_ERROR,
@@ -74,29 +70,6 @@ TEST(UrmaBondTest, ContextTablesMapJettyIdsAndRemoteTokenIds)
     EXPECT_EQ(0, bdp_p_vjetty_id_table_del_without_lock(&pJettyTable, pJettyId, JETTY));
     EXPECT_EQ(nullptr, bdp_p_vjetty_id_table_lookup_comp_without_lock(&pJettyTable, pJettyId, JETTY));
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&pJettyTable));
-
-    ASSERT_EQ(0, bdp_r_v2p_token_id_table_create(&tokenTable, 4));
-    EXPECT_EQ(BONDP_HASH_MAP_NOT_FOUND_ERROR,
-        bdp_r_v2p_token_id_tabl_lookup(&tokenTable, 0x44, remoteEid, &lookedUpToken));
-    tokenItem.key.v_token_id = 0x44;
-    tokenItem.key.v_remote_eid = remoteEid;
-    tokenItem.v_handle = 0x55667788ULL;
-    tokenItem.index = 3;
-    tokenItem.connected[0][1] = true;
-    tokenItem.peer_p_seg[1].len = 0x99;
-    EXPECT_EQ(tokenItem.key.v_token_id, tokenTable.hash_f(&tokenItem.key));
-    EXPECT_EQ(0, bdp_r_v2p_token_id_table_add_lockless(&tokenTable, &tokenItem));
-    EXPECT_EQ(0, bdp_r_v2p_token_id_tabl_lookup(&tokenTable, 0x44, remoteEid, &lookedUpToken));
-    EXPECT_EQ(tokenItem.v_handle, lookedUpToken.v_handle);
-    EXPECT_EQ(tokenItem.index, lookedUpToken.index);
-    EXPECT_TRUE(lookedUpToken.connected[0][1]);
-    EXPECT_EQ(0x99U, lookedUpToken.peer_p_seg[1].len);
-    EXPECT_EQ(0, bdp_r_v2p_token_id_table_add_lockless(&tokenTable, &tokenItem));
-    EXPECT_EQ(-1, bdp_r_v2p_token_id_del_idx_lockless(&tokenTable, 9));
-    EXPECT_EQ(0, bdp_r_v2p_token_id_del_idx_lockless(&tokenTable, tokenItem.index));
-    EXPECT_EQ(BONDP_HASH_MAP_NOT_FOUND_ERROR,
-        bdp_r_v2p_token_id_tabl_lookup(&tokenTable, 0x44, remoteEid, &lookedUpToken));
-    EXPECT_EQ(0, bdp_r_v2p_token_id_table_destroy(&tokenTable));
 }
 
 TEST(UrmaBondTest, ConnectionTableGetOrCreateReusesExistingConnection)

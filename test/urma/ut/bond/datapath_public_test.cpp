@@ -27,11 +27,16 @@ TEST(UrmaBondTest, DatapathPublicPostSendPropagatesSingleDeviceNoStoreFailure)
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_STANDALONE;
     fixture.comp.comp_type = BONDP_COMP_JFS;
     fixture.comp.active_count = 1;
+    /* p_jfs/p_jfr/p_jetty share one union: set the view this test posts on */
+    fixture.comp.p_jfs[0] = &fixture.phyJfs[0];
     fixture.target.active_count = 1;
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
+    /* provider post fails: the error must be propagated unchanged */
+    urma_test::SetHwMockStatus(URMA_EINVAL);
 
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
-    EXPECT_EQ(nullptr, badWr);
+    /* API contract: the first failing WR is reported back */
+    EXPECT_EQ(&wr, badWr);
     EXPECT_EQ(0U, fixture.comp.sqe_cnt[0][0].load());
 }
 
@@ -48,6 +53,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvPropagatesSingleDeviceNoStoreFailure)
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_STANDALONE;
     fixture.comp.comp_type = BONDP_COMP_JFR;
     fixture.comp.active_count = 1;
+    fixture.comp.p_jfr[0] = &fixture.phyJfr[0];
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
     fixture.phyOps.post_jfr_wr = MockPostFirstJfrWrFails;
 
@@ -75,13 +81,17 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupSplitsAcrossActivePaths)
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = false;
     fixture.comp.comp_type = BONDP_COMP_JFR;
+    fixture.comp.p_jfr[0] = &fixture.phyJfr[0];
+    fixture.comp.p_jfr[1] = &fixture.phyJfr[1];
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    /* two WRs are split across the two active paths (one RQE each) */
+    EXPECT_EQ(URMA_SUCCESS, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_EQ(nullptr, badWr);
-    EXPECT_EQ(1U, fixture.comp.rqe_cnt[0] + fixture.comp.rqe_cnt[1]);
+    EXPECT_EQ(1U, fixture.comp.rqe_cnt[0]);
+    EXPECT_EQ(1U, fixture.comp.rqe_cnt[1]);
     wr_buf_uninit(&fixture.comp.recv_wr_buf);
 }
 
@@ -106,6 +116,8 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupTranslatesBadWr)
     fixture.comp.active_count = 1;
     fixture.comp.active_indices[0] = 0;
     fixture.comp.p_jfr[0] = &fixture.phyJfr[0];
+    /* core's urma_post_jfr_wr also requires ops->post_jfs_wr to be set */
+    fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
     fixture.phyOps.post_jfr_wr = [](urma_jfr_t *, urma_jfr_wr_t *wr,
                                     urma_jfr_wr_t **badWr) -> urma_status_t {
         *badWr = wr->next;
@@ -262,7 +274,7 @@ TEST(UrmaBondTest, DatapathPollRecvCrWithStoreUsesBufferedWr)
 
     physicalJfrId.uasid = 0;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 8));
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
     ASSERT_EQ(0, bondp_conn_table_create(&fixture.comp.v_conn_table, 4));
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = true;
@@ -375,20 +387,17 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     fixture.comp.v_jfs.jfs_id.id = 0x8b;
     fixture.comp.p_jfs[0] = &fixture.phyJfs[0];
     fixture.target.active_count = 1;
-    fixture.target.active_indices[0] = 0;
-    fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0][0] = true;
-    fixture.target.is_msn_enabled = true;
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+    fixture.target.mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x8c;
     fixture.target.v_tjetty.type = URMA_JETTY;
     SetRefCount(&fixture.target.use_cnt, 2);
     SetRefCount(&fixture.localSeg.use_cnt, 2);
     SetRefCount(&fixture.remoteSeg.use_cnt, 2);
-    fixture.target.p_tjetty[0][0] = &fixture.phyTarget[0][0];
     fixture.phyJfs[0].jfs_id = physicalJfsId;
     fixture.phyJfs[0].jfs_cfg.jfc = &fixture.phyJfc;
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfs_wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
     ASSERT_EQ(0, pthread_spin_init(&fixture.comp.send_lock, PTHREAD_PROCESS_PRIVATE));
     ASSERT_EQ(0, bdp_p_vjetty_id_table_add_without_lock(
         &fixture.ctx.p_vjetty_id_table, physicalJfsId, JFS, fixture.comp.v_jfs.jfs_id.id, &fixture.comp));
@@ -397,8 +406,9 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     EXPECT_EQ(0, schedule_send(wr.tjetty, &fixture.comp, &scheduledSendIdx, &scheduledTargetIdx, nullptr));
     EXPECT_EQ(0, scheduledSendIdx);
     EXPECT_EQ(0, scheduledTargetIdx);
-    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&wr, &copiedWr, copiedSrc, copiedDst, BONDP_MAX_SGE_NUM));
-    encode_jfs_wr_msn(&copiedWr, &fixture.comp, 0, fixture.target.is_msn_enabled);
+    EXPECT_EQ(URMA_SUCCESS, copy_jfs_wr(&wr, &copiedWr, copiedSrc, copiedDst, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
+    encode_jfs_wr_msn(&copiedWr, &fixture.comp, 0,
+                      (fixture.target.mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0);
     ASSERT_EQ(URMA_SUCCESS, urma_post_jfs_wr(fixture.comp.p_jfs[0], &wr, &badWr));
     urma_test::GetHwMockState().postJfsCount = 0;
     badWr = nullptr;
@@ -420,7 +430,8 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_SUCCESS;
     g_mockDatapathCr.local_id = physicalJfsId.id;
-    g_mockDatapathCr.user_ctx = 1;
+    /* the CR carries the store entry wr_id (high 32 = gen, low 32 = idx + 1) */
+    g_mockDatapathCr.user_ctx = idx_to_wr_id(0, 1);
 
     EXPECT_EQ(1, bondp_poll_jfc(&vJfc.v_jfc, 1, &outCr));
     EXPECT_EQ(fixture.comp.v_jfs.jfs_id.id, outCr.local_id);
@@ -449,22 +460,20 @@ TEST(UrmaBondTest, DatapathPostSendStoreHandlesFullBufferAndInvalidPathRetry)
     fixture.comp.v_jfs.urma_ctx = &fixture.ctx.v_ctx;
     fixture.comp.p_jfs[0] = &fixture.phyJfs[0];
     fixture.target.active_count = 1;
-    fixture.target.active_indices[0] = 0;
-    fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0][0] = true;
-    fixture.target.is_msn_enabled = true;
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+    fixture.target.mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.type = URMA_JETTY;
-    fixture.target.p_tjetty[0][0] = &fixture.phyTarget[0][0];
     SetRefCount(&fixture.target.use_cnt, 2);
     SetRefCount(&fixture.localSeg.use_cnt, 2);
     SetRefCount(&fixture.remoteSeg.use_cnt, 2);
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.send_wr_buf, 1, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfs_wr_buf_init(&fixture.comp.send_wr_buf, 1, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
     ASSERT_EQ(0, pthread_spin_init(&fixture.comp.send_lock, PTHREAD_PROCESS_PRIVATE));
 
     heldEntry = jfs_wr_buf_alloc(&fixture.comp.send_wr_buf);
     ASSERT_NE(nullptr, heldEntry);
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    /* send WR buffer exhausted -> ENOMEM (was EAGAIN before the store rework) */
+    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
     jfs_wr_buf_release(&fixture.comp.send_wr_buf, heldEntry);
 
     heldEntry = jfs_wr_buf_alloc(&fixture.comp.send_wr_buf);
@@ -478,7 +487,8 @@ TEST(UrmaBondTest, DatapathPostSendStoreHandlesFullBufferAndInvalidPathRetry)
 
     fixture.comp.valid[0] = true;
     invalidWr.rw.src.num_sge = BONDP_MAX_SGE_NUM + 1;
-    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfs_wr(&fixture.comp.v_jfs, &invalidWr, &badWr));
+    /* WR validation rejects an out-of-range SGE count with EINVAL */
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &invalidWr, &badWr));
 
     pthread_spin_destroy(&fixture.comp.send_lock);
     wr_buf_uninit(&fixture.comp.send_wr_buf);
@@ -499,7 +509,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     secondWr.user_ctx = 0x202;
     firstWr.next = &secondWr;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 8));
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfs_wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
     ASSERT_EQ(0, pthread_spin_init(&fixture.comp.send_lock, PTHREAD_PROCESS_PRIVATE));
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = true;
@@ -515,14 +525,11 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     fixture.comp.v_jfs.jfs_id.id = 0x9b;
     fixture.comp.p_jfs[0] = &fixture.phyJfs[0];
     fixture.target.active_count = 1;
-    fixture.target.active_indices[0] = 0;
-    fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0][0] = true;
-    fixture.target.is_msn_enabled = true;
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+    fixture.target.mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x9c;
     fixture.target.v_tjetty.type = URMA_JETTY;
-    fixture.target.p_tjetty[0][0] = &fixture.phyTarget[0][0];
     fixture.phyJfs[0].jfs_id = physicalJfsId;
     fixture.phyJfs[0].jfs_cfg.jfc = &fixture.phyJfc;
     SetRefCount(&fixture.target.use_cnt, 3);
@@ -541,7 +548,8 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_SUCCESS;
     g_mockDatapathCr.local_id = physicalJfsId.id;
-    g_mockDatapathCr.user_ctx = 1;
+    /* the CR carries the store entry wr_id of the first (successfully posted) WR */
+    g_mockDatapathCr.user_ctx = idx_to_wr_id(0, 1);
 
     EXPECT_EQ(1, bondp_poll_jfc(&vJfc.v_jfc, 1, &outCr));
     EXPECT_EQ(firstWr.user_ctx, outCr.user_ctx);
@@ -579,7 +587,7 @@ TEST(UrmaBondTest, DatapathPostRecvStoreSubmitsAndCleansProviderFailure)
     fixture.comp.p_jfr[0] = &fixture.phyJfr[0];
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 4, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.comp.recv_wr_buf, 4, BONDP_MAX_SGE_NUM));
 
     EXPECT_EQ(URMA_SUCCESS, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_EQ(nullptr, badWr);
@@ -609,7 +617,7 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
 
     physicalJfsId.uasid = 0;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&fixture.ctx.p_vjetty_id_table, 8));
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfs_wr_buf_init(&fixture.comp.send_wr_buf, 4, BONDP_MAX_SGE_NUM, BONDP_MAX_SGE_NUM));
     ASSERT_EQ(0, pthread_spin_init(&fixture.comp.send_lock, PTHREAD_PROCESS_PRIVATE));
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = true;
@@ -619,6 +627,8 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
     fixture.phyOps.poll_jfc = MockPollOneCr;
     fixture.comp.comp_type = BONDP_COMP_JFS;
     fixture.comp.active_count = 2;
+    /* failover CR only resends on a backup path when failover is enabled on the ctx */
+    fixture.ctx.enable_failover = true;
     fixture.comp.active_indices[0] = 0;
     fixture.comp.active_indices[1] = 1;
     fixture.comp.valid[0] = true;
@@ -628,21 +638,15 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
     fixture.comp.p_jfs[0] = &fixture.phyJfs[0];
     fixture.comp.p_jfs[1] = &fixture.phyJfs[1];
     fixture.target.active_count = 2;
-    fixture.target.active_indices[0] = 0;
-    fixture.target.local_active_indices[0] = 0;
-    fixture.target.active_indices[1] = 1;
-    fixture.target.local_active_indices[1] = 1;
-    fixture.target.valid[0][0] = true;
-    fixture.target.valid[1][1] = true;
-    fixture.target.is_msn_enabled = true;
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+    SetTargetJettyPath(fixture.target, 1, 1, &fixture.phyTarget[1][1], true);
+    fixture.target.mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.id.id = 0x96;
     fixture.target.v_tjetty.type = URMA_JETTY;
     SetRefCount(&fixture.target.use_cnt, 2);
     SetRefCount(&fixture.localSeg.use_cnt, 2);
     SetRefCount(&fixture.remoteSeg.use_cnt, 2);
-    fixture.target.p_tjetty[0][0] = &fixture.phyTarget[0][0];
-    fixture.target.p_tjetty[1][1] = &fixture.phyTarget[1][1];
     fixture.phyJfs[0].jfs_id = physicalJfsId;
     fixture.phyJfs[0].jfs_cfg.jfc = &fixture.phyJfc;
     fixture.phyJfs[1].jfs_cfg.jfc = &fixture.phyJfc;
@@ -660,7 +664,8 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
     g_mockDatapathCrCount = 1;
     g_mockDatapathCr.status = URMA_CR_ACK_TIMEOUT_ERR;
     g_mockDatapathCr.local_id = physicalJfsId.id;
-    g_mockDatapathCr.user_ctx = 1;
+    /* the CR carries the store entry wr_id (high 32 = gen, low 32 = idx + 1) */
+    g_mockDatapathCr.user_ctx = idx_to_wr_id(0, 1);
 
     EXPECT_EQ(0, bondp_poll_jfc(&vJfc.v_jfc, 1, &outCr));
     EXPECT_EQ(2, urma_test::GetHwMockState().postJfsCount);
@@ -794,7 +799,7 @@ TEST(UrmaBondTest, PublicDatapathApisRejectRecvStateBeforeProviderAccess)
     fixture.ctx.msn_enable = true;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr(&fixture.jetty.v_jetty, &recvWr, &badRecv));
 
-    ASSERT_EQ(0, wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
     heldEntry = jfr_wr_buf_alloc(&fixture.jfr.recv_wr_buf);
     ASSERT_NE(nullptr, heldEntry);
     fixture.jfr.active_count = 1;
@@ -833,7 +838,7 @@ TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsOversizedWrList)
     }
     fixture.ctx.msn_enable = false;
     fixture.InitActiveComp(&fixture.jfr, 0);
-    ASSERT_EQ(0, wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr[0], &badRecv));
     wr_buf_uninit(&fixture.jfr.recv_wr_buf);
 }
@@ -884,7 +889,7 @@ TEST(UrmaBondTest, DatapathJettyRecvStoreUsesSharedJfrBuffer)
     fixture.comp.active_indices[0] = 0;
     fixture.comp.v_jetty.jetty_cfg.shared.jfr = &fixture.comp.v_jfr;
     fixture.phyOps.post_jetty_recv_wr = MockPostJettyRecvWr;
-    ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
+    ASSERT_EQ(0, jfr_wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
 
     recvWr.src.sge = fixture.srcSge;
     recvWr.src.num_sge = 1;
@@ -907,10 +912,8 @@ TEST(UrmaBondTest, DatapathSendStoreRejectsOversizedList)
     fixture.comp.valid[0] = true;
     fixture.comp.v_jfs.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.active_count = 1;
-    fixture.target.active_indices[0] = 0;
-    fixture.target.local_active_indices[0] = 0;
-    fixture.target.valid[0][0] = true;
-    fixture.target.is_msn_enabled = true;
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+    fixture.target.mask |= BONDP_TJETTY_FLAG_MSN_ENABLED;
     fixture.target.v_tjetty.urma_ctx = &fixture.ctx.v_ctx;
     fixture.target.v_tjetty.type = URMA_JETTY;
     SetRefCount(&fixture.target.use_cnt, 2);

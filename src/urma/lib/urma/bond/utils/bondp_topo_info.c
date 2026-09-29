@@ -145,7 +145,11 @@ static int fill_eid_mappings(eid_mapping_entry_t *entries, urma_eid_t *bonding_p
             bidx++;
         }
     }
-    qsort(entries, idx, sizeof(eid_mapping_entry_t), eid_mapping_cmp);
+    /* entries may be NULL when the topology has no valid EID (idx == 0):
+     * qsort() must not receive a NULL base pointer. */
+    if (idx > 1) {
+        qsort(entries, idx, sizeof(eid_mapping_entry_t), eid_mapping_cmp);
+    }
     return 0;
 }
 

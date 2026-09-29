@@ -157,7 +157,9 @@ static urma_status_t comp_post_recv(bondp_comp_t *comp, int recv_idx, urma_jfr_w
 
 static uint32_t bondp_get_max_recv_sge(const bondp_comp_t *bdp_comp)
 {
-    if (bdp_comp->comp_type == BONDP_COMP_JETTY) {
+    /* The shared-JFR contract is guaranteed by the caller/core; only the NULL
+     * case is guarded here so the fallback below stays defined. */
+    if (bdp_comp->comp_type == BONDP_COMP_JETTY && bdp_comp->v_jetty.jetty_cfg.shared.jfr != NULL) {
         bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(bdp_comp->v_jetty.jetty_cfg.shared.jfr, bondp_comp_t, v_jfr);
         return bdp_jfr->max_recv_sge;
     }
