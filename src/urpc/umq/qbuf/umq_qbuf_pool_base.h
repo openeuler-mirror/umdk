@@ -407,7 +407,6 @@ static ALWAYS_INLINE uint32_t qbuf_tls_round_batch(uint32_t needed, uint32_t bat
 
 // Expansion pool functions (implemented in umq_qbuf_pool.c for normal pool).
 // sc: size_class index (0..UMQ_QBUF_SIZE_CLASS_MAX). UMQ_QBUF_SIZE_CLASS_MAX means without_data.
-int expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
 #ifdef UMQ_QBUF_DEBUG
 // 线程局部标志: 当fetch_from_global走expansion pool或mmap扩容时置true
 // 用于umq_normal_qbuf_alloc区分_lc=1(fetch_global) vs _lc=2(fetch_expansion)
@@ -418,7 +417,7 @@ static inline bool qbuf_debug_on(void)
     return __builtin_expect(__atomic_load_n(&g_qbuf_debug_enabled, __ATOMIC_RELAXED), 0) != 0;
 }
 #endif
-void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt);
+void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, bool sync_wait);
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, umq_buf_list_t *local_head,
                                     uint64_t *local_buf_cnt);
 uint64_t return_list_to_pools(umq_buf_t *local_head, umq_buf_list_t *global_head, uint64_t *global_buf_cnt,
@@ -426,10 +425,9 @@ uint64_t return_list_to_pools(umq_buf_t *local_head, umq_buf_list_t *global_head
 
 bool umq_disable_scale_cap(void);
 
-bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc);
+bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc, uint64_t deadline_ns);
 bool umq_qbuf_is_expanding(bool with_data, uint32_t sc);
 void umq_qbuf_record_wait_async_expand(bool with_data, uint32_t sc, uint64_t wait_us);
-void umq_qbuf_record_sync_expand(bool with_data, uint32_t sc, uint64_t expand_us);
 void umq_qbuf_record_fetch_total(bool with_data, uint32_t sc, uint64_t fetch_us);
 
 typedef struct umq_qbuf_fetch_req_info {
@@ -490,7 +488,8 @@ static ALWAYS_INLINE void thread_local_pool_rollback(umq_buf_t *buf_head_old, ui
 }
 
 static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool, local_block_pool_t *cache_pool,
-                                               bool with_data, uint32_t sc, uint32_t batch_count)
+                                               bool with_data, uint32_t sc, uint32_t batch_count,
+                                               uint64_t deadline_ns)
 {
     uint32_t count = 0;
     umq_buf_t *local_head_before;
@@ -509,7 +508,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
         *info.local_buf_cnt += count;
         uint64_t global_cnt_after = *info.global_buf_cnt;
         (void)pthread_spin_unlock(&global_pool->global_mutex);
-        async_expand_global_pool(with_data, sc, global_cnt_after);
+        async_expand_global_pool(with_data, sc, global_cnt_after, false);
         return count;
     }
 
@@ -547,16 +546,16 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     /* Declared before the loop: the goto ROLLBACK below would otherwise jump
      * over its initialization, which C++ rejects (C only warns). */
     uint64_t fetch_us = 0;
+    int ret_code = UMQ_ERR_ENOMEM;
     while (count < batch_count) {
-        // if async expand is in progress, wait for it to finish and accumulate wait time
-        if (umq_qbuf_is_expanding(with_data, sc)) {
+        // check deadline before any blocking operation
+        if (deadline_ns > 0) {
             clock_gettime(CLOCK_MONOTONIC, &_ts);
-            uint64_t wait_start_ns = (uint64_t)_ts.tv_sec * NS_PER_SEC + (uint64_t)_ts.tv_nsec;
-            (void)umq_qbuf_wait_expansion_done(with_data, sc);
-            clock_gettime(CLOCK_MONOTONIC, &_ts);
-            uint64_t wait_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
-                                (uint64_t)_ts.tv_nsec - wait_start_ns) / NS_PER_US;
-            wait_total_us += wait_us;
+            uint64_t now_ns = (uint64_t)_ts.tv_sec * NS_PER_SEC + (uint64_t)_ts.tv_nsec;
+            if (now_ns >= deadline_ns) {
+                ret_code = UMQ_ERR_ETIMEOUT;
+                goto ROLLBACK;
+            }
         }
         // try to fetch from expansion pool (may have buffers from previous async expand)
         uint32_t _exp_cnt =
@@ -565,32 +564,63 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
             count += _exp_cnt;
             continue;
         }
-        // expansion pool empty, need sync expand
-        clock_gettime(CLOCK_MONOTONIC, &_ts);
-        uint64_t expand_start_ns = (uint64_t)_ts.tv_sec * NS_PER_SEC + (uint64_t)_ts.tv_nsec;
-        int ret = expand_global_pool(with_data, sc, *info.global_buf_cnt);
-        if (ret == -UMQ_ERR_EBUSY) {
-            // another thread is expanding, retry
+        // expansion pool empty, trigger async expand (non-blocking)
+        // another thread may already be expanding, or no expand is needed
+        async_expand_global_pool(with_data, sc, *info.global_buf_cnt, true);
+        // wait for async expand to complete (with deadline)
+        if (umq_qbuf_is_expanding(with_data, sc)) {
+            clock_gettime(CLOCK_MONOTONIC, &_ts);
+            uint64_t wait_start_ns = (uint64_t)_ts.tv_sec * NS_PER_SEC +
+                                     (uint64_t)_ts.tv_nsec;
+            bool wait_ok = umq_qbuf_wait_expansion_done(with_data, sc, deadline_ns);
+            if (!wait_ok) {
+                // timeout
+                ret_code = UMQ_ERR_ETIMEOUT;
+                goto ROLLBACK;
+            }
+            clock_gettime(CLOCK_MONOTONIC, &_ts);
+            uint64_t wait_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
+                                (uint64_t)_ts.tv_nsec - wait_start_ns) / NS_PER_US;
+            wait_total_us += wait_us;
+#ifdef UMQ_QBUF_DEBUG
+            if (qbuf_debug_on()) {
+                g_dbg_expansion_happened = true;
+            }
+#endif
+            // Expand done. Do not act on last_expand_failed here (it may
+            // belong to a later expand); the latch still yields ENOMEM below.
             continue;
         }
-        if (ret != UMQ_SUCCESS) {
-            if (count > 0) {
+        // not expanding: no expansion was needed, or the worker already
+        // finished between spawn and our is_expanding check -- retry both
+        // pools once, its blocks may have just landed.
+        if (count < batch_count) {
+            uint32_t _exp_cnt =
+                fetch_from_expansion_pools(with_data, sc, batch_count - count,
+                                           info.local_head, info.local_buf_cnt);
+            count += _exp_cnt;
+        }
+        if (count < batch_count) {
+            (void)pthread_spin_lock(&global_pool->global_mutex);
+            get_pool_req_info(cache_pool, global_pool, &info, with_data, sc);
+            if (*info.global_buf_cnt > 0) {
+                uint32_t take = allocate_batch(info.global_head,
+                                                (uint32_t)*info.global_buf_cnt,
+                                                info.local_head);
+                *info.global_buf_cnt -= take;
+                *info.local_buf_cnt += take;
+                count += take;
+            }
+            (void)pthread_spin_unlock(&global_pool->global_mutex);
+            if (count >= batch_count) {
                 break;
             }
-            goto ROLLBACK;
+            if (count > 0) {
+                // got some but not enough, but cannot expand further
+                break;
+            }
         }
-        // record sync expand latency
-        clock_gettime(CLOCK_MONOTONIC, &_ts);
-        uint64_t expand_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
-                              (uint64_t)_ts.tv_nsec - expand_start_ns) / NS_PER_US;
-        umq_qbuf_record_sync_expand(with_data, sc, expand_us);
-#ifdef UMQ_QBUF_DEBUG
-        // 统计mmap扩容路径: expand_global_pool成功调用了mmap分配新内存
-        // 这是最慢的路径(通常>1ms)，置flag让alloc层记录为_lc=2
-        if (qbuf_debug_on()) g_dbg_expansion_happened = true;
-#endif
-
-        count += fetch_from_expansion_pools(with_data, sc, batch_count - count, info.local_head, info.local_buf_cnt);
+        goto ROLLBACK;
     }
     // record accumulated wait time for async expand
     if (wait_total_us > 0) {
@@ -601,7 +631,7 @@ static ALWAYS_INLINE int32_t fetch_from_global(global_block_pool_t *global_pool,
     fetch_us = ((uint64_t)_ts.tv_sec * NS_PER_SEC +
                 (uint64_t)_ts.tv_nsec - fetch_start_ns) / NS_PER_US;
     umq_qbuf_record_fetch_total(with_data, sc, fetch_us);
-    async_expand_global_pool(with_data, sc, global_cnt_snapshot);
+    async_expand_global_pool(with_data, sc, global_cnt_snapshot, false);
     return count;
 
 ROLLBACK:
@@ -611,7 +641,7 @@ ROLLBACK:
                 (uint64_t)_ts.tv_nsec - fetch_start_ns) / NS_PER_US;
     umq_qbuf_record_fetch_total(with_data, sc, fetch_us);
     thread_local_pool_rollback(local_head_before, local_cnt_before, cache_pool, global_pool, with_data, sc);
-    return -UMQ_ERR_ENOMEM;
+    return -ret_code;
 }
 
 // flush list from local to global, threshold means the local pool size that needs to be returned

@@ -69,7 +69,7 @@ int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *opti
     if (pool_type == UMQ_ALLOC_POOL_AUTO) {
         pool_type = UMQ_ALLOC_POOL_NORMAL;
         ret = umq_qbuf_alloc_from_pool(pool_type, request_size, num, option, list);
-        if (ret != UMQ_SUCCESS) {
+        if (ret != UMQ_SUCCESS && ret != -UMQ_ERR_ETIMEOUT && ret != -UMQ_ERR_EINVAL) {
             ret = umq_qbuf_alloc_from_pool(UMQ_ALLOC_POOL_ESCAPE, request_size, num, option, list);
         }
         return ret;

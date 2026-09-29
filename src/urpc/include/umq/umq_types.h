@@ -438,11 +438,14 @@ struct umq_buf {
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE (1) // enable arg headroom_size
 #define UMQ_ALLOC_FLAG_POOL_TYPE (2)      // enable arg pool_type
+#define UMQ_ALLOC_FLAG_TIMEOUT (4)        // enable arg timeout_ms
+#define UMQ_ALLOC_TIMEOUT_MS_MAX (1000)   // max timeout in milliseconds
 
 typedef struct umq_alloc_option {
     uint32_t flag; // indicates which below property takes effect
     uint16_t headroom_size;
     umq_alloc_pool_type_t pool_type;
+    uint16_t timeout_ms; // timeout in milliseconds, 0 = no timeout, valid range [0, UMQ_ALLOC_TIMEOUT_MS_MAX]
 } umq_alloc_option_t;
 
 typedef enum umq_dfx_module_id {
