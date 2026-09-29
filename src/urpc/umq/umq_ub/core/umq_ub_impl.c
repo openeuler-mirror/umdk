@@ -3111,11 +3111,11 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     umq_imm_head->mempool_num = 1;
     umq_imm_head->mem_interval = UMQ_SIZE_0K_SMALL_INTERVAL;
 
-    ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)(umq_imm_head + 1);
+    ub_mempool_info_t *mempool_info = (ub_mempool_info_t *)(umq_imm_head + 1);
     uint32_t ver = qcfg->dev_ctx->mempool_version[mempool_id];
     uint32_t cap = (uint32_t)umq_buf_size_small() - (uint32_t)sizeof(umq_imm_head_t);
     uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
-                                           import_mempool_info, cap,
+                                           mempool_info, cap,
                                            umq_ub_enable_user_tseg(qcfg->dev_ctx->feature));
     if (written == 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, fill_seg_ctx failed, mempool_id: %u\n",
@@ -3157,8 +3157,20 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
 {
     ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
-    if (qcfg->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
-        mempool_info_size < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t)) {
+    if (qcfg->dev_ctx == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info parameter invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    /* Feature is static for the queue's lifetime; read once and reuse below. */
+    bool use_user_tseg = umq_ub_enable_user_tseg(qcfg->dev_ctx->feature);
+    /* Variant-aware minimum capacity: header + the plain payload of the
+     * selected flavor (urma_user_tseg_t / urma_seg_t). The exact (possibly
+     * larger) seg_size is re-checked inside umq_ub_fill_seg_ctx; checking the
+     * flavor-specific floor here makes a too-small import buffer fail fast
+     * with EINVAL instead of after an urma_get_seg_ctx round-trip. */
+    if (queue->bind_ctx == NULL || mempool_id >= UMQ_MAX_TSEG_NUM || mempool_info == NULL ||
+        mempool_info_size < UMQ_MEMPOOL_INFO_HDR_SIZE +
+        (use_user_tseg ? UMQ_USER_TSEG_SIZE : UMQ_URMA_SEG_SIZE)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
@@ -3180,7 +3192,7 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
         return -UMQ_ERR_EINVAL;
     }
     uint32_t ver = qcfg->dev_ctx->mempool_version[mempool_id];
-    ub_import_mempool_info_t *import_mempool_info = (ub_import_mempool_info_t *)mempool_info;
+    ub_mempool_info_t *entry = (ub_mempool_info_t *)mempool_info;
     /* out_cap is the total bytes available at @out (header + seg blob), so pass
      * mempool_info_size unchanged — the helper checks it against HDR + seg_size. */
     uint32_t cap = mempool_info_size;
@@ -3188,10 +3200,10 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
      * blob (urma_seg_t + has_user_info ext tail on bonding), so the peer imports
      * via the has_user_info=true branch and reads peer_p_seg[] directly from
      * the extension — no reliance on the kernel driver reconstructing it. The
-     * caller's buffer (sized to UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
+     * caller's buffer (sized to UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE or
+     * UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE in ubsocket, per variant) reserves
      * slack for the worst-case extension tail. */
-    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver, import_mempool_info, cap,
-        umq_ub_enable_user_tseg(qcfg->dev_ctx->feature));
+    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver, entry, cap, use_user_tseg);
     (void)pthread_spin_unlock(&qcfg->dev_ctx->tseg_list_lock);
     if (written == 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u fill_seg_ctx failed\n", mempool_id);
@@ -3213,10 +3225,10 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    /* The blob is the wire layout (== ub_import_mempool_info_t layout, pinned by
-     * static_asserts); umq parses mempool_id/version internally so the caller
-     * never inspects fields. */
-    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+    /* The blob's wire layout starts with the common ub_mempool_info_hdr_t
+     * (pinned by static_asserts); umq parses mempool_id/version internally so
+     * the caller never inspects fields. */
+    const ub_mempool_info_hdr_t *info = (const ub_mempool_info_hdr_t *)mempool_info;
     uint32_t mempool_id = info->mempool_id;
     uint32_t version = info->version;
     if (mempool_id >= UMQ_MAX_TSEG_NUM) {
@@ -3302,9 +3314,10 @@ int umq_ub_remote_mempool_state_check_impl(uint64_t umqh_tp, const uint8_t *memp
         return UMQ_REMOTE_MEMPOOL_STATE_ERR;
     }
     /* Parse mempool_id/version from the opaque blob internally; the caller does
-     * not inspect wire fields. Layout == ub_import_mempool_info_t (static_asserts
-     * pin it), so a cast is a safe, zero-copy read. */
-    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+     * not inspect wire fields. Layout starts with the common
+     * ub_mempool_info_hdr_t (static_asserts pin it), so a cast is a safe,
+     * zero-copy read. */
+    const ub_mempool_info_hdr_t *info = (const ub_mempool_info_hdr_t *)mempool_info;
     uint32_t mempool_id = info->mempool_id;
     uint32_t version = info->version;
     if (mempool_id >= UMQ_MAX_TSEG_NUM) {
@@ -3358,8 +3371,8 @@ int umq_ub_mempool_info_get_remote_fields_impl(const uint8_t *mempool_info, uint
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get remote fields parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
-    /* Parse the opaque blob with umq's private layout; the caller never sees the struct. */
-    const ub_import_mempool_info_t *info = (const ub_import_mempool_info_t *)mempool_info;
+    /* Parse the opaque blob's common header; the caller never sees the struct. */
+    const ub_mempool_info_hdr_t *info = (const ub_mempool_info_hdr_t *)mempool_info;
     if (out_mempool_id != NULL) {
         *out_mempool_id = info->mempool_id;
     }

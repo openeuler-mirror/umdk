@@ -721,14 +721,27 @@ typedef struct umq_tp_resource_create_option {
  * compute wire budgets without seeing the struct; the value is pinned by
  * static_asserts in umq_ub_private.h. */
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
-#define UMQ_USER_TSEG_SIZE 12u  /* sizeof(urma_user_tseg_t) */
+#define UMQ_USER_TSEG_SIZE 12u /* sizeof(urma_user_tseg_t) */
+#define UMQ_URMA_SEG_SIZE 48u /* sizeof(urma_seg_t) */
+
+/* Extension-tail slack reserved above the fixed struct when sizing worst-case
+ * mempool info blobs. The import entry's seg blob (urma_seg_t) may carry a
+ * bonding has_user_info extension tail (up to ~101B uncompressed; 128B covers
+ * it with slack, so one umq build runs against either umdk variant); the
+ * noimport entry's urma_user_tseg_t blob reserves 64B for its URMA-defined
+ * extension tail, keeping the 100B wire budget. */
 #define UMQ_IMPORT_MEMPOOL_INFO_EXTERN 128u
 #define UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN 64u
-/* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
- * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~101B
- * uncompressed; 128B covers it with slack, so one umq build runs against
- * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + UMQ_IMPORT_MEMPOOL_INFO_EXTERN)
+
+/* Worst-case blob sizes, one per entry variant:
+ *   import:   sizeof(ub_import_mempool_info_t) = 24B hdr + 48B urma_seg_t
+ *   noimport: sizeof(ub_noimport_mempool_info_t) = 24B hdr + 12B urma_user_tseg_t
+ * plus the UMQ_*_MEMPOOL_INFO_EXTERN slack. Both structs are umq-internal, so
+ * the payload sizes are spelled UMQ_URMA_SEG_SIZE / UMQ_USER_TSEG_SIZE here;
+ * the totals are pinned to the sizeof-based values in umq_ub_private.h by
+ * static_asserts. Callers size stack buffers to these. */
+#define UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE \
+    (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_URMA_SEG_SIZE + UMQ_IMPORT_MEMPOOL_INFO_EXTERN)
 #define UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE \
     (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_USER_TSEG_SIZE + UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN)
 
