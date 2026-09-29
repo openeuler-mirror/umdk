@@ -22,9 +22,9 @@
 
 #include <gtest/gtest.h>
 
-#include "bondp_api.h"
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_jetty.h"
 #include "bondp_cp_seg.h"
 #include "bondp_cp_tjetty.h"
 #include "bondp_cp_user_ctl.h"
@@ -34,6 +34,7 @@
 #include "bondp_dp_failback.h"
 #include "bondp_dp_health.h"
 #include "bondp_dp_interrupt.h"
+#include "bondp_env.h"
 #include "bondp_hash_table.h"
 #include "bondp_provider_ops.h"
 #include "bondp_slide_window.h"
@@ -231,9 +232,12 @@ inline void FillMockTopoInfo(uint64_t outAddr, uint32_t outLen)
     auto *out = reinterpret_cast<ubagg_topo_info_out *>(outAddr);
     out->node_num = 1;
     out->topo_info[0].is_current = true;
-    auto *aggEid = reinterpret_cast<urma_eid_t *>(out->topo_info[0].agg_devs[0].agg_eid);
-    aggEid->in6.subnet_prefix = 0x51510000ULL;
-    aggEid->in6.interface_id = 0x61610000ULL;
+    /* agg_eid is a byte array inside a packed struct: fill it through memcpy
+     * instead of an unaligned urma_eid_t pointer cast. */
+    urma_eid_t aggEid = {};
+    aggEid.in6.subnet_prefix = 0x51510000ULL;
+    aggEid.in6.interface_id = 0x61610000ULL;
+    std::memcpy(out->topo_info[0].agg_devs[0].agg_eid, &aggEid, sizeof(aggEid));
 }
 
 inline void FillUserCtlOutput(urma_cmd_attr_t *attrs, uint32_t attrCount)
@@ -303,6 +307,33 @@ inline void FillCreateOutput(uint32_t command, urma_cmd_attr_t *attrs, uint32_t 
 }
 
 static const uint32_t BOND_TEST_RECV_BATCH_POST_MAX_NUM = 280;
+
+/* bondp_target_jetty_t ends with the flexible array p_tjettys[], so path entries
+ * cannot live in a plain value member: keep the header inside a backing buffer
+ * and expose it through a reference (see BondPathFixture::target). */
+constexpr uint32_t kBondTargetMaxPaths = URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM;
+constexpr size_t kBondTargetJettyBytes =
+    sizeof(bondp_target_jetty_t) + kBondTargetMaxPaths * sizeof(bondp_p_target_jetty_t);
+
+inline void SetTargetJettyPath(bondp_target_jetty_t &t, uint32_t local_idx, uint32_t remote_idx,
+                               urma_target_jetty_t *p_tjetty, bool valid)
+{
+    for (uint32_t i = 0; i < t.p_tjetty_count; i++) {
+        if (t.p_tjettys[i].local_indice == static_cast<uint8_t>(local_idx) &&
+            t.p_tjettys[i].remote_indice == static_cast<uint8_t>(remote_idx)) {
+            t.p_tjettys[i].p_tjetty = p_tjetty;
+            t.p_tjettys[i].valid = valid;
+            return;
+        }
+    }
+    uint32_t i = t.p_tjetty_count;
+    t.p_tjettys[i].local_indice = static_cast<uint8_t>(local_idx);
+    t.p_tjettys[i].remote_indice = static_cast<uint8_t>(remote_idx);
+    t.p_tjettys[i].p_tjetty = p_tjetty;
+    t.p_tjettys[i].valid = valid;
+    t.p_tjetty_count++;
+}
+
 struct BondPathFixture {
     bondp_context_t ctx = {};
     urma_device_t dev = {};
@@ -311,7 +342,8 @@ struct BondPathFixture {
     urma_ops_t phyOps = {};
     urma_jfc_t phyJfc = {};
     bondp_comp_t comp = {};
-    bondp_target_jetty_t target = {};
+    std::vector<uint8_t> targetStorage;
+    bondp_target_jetty_t &target;
     urma_jfs_t phyJfs[2] = {};
     urma_jfr_t phyJfr[2] = {};
     urma_jetty_t phyJetty[2] = {};
@@ -326,8 +358,12 @@ struct BondPathFixture {
     bondp_env_t savedEnv = {};
 
     BondPathFixture()
+        : targetStorage(kBondTargetJettyBytes),
+          target(*reinterpret_cast<bondp_target_jetty_t *>(targetStorage.data()))
     {
         urma_test::ResetHwMockState();
+        /* a real bondp context always has the segment cache map initialized */
+        (void)bondp_seg_cache_init(&ctx);
         /* Build a two-path virtual topology without creating real URMA devices. */
         savedEnv = g_bondp_env;
         g_bondp_env = env;
@@ -357,6 +393,11 @@ struct BondPathFixture {
         comp.v_jetty.jetty_cfg.jfs_cfg.trans_mode = URMA_TM_RC;
         comp.v_jetty.jetty_cfg.jfs_cfg.flag.bs.order_type = URMA_OL;
         comp.v_jetty.jetty_id.id = 0x22;
+        /* bonding devices are UB: the core requires shared-JFR jetties */
+        comp.v_jetty.jetty_cfg.flag.bs.share_jfr = URMA_SHARE_JFR;
+        /* produced recv paths read the shared JFR out of the virtual jetty */
+        comp.v_jetty.jetty_cfg.shared.jfr = &comp.v_jfr;
+        comp.v_jetty.jetty_cfg.shared.jfc = &phyJfc;
         comp.v_jfs.jfs_id.id = 0x23;
         comp.v_jfr.jfr_id.id = 0x24;
         comp.active_count = 2;
@@ -390,14 +431,16 @@ struct BondPathFixture {
         comp.p_jfr[1] = &phyJfr[1];
         comp.p_jetty[0] = &phyJetty[0];
         comp.p_jetty[1] = &phyJetty[1];
+        /* bondp_create_jfs/jfr/jetty fill these from the device cap; the
+         * hand-built fixture must do the same or the WR validation rejects
+         * every WR with a non-zero SGE count. */
+        comp.max_send_sge = BONDP_MAX_SGE_NUM;
+        comp.max_send_rsge = BONDP_MAX_SGE_NUM;
+        comp.max_recv_sge = BONDP_MAX_SGE_NUM;
 
         target.active_count = 2;
-        target.active_indices[0] = 0;
-        target.active_indices[1] = 1;
-        target.valid[0][0] = true;
-        target.valid[1][1] = true;
-        target.p_tjetty[0][0] = &phyTarget[0][0];
-        target.p_tjetty[1][1] = &phyTarget[1][1];
+        SetTargetJettyPath(target, 0, 0, &phyTarget[0][0], true);
+        SetTargetJettyPath(target, 1, 1, &phyTarget[1][1], true);
         comp.p_jetty[0]->remote_jetty = &phyTarget[0][0];
         comp.p_jetty[1]->remote_jetty = &phyTarget[1][1];
 
@@ -418,6 +461,7 @@ struct BondPathFixture {
 
     ~BondPathFixture()
     {
+        bondp_seg_cache_uninit(&ctx);
         g_bondp_env = savedEnv;
     }
 
@@ -492,12 +536,20 @@ struct BondPublicApiFixture {
     bondp_comp_t jfs = {};
     bondp_comp_t jfr = {};
     bondp_comp_t jetty = {};
-    bondp_target_jetty_t targetJetty = {};
-    bondp_target_jetty_t targetJfr = {};
+    std::vector<uint8_t> targetJettyStorage;
+    bondp_target_jetty_t &targetJetty;
+    std::vector<uint8_t> targetJfrStorage;
+    bondp_target_jetty_t &targetJfr;
 
     BondPublicApiFixture()
+        : targetJettyStorage(kBondTargetJettyBytes),
+          targetJetty(*reinterpret_cast<bondp_target_jetty_t *>(targetJettyStorage.data())),
+          targetJfrStorage(kBondTargetJettyBytes),
+          targetJfr(*reinterpret_cast<bondp_target_jetty_t *>(targetJfrStorage.data()))
     {
         urma_test::ResetHwMockState();
+        /* a real bondp context always has the segment cache map initialized */
+        (void)bondp_seg_cache_init(&ctx);
         /* Public API smoke tests exercise stable outer branches; provider/device paths stay mocked by zero members. */
         std::snprintf(dev.name, sizeof(dev.name), "bond_ut");
         std::snprintf(phyDev.name, sizeof(phyDev.name), "bond_phy_ut");
@@ -540,6 +592,8 @@ struct BondPublicApiFixture {
 
         InitComp(&jetty, BONDP_COMP_JETTY);
         jetty.v_jetty.urma_ctx = &ctx.v_ctx;
+        /* bonding devices are UB: the core requires shared-JFR jetties */
+        jetty.v_jetty.jetty_cfg.flag.bs.share_jfr = URMA_SHARE_JFR;
         jetty.v_jetty.jetty_cfg.shared.jfr = &jfr.v_jfr;
 
         targetJetty.v_tjetty.urma_ctx = &ctx.v_ctx;
@@ -553,6 +607,7 @@ struct BondPublicApiFixture {
 
     ~BondPublicApiFixture()
     {
+        bondp_seg_cache_uninit(&ctx);
         pthread_rwlock_destroy(&ctx.p_vjetty_id_table.lock);
     }
 
@@ -560,6 +615,10 @@ struct BondPublicApiFixture {
     {
         comp->bondp_ctx = &ctx;
         comp->comp_type = type;
+        /* mirror the values bondp_create_* would set from the device cap */
+        comp->max_send_sge = BONDP_MAX_SGE_NUM;
+        comp->max_send_rsge = BONDP_MAX_SGE_NUM;
+        comp->max_recv_sge = BONDP_MAX_SGE_NUM;
         SetRefCount(&comp->use_cnt, 1);
     }
 

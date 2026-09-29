@@ -81,10 +81,13 @@ TEST(UrmaBondTest, PublicSegmentApisCoverTokenAndRefcountPaths)
     SetRefCount(&localSeg.use_cnt, 2);
     bondp_tseg_get(&localSeg.v_tseg);
     EXPECT_EQ(3UL, localSeg.use_cnt.atomic_cnt.load());
-    EXPECT_EQ(URMA_SUCCESS, bondp_unregister_seg(&localSeg.v_tseg));
-    EXPECT_EQ(2UL, localSeg.use_cnt.atomic_cnt.load());
+    /* new contract: unregister with in-flight references (use_cnt > 1) is rejected
+     * with EAGAIN and leaves the reference count untouched; the caller must stop
+     * posting and retry. */
+    EXPECT_EQ(URMA_EAGAIN, bondp_unregister_seg(&localSeg.v_tseg));
+    EXPECT_EQ(3UL, localSeg.use_cnt.atomic_cnt.load());
     bondp_tseg_put(&localSeg.v_tseg);
-    EXPECT_EQ(1UL, localSeg.use_cnt.atomic_cnt.load());
+    EXPECT_EQ(2UL, localSeg.use_cnt.atomic_cnt.load());
 
     remoteSeg.v_tseg.token_id = nullptr;
     SetRefCount(&remoteSeg.use_cnt, 2);
@@ -202,7 +205,6 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.seg_cache_enable = true;
-    ASSERT_EQ(0, bdp_r_v2p_token_id_table_create(&fixture.ctx.remote_v2p_token_id_table, 4));
     remote->ubva.eid = MakeEid(0x801);
     remote->ubva.va = 0x100000;
     remote->len = 4096;
@@ -242,7 +244,6 @@ TEST(UrmaBondTest, PublicImportSegmentUsesPhysicalProviderMocks)
 
     urma_test::SetHwMockStatus(URMA_FAIL);
     EXPECT_EQ(nullptr, bondp_import_seg(&fixture.ctx.v_ctx, remote, &token, 0x300000, flag));
-    EXPECT_EQ(0, bdp_r_v2p_token_id_table_destroy(&fixture.ctx.remote_v2p_token_id_table));
     std::free(remote);
 }
 
@@ -304,8 +305,10 @@ TEST(UrmaBondTest, PublicImportJettyUsesExtAndPhysicalProviderMocks)
 
 TEST(UrmaBondTest, PublicImportJettyUsesMockIoctlAndPhysicalProvider)
 {
+    BondTopoMapCleanup topoCleanup;
     BondPublicApiFixture fixture;
     bondp_env_t fakeEnv = {};
+    bondp_topo_node_t topo[2] = {};
     urma_rjetty_t rjetty = {};
     urma_token_t token = {};
     urma_target_jetty_t *target = nullptr;
@@ -318,8 +321,18 @@ TEST(UrmaBondTest, PublicImportJettyUsesMockIoctlAndPhysicalProvider)
     g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xa30, 0xa300);
     rjetty.jetty_id = MakeJettyId(0xa31);
+    rjetty.jetty_id.eid = MakeEid(0xa31);
     rjetty.trans_mode = URMA_TM_RC;
     rjetty.type = URMA_JETTY;
+
+    /* importing by default path rebuilds the connectivity matrix from the topo */
+    topo[0].is_current = true;
+    CopyEidToTopo(topo[0].agg_devs[0].agg_eid, MakeEid(0xa41));
+    CopyEidToTopo(topo[0].agg_devs[0].ues[0].primary_eid, MakeEid(0xa42));
+    CopyEidToTopo(topo[0].agg_devs[0].ues[0].port_eid[0], MakeEid(0xa43));
+    CopyEidToTopo(topo[1].agg_devs[0].agg_eid, rjetty.jetty_id.eid);
+    topo[1].links[0][0] = true;
+    ASSERT_EQ(0, bondp_topo_init(topo, 2));
 
     target = bondp_import_jetty(&fixture.ctx.v_ctx, &rjetty, &token);
     ASSERT_NE(nullptr, target);
@@ -519,7 +532,6 @@ TEST(UrmaBondTest, PublicProviderDeleteContextPropagatesVirtualDeleteFailure)
     ctx->v_ctx.async_fd = -1;
     ctx->real_async_fd = -1;
     ASSERT_EQ(0, bdp_p_vjetty_id_table_create(&ctx->p_vjetty_id_table, 4));
-    ASSERT_EQ(0, bdp_r_v2p_token_id_table_create(&ctx->remote_v2p_token_id_table, 4));
 
     fakeEnv.enable_health_check = false;
     g_bondp_env = fakeEnv;
@@ -542,7 +554,6 @@ TEST(UrmaBondTest, PublicProviderInitUsesDefaultEnvValuesAndCleansUp)
     EnvGuard failback("BOND_ENABLE_FAILBACK", nullptr);
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", nullptr);
     EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "bad-int");
-    EnvGuard firstSleep("BOND_RNR_RETRY_FIRST_SLEEP_MS", nullptr);
     EnvGuard jitterRatio("BOND_RNR_RETRY_JITTER_RATIO", nullptr);
 
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
@@ -551,7 +562,6 @@ TEST(UrmaBondTest, PublicProviderInitUsesDefaultEnvValuesAndCleansUp)
     EXPECT_TRUE(g_bondp_env.enable_health_check);
     EXPECT_EQ(BONDP_HC_DEFAULT_PROBE_INTERVAL_MS,
               g_bondp_env.health_check_interval_ms);
-    EXPECT_EQ(g_bondp_env.rnr_retry_sleep_ms, g_bondp_env.rnr_retry_first_sleep_ms);
     EXPECT_EQ(0U, g_bondp_env.rnr_retry_jitter_ratio);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
 }
@@ -561,8 +571,8 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     EnvGuard failover("BOND_ENABLE_FAILOVER", "true");
     EnvGuard failback("BOND_ENABLE_FAILBACK", "false");
     EnvGuard healthCheck("BOND_ENABLE_HEALTH_CHECK", "true");
-    EnvGuard healthInterval("BOND_HEALTH_CHECK_ACTIVE_INTERVAL", "60000");
-    EnvGuard firstSleep("BOND_RNR_RETRY_FIRST_SLEEP_MS", "5");
+    EnvGuard healthInterval("BOND_HEALTH_CHECK_INTERVAL", "60000");
+    EnvGuard rnrSleep("BOND_RNR_RETRY_SLEEP_MS", "5");
     EnvGuard jitterRatio("BOND_RNR_RETRY_JITTER_RATIO", "25");
 
     EXPECT_EQ(URMA_SUCCESS, bondp_init(nullptr));
@@ -570,7 +580,7 @@ TEST(UrmaBondTest, PublicProviderInitAcceptsValidEnvValues)
     EXPECT_FALSE(g_bondp_env.enable_failback);
     EXPECT_TRUE(g_bondp_env.enable_health_check);
     EXPECT_EQ(60000U, g_bondp_env.health_check_interval_ms);
-    EXPECT_EQ(5U, g_bondp_env.rnr_retry_first_sleep_ms);
+    EXPECT_EQ(5U, g_bondp_env.rnr_retry_sleep_ms);
     EXPECT_EQ(25U, g_bondp_env.rnr_retry_jitter_ratio);
     EXPECT_EQ(URMA_SUCCESS, bondp_uninit());
 }

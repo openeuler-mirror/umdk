@@ -8,11 +8,6 @@
 
 using namespace urma_test_bond;
 
-static size_t WrBufEntrySize()
-{
-    return sizeof(jfs_wr_entry_t) > sizeof(jfr_wr_entry_t) ? sizeof(jfs_wr_entry_t) : sizeof(jfr_wr_entry_t);
-}
-
 static urma_jfce_t *g_emptyEventJfce = nullptr;
 static urma_jfc_t *g_readyEventJfc = nullptr;
 static urma_jfc_t *g_rearmedPhysicalJfc[URMA_UBAGG_DEV_MAX_NUM] = {};
@@ -195,8 +190,8 @@ TEST(UrmaBondTest, PublicApiModifyAndQueryHandleEmptyMemberSets)
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfs(&fixture.jfs.v_jfs, &jfsAttr));
     EXPECT_TRUE(fixture.jfs.modify_to_error);
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr));
-    EXPECT_EQ(URMA_SUCCESS, bondp_query_jfr(&fixture.jfr.v_jfr, &queriedCfg, &jfrAttr));
-    EXPECT_EQ(JFR_STATE, jfrAttr.mask);
+    /* new contract: querying a virtual JFR that has no physical member is invalid */
+    EXPECT_EQ(URMA_EINVAL, bondp_query_jfr(&fixture.jfr.v_jfr, &queriedCfg, &jfrAttr));
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jetty(&fixture.jetty.v_jetty, &jettyAttr));
     EXPECT_TRUE(fixture.jetty.modify_to_error);
 }
@@ -370,27 +365,27 @@ TEST(UrmaBondTest, PublicCreateApisRejectInvalidPortIdsBeforeProviderAccess)
     jfcCfg.base.jfce = &fixture.jfce.v_jfce;
     jfcCfg.port_ids = &portId;
     jfcCfg.port_count = 1;
-    portId.chip_id = 0;
-    portId.die_id = 1;
-    portId.port_idx = UINT8_MAX;
+    portId.bs.chip_id = 0;
+    portId.bs.die_id = 1;
+    portId.bs.port_idx = UINT8_MAX;
     EXPECT_EQ(nullptr, bondp_create_jfc(&fixture.ctx.v_ctx, &jfcCfg.base));
 
     jfsCfg.base.flag.bs.has_drv_ext = 1;
     jfsCfg.base.jfc = &fixture.jfc.v_jfc;
     jfsCfg.port_ids = &portId;
     jfsCfg.port_count = 1;
-    portId.chip_id = 1;
-    portId.die_id = 2;
-    portId.port_idx = UINT8_MAX;
+    portId.bs.chip_id = 1;
+    portId.bs.die_id = 2;
+    portId.bs.port_idx = UINT8_MAX;
     EXPECT_EQ(nullptr, bondp_create_jfs(&fixture.ctx.v_ctx, &jfsCfg.base));
 
     jfrCfg.base.flag.bs.has_drv_ext = 1;
     jfrCfg.base.jfc = &fixture.jfc.v_jfc;
     jfrCfg.port_ids = &portId;
     jfrCfg.port_count = 1;
-    portId.chip_id = 1;
-    portId.die_id = 1;
-    portId.port_idx = PORT_NUM + 1;
+    portId.bs.chip_id = 1;
+    portId.bs.die_id = 1;
+    portId.bs.port_idx = PORT_NUM + 1;
     EXPECT_EQ(nullptr, bondp_create_jfr(&fixture.ctx.v_ctx, &jfrCfg.base));
 
     jettyCfg.base.flag.bs.has_drv_ext = 1;
@@ -398,13 +393,13 @@ TEST(UrmaBondTest, PublicCreateApisRejectInvalidPortIdsBeforeProviderAccess)
     jettyCfg.base.shared.jfr = &fixture.jfr.v_jfr;
     jettyCfg.port_ids = &portId;
     jettyCfg.port_count = 1;
-    portId.chip_id = 1;
-    portId.die_id = 1;
-    portId.port_idx = 0;
+    portId.bs.chip_id = 1;
+    portId.bs.die_id = 1;
+    portId.bs.port_idx = 0;
     fixture.ctx.dev_num = 1;
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg.base));
 
-    portId.port_idx = UINT8_MAX;
+    portId.bs.port_idx = UINT8_MAX;
     fixture.ctx.dev_num = 2;
     EXPECT_EQ(nullptr, bondp_create_jfc(&fixture.ctx.v_ctx, &jfcCfg.base));
 }
@@ -1170,9 +1165,11 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     jfrCfg.max_sge = 1;
     jfrCfg.trans_mode = URMA_TM_RC;
     urma_test::SetHwMockIoctl(true, 0xb61, 0xb610);
-    g_mockCallocFailSize = WrBufEntrySize();
+    /* wr_buf_init() allocates calloc(max_wr_num, entry_size): fail by nmemb.
+     * depth * enabled_count = 4 for this jfr. */
+    g_mockCallocFailNmemb = 4;
     EXPECT_EQ(nullptr, bondp_create_jfr(&fixture.ctx.v_ctx, &jfrCfg));
-    g_mockCallocFailSize = 0;
+    g_mockCallocFailNmemb = 0;
 
     fixture.jfr.v_jfr.jfr_cfg.jfc = &fixture.jfc.v_jfc;
     fixture.jfr.v_jfr.jfr_cfg.depth = 4;
@@ -1193,9 +1190,10 @@ TEST(UrmaBondTest, PublicCreateApisCleanupIdMappingAfterLateWrBufferFailures)
     fakeEnv.enable_health_check = false;
     g_bondp_env = fakeEnv;
     urma_test::SetHwMockIoctl(true, 0xb62, 0xb620);
-    g_mockCallocFailSize = WrBufEntrySize();
+    /* the jetty send buffer uses jfs_cfg.depth = 1 */
+    g_mockCallocFailNmemb = 1;
     EXPECT_EQ(nullptr, bondp_create_jetty(&fixture.ctx.v_ctx, &jettyCfg));
-    g_mockCallocFailSize = 0;
+    g_mockCallocFailNmemb = 0;
     g_bondp_env = {};
 
     EXPECT_EQ(0, bdp_p_vjetty_id_table_destroy(&fixture.ctx.p_vjetty_id_table));
@@ -1226,8 +1224,8 @@ TEST(UrmaBondTest, PublicCreateJettyHonorsExplicitPortIds)
     jfrCfg.trans_mode = URMA_TM_RC;
     fixture.jfr.v_jfr.jfr_cfg = jfrCfg;
     fixture.phyJfr.jfr_cfg = jfrCfg;
-    portId.chip_id = 1;
-    portId.port_idx = UINT8_MAX;
+    portId.bs.chip_id = 1;
+    portId.bs.port_idx = UINT8_MAX;
 
     jettyCfg.base.flag.bs.share_jfr = URMA_SHARE_JFR;
     jettyCfg.base.flag.bs.has_drv_ext = 1;
@@ -1376,6 +1374,8 @@ TEST(UrmaBondTest, PublicUserCtlGetRjettyAndSegCtxUseMockIoctl)
     fixture.InitActiveComp(&fixture.jetty, 0);
     fixture.jetty.v_jetty.jetty_id = MakeJettyId(0xa01);
     fixture.jetty.v_jetty.jetty_id.eid = MakeEid(0xa02);
+    /* the ext builder requires the physical jetty to share the virtual uasid */
+    fixture.phyJetty[0].jetty_id.uasid = fixture.jetty.v_jetty.jetty_id.uasid;
 
     bondp_topo_node_t topo[2] = {};
     topo[0].is_current = true;
@@ -1507,15 +1507,13 @@ TEST(UrmaBondTest, PublicJettyBindUsesPhysicalTargetsAndRollsBackFailures)
 
     fixture.InitActiveComp(&fixture.jetty, 0);
     fixture.targetJetty.active_count = 2;
-    fixture.targetJetty.active_indices[0] = 0;
-    fixture.targetJetty.active_indices[1] = 1;
+    SetTargetJettyPath(fixture.targetJetty, 0, 0, &phyTarget[0], true);
+    SetTargetJettyPath(fixture.targetJetty, 1, 1, &phyTarget[1], true);
     fixture.jetty.active_count = 2;
     fixture.jetty.active_indices[0] = 0;
     fixture.jetty.active_indices[1] = 1;
     fixture.jetty.p_jetty[0] = &fixture.phyJetty[0];
     fixture.jetty.p_jetty[1] = &fixture.phyJetty[1];
-    fixture.targetJetty.p_tjetty[0][0] = &phyTarget[0];
-    fixture.targetJetty.p_tjetty[1][1] = &phyTarget[1];
 
     EXPECT_EQ(URMA_SUCCESS, bondp_bind_jetty(&fixture.jetty.v_jetty, &fixture.targetJetty.v_tjetty));
     EXPECT_EQ(&fixture.targetJetty.v_tjetty, fixture.jetty.v_jetty.remote_jetty);
