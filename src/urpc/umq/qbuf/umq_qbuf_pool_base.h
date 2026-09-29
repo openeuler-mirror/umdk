@@ -388,6 +388,7 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
             // shm id and pool name may not right
             UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s pool double free\n", buf_id,
                                with_data ? "with" : "without");
+            return 0;
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_FREE;
     }
@@ -477,7 +478,7 @@ static ALWAYS_INLINE void thread_local_pool_rollback(umq_buf_t *buf_head_old, ui
     QBUF_LIST_FIRST(info.local_head) = buf_head_old;
     uint64_t alloc_cnt = ((*info.local_buf_cnt) - buf_cnt_old);
     umq_buf_t *tail = head;
-    for (uint64_t i = 0; i < alloc_cnt - 1; i++) {
+    for (uint64_t i = 0; i < alloc_cnt - 1 && tail != NULL; i++) {
         tail = QBUF_LIST_NEXT(tail);
     }
     tail->qbuf_next = NULL;
