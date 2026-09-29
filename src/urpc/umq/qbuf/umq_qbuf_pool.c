@@ -2874,6 +2874,9 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
 
     if (!exp_pool->inited) {
         UMQ_VLOG_ERR(VLOG_UMQ, "expansion pool has not been inited\n");
+        if (!already_locked) {
+            __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+        }
         return -UMQ_ERR_ENOMEM;
     }
 
@@ -4370,24 +4373,45 @@ bool umq_qbuf_is_expanding(bool with_data, uint32_t sc)
     return __atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) != 0;
 }
 
+/* Fallback bound for the sync wait when the caller specifies no timeout
+ * (deadline_ns=0): expansion normally finishes in milliseconds; if is_expanding stays
+ * set far beyond that (e.g. urma_register_seg hung in the worker thread), give up
+ * instead of spinning forever. */
+#define QBUF_EXPAND_WAIT_FALLBACK_MS (20000)
+/* Wait loop policy: busy-yield first to keep wake-up latency minimal; once the yield
+ * budget is spent (slow expansion or a hung worker), switch to sleep slices so the
+ * waiter stops burning CPU while still respecting the deadline. */
+#define QBUF_EXPAND_WAIT_YIELD_SPINS (1024)
+#define QBUF_EXPAND_WAIT_SLEEP_US (100)
+
 bool umq_qbuf_wait_expansion_done(bool with_data, uint32_t sc, uint64_t deadline_ns)
 {
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_data;
 
+    if (deadline_ns == 0) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        deadline_ns = (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec +
+                      (uint64_t)QBUF_EXPAND_WAIT_FALLBACK_MS * NS_PER_MS;
+    }
+
+    uint32_t spins = 0;
     while (true) {
         if (__atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) == 0) {
             return true;
         }
-        if (deadline_ns > 0) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            uint64_t now = (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
-            if (now >= deadline_ns) {
-                return false;
-            }
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint64_t now = (uint64_t)ts.tv_sec * NS_PER_SEC + (uint64_t)ts.tv_nsec;
+        if (now >= deadline_ns) {
+            return false;
         }
-        (void)sched_yield();
+        if (++spins < QBUF_EXPAND_WAIT_YIELD_SPINS) {
+            (void)sched_yield();
+        } else {
+            (void)usleep(QBUF_EXPAND_WAIT_SLEEP_US);
+        }
     }
 }
 
