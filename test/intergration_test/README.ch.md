@@ -18,11 +18,12 @@
   yum install -y glib2-devel
   yum install -y iperf3
   pip install pytest==8.0.2
-  pip install pytest-timeout=2.4.0
+  pip install pytest-timeout==2.4.0
   pip install fabric==2.7.1
   pip install paramiko==3.1.0
   pip install func_timeout
   pip install PyYAML
+  pip install shyaml
 ```
 
 2. Environment YAML File Preparation
