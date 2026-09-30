@@ -380,6 +380,7 @@ typedef struct umq_ub_ctx {
     uint32_t feature;
     umq_flow_control_cfg_t flow_control;
     urma_context_t *urma_ctx;
+    urma_token_id_t *token_id;
     urma_device_attr_t dev_attr;
     umq_dev_assign_t dev_info;
     pthread_spinlock_t tseg_list_lock;
