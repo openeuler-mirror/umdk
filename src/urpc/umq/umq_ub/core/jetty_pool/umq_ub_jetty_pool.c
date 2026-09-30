@@ -552,10 +552,11 @@ static jetty_pool_node_t *scan_recover_q(revived_dispose_fn dispose, void *ctx, 
     }
 
     jetty_pool_node_t *borrowed = NULL;
+    jetty_pool_node_t *next = NULL; // hoisted: successor snapshot, used to set probe_cursor on break
     while (node != NULL && remaining > 0) {
         // Snapshot next before any detach so the cursor survives reviving this node.
         urpc_list_t *next_field = (node->node.next == head) ? NULL : node->node.next;
-        jetty_pool_node_t *next = (next_field != NULL) ?
+        next = (next_field != NULL) ?
             CONTAINER_OF_FIELD(next_field, jetty_pool_node_t, node) : NULL;
 
         if (node_jettys_available(node)) {
@@ -571,8 +572,15 @@ static jetty_pool_node_t *scan_recover_q(revived_dispose_fn dispose, void *ctx, 
         node = next;
     }
 
-    // NULL = reached tail, wraps to head next round.
-    g_jetty_pool.probe_cursor = node;
+    // On borrow (break), `node` is the revived/detached node — its node.next is LIST_POISON_NEXT
+    // (0x100) and is_jetty_recovering was cleared. Resume next scan from `next` (the successor
+    // snapshotted before the detach, still in recover_q). On exhaustion, `node` is NULL (reached
+    // tail, wraps to head next round) or the last examined node (still in recover_q). NEVER set
+    // the cursor to the detached borrowed node: mark_recovering can re-set is_jetty_recovering on
+    // it while it is still IN_USE (not yet routed back to recover_q by free), and the
+    // is_jetty_recovering guard would then treat the stale cursor as live and dereference the
+    // poisoned node.next (0x100) -> SIGSEGV.
+    g_jetty_pool.probe_cursor = (borrowed != NULL) ? next : node;
     // all_recover_dead: active_q empty (active_count==0) AND no borrowed node in flight that
     // could return and repopulate active_q (in_use_count==0) AND recover_q yielded nothing
     // revivable (borrowed==NULL). Only then is the entire pool dead -> ENOSR. recover_count==0
