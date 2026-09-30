@@ -38,17 +38,24 @@ typedef struct {
     bool isInited;
 } SncPingEidCtx;
 
+typedef enum {
+    DO_PING = 0,
+    GET_CTX = 1
+} SncTaskType;
+
 typedef struct {
+    SncTaskType type;
     int clientDevId;
     char clientEid[IP_LEN];
     char serverEid[IP_LEN];
     SncPingResult* result;
+    uint32_t jettyId;
     std::atomic<bool> done;
     std::atomic<bool> canceled;
     std::atomic<int> ret;
     std::mutex cvMutex;
     std::condition_variable cv;
-} SncPingTask;
+} SncTask;
 
 typedef struct {
     int devId;
@@ -58,7 +65,9 @@ typedef struct {
     std::mutex eidMutex;
     std::mutex queueMutex;
     std::condition_variable queueCv;
-    std::queue<std::shared_ptr<SncPingTask>> taskQueue;
+    std::queue<std::shared_ptr<SncTask>> taskQueue;
+    SncPingTaMode taMode;
+    SncPingTpMode tpMode;
 } SncPingDevThread;
 
 #endif

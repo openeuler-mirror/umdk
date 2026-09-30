@@ -19,6 +19,23 @@ extern "C"{
 
 #define IP_LEN 33
 
+typedef enum {
+    SNC_PING_TA_MODE_UM = 0,
+    SNC_PING_TA_MODE_RM = 1,
+    SNC_PING_TA_MODE_RC = 2
+} SncPingTaMode;
+
+typedef enum {
+    SNC_PING_TP_MODE_UTP = 0,
+    SNC_PING_TP_MODE_CTP = 1,
+    SNC_PING_TP_MODE_RTP = 2
+} SncPingTpMode;
+
+typedef struct {
+    SncPingTaMode taMode;
+    SncPingTpMode tpMode;
+} SncPingInitCfg;
+
 typedef struct {
     int devId;
     char eid[IP_LEN];
@@ -33,11 +50,25 @@ typedef struct {
     uint32_t state;
 } SncPingResult;
 
+typedef struct {
+    char eid[IP_LEN];
+    uint32_t jettyId;
+} SncPingCtxInfo;
+
+typedef struct {
+    int count;
+    SncPingCtxInfo* items;
+} SncPingCtxInfoMap;
+
 int SncPingInit(SncPingEntity* entities, int count);
+
+int SncPingInitWithCfg(SncPingEntity* entities, int count, SncPingInitCfg* cfg);
 
 int SncPingOne(int clientDevId, const char* clientEid, const char* serverEid, SncPingResult* result);
 
 int SncPingDeinit(SncPingEntity* entities, int count);
+
+int SncPingGetCtxInfo(SncPingEntity* entities, int count, SncPingCtxInfoMap* result);
 
 #ifdef __cplusplus
 }
