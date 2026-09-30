@@ -9,6 +9,9 @@ add_executable(urma_bond_ut
     datapath_public_test.cpp
     public_api_test.cpp
     segment_provider_health_test.cpp
+    health_probe_test.cpp
+    user_ctl_extra_test.cpp
+    datapath_user_tseg_test.cpp
 )
 target_link_libraries(urma_bond_ut PRIVATE urma_test_common ${URMA_UBAGG_SO} ${URMA_SO} ${URMA_COMMON_SO}
     GTest::gtest_main dl rt pthread)
