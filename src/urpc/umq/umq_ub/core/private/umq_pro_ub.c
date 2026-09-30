@@ -1978,28 +1978,28 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
 static void umq_ub_process_cr_err_for_jetty_pool(ub_queue_t *queue, urma_cr_t *cr,
     jetty_pool_node_t *node, ub_queue_jetty_index_t jetty_idx)
 {
-    // Only ACK_TIMEOUT carries actionable info about jetty health; bail out otherwise.
-    // node is NULL for queues that own their jetty (no pool) — nothing to mark.
-    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR || node == NULL) {
+    if (node == NULL) {
         return;
     }
     bool is_bond = is_umq_ub_bonding_dev(umq_ub_queue_cfg_get(queue)->dev_ctx->urma_ctx->dev->name);
     if (!is_bond) {
-        // Non-bond: terminal error, isolate the node in relay_q (unchanged behavior).
-        umq_ub_jetty_node_mark_err(node);
+        if (cr->status == URMA_CR_ACK_TIMEOUT_ERR) {
+            umq_ub_jetty_node_mark_err(node);
+        }
         return;
     }
-    // Bond: check the specific jetty that hit ACK_TIMEOUT. If its async rebuild already
-    // finished, keep the node allocable; otherwise mark recovering so it is parked in
-    // recover_q for a later miss-driven probe. node ref_cnt is held, so jetty[] stays valid.
+    if (cr->status != URMA_CR_ACK_TIMEOUT_ERR && cr->status != URMA_CR_LOC_LEN_ERR &&
+        cr->status != URMA_CR_LOC_ACCESS_ERR) {
+        return;
+    }
     if (umq_symbol_urma()->bondp_jetty_is_available(node->jetty[jetty_idx])) {
         return;
     }
     urma_jetty_t *jetty = node->jetty[jetty_idx];
     urma_eid_t *eid = &jetty->jetty_id.eid;
     uint32_t jid = jetty->jetty_id.id;
-    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "UMQ(ID:%u), bond jetty[%d] get cqe URMA_CR_ACK_TIMEOUT_ERR, eid: " EID_FMT
-        ", jetty_id: %u, mark recovering\n", queue->umq_id, jetty_idx, EID_ARGS(*eid), jid);
+    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ_URMA_CQE, "UMQ(ID:%u), bond jetty[%d] get cqe err status[%d], eid: " EID_FMT
+        ", jetty_id: %u, mark recovering\n", queue->umq_id, jetty_idx, (int)cr->status, EID_ARGS(*eid), jid);
     umq_ub_jetty_node_mark_recovering(node);
 }
 
