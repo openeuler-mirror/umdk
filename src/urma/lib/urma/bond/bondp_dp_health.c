@@ -322,15 +322,17 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     path->probe_checked = true;
 
     bondp_context_t *bdp_ctx = NULL;
-    if (ok && bdp_tjetty != NULL) {
+    if (bdp_tjetty != NULL) {
         bdp_ctx = CONTAINER_OF_FIELD(bdp_tjetty->v_tjetty.urma_ctx, bondp_context_t, v_ctx);
     }
     pthread_rwlock_unlock(&node->lock);
 
     if (ok) {
         hc_set_tjetty_list_target_valid(node, (uint32_t)local_idx, target_idx);
+    } else if (bdp_ctx != NULL && cr->status == URMA_CR_LOC_ACCESS_ERR) {
+        bondp_set_port_status_bad(bdp_ctx, (uint32_t)local_idx);
     }
-    if (bdp_ctx != NULL) {
+    if (ok && bdp_ctx != NULL) {
         hc_set_local_idx_jettys_hc_valid(bdp_ctx, (uint32_t)local_idx);
     }
 }
@@ -1219,4 +1221,18 @@ void bondp_hc_tjetty_sync_valid(const bondp_target_jetty_t *bdp_tjetty)
         }
     }
     pthread_rwlock_unlock(&node->lock);
+}
+
+void bondp_set_port_status_bad(bondp_context_t *bdp_ctx, uint32_t local_idx)
+{
+    if (bdp_ctx == NULL || local_idx >= URMA_UBAGG_DEV_MAX_NUM) {
+        return;
+    }
+    /* Edge-triggered: log once per false->true transition. */
+    if (atomic_exchange(&bdp_ctx->port_status_bad[local_idx], true)) {
+        return;
+    }
+    bondp_port_id_t pid = bondp_active_index_to_port_id(local_idx);
+    URMA_LOG_WARN("Port status changed to bad, local_idx=%u, chip_id=%u, die_id=%u, port_idx=%u\n",
+                  local_idx, pid.bs.chip_id, pid.bs.die_id, pid.bs.port_idx);
 }
