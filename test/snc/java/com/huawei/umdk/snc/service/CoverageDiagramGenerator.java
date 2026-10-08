@@ -73,7 +73,7 @@ public class CoverageDiagramGenerator {
         TopoPortInfo topoPorts = buildTopoPortInfo(rawSn);
 
         // === Step 4: Init stores ===
-        // 4a. SuperNodeStore holds the augmented SuperNode for runtime route-table lookups
+        // 4a. SuperNodeStore holds the SuperNode for runtime route-table lookups
         //     (used by CoveragePlanEngine.lookupRoute() during traceForward/Reverse).
         SuperNodeStore superNodeStore = new SuperNodeStore();
         superNodeStore.init();

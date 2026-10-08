@@ -3030,6 +3030,11 @@ public class RouteLookupEngine {
 
 `planPathsCoverageEx` 在阶段 1 枚举框间 EID 对时，被选中 NPU 端口的 CNA（源 CNA）将作为下游 L1SW/L2SW/L1SW 路由查找的 DstCNA（即 SCNA），决定下游各跳的 hash 选口。即：源 NPU 端口 CNA → 影响 L1SW→L2SW、L2SW→L1SW、L1SW→NPU 的出端口选择。同一 EID 对的正向 DstCNA 与反向 DstCNA 不同（反向用源 CNA），导致正反向路径不必重合，从而覆盖更多链路。
 
+`planPathsCoverage` 的 SCNA 链接更简单：
+- **正向**：hop1（NPU→L1SW）物理直连固定端口，SCNA = `src.cna`（源端口 CNA）；hop2（L1SW→L2SW）、hop3（L2SW→L1SW）使用 `(scna=src.cna, dcna=dst.cna)`；hop4（L1SW→NPU）取 `get(0)`，并记录实际命中的 L1SW 侧对端端口 CNA 到 `PathTrace.dstNpuEntryCna`（即 dst NPU 的真实入口端口 CNA）。
+- **反向**：hop1（NPU→L1SW）物理直连；hop2/hop3 使用 `(scna=revScna, dcna=src.cna)`，其中 `revScna = fwdTrace.dstNpuEntryCna != null ? fwdTrace.dstNpuEntryCna : dst.cna`；hop4 取 `get(0)`。
+- **设计意图**：反向 SCNA 取正向 hop4 实际命中端口的对端 CNA，使反向路径自然延续正向 hop4 的物理链路（即正反向走同一条 NPU↔L1SW 末跳链路），无需额外对称约束校验（旧版 `traceReversePath` 中的 `dstNpuKey`/`l1swMatch`/`portMatch` 校验已移除）。
+
 #### 8.3.4 两阶段覆盖（planPathsCoverageEx）
 
 **阶段 1（框间 CROSS_L2）：**
@@ -3264,13 +3269,17 @@ public class HashUtils {
 
 **接收语义（关键前提）：** 目的 CNA 属于某 NPU 设备，该 NPU 就能接收该报文，即使报文到达的端口并不是该 CNA 自己对应的物理端口。因此路由/选口的约束从 "CNA ↔ 端口一一对应" 放宽为 "**CNA 所属 NPU 设备可达**"。
 
-| 位置 | 旧口径 | 扩展后口径 |
+| 位置 | `planPathsCoverage`（当前） | `planPathsCoverageEx`（扩展） |
 |:---|:---|:---|
-| L1SW 路由 | 仅为"物理相连端口"的 CNA 建 /32 路由 | 对**有端口的每个 NPU**，为其**每个 CNA** 建 /32 路由，出端口 = 该 L1SW 到该 NPU 的**全部**端口 |
-| L2SW→L1SW 选口 | 固定用 `dst.remoteL1sw`（目的端口所在的 L1SW） | 任意"能到达目的 NPU 设备的 L1SW" |
-| L1SW→NPU 选口 | 路由仅 1 个出端口（无 ECMP） | 该 L1SW 到目的 NPU 的全部端口（≥2 → hash 可选） |
+| L1SW 路由 | 仅为"物理相连端口"的 CNA 建 /32 路由（每条 1 个出端口，无 ECMP） | 对**有端口的每个 NPU**，为其**每个 CNA** 建 /32 路由，出端口 = 该 L1SW 到该 NPU 的**全部**端口 |
+| L2SW 路由 | /32 路由出端口覆盖目的机框全部 4 块 L1SW（32 个端口） | 同 `planPathsCoverage` |
+| L2SW→L1SW 选口 | L2SW 路由 LPM 命中条目中 remote 为 L1SW 的出端口（32 个，hash 选一） | 同 `planPathsCoverage` |
+| NPU→L1SW 选口（hop1） | **物理直连固定端口，无 hash**（NPU 不查路由表） | CRC-8 `(DstCNA, jettyId)` hash（H1/H2） |
+| L1SW→NPU 选口（hop4） | 路由仅 1 个出端口，`get(0)` | 该 L1SW 到目的 NPU 的全部端口（≥2 → hash 可选，H4） |
 
-**副作用（正向）：** L1SW→NPU 与 L2SW→L1SW 两跳的 ECMP 成员集不再退化，覆盖规划可以真正"踩"到这些出端口，NPU↔L1SW 层覆盖率可达 100%。
+> **历史说明**：在 L2SW→L1SW 选口对齐修复之前，`planPathsCoverage` 使用预计算物理拓扑表（`dst.remoteL1sw` + chip 维度 8 端口）。当前实现使用 L2SW 路由 LPM 命中条目的 L1SW 向出端口（32 个），与 `planPathsCoverageEx` 一致。hop1（NPU→L1SW）和 hop4（L1SW→NPU）在 `planPathsCoverage` 中保持物理确定性，这是有意设计（单端口绑定 / 单出端口路由）。
+
+**副作用（正向）：** L1SW→NPU 一跳的 ECMP 成员集在 `planPathsCoverageEx` 中不再退化，覆盖规划可以真正"踩"到这些出端口，NPU↔L1SW 层覆盖率可达 100%。在 `planPathsCoverage` 中，L2SW→L1SW 一跳现在使用 32 个 ECMP 成员（相比此前的 8 个），扩大了正反向路径可覆盖的 L1SW↔L2SW 出端口范围。
 
 #### 8.7.8 EID 与出端口的关系
 

@@ -774,10 +774,12 @@ EID 对的路径类型标识（`CoveredEidPair.type`），按 NPU/L1/L2 层级�
 
 | 序号 | 位置 | 方向 | scna / dcna | sport / dport | 成员集 |
 |:---:|:---|:---|:---|:---|:---|
-| H1 | `traceForwardPath` | L1SW→L2SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | L1SW 路由出端口中 remote 为 L2SW 的集合 |
-| H2 | `traceForwardPath` | L2SW→L1SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | L2SW 入端口所属 chip 上通往 `dst.remoteL1sw` 的端口集合 |
-| H3 | `traceReversePath` | L1SW→L2SW（反） | `dst.cna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | 目的 L1SW 路由出端口中 remote 为 L2SW 的集合 |
-| H4 | `traceReversePath` | L2SW→L1SW（反） | `dst.cna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | 反向 L2SW 入端口所属 chip 上通往 `src.remoteL1sw` 的端口集合 |
+| H1 | `traceForwardPath` | L1SW→L2SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | L1SW 路由 LPM 命中条目中 remote 为 L2SW 的出端口集合 |
+| H2 | `traceForwardPath` | L2SW→L1SW | `src.cna` / `dst.cna` | `dataUdpSrcPort` / `ackUdpSrcPort` | L2SW 路由 LPM 命中条目中 remote 为 L1SW 的出端口集合（共 32 个，对应目的机框 4 块 L1SW × 8 端口） |
+| H3 | `traceReversePath` | L1SW→L2SW（反） | `revScna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | 反向 L1SW 路由 LPM 命中条目中 remote 为 L2SW 的出端口集合 |
+| H4 | `traceReversePath` | L2SW→L1SW（反） | `revScna` / `src.cna` | `ackUdpSrcPort` / `dataUdpSrcPort` | 反向 L2SW 路由 LPM 命中条目中 remote 为 L1SW 的出端口集合（共 32 个） |
+
+> **反向 SCNA（`revScna`）**：取正向 hop4（L1SW→NPU）实际命中的 L1SW 侧对端端口 CNA（即 dst NPU 真实入口端口 CNA，由 `PathTrace.dstNpuEntryCna` 携带）；若正向未追踪到该信息则兜底回退到 `dst.cna`。该设计使反向路径自然延续正向 hop4 的物理链路，无需额外对称约束校验。
 
 **`planPathsCoverageEx` 新增 hash 点位（H5/H6 用 `nativeHashDstCnaJetty` 与 `nativePortIdx`）：**
 
@@ -800,15 +802,19 @@ EID 对的路径类型标识（`CoveredEidPair.type`），按 NPU/L1/L2 层级�
 
 > 某些拓扑下阶段 2 可能产出 0 对（框间已覆盖全部 NPU↔L1SW 出端口），这是正常结果；单机框（或跨机框路径不可用）时则全部由框内覆盖。
 
-### 9.4 路由范围扩展与接收语义（`planPathsCoverageEx`）
+### 9.4 路由范围扩展与接收语义（`planPathsCoverage` / `planPathsCoverageEx` 共享）
 
 **接收语义（关键前提）**：目的 CNA 属于某 NPU 设备，该 NPU 就能接收该报文，即使报文到达的端口并不是该 CNA 自己对应的物理端口。因此路由/选口的约束从"CNA ↔ 端口一一对应"放宽为"CNA 所属 NPU 设备可达"。
 
 | 位置 | `planPathsCoverage` 口径 | `planPathsCoverageEx` 口径 |
 |:---|:---|:---|
-| L1SW 路由 | 仅为"物理相连端口"的 CNA 建 /32 路由 | 对有端口的每个 NPU，为其每个 CNA 建 /32 路由，出端口 = 该 L1SW 到该 NPU 的全部端口（由测试夹具 `CoverageRouteAugmentor.augmentL1swNpuRouting` 增强） |
-| L2SW→L1SW 选口 | 固定用 `dst.remoteL1sw` | 任意"能到达目的 NPU 设备的 L1SW"（`PrecomputedTopo.npuL1Peers` + `l2PortsTowardsL1Peers`） |
-| L1SW→NPU 选口 | 路由仅 1 个出端口（无 ECMP），`get(0)` | 该 L1SW 到目的 NPU 的全部端口（≥2 → hash 可选），`l1PortsTowardsDevice` + `nativePortIdx` |
+| L1SW 路由 | 仅为"物理相连端口"的 CNA 建 /32 路由（每条 1 个出端口，无 ECMP） | 对有端口的每个 NPU，为其每个 CNA 建 /32 路由，出端口 = 该 L1SW 到该 NPU 的全部端口 |
+| L2SW 路由 | /32 路由出端口覆盖目的机框全部 4 块 L1SW（32 个端口） | 同 `planPathsCoverage` |
+| L2SW→L1SW 选口 | L2SW 路由 LPM 命中条目中 remote 为 L1SW 的出端口集合（32 个，hash 选一） | 同 `planPathsCoverage` |
+| NPU→L1SW 选口（hop1） | **物理直连固定端口，无 hash**（NPU 不查路由表） | CRC-8 `(DstCNA, jettyId)` hash（H5） |
+| L1SW→NPU 选口（hop4） | 路由仅 1 个出端口，`get(0)` 取首个 | 该 L1SW 到目的 NPU 的全部端口（≥2 → hash 可选），H6 |
+
+> **hop1/hop4 在 `planPathsCoverage` 中保持物理确定性**：NPU→L1SW 末跳出端口由 NPU 候选的物理绑定固定（不参与 hash），L1SW→NPU 末跳出端口取 `get(0)`（路由仅 1 个出端口，无 ECMP）。中间两跳（L1SW→L2SW、L2SW→L1SW）按路由 LPM + hash 选口，与 `planPathsCoverageEx` 一致。
 
 ### 9.5 EID 与出端口的关系
 

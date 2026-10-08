@@ -187,23 +187,6 @@ public final class HashUtils {
     //  NPU->L1SW egress port selection: (DstCNA, jettyId) two-tuple
     // ======================================================================
 
-    /** Minimum valid jetty id (inclusive), per the UB jetty id allocation rule. */
-    public static final int JETTY_ID_MIN = 32;
-
-    /** Maximum valid jetty id (inclusive), per the UB jetty id allocation rule. */
-    public static final int JETTY_ID_MAX = 1023;
-
-    /**
-     * Returns whether {@code jettyId} is within the valid range
-     * {@code [32, 1023]}.
-     *
-     * @param jettyId the jetty id to validate
-     * @return {@code true} when the value is a legal jetty id
-     */
-    public static boolean isValidJettyId(int jettyId) {
-        return jettyId >= JETTY_ID_MIN && jettyId <= JETTY_ID_MAX;
-    }
-
     /**
      * Computes the NPU egress port index for the NPU-&gt;L1SW hop, falling
      * back to the pure-Java {@link UbSwitchHash} implementation when the

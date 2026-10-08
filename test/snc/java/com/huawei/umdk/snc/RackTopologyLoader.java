@@ -351,7 +351,9 @@ public final class RackTopologyLoader {
         for (JsonNode portNode : portsArray) {
             NpuPortEntity port = new NpuPortEntity(
                 portNode.has("eid") ? portNode.get("eid").asText() : null,
-                portNode.has("upi") ? portNode.get("upi").asText() : null);
+                portNode.has("upi") ? portNode.get("upi").asText() : null,
+                portNode.has("jettyId") && portNode.get("jettyId").canConvertToInt()
+                    ? portNode.get("jettyId").asInt() : null);
             port.setPortName(portNode.get("portName").asText());
             port.setId(portNode.get("id").asInt());
             port.setChipIndex(chipIndex);

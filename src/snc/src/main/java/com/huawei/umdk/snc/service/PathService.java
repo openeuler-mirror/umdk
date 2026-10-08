@@ -41,12 +41,14 @@ import com.huawei.umdk.snc.engine.PathEngine;
 import com.huawei.umdk.snc.engine.RouteLookupEngine;
 import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.DeviceType;
+import com.huawei.umdk.snc.entity.ForwardingChip;
 import com.huawei.umdk.snc.entity.InternalPathHop;
 import com.huawei.umdk.snc.exception.PathPlanException;
 import com.huawei.umdk.snc.entity.InternalPathInfo;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
 import com.huawei.umdk.snc.entity.OutPortInfo;
+import com.huawei.umdk.snc.entity.PortEntity;
 import com.huawei.umdk.snc.entity.RouteSelectionRecord;
 import com.huawei.umdk.snc.entity.RoutingEntry;
 import com.huawei.umdk.snc.entity.RoutingTable;
@@ -433,6 +435,20 @@ public class PathService {
             return result;
         }
 
+        // planPathsCoverageEx requires jettyId on every NPU port (hop1 NPU→L1SW
+        // egress is hashed by (DstCNA, jettyId)); reject early when missing.
+        if (extended) {
+            String missingJetty = findFirstNpuPortMissingJettyId(superNode);
+            if (missingJetty != null) {
+                LOG.error("planPathsCoverageEx: error=NPU port missing jettyId, port=%s", missingJetty);
+                CoveragePathsResult r = new CoveragePathsResult();
+                r.setStatus(PlanStatus.TOPO_INCOMPLETE);
+                r.setErrorMessage("NPU port missing jettyId: " + missingJetty
+                    + " (planPathsCoverageEx requires jettyId on all NPU ports)");
+                return r;
+            }
+        }
+
         CoverageRequirement requirement = request.getCoverageRequirement();
         CoverageSearchResult searchResult = extended
             ? coveragePlanEngine.findCoverageEx(superNode, dataUdpSrcPort, ackUdpSrcPort,
@@ -545,6 +561,30 @@ public class PathService {
         LOG.info("planPathsCoverage: scope=%s, status=%s, pairCount=%d, linkCount=%d",
             scope, result.getStatus(), eidPairs.size(), coverageLinks.size());
         return result;
+    }
+
+    /**
+     * Returns the first NPU physical port (as {@code "deviceName#portName"})
+     * whose {@code jettyId} is {@code null}, or {@code null} when all NPU
+     * ports carry a jetty id.
+     */
+    private static String findFirstNpuPortMissingJettyId(SuperNode superNode) {
+        if (superNode == null || superNode.getAllDevices() == null) return null;
+        for (DeviceEntity dev : superNode.getAllDevices().values()) {
+            if (dev.getDeviceType() != DeviceType.NPU || dev.getForwardingChips() == null) {
+                continue;
+            }
+            for (ForwardingChip chip : dev.getForwardingChips().values()) {
+                if (chip.getPorts() == null) continue;
+                for (PortEntity port : chip.getPorts().values()) {
+                    if (port instanceof NpuPortEntity
+                        && ((NpuPortEntity) port).getJettyId() == null) {
+                        return dev.getDeviceName() + "#" + port.getPortName();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**
