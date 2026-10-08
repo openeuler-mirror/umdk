@@ -30,7 +30,7 @@ TEST(UrmaBondTest, DatapathPublicPostSendPropagatesSingleDeviceNoStoreFailure)
     fixture.target.active_count = 1;
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
     EXPECT_EQ(nullptr, badWr);
     EXPECT_EQ(0U, fixture.comp.sqe_cnt[0][0].load());
 }
@@ -51,7 +51,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvPropagatesSingleDeviceNoStoreFailure)
     fixture.phyOps.post_jfs_wr = MockPostAnyJfsWr;
     fixture.phyOps.post_jfr_wr = MockPostFirstJfrWrFails;
 
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr(&fixture.comp.v_jfr, &wr, &badWr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &wr, &badWr));
     EXPECT_EQ(&wr, badWr);
     EXPECT_EQ(0U, fixture.comp.rqe_cnt[0]);
 }
@@ -79,7 +79,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupSplitsAcrossActivePaths)
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
     ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 2, BONDP_MAX_SGE_NUM));
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_EQ(nullptr, badWr);
     EXPECT_EQ(1U, fixture.comp.rqe_cnt[0] + fixture.comp.rqe_cnt[1]);
     wr_buf_uninit(&fixture.comp.recv_wr_buf);
@@ -112,7 +112,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupTranslatesBadWr)
         return URMA_EAGAIN;
     };
 
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_EQ(&secondWr, badWr);
     EXPECT_EQ(1U, fixture.comp.rqe_cnt[0]);
 }
@@ -135,7 +135,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupRejectsOversizedList)
     fixture.comp.comp_type = BONDP_COMP_JFR;
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.comp.v_jfr, &wrs[0], &badWr));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &wrs[0], &badWr));
     EXPECT_EQ(nullptr, badWr);
     EXPECT_EQ(0, urma_test::GetHwMockState().postJfrCount);
 }
@@ -403,7 +403,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreAndPollCompletionRoundTrip)
     urma_test::GetHwMockState().postJfsCount = 0;
     badWr = nullptr;
 
-    postRet = bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr);
+    postRet = bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr);
     if (postRet != URMA_SUCCESS) {
         EXPECT_EQ(0, urma_test::GetHwMockState().postJfsCount);
         pthread_spin_destroy(&fixture.comp.send_lock);
@@ -464,21 +464,21 @@ TEST(UrmaBondTest, DatapathPostSendStoreHandlesFullBufferAndInvalidPathRetry)
 
     heldEntry = jfs_wr_buf_alloc(&fixture.comp.send_wr_buf);
     ASSERT_NE(nullptr, heldEntry);
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
     jfs_wr_buf_release(&fixture.comp.send_wr_buf, heldEntry);
 
     heldEntry = jfs_wr_buf_alloc(&fixture.comp.send_wr_buf);
     ASSERT_NE(nullptr, heldEntry);
     fixture.comp.valid[0] = false;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
     jfs_wr_buf_release(&fixture.comp.send_wr_buf, heldEntry);
 
     fixture.comp.valid[0] = false;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
 
     fixture.comp.valid[0] = true;
     invalidWr.rw.src.num_sge = BONDP_MAX_SGE_NUM + 1;
-    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfs_wr(&fixture.comp.v_jfs, &invalidWr, &badWr));
+    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &invalidWr, &badWr));
 
     pthread_spin_destroy(&fixture.comp.send_lock);
     wr_buf_uninit(&fixture.comp.send_wr_buf);
@@ -531,7 +531,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
     ASSERT_EQ(0, bdp_p_vjetty_id_table_add_without_lock(
         &fixture.ctx.p_vjetty_id_table, physicalJfsId, JFS, fixture.comp.v_jfs.jfs_id.id, &fixture.comp));
 
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr(&fixture.comp.v_jfs, &firstWr, &badWr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &firstWr, &badWr));
     EXPECT_NE(nullptr, badWr);
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
@@ -581,7 +581,7 @@ TEST(UrmaBondTest, DatapathPostRecvStoreSubmitsAndCleansProviderFailure)
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
     ASSERT_EQ(0, wr_buf_init(&fixture.comp.recv_wr_buf, 4, BONDP_MAX_SGE_NUM));
 
-    EXPECT_EQ(URMA_SUCCESS, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(URMA_SUCCESS, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_EQ(nullptr, badWr);
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfrCount);
     EXPECT_EQ(2U, fixture.comp.rqe_cnt[0]);
@@ -590,7 +590,7 @@ TEST(UrmaBondTest, DatapathPostRecvStoreSubmitsAndCleansProviderFailure)
     badWr = nullptr;
     fixture.comp.rqe_cnt[0] = 0;
     fixture.phyOps.post_jfr_wr = MockPostFirstJfrWrFails;
-    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
     EXPECT_NE(nullptr, badWr);
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfrCount);
     EXPECT_EQ(0U, fixture.comp.rqe_cnt[0]);
@@ -651,7 +651,7 @@ TEST(UrmaBondTest, DatapathFailoverCrResendsBufferedJfsWrToBackupPath)
         &fixture.ctx.p_vjetty_id_table, physicalJfsId, JFS, fixture.comp.v_jfs.jfs_id.id, &fixture.comp));
 
     wr.user_ctx = 0xbeef;
-    ASSERT_EQ(URMA_SUCCESS, bondp_post_jfs_wr(&fixture.comp.v_jfs, &wr, &badWr));
+    ASSERT_EQ(URMA_SUCCESS, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
 
@@ -683,18 +683,18 @@ TEST(UrmaBondTest, PublicDatapathApisRejectInvalidWorkRequests)
 
     fixture.jfs.comp_type = BONDP_COMP_JFR;
     fixture.jetty.comp_type = BONDP_COMP_JFR;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &sendWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &sendWr, &badSend));
     EXPECT_EQ(nullptr, badSend);
     badSend = nullptr;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr(&fixture.jetty.v_jetty, &sendWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr_sched(&fixture.jetty.v_jetty, &sendWr, &badSend));
     EXPECT_EQ(nullptr, badSend);
 
     fixture.jfr.comp_type = BONDP_COMP_JFS;
     fixture.jetty.comp_type = BONDP_COMP_JFS;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr, &badRecv));
     EXPECT_EQ(&recvWr, badRecv);
     badRecv = nullptr;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr(&fixture.jetty.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr_sched(&fixture.jetty.v_jetty, &recvWr, &badRecv));
     EXPECT_EQ(&recvWr, badRecv);
 
     EXPECT_EQ(0, bondp_poll_jfc(&fixture.jfc.v_jfc, 1, &cr));
@@ -720,19 +720,19 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
 
     writeWr.opcode = URMA_OPC_WRITE;
     writeWr.tjetty = &fixture.targetJetty.v_tjetty;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &writeWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &writeWr, &badSend));
     EXPECT_EQ(&writeWr, badSend);
 
     badSend = nullptr;
     casWr.opcode = URMA_OPC_CAS;
     casWr.tjetty = &fixture.targetJetty.v_tjetty;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &casWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &casWr, &badSend));
     EXPECT_EQ(&casWr, badSend);
 
     badSend = nullptr;
     faddWr.opcode = URMA_OPC_FADD;
     faddWr.tjetty = &fixture.targetJetty.v_tjetty;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &faddWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &faddWr, &badSend));
     EXPECT_EQ(&faddWr, badSend);
 
     srcSge.tseg = reinterpret_cast<urma_target_seg_t *>(&fixture);
@@ -747,7 +747,7 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
     affinityWr.src_chip_id = BONDP_CHIP_ID_MAX + 1;
     affinityWr.dst_chip_id = BONDP_CHIP_ID_MIN;
     badSend = nullptr;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &affinityWr.base, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &affinityWr.base, &badSend));
     EXPECT_EQ(&affinityWr.base, badSend);
 
     writeWr.rw.src.sge = &srcSge;
@@ -755,7 +755,7 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
     writeWr.rw.dst.sge = &dstSge;
     writeWr.rw.dst.num_sge = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_rsge + 1;
     badSend = nullptr;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &writeWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &writeWr, &badSend));
 
     readWr.opcode = URMA_OPC_READ;
     readWr.tjetty = &fixture.targetJetty.v_tjetty;
@@ -763,20 +763,20 @@ TEST(UrmaBondTest, PublicDatapathApisValidateSendWorkRequestFields)
     readWr.rw.src.num_sge = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_rsge + 1;
     readWr.rw.dst.sge = &dstSge;
     readWr.rw.dst.num_sge = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_sge + 1;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &readWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &readWr, &badSend));
 
     sendWr.opcode = URMA_OPC_SEND;
     sendWr.tjetty = &fixture.targetJetty.v_tjetty;
     sendWr.send.src.sge = &srcSge;
     sendWr.send.src.num_sge = fixture.sysfsDev.dev_attr.dev_cap.max_jfs_sge + 1;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &sendWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &sendWr, &badSend));
 
     casWr.cas.src = &srcSge;
     casWr.cas.dst = &dstSge;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &casWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &casWr, &badSend));
     faddWr.faa.src = &srcSge;
     faddWr.faa.dst = &dstSge;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &faddWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &faddWr, &badSend));
 
     g_bondp_env = {};
 }
@@ -792,14 +792,14 @@ TEST(UrmaBondTest, PublicDatapathApisRejectRecvStateBeforeProviderAccess)
     fixture.jetty.comp_type = BONDP_COMP_JETTY;
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = true;
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr(&fixture.jetty.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr_sched(&fixture.jetty.v_jetty, &recvWr, &badRecv));
 
     ASSERT_EQ(0, wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
     heldEntry = jfr_wr_buf_alloc(&fixture.jfr.recv_wr_buf);
     ASSERT_NE(nullptr, heldEntry);
     fixture.jfr.active_count = 1;
     fixture.jfr.active_indices[0] = 0;
-    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_ENOMEM, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr, &badRecv));
     jfr_wr_buf_release(&fixture.jfr.recv_wr_buf, heldEntry);
     wr_buf_uninit(&fixture.jfr.recv_wr_buf);
 }
@@ -813,12 +813,12 @@ TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsStableScheduleFailures)
     fixture.ctx.msn_enable = false;
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.jfr.active_count = 0;
-    EXPECT_EQ(URMA_FAIL, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr, &badRecv));
 
     fixture.jfr.active_count = 1;
     fixture.jfr.active_indices[0] = 0;
     fixture.ctx.bonding_mode = static_cast<bondp_bonding_mode_t>(0xff);
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr, &badRecv));
 
 }
 
@@ -834,7 +834,7 @@ TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsOversizedWrList)
     fixture.ctx.msn_enable = false;
     fixture.InitActiveComp(&fixture.jfr, 0);
     ASSERT_EQ(0, wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(&fixture.jfr.v_jfr, &recvWr[0], &badRecv));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr[0], &badRecv));
     wr_buf_uninit(&fixture.jfr.recv_wr_buf);
 }
 
@@ -856,18 +856,18 @@ TEST(UrmaBondTest, DatapathJettyStandaloneDispatchesProviderPostCallbacks)
 
     recvWr.src.sge = fixture.srcSge;
     recvWr.src.num_sge = 1;
-    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_send_wr(&fixture.comp.v_jetty, &sendWr, &badSend));
+    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_send_wr_sched(&fixture.comp.v_jetty, &sendWr, &badSend));
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     fixture.comp.v_jetty.remote_jetty = nullptr;
-    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_recv_wr(&fixture.comp.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_recv_wr_sched(&fixture.comp.v_jetty, &recvWr, &badRecv));
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfrCount);
     EXPECT_EQ(1U, fixture.comp.rqe_cnt[0]);
 
     urma_test::SetHwMockBadWr(&sendWr, &recvWr);
     urma_test::SetHwMockStatus(URMA_FAIL);
-    EXPECT_EQ(URMA_FAIL, bondp_post_jetty_send_wr(&fixture.comp.v_jetty, &sendWr, &badSend));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jetty_send_wr_sched(&fixture.comp.v_jetty, &sendWr, &badSend));
     EXPECT_NE(nullptr, badSend);
-    EXPECT_EQ(URMA_FAIL, bondp_post_jetty_recv_wr(&fixture.comp.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_FAIL, bondp_post_jetty_recv_wr_sched(&fixture.comp.v_jetty, &recvWr, &badRecv));
     EXPECT_NE(nullptr, badRecv);
 }
 
@@ -888,7 +888,7 @@ TEST(UrmaBondTest, DatapathJettyRecvStoreUsesSharedJfrBuffer)
 
     recvWr.src.sge = fixture.srcSge;
     recvWr.src.num_sge = 1;
-    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_recv_wr(&fixture.comp.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(URMA_SUCCESS, bondp_post_jetty_recv_wr_sched(&fixture.comp.v_jetty, &recvWr, &badRecv));
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfrCount);
     EXPECT_EQ(1U, fixture.comp.rqe_cnt[0]);
 
@@ -922,7 +922,7 @@ TEST(UrmaBondTest, DatapathSendStoreRejectsOversizedList)
         oversizedWr[i].next = &oversizedWr[i + 1];
     }
     oversizedWr[BONDP_BATCH_POST_MAX_NUM] = fixture.MakeSendWr(URMA_OPC_SEND);
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &oversizedWr[0], &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &oversizedWr[0], &badSend));
 }
 
 TEST(UrmaBondTest, PublicDatapathSendWrListReturnsFirstBadWr)
@@ -938,6 +938,6 @@ TEST(UrmaBondTest, PublicDatapathSendWrListReturnsFirstBadWr)
     secondWr.opcode = URMA_OPC_WRITE;
     secondWr.tjetty = &fixture.targetJetty.v_tjetty;
 
-    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.jfs.v_jfs, &firstWr, &badSend));
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &firstWr, &badSend));
     EXPECT_EQ(&secondWr, badSend);
 }

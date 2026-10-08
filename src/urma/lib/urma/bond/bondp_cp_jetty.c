@@ -602,6 +602,40 @@ bondp_port_id_t bondp_active_index_to_port_id(uint32_t active_index)
     return id;
 }
 
+/* Pure coordinate translation for a REMOTE port id: same arithmetic as
+ * convert_bond_port_id_to_active_index, but without requiring the local
+ * context to have a live p_ctx at the mapped slot. A remote id may be
+ * reachable through a target jetty even when the local end has no port
+ * configured at the symmetric index; reachability is the caller's business
+ * (checked against the target jetty path table). */
+int convert_remote_bond_port_id_to_active_index(bondp_port_id_t port_id, uint32_t *active_index)
+{
+    if (port_id.bs.chip_id == 0 || port_id.bs.chip_id > CHIP_NUM) {
+        URMA_LOG_ERR("Invalid remote chip_id=%u.\n", port_id.bs.chip_id);
+        return -1;
+    }
+    if (port_id.bs.die_id != 1) {
+        URMA_LOG_ERR("Invalid remote port_id.die_id=%u.\n", port_id.bs.die_id);
+        return -1;
+    }
+    if (port_id.bs.port_idx == UINT8_MAX) {
+        *active_index = port_id.bs.chip_id - 1;
+        return 0;
+    }
+    /* Port EIDs are numbered [0, PORT_NUM - 1]; a wider range would alias
+     * chip1/PORT_NUM onto chip2/port0 in the matrix mapping. */
+    if (port_id.bs.port_idx >= PORT_NUM) {
+        URMA_LOG_ERR("Invalid remote port_id.port_idx=%u.\n", port_id.bs.port_idx);
+        return -1;
+    }
+    *active_index = (uint32_t)get_matrix_port_p_idx(port_id.bs.chip_id - 1, port_id.bs.port_idx);
+    if (*active_index >= (uint32_t)URMA_UBAGG_DEV_MAX_NUM) {
+        URMA_LOG_ERR("Invalid remote converted index=%u.\n", *active_index);
+        return -1;
+    }
+    return 0;
+}
+
 static int init_active_indices_ex(bondp_context_t *bdp_ctx,
                                   uint32_t enabled_indices[], uint32_t *enabled_count,
                                   uint32_t active_indices[], uint32_t *active_count,

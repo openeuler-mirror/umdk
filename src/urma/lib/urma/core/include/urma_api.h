@@ -908,7 +908,7 @@ urma_status_t urma_fill_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
  * post a request to read, write, atomic or send data.
  * @param[in] jfs: the jfs created before, which is used to put command;
  * @param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
- * @param[in] bad_wr: the first of failure request.
+ * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
@@ -917,7 +917,7 @@ urma_status_t urma_post_jfs_wr(urma_jfs_t *jfs, urma_jfs_wr_t *wr, urma_jfs_wr_t
  * post a request to recv data.
  * @param[in] jfr: the jfr created before, which is used to put command;
  * @param[in] wr: the posting request all information, including sge, flag.
- * @param[in] bad_wr: the first of failure request.
+ * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
@@ -926,7 +926,7 @@ urma_status_t urma_post_jfr_wr(urma_jfr_t *jfr, urma_jfr_wr_t *wr, urma_jfr_wr_t
  * post a request to read, write, atomic or send data.
  * @param[in] jetty: the jetty created before, which is used to put command;
  * @param[in] wr: the posting request all information, including src addr, dst addr, len, jfc, flag, ordering etc.
- * @param[in] bad_wr: the first of failure request.
+ * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
@@ -935,7 +935,7 @@ urma_status_t urma_post_jetty_send_wr(urma_jetty_t *jetty, urma_jfs_wr_t *wr, ur
  * post a request to recv data.
  * @param[in] jetty: the jetty created before, which is used to put command;
  * @param[in] wr: the posting request all information, including sge, flag.
- * @param[in] bad_wr: the first of failure request.
+ * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_post_jetty_recv_wr(urma_jetty_t *jetty, urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
