@@ -535,11 +535,6 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
         }
     }
 
-    uint32_t base_msn = 0;
-    if (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) {
-        base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
-    }
-
     urma_status_t ret = URMA_FAIL;
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         int send_idx = -1;
@@ -585,9 +580,6 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                 }
                 goto OUT;
             }
-            uint32_t wr_msn = (base_msn + index) % BONDP_MAX_BITMAP_SIZE;
-            bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
-            encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             convert_jfs_vwr_to_pwr(pwr, send_idx, target_idx, NULL, NULL);
             if (vwr->next != NULL) {
                 pwr->next = &prealloc_wr_list[index + 1];
@@ -604,6 +596,20 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                 return URMA_EAGAIN;
             }
             continue;
+        }
+        /* Every failure exit of this round is behind us: consume the MSN batch
+         * only for WRs that are actually about to be submitted. Numbers
+         * reserved for a post that returns early would never reach the
+         * receiver and permanently stall its slide window. */
+        bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
+        uint32_t base_msn = 0;
+        if (msn_enable) {
+            base_msn = atomic_fetch_add(&bdp_comp->msn, (uint32_t)wr_total) % BONDP_MAX_BITMAP_SIZE;
+        }
+        urma_jfs_wr_t *msn_pwr = prealloc_wr_list;
+        for (int msn_idx = 0; msn_idx < wr_total; msn_idx++, msn_pwr = msn_pwr->next) {
+            encode_jfs_wr_msn(msn_pwr, bdp_comp,
+                              (base_msn + (uint32_t)msn_idx) % BONDP_MAX_BITMAP_SIZE, msn_enable);
         }
         urma_jfs_wr_t *bad_pwr = NULL;
         ret = comp_post_send(bdp_comp, send_idx, target_idx, prealloc_wr_list, &bad_pwr, wr_total);
@@ -643,10 +649,6 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
     if (wr_total > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
         return URMA_EINVAL;
-    }
-    uint32_t base_msn = 0;
-    if (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) {
-        base_msn = atomic_fetch_add(&bdp_comp->msn, wr_total) % BONDP_MAX_BITMAP_SIZE;
     }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         urma_status_t ret = URMA_SUCCESS;
@@ -732,9 +734,6 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 }
                 goto CLEANUP;
             }
-            uint32_t wr_msn = (base_msn + i) % BONDP_MAX_BITMAP_SIZE;
-            bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
-            encode_jfs_wr_msn(pwr, bdp_comp, wr_msn, msn_enable);
             pwr->user_ctx = wr_entry->wr_id;
             /* Link WRs into a chain */
             if (i > 0) {
@@ -817,6 +816,20 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 return URMA_EAGAIN;
             }
             continue;
+        }
+        /* Every failure exit of this round is behind us (the re-validated path
+         * inside the lock is the last one): consume the MSN batch only for WRs
+         * that are actually about to be submitted. Numbers reserved for a post
+         * that returns early would never reach the receiver and permanently
+         * stall its slide window. */
+        bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
+        uint32_t base_msn = 0;
+        if (msn_enable) {
+            base_msn = atomic_fetch_add(&bdp_comp->msn, (uint32_t)wr_count) % BONDP_MAX_BITMAP_SIZE;
+        }
+        for (int i = 0; i < wr_count; i++) {
+            encode_jfs_wr_msn(&wr_entries[i]->wr, bdp_comp,
+                              (base_msn + (uint32_t)i) % BONDP_MAX_BITMAP_SIZE, msn_enable);
         }
         urma_jfs_wr_t *bad_pwr = NULL;
         ret = comp_post_send(bdp_comp, send_idx, target_idx, &wr_entries[0]->wr,
