@@ -189,7 +189,7 @@ TEST(UrmaBondTest, PublicApiModifyAndQueryHandleEmptyMemberSets)
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfc(&fixture.jfc.v_jfc, &jfcAttr));
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfs(&fixture.jfs.v_jfs, &jfsAttr));
     EXPECT_TRUE(fixture.jfs.modify_to_error);
-    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr));
+    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr_sched(&fixture.jfr.v_jfr, &jfrAttr));
     /* new contract: querying a virtual JFR that has no physical member is invalid */
     EXPECT_EQ(URMA_EINVAL, bondp_query_jfr(&fixture.jfr.v_jfr, &queriedCfg, &jfrAttr));
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jetty(&fixture.jetty.v_jetty, &jettyAttr));
@@ -215,14 +215,14 @@ TEST(UrmaBondTest, PublicApiModifyAndQueryPropagatePhysicalMemberResults)
     EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfc(&fixture.jfc.v_jfc, &jfcAttr));
     EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfs(&fixture.jfs.v_jfs, &jfsAttr));
     EXPECT_TRUE(fixture.jfs.modify_to_error);
-    EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr));
+    EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr_sched(&fixture.jfr.v_jfr, &jfrAttr));
     EXPECT_EQ(URMA_EAGAIN, bondp_modify_jetty(&fixture.jetty.v_jetty, &jettyAttr));
     EXPECT_TRUE(fixture.jetty.modify_to_error);
 
     urma_test::SetHwMockStatus(URMA_SUCCESS);
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfc(&fixture.jfc.v_jfc, &jfcAttr));
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfs(&fixture.jfs.v_jfs, &jfsAttr));
-    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr));
+    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr_sched(&fixture.jfr.v_jfr, &jfrAttr));
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jetty(&fixture.jetty.v_jetty, &jettyAttr));
 
     urma_test::GetHwMockState().jfrQueryStatus = URMA_FAIL;
@@ -290,8 +290,8 @@ TEST(UrmaBondTest, PublicApiRejectsInvalidCreateAndControlInputs)
     EXPECT_EQ(-EINVAL, bondp_user_ctl(&fixture.ctx.v_ctx, &ctl, &ctlOut));
     ctl.opcode = BONDP_USER_CTL_OPCODE_GET_SEG_CTX;
     EXPECT_EQ(-EINVAL, bondp_user_ctl(&fixture.ctx.v_ctx, &ctl, &ctlOut));
-    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(nullptr, &asyncEvent));
-    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(&fixture.ctx.v_ctx, nullptr));
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event_sched(nullptr, &asyncEvent));
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event_sched(&fixture.ctx.v_ctx, nullptr));
 
     bondp_jfc_t noJfceJfc = {};
     EXPECT_EQ(URMA_EINVAL, bondp_rearm_jfc(&noJfceJfc.v_jfc, false));
@@ -750,7 +750,7 @@ TEST(UrmaBondTest, PublicEventApisCoverProviderFailureContracts)
     ASSERT_EQ(0, epoll_ctl(epollFd, EPOLL_CTL_MOD, eventFd, &ev));
     ASSERT_EQ(0, eventfd_write(eventFd, 1));
     urma_test::SetHwMockStatus(URMA_EAGAIN);
-    EXPECT_EQ(URMA_EAGAIN, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_EAGAIN, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
 
     EXPECT_EQ(0, close(eventFd));
     EXPECT_EQ(0, close(epollFd));
@@ -793,27 +793,27 @@ TEST(UrmaBondTest, PublicAsyncEventMapsPhysicalJfsAndAckReleasesPrivateEvent)
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_JFC_ERR;
     g_mockAsyncEvent.element.jfc = &physicalJfc;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     EXPECT_EQ(&fixture.jfc.v_jfc, event.element.jfc);
     bondp_ack_async_event(&event);
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_JFR_LIMIT;
     g_mockAsyncEvent.element.jfr = &physicalJfr;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     EXPECT_EQ(&fixture.jfr.v_jfr, event.element.jfr);
     bondp_ack_async_event(&event);
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_JETTY_ERR;
     g_mockAsyncEvent.element.jetty = &physicalJetty;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     EXPECT_EQ(&fixture.jetty.v_jetty, event.element.jetty);
     bondp_ack_async_event(&event);
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_EID_CHANGE;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     EXPECT_EQ(0U, event.element.eid_idx);
     bondp_ack_async_event(&event);
 
@@ -821,13 +821,13 @@ TEST(UrmaBondTest, PublicAsyncEventMapsPhysicalJfsAndAckReleasesPrivateEvent)
     g_mockAsyncEvent.event_type = URMA_EVENT_JFR_ERR;
     g_mockAsyncEvent.element.jfr = &physicalJfr;
     physicalJfr.jfr_cfg.user_ctx = 0;
-    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     physicalJfr.jfr_cfg.user_ctx = reinterpret_cast<uint64_t>(&fixture.jfr.v_jfr);
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_JFS_ERR;
     g_mockAsyncEvent.element.jfs = &physicalJfs;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
     EXPECT_EQ(&fixture.ctx.v_ctx, event.urma_ctx);
     EXPECT_EQ(URMA_EVENT_JFS_ERR, event.event_type);
     EXPECT_EQ(&fixture.jfs.v_jfs, event.element.jfs);
@@ -1530,3 +1530,166 @@ TEST(UrmaBondTest, PublicJettyBindUsesPhysicalTargetsAndRollsBackFailures)
     EXPECT_EQ(nullptr, fixture.phyJetty[0].remote_jetty);
     EXPECT_EQ(1, urma_test::GetHwMockState().unbindJettyCount);
 }
+
+TEST(UrmaBondTest, PublicModifyJfrRejectsInvalidInputs)
+{
+    BondPublicApiFixture fixture;
+    urma_jfr_attr_t jfrAttr = {};
+    bondp_wr_hint_t hint = {};
+
+    jfrAttr.mask = JFR_RX_THRESHOLD;
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t);
+
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr(nullptr, &jfrAttr, &hint));
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr(&fixture.jfr.v_jfr, nullptr, &hint));
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr, nullptr));
+    /* v_jfr.urma_ctx is NULL in the fixture */
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    /* a ctx whose ops is not the bond ops is rejected */
+    fixture.jfr.v_jfr.urma_ctx = &fixture.ctx.v_ctx;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+}
+
+TEST(UrmaBondTest, PublicModifyJfrInternalRoutesSchedAndDirectedHint)
+{
+    BondPublicApiFixture fixture;
+    urma_jfr_attr_t jfrAttr = {};
+    bondp_wr_hint_t hint = {};
+
+    fixture.InitSinglePhysicalMember();
+    jfrAttr.mask = JFR_RX_THRESHOLD;
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t);
+
+    /* a comp that is not a JFR is rejected */
+    fixture.jfr.comp_type = BONDP_COMP_JFS;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    fixture.jfr.comp_type = BONDP_COMP_JFR;
+
+    /* a deleting jfr reports EAGAIN */
+    fixture.jfr.deleting = true;
+    EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    fixture.jfr.deleting = false;
+
+    /* unsupported attribute mask */
+    jfrAttr.mask = JFR_STATE;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    jfrAttr.mask = JFR_RX_THRESHOLD;
+
+    /* hint->mask == 0 routes to the sched path over all members */
+    urma_test::SetHwMockStatus(URMA_EAGAIN);
+    EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    urma_test::SetHwMockStatus(URMA_SUCCESS);
+    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+
+    /* a directed hint: chip 1 primary eid maps to member 0 */
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
+    hint.src_id.bs.chip_id = 1;
+    hint.src_id.bs.port_idx = UINT8_MAX;
+    urma_test::SetHwMockStatus(URMA_EAGAIN);
+    EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    urma_test::SetHwMockStatus(URMA_SUCCESS);
+    EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+
+    /* a directed hint whose member jfr slot is empty is rejected */
+    fixture.jfr.p_jfr[0] = nullptr;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    fixture.jfr.p_jfr[0] = &fixture.phyJfr;
+
+    /* malformed hints are rejected */
+    hint.version = BONDP_WR_HINT_VERSION_V0 + 1;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t) - 1;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    hint.size = sizeof(bondp_wr_hint_t);
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
+
+    /* a hint pointing at a port with no live physical ctx is rejected */
+    hint.src_id.bs.chip_id = 2;
+    EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
+}
+
+TEST(UrmaBondTest, PublicGetAsyncEventRejectsInvalidInputs)
+{
+    BondPublicApiFixture fixture;
+    urma_async_event_t event = {};
+    bondp_port_id_t portId = {};
+
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(nullptr, &event, &portId));
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(&fixture.ctx.v_ctx, nullptr, &portId));
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(&fixture.ctx.v_ctx, &event, nullptr));
+    /* a ctx whose ops is not the bond ops is rejected */
+    EXPECT_EQ(URMA_EINVAL, bondp_get_async_event(&fixture.ctx.v_ctx, &event, &portId));
+}
+
+TEST(UrmaBondTest, PublicGetAsyncEventInternalFillsPortIdOnlyForJfrLimit)
+{
+    BondPublicApiFixture fixture;
+    urma_async_event_t event = {};
+    bondp_port_id_t portId = {};
+    urma_jfr_t foreignJfr = {};
+    epoll_event ev = {};
+    int epollFd = -1;
+    int eventFd = -1;
+
+    fixture.InitSinglePhysicalMember();
+    epollFd = epoll_create1(EPOLL_CLOEXEC);
+    ASSERT_GE(epollFd, 0);
+    eventFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    ASSERT_GE(eventFd, 0);
+    fixture.ctx.v_ctx.async_fd = epollFd;
+    fixture.phyJfc.urma_ctx = &fixture.phyCtx;
+    fixture.phyJfc.jfc_cfg.user_ctx = reinterpret_cast<uint64_t>(&fixture.jfc.v_jfc);
+    fixture.phyJfr.jfr_cfg.user_ctx = reinterpret_cast<uint64_t>(&fixture.jfr);
+    foreignJfr.jfr_cfg.user_ctx = reinterpret_cast<uint64_t>(&fixture.jfr);
+    fixture.phyOps.get_async_event = MockGetAsyncEvent;
+    fixture.phyOps.ack_async_event = MockAckAsyncEvent;
+    g_mockAckAsyncCount = 0;
+    ev.events = EPOLLIN;
+    ev.data.ptr = &fixture.phyCtx;
+    ASSERT_EQ(0, epoll_ctl(epollFd, EPOLL_CTL_ADD, eventFd, &ev));
+
+    /* no pending event: FAIL is returned and the port id is untouched */
+    portId.value = 0x5a5a;
+    EXPECT_EQ(URMA_FAIL, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
+    EXPECT_EQ(0x5a5a, portId.value);
+
+    /* non-LIMIT events do not touch the port id */
+    ASSERT_EQ(0, eventfd_write(eventFd, 1));
+    g_mockAsyncEvent = {};
+    g_mockAsyncEvent.event_type = URMA_EVENT_JFC_ERR;
+    g_mockAsyncEvent.element.jfc = &fixture.phyJfc;
+    portId.value = 0x5a5a;
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
+    EXPECT_EQ(&fixture.jfc.v_jfc, event.element.jfc);
+    EXPECT_EQ(0x5a5a, portId.value);
+    bondp_ack_async_event(&event);
+
+    /* JFR_LIMIT reports the local port of the member jfr */
+    g_mockAsyncEvent = {};
+    g_mockAsyncEvent.event_type = URMA_EVENT_JFR_LIMIT;
+    g_mockAsyncEvent.element.jfr = &fixture.phyJfr;
+    portId.value = 0x5a5a;
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
+    EXPECT_EQ(&fixture.jfr.v_jfr, event.element.jfr);
+    EXPECT_EQ(bondp_active_index_to_port_id(0).value, portId.value);
+    bondp_ack_async_event(&event);
+
+    /* JFR_LIMIT from a jfr that is not a member of this bond keeps the id invalid */
+    g_mockAsyncEvent = {};
+    g_mockAsyncEvent.event_type = URMA_EVENT_JFR_LIMIT;
+    g_mockAsyncEvent.element.jfr = &foreignJfr;
+    portId.value = 0x5a5a;
+    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
+    EXPECT_EQ(UINT16_MAX, portId.value);
+    bondp_ack_async_event(&event);
+    EXPECT_EQ(3, g_mockAckAsyncCount);
+
+    EXPECT_EQ(0, close(eventFd));
+    EXPECT_EQ(0, close(epollFd));
+}
+

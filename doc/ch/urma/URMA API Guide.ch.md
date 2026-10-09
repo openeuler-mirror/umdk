@@ -6950,6 +6950,105 @@ typedef struct bondp_set_bonding_port_in {
 
 Return: 0 on success, `URMA_EAGAIN` when the context is still referenced by existing objects, other value on error.
 
+#### 2.5.1.2 bondp_modify_jfr
+
+1.  头文件
+
+#include "urma_ubagg.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) bondp_modify_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *attr, bondp_wr_hint_t *hint);
+
+定义文件: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h)
+
+3.  描述
+
+修改聚合（bonding）设备虚拟 JFR 的属性，当前仅支持 `JFR_RX_THRESHOLD`（接收水位阈值）。
+
+hint 路由规则：
+
+- `hint->mask == 0`：不指定端口，等价于修改全部成员物理 JFR；
+- `hint->mask` 置位 `BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID`：定向修改指定成员物理 JFR，其余成员不受影响；
+- `hint` 必须满足：`version == BONDP_WR_HINT_VERSION_V0`，`size == sizeof(bondp_wr_hint_t)`，否则返回 `URMA_EINVAL`。
+
+4.  参数
+
+@param[in] jfr: the bond virtual jfr created before;
+
+@param[in] attr: the attributes to modify, mask must be JFR_RX_THRESHOLD;
+
+@param[in] hint: the routing hint, NULL is not allowed, mask=0 means all members;
+
+5.  返回值
+
+Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, other value on error
+
+6.  示例
+
+```c
+/* 场景一：修改全部成员的接收水位阈值 */
+urma_jfr_attr_t attr = {.mask = JFR_RX_THRESHOLD, .rx_threshold = 8};
+bondp_wr_hint_t hint = {.version = BONDP_WR_HINT_VERSION_V0, .size = sizeof(bondp_wr_hint_t)};
+urma_status_t status = bondp_modify_jfr(v_jfr, &attr, &hint);
+
+/* 场景二：仅定向修改 chip 1 primary EID 对应成员 */
+hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
+hint.src_id.bs.chip_id = 1;
+hint.src_id.bs.die_id = 1;
+hint.src_id.bs.port_idx = UINT8_MAX; /* primary EID */
+status = bondp_modify_jfr(v_jfr, &attr, &hint);
+```
+
+#### 2.5.1.3 bondp_get_async_event
+
+1.  头文件
+
+#include "urma_ubagg.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) bondp_get_async_event([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_async_event_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *event, bondp_port_id_t *port_id);
+
+定义文件: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h)
+
+3.  描述
+
+非阻塞地从聚合（bonding）设备虚拟上下文获取异步事件。事件内的 jetty/JFR 已映射为虚拟对象；获取成功后需调用 `urma_ack_async_event` 释放。
+
+4.  参数
+
+@param[in] ctx: the bond virtual context created before;
+
+@param[out] event: the async event filled by liburma;
+
+@param[out] port_id: see哨兵约定 below;
+
+5.  返回值
+
+Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond context, `URMA_FAIL` when no event is pending or the event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
+
+6.  哨兵约定
+
+`port_id->value` 恒被写入，规则：
+
+- `event->event_type == URMA_EVENT_JFR_LIMIT` 且事件源 JFR 属于本 bond 时，`port_id` 为该成员物理 JFR 对应的本机端口坐标（chip_id/die_id/port_idx），调用方可据此通过 `bondp_modify_jfr` 定向设置接收水位与及时补充RQE，避免 RNR；
+- 其他情况（非 JFR_LIMIT 事件、无事件返回失败、事件源 JFR 不属于本 bond）均为 `UINT16_MAX`，表示端口无效。
+
+7.  示例
+
+```c
+urma_async_event_t event;
+bondp_port_id_t port_id;
+urma_status_t status = bondp_get_async_event(v_ctx, &event, &port_id);
+if (status == URMA_SUCCESS) {
+    if (event.event_type == URMA_EVENT_JFR_LIMIT && port_id.value != UINT16_MAX) {
+        /* 定向重新设置水线与及时补充RQE给产生事件的成员端口，避免 RNR */
+    }
+    (void)urma_ack_async_event(&event);
+}
+```
+
 ### 2.5.2 日志
 
 #### 2.5.2.1 urma_register_log_func
