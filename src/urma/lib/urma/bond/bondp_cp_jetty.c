@@ -14,6 +14,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+#include "urma_ubagg.h"
 #include "ub_util.h"
 #include "urma_api.h"
 #include "urma_cmd.h"
@@ -28,6 +29,7 @@
 #include "bondp_hash_table.h"
 #include "bondp_types.h"
 #include "urma_ubagg.h"
+#include "bondp_provider_ops.h"
 
 #include "bondp_cp_jetty.h"
 
@@ -1240,9 +1242,94 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
     return ret;
 }
 
-urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
+static urma_status_t bondp_hint_parse_local_idx(const bondp_context_t *bdp_ctx, const bondp_wr_hint_t *hint,
+    uint32_t *idx)
 {
-    urma_status_t ret = URMA_SUCCESS, final_ret = URMA_SUCCESS;
+    if (hint->version != BONDP_WR_HINT_VERSION_V0 || hint->size != sizeof(bondp_wr_hint_t)) {
+        return URMA_EINVAL;
+    }
+    if (hint->src_id.bs.die_id != 1) {
+        URMA_LOG_ERR("JFR hint must set die_id=1, die_id=%u.\n", hint->src_id.bs.die_id);
+        return URMA_EINVAL;
+    }
+    if ((hint->mask & BONDP_WR_HINT_MASK_SRC_CHIP_ID) == 0 ||
+        (hint->mask & BONDP_WR_HINT_MASK_SRC_PORT_ID) == 0) {
+        URMA_LOG_ERR("JFR hint must specify src chip_id and port_id, mask=0x%lx.\n", hint->mask);
+        return URMA_EINVAL;
+    }
+    bondp_port_id_t port_id = {0};
+    port_id.bs.chip_id = hint->src_id.bs.chip_id;
+    port_id.bs.die_id = 1;                    /* die 恒为 1，不依赖调用方填写 */
+    port_id.bs.port_idx = hint->src_id.bs.port_idx;
+    if (convert_bond_port_id_to_active_index(bdp_ctx, port_id, idx) != 0) {
+        URMA_LOG_ERR("Failed to convert src port_id 0x%x to local idx.\n", port_id.value);
+        return URMA_EINVAL;
+    }
+    return URMA_SUCCESS;
+}
+
+urma_status_t bondp_modify_jfr_internal(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+    bondp_wr_hint_t *hint)
+{
+    bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jfr, bondp_comp_t, v_jfr);
+    if (bdp_jfr->comp_type != BONDP_COMP_JFR) {
+        return URMA_EINVAL;
+    }
+
+    atomic_fetch_add(&bdp_jfr->use_cnt.atomic_cnt, 1);
+    if (atomic_load(&bdp_jfr->deleting)) {
+        atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
+        return URMA_EAGAIN;
+    }
+
+    urma_status_t result = URMA_SUCCESS;
+    if (attr->mask != JFR_RX_THRESHOLD) {
+        URMA_LOG_ERR("Only JFR_RX_THRESHOLD is supported by bondp_modify_jfr.\n");
+        result = URMA_EINVAL;
+        goto OUT;
+    }
+
+    if (hint->mask == 0) {
+        result = bondp_modify_jfr_sched(jfr, attr);
+        goto OUT;
+    }
+
+    uint32_t idx = 0;
+    result = bondp_hint_parse_local_idx(bdp_jfr->bondp_ctx, hint, &idx);
+    if (result != URMA_SUCCESS) {
+        goto OUT;
+    }
+    if (idx >= URMA_UBAGG_DEV_MAX_NUM || bdp_jfr->p_jfr[idx] == NULL) {
+        URMA_LOG_ERR("Port is not a member of this jfr, idx=%u, jfr_id=%u\n",
+            idx, bdp_jfr->v_jfr.jfr_id.id);
+        result = URMA_EINVAL;
+        goto OUT;
+    }
+    result = urma_modify_jfr(bdp_jfr->p_jfr[idx], attr);
+
+OUT:
+    atomic_fetch_sub(&bdp_jfr->use_cnt.atomic_cnt, 1);
+    return result;
+}
+
+urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+    bondp_wr_hint_t *hint)
+{
+    if (jfr == NULL || jfr->urma_ctx == NULL || attr == NULL || hint == NULL) {
+        return URMA_EINVAL;
+    }
+    if (!bondp_is_bond_ctx(jfr->urma_ctx)) {
+        URMA_LOG_ERR("bondp_modify_jfr is only supported on bond JFR.\n");
+        return URMA_EINVAL;
+    }
+    return bondp_modify_jfr_internal(jfr, attr, hint);
+}
+
+
+urma_status_t bondp_modify_jfr_sched(urma_jfr_t *jfr, urma_jfr_attr_t *attr)
+{
+    urma_status_t ret = URMA_SUCCESS;
+    urma_status_t final_ret = URMA_SUCCESS;
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jfr, bondp_comp_t, v_jfr);
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
