@@ -274,7 +274,8 @@ typedef struct umq_ops {
      * @param[in] umqh_tp: umq tp handle
      * @param[in] mempool_id: mempool id, the ID of the memory pool from which the buffer was obtained
      * @param[in] mempool_info_size: capacity of mempool_info buffer
-     * @param[out] mempool_info: caller-allocated buffer (>= UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE or UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE)
+     * @param[out] mempool_info: caller-allocated buffer (>= UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE
+     * or UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE)
      * @param[out] mempool_info_len: actual byte length written (set on success)
      * Return: 0 on success, other value on error
      */

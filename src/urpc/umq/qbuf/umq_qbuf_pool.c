@@ -73,22 +73,6 @@
 #define QBUF_DBG_LC_PATH_ESCAPE (3)          // lifecycle path index: escape (see qbuf_lc_labels)
 #define QBUF_POOL_MEMPOOL_ID_INVALID (0xFFFFU) // sentinel mempool_id when no buffer present
 #define QBUF_BACKTRACE_FRAMES_MAX (32)       // max frames captured by backtrace()
-// IOBuf Block flag bit positions (external format, see qbuf_log_non_pool_pointer):
-// bit 0 = USER_DATA, bit 2 = UB, bit 3 = TINY, bit 4 = ESCAPE
-#define QBUF_BLOCK_FLAG_BIT_USER_DATA (0)
-#define QBUF_BLOCK_FLAG_BIT_UB        (2)
-#define QBUF_BLOCK_FLAG_BIT_TINY     (3)
-#define QBUF_BLOCK_FLAG_BIT_ESCAPE   (4)
-// IOBuf Block raw-dump word indices (data treated as uint64_t[4], 32 bytes):
-//   word 0 = offset 0-7  (nshared + flags + abi_check)
-//   word 1 = offset 8-15 (size + cap)
-//   word 2 = offset 16-23 (portal_next/data_meta)
-//   word 3 = offset 24-31 (data ptr)
-#define QBUF_BLOCK_RAW_WORD_HDR          (0)
-#define QBUF_BLOCK_RAW_WORD_SIZE_CAP     (1)
-#define QBUF_BLOCK_RAW_WORD_META         (2)
-#define QBUF_BLOCK_RAW_WORD_DATA_PTR     (3)
-#define QBUF_BLOCK_RAW_WORD_COUNT        (4)
 
 typedef struct qbuf_expansion_pool_slot {
     urpc_list_t node;    // linkage in exp_pool.slot_list

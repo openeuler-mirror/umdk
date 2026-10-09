@@ -715,7 +715,7 @@ typedef struct umq_tp_resource_create_option {
  * compute wire budgets without seeing the struct; the value is pinned by
  * static_asserts in umq_ub_private.h. */
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
-#define UMQ_USER_TSEG_SIZE 12u  /* sizeof(urma_user_tseg_t)*/
+#define UMQ_USER_TSEG_SIZE 12u  /* sizeof(urma_user_tseg_t) */
 #define UMQ_IMPORT_MEMPOOL_INFO_EXTERN 128u
 #define UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN 64u
 /* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
