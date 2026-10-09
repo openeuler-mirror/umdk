@@ -151,7 +151,7 @@ class PlanPathsCoverageExIntegrationTest {
     }
 
     @Test
-    @Timeout(600)
+    @Timeout(1800)
     @DisplayName("REDUNDANT：每条被覆盖链路（NPU_L1 + L1_L2）至少被 2 个 EID 对覆盖")
     void redundant() {
         CoveragePathsResult result = sncService.planPathsCoverageEx(

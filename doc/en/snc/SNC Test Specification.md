@@ -110,32 +110,33 @@ src/test/java/com/huawei/umdk/snc/
 
 | Layer | Test Class | Class Under Test | Case Count |
 |------|--------|--------|--------|
-| Service | `SuperNodeServiceTest` | `SuperNodeService` | 35 |
-| Service | `PathServiceTest` | `PathService` (incl. planPathsCoverage/Ex) | 95+ |
-| Service | `LinkEventServiceTest` | `LinkEventService` | 25+ |
-| Engine | `PathEngineTest` | `PathEngine` | 20 |
+| Service | `SuperNodeServiceTest` | `SuperNodeService` | 41 |
+| Service | `PathServiceTest` | `PathService` (incl. planPathsCoverage/Ex) | 43 |
+| Service | `LinkEventServiceTest` | `LinkEventService` | 12 |
+| Engine | `PathEngineTest` | `PathEngine` | 22 |
 | Engine | `RouteLookupEngineTest` | `RouteLookupEngine` | 8 |
-| Engine | `CoveragePlanEngineTest` | `CoveragePlanEngine` (findCoverage/Ex + two-phase) | 80+ |
-| Route | `RouteMspServiceTest` | `RouteMspService` | 20+ |
-| Route | `RouteInstantiationServiceTest` | `RouteInstantiationService` | 25+ |
-| Route | `RouteConvergeServiceTest` | `RouteConvergeService` | 30+ |
-| Route | `TopoTemplateServiceTest` | `TopoTemplateService` | 12+ |
-| Route | `TemplateModelTest` | SncTopology/SncNode/SncPort/Label etc. | 40+ |
-| Route | `RouteTableTest`/`RouteEntryTest`/`InboundTest`/`NextHopPortTest`/`OriginNodeTest` | route.model classes | 35+ |
-| Store | `SuperNodeStoreTest` | `SuperNodeStore` | 24 |
+| Engine | `CoveragePlanEngineMiniTopologyTest` | `CoveragePlanEngine` (findCoverage/Ex + two-phase, mini topology) | 11 |
+| Route | `RouteMspTest` | `RouteMspService` | 4 |
+| Route | `RouteInstantiationTest` | `RouteInstantiationService` | 4 |
+| Route | `RouteConvergeServiceTest` | `RouteConvergeService` | 12 |
+| Route | `RouteSelectionRecordTest` | `RouteSelectionRecord` | 16 |
+| Store | `SuperNodeStoreTest` | `SuperNodeStore` | 26 |
 | Entity | 22 test files (incl. LinkEventTest) | Various Entity classes | ~170 |
 | DTO | 15 test files (incl. 11 new DTOs) | DTO classes | 80+ |
 | Exception | 4 test files | Exception classes | 18 |
-| Config | `SNCConfigTest` | `SNCConfig` | 7 |
-| Util | `AddressUtilsTest` + `HashUtilsTest` + `UbSwitchHashTest` + `DllLoaderTest` | AddressUtils + HashUtils + UbSwitchHash + DllLoader | 60+ |
+| Config | `SNCConfigTest` | `SNCConfig` | 17 |
+| Util | `AddressUtilsTest` + `HashUtilsJettyTest` + `UbSwitchHashTest` + `HashCouplingTest` | AddressUtils + HashUtils + UbSwitchHash | 44 |
 
 ### 2.2 Integration Tests
 
 | Test Class | Case Count | Data Source |
 |--------|--------|---------|
-| `SNCServiceIntegrationTest` | 60+ | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
-| `PlanPathsCoverageExIntegrationTest` | 30+ | Landed (delivered together with NPU-L1 design) |
-| `FullRackTopologyJettyIdTest` | 5+ | `FullRackTopologyGenerator` fixed jettyId allocation (32..39) |
+| `SNCServiceIntegrationTest` | 31 | JSON files (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
+| `PlanPathsCoverageIntegrationTest` | 4 | `RackTopologyLoader.loadRawTopology()` full 4-rack topology |
+| `PlanPathsCoverageExIntegrationTest` | 7 | `RackTopologyLoader.loadRawTopology()` full 4-rack topology |
+| `CoverageMainSuccessTest` | 6 | `RackTopologyLoader.loadRawTopology()` full 4-rack topology |
+| `CoverageIntraChassisTest` | 1 | Single-chassis topology (pruned from `RackTopologyLoader`) |
+| `FullRackTopologyJettyIdTest` | 3 | `FullRackTopologyGenerator` fixed jettyId allocation (32..39) |
 
 ---
 
