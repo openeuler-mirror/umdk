@@ -110,32 +110,33 @@ src/test/java/com/huawei/umdk/snc/
 
 | 层级 | 测试类 | 被测类 | 用例数 |
 |------|--------|--------|--------|
-| Service | `SuperNodeServiceTest` | `SuperNodeService` | 35 |
-| Service | `PathServiceTest` | `PathService`（含 planPathsCoverage/Ex） | 95+ |
-| Service | `LinkEventServiceTest` | `LinkEventService` | 25+ |
-| Engine | `PathEngineTest` | `PathEngine` | 20 |
+| Service | `SuperNodeServiceTest` | `SuperNodeService` | 41 |
+| Service | `PathServiceTest` | `PathService`（含 planPathsCoverage/Ex） | 43 |
+| Service | `LinkEventServiceTest` | `LinkEventService` | 12 |
+| Engine | `PathEngineTest` | `PathEngine` | 22 |
 | Engine | `RouteLookupEngineTest` | `RouteLookupEngine` | 8 |
-| Engine | `CoveragePlanEngineTest` | `CoveragePlanEngine`（findCoverage/Ex + 两阶段） | 80+ |
-| Route | `RouteMspServiceTest` | `RouteMspService` | 20+ |
-| Route | `RouteInstantiationServiceTest` | `RouteInstantiationService` | 25+ |
-| Route | `RouteConvergeServiceTest` | `RouteConvergeService` | 30+ |
-| Route | `TopoTemplateServiceTest` | `TopoTemplateService` | 12+ |
-| Route | `TemplateModelTest` | SncTopology/SncNode/SncPort/Label 等 | 40+ |
-| Route | `RouteTableTest`/`RouteEntryTest`/`InboundTest`/`NextHopPortTest`/`OriginNodeTest` | route.model 各类 | 35+ |
-| Store | `SuperNodeStoreTest` | `SuperNodeStore` | 24 |
+| Engine | `CoveragePlanEngineMiniTopologyTest` | `CoveragePlanEngine`（findCoverage/Ex + 两阶段，迷你拓扑） | 11 |
+| Route | `RouteMspTest` | `RouteMspService` | 4 |
+| Route | `RouteInstantiationTest` | `RouteInstantiationService` | 4 |
+| Route | `RouteConvergeServiceTest` | `RouteConvergeService` | 12 |
+| Route | `RouteSelectionRecordTest` | `RouteSelectionRecord` | 16 |
+| Store | `SuperNodeStoreTest` | `SuperNodeStore` | 26 |
 | Entity | 22 个测试文件（含 LinkEventTest） | 各 Entity 类 | ~170 |
 | DTO | 15 个测试文件（含 11 个新增 DTO） | DTO 类 | 80+ |
 | Exception | 4 个测试文件 | 异常类 | 18 |
-| Config | `SNCConfigTest` | `SNCConfig` | 7 |
-| Util | `AddressUtilsTest` + `HashUtilsTest` + `UbSwitchHashTest` + `DllLoaderTest` | AddressUtils + HashUtils + UbSwitchHash + DllLoader | 60+ |
+| Config | `SNCConfigTest` | `SNCConfig` | 17 |
+| Util | `AddressUtilsTest` + `HashUtilsJettyTest` + `UbSwitchHashTest` + `HashCouplingTest` | AddressUtils + HashUtils + UbSwitchHash | 44 |
 
 ### 2.2 集成测试
 
 | 测试类 | 用例数 | 数据来源 |
 |--------|--------|---------|
-| `SNCServiceIntegrationTest` | 60+ | JSON 文件 (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
-| `PlanPathsCoverageExIntegrationTest` | 30+ | 已落地（与 NPU-L1 设计同步落地） |
-| `FullRackTopologyJettyIdTest` | 5+ | `FullRackTopologyGenerator` 固定 jettyId 分配（32..39） |
+| `SNCServiceIntegrationTest` | 31 | JSON 文件 (`topo_data_2npu_1port.json`, `topo_data_4npu_8port.json`, `topo_data_2box_16l2sw.json`) |
+| `PlanPathsCoverageIntegrationTest` | 4 | `RackTopologyLoader.loadRawTopology()` 完整 4 机框拓扑 |
+| `PlanPathsCoverageExIntegrationTest` | 7 | `RackTopologyLoader.loadRawTopology()` 完整 4 机框拓扑 |
+| `CoverageMainSuccessTest` | 6 | `RackTopologyLoader.loadRawTopology()` 完整 4 机框拓扑 |
+| `CoverageIntraChassisTest` | 1 | 单框拓扑（`RackTopologyLoader` 裁剪） |
+| `FullRackTopologyJettyIdTest` | 3 | `FullRackTopologyGenerator` 固定 jettyId 分配（32..39） |
 
 ---
 
@@ -253,8 +254,8 @@ src/test/java/com/huawei/umdk/snc/
 | 类 | 测试用例数 | 关键测试点 |
 |:---|:----------|:-----------|
 | RouteLookupEngine | 8 | LPM 匹配/不匹配/默认路由/空路由/ECMP 多出口；maskLengths=[0] 无匹配 |
-| PathEngine | 20 | 直连路径（NpuDevice/NpuPortEntity 重载）/多跳路径/跨芯片路由查找/路径反转/端口查找异常/null 芯片/半连接 |
-| CoveragePlanEngine | 80+ | findCoverage（L1↔L2 域）；findCoverageEx（两阶段 CROSS_L2 + LOCAL_L1）；hash 使用点 H1~H7b；jettyIdOf 回落（缺失/越界/null port.id）；getExDiagnostics 全部 10 个诊断计数；MIN_COVERAGE / REDUNDANT 两种 coverageRequirement；COVERAGE_INCOMPLETE 与 SUCCESS 终止条件；EID 均匀度统计 |
+| PathEngine | 22 | 直连路径（NpuDevice/NpuPortEntity 重载）/多跳路径/跨芯片路由查找/路径反转/端口查找异常/null 芯片/半连接 |
+| CoveragePlanEngine | 11 | findCoverage（L1↔L2 域）：MIN_COVERAGE/REDUNDANT/null requirement；findCoverageEx（两阶段 CROSS_L2 + LOCAL_L1）：MIN_COVERAGE/REDUNDANT/null requirement；空拓扑/无 L2SW 边界；构造器/accessor 验证；迷你 2-chassis 拓扑 |
 
 **RouteLookupEngine LPM 核心算法：**
 
@@ -294,9 +295,9 @@ src/test/java/com/huawei/umdk/snc/
 
 | 类 | 测试用例数 | 关键测试点 |
 |:---|:----------|:-----------|
-| SuperNodeService | 35 | importSuperNode 校验、addNpuDevices/addSwDevices、getDevice、getRoutingTable、异常处理；空值/空串/空集合参数校验 |
-| PathService | 95+ | 完整 planPath 流程（65）+ planPathsCoverage（15+）+ planPathsCoverageEx（15+）；各错误码分支、反射测试（null 字段）、routePhase 异常分支、NpuDevice.findNpuPort 边界；CoveragePlanEngine 构造参数注入；两阶段流程触发；scope/layerStats 验证 |
-| LinkEventService | 25+ | handleLinkEvent 正常 down/up 流程；端口状态更新（linkStatus/updateAt）；触发 RouteConvergeService.converge；非法 eventType 抛 IllegalArgumentException；设备/端口不存在抛 IllegalStateException；SuperNode 为 null 抛 IllegalArgumentException |
+| SuperNodeService | 41 | importSuperNode 校验、addNpuDevices/addSwDevices、getDevice、getRoutingTable、异常处理；空值/空串/空集合参数校验 |
+| PathService | 43 | 完整 planPath 流程（65）+ planPathsCoverage（15+）+ planPathsCoverageEx（15+）；各错误码分支、反射测试（null 字段）、routePhase 异常分支、NpuDevice.findNpuPort 边界；CoveragePlanEngine 构造参数注入；两阶段流程触发；scope/layerStats 验证 |
+| LinkEventService | 12 | handleLinkEvent 正常 down/up 流程；端口状态更新（linkStatus/updateAt）；触发 RouteConvergeService.converge；非法 eventType 抛 IllegalArgumentException；设备/端口不存在抛 IllegalStateException；SuperNode 为 null 抛 IllegalArgumentException |
 
 **PathService 流程覆盖（对应设计文档 §9）：**
 
@@ -346,9 +347,9 @@ src/test/java/com/huawei/umdk/snc/
 | 测试类别 | 测试用例数 | 关键测试点 |
 |:---------|:----------|:-----------|
 | 生命周期状态机 | 12+ | INIT→READY→DATAREADY→UNINIT 各状态转换；routeCalculate/makeRoutes/getNodeRoute/notifyLinkEvent 在 READY/DATAREADY 均可用；planPathsCoverage/Ex 仅 DATAREADY |
-| 参数校验 | 20+ | 所有入参 null/空字符串检查；CoveragePathsRequest/LinkEvent 字段校验 |
-| 异常处理 | 10+ | 未 init/uninit 后调用各方法；routeCalculate 未调用直接 makeRoutes 抛 IllegalStateException；makeRoutes 未调用直接 getNodeRoute 抛异常 |
-| 完整链路 | 10+ | 从 init → setSuperNodeData → addNpuDevices → addSwDevices → planPath → planPathsCoverage → planPathsCoverageEx → routeCalculate → makeRoutes → getNodeRoute → notifyLinkEvent → uninit |
+| 参数校验 | 10+ | 所有入参 null/空字符串检查；CoveragePathsRequest/LinkEvent 字段校验 |
+| 异常处理 | 5+ | 未 init/uninit 后调用各方法；routeCalculate 未调用直接 makeRoutes 抛 IllegalStateException；makeRoutes 未调用直接 getNodeRoute 抛异常 |
+| 完整链路 | 4+ | 从 init → setSuperNodeData → addNpuDevices → addSwDevices → planPath → planPathsCoverage → planPathsCoverageEx → routeCalculate → makeRoutes → getNodeRoute → notifyLinkEvent → uninit |
 | 覆盖规划链路 | 8+ | planPathsCoverage/planPathsCoverageEx 完整流程；scope/layerStats/type 验证 |
 | 路由计算链路 | 8+ | routeCalculate 幂等（两次调用）；makeRoutes 实例化；getNodeRoute 查询；notifyLinkEvent 收敛后 getNodeRoute 验证 reachable 变化 |
 

@@ -39,9 +39,11 @@ public class CoveragePathsResult {
 
     private CoverageStats stats;
 
-    /** Coverage link scope used by this call; {@code null} for the original interface. */
+    /** Coverage link scope used by this call; {@code L1_L2} for {@code planPathsCoverage},
+     *  {@code NPU_L1_L2} for {@code planPathsCoverageEx}. Never {@code null}. */
     private CoverageLinkScope scope;
 
-    /** Per-layer statistics; {@code null} for the original interface. */
+    /** Per-layer statistics; {@code null} for {@code planPathsCoverage}, populated for
+     *  {@code planPathsCoverageEx}. */
     private Map<CoverageLinkLayer, CoverageLayerStats> layerStats;
 }
