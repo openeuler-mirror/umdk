@@ -11,6 +11,7 @@
 #define BONDP_DP_INTERRUPT_H
 
 #include "urma_types.h"
+#include "urma_ubagg.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,9 +24,12 @@ int bondp_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t
 
 void bondp_ack_jfc(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt);
 
-urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *event);
+urma_status_t bondp_get_async_event_sched(urma_context_t *ctx, urma_async_event_t *event);
 void bondp_ack_async_event(urma_async_event_t *event);
 
+/* be used by bondp_get_async_event */
+urma_status_t bondp_get_async_event_internal(urma_context_t *ctx, urma_async_event_t *v_event,
+    bondp_port_id_t *port_id);
 #ifdef __cplusplus
 }
 #endif
