@@ -1609,18 +1609,6 @@ static int umq_share_rq_validate(umq_ub_ctx_t *dev_ctx, umq_create_option_t *opt
         return -UMQ_ERR_EINVAL;
     }
 
-    if (is_umq_ub_share_transport(option->create_flag) &&
-        !is_umq_ub_share_transport(share_rq->create_flag)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "creating_queue has SHARE_TRANSPORT, but share_rq does not have SHARE_TRANSPORT\n");
-        return -UMQ_ERR_EINVAL;
-    }
-
-    if (is_umq_ub_share_transport(share_rq->create_flag) &&
-        !is_umq_ub_share_transport(option->create_flag)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "share_rq has SHARE_TRANSPORT, but creating_queue does not have SHARE_TRANSPORT\n");
-        return -UMQ_ERR_EINVAL;
-    }
-
     if (share_rq->state == QUEUE_STATE_ERR) {
         UMQ_VLOG_ERR(VLOG_UMQ, "share_rq state is invalid\n");
         return -UMQ_ERR_EINVAL;
