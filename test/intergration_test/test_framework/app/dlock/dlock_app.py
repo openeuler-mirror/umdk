@@ -57,9 +57,9 @@ def gen_random_port(host_list, port_num=2):
         if res == 0:
             break
     for i in range(100):
-        udp_port = random.randint(40000, 50000)
-        log.info(f'---------- [ udp_port = {i} {tcp_port} ] ----------')
-        ret = check_port_nouse(host_list, up)
+        udp_port = random.randint(40000, 55000)
+        log.info(f'---------- [ udp_port = {i} {udp_port} ] ----------')
+        ret = check_port_nouse(host_list, udp_port)
         if ret == 0:
             break
     return tcp_port, udp_port
