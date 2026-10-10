@@ -664,9 +664,14 @@ __aicore__ inline void CamMoeDistributeDispatchSend<TemplateMC2TypeFunc>::QuantP
         pipe_barrier(PIPE_V);
 
         ReduceMax(quantRowMaxTensor_, quantFloatAbsTensor_, quantFloatAbsTensor_, hiddenSize_, false);
-        SyncFunc<HardEvent::V_S>();
 
-        dynamicScale = float(127.0) / quantRowMaxTensor_.GetValue(0);
+        pipe_barrier(PIPE_V);
+        Duplicate(quantFloatAbsTensor_, 127.0f, 1);
+        pipe_barrier(PIPE_V);
+        Div(quantFloatAbsTensor_, quantFloatAbsTensor_, quantRowMaxTensor_, 1);
+        SyncFunc<HardEvent::V_S>();
+        dynamicScale = quantFloatAbsTensor_.GetValue(0);
+
         SyncFunc<HardEvent::S_V>();
 
         Muls(quantFloatTensor_, quantFloatTensor_, dynamicScale, hiddenSize_);
