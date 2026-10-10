@@ -247,23 +247,6 @@ void udma_u_delete_sq(struct udma_u_jetty_queue *sq)
 		(void)pthread_spin_destroy(&sq->lock);
 }
 
-void udma_u_lock_delete_sq(struct udma_u_jetty_queue *sq)
-{
-	if (sq->wrid != NULL) {
-		free(sq->wrid);
-		sq->wrid = NULL;
-	}
-
-	if (sq->qbuf != NULL) {
-		sq->qbuf = NULL;
-		sq->qbuf_curr = NULL;
-		sq->qbuf_end = NULL;
-	}
-
-	if (!sq->lock_free)
-		(void)pthread_spin_destroy(&sq->lock);
-}
-
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);

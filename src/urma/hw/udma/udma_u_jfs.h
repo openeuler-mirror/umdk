@@ -197,7 +197,6 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg);
 urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg);
 urma_status_t udma_u_delete_jfs(urma_jfs_t *jfs);
 void udma_u_delete_sq(struct udma_u_jetty_queue *sq);
-void udma_u_lock_delete_sq(struct udma_u_jetty_queue *sq);
 urma_status_t udma_u_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *jfs_attr);
 urma_status_t udma_u_query_jfs(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg,
 			       urma_jfs_attr_t *attr);
