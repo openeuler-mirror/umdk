@@ -1005,6 +1005,13 @@ static ALWAYS_INLINE void umq_ub_io_packet_stats(ub_queue_t *queue, ub_packet_st
     }
 }
 
+static ALWAYS_INLINE void umq_bondp_port_id_from_umq(const umq_port_id_t *src, bondp_port_id_t *dst)
+{
+    dst->bs.chip_id = src->bs.chip_id;
+    dst->bs.die_id = src->bs.die_id;
+    dst->bs.port_idx = src->bs.port_idx;
+}
+
 #ifdef __cplusplus
 }
 #endif

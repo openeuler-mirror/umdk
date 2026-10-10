@@ -332,7 +332,7 @@ typedef union umq_port_id {
     uint16_t value;
 } umq_port_id_t;
 
-// port[0] is primary port, others as backup
+// bonding member ports configured for this UMQ; role and capacity policy belong to the caller
 typedef struct umq_used_ports {
     umq_port_id_t *port;
     uint8_t num;
@@ -425,12 +425,20 @@ struct umq_buf {
     uint32_t mempool_id : 11;          // indicate which memory pool it is allocated from
     uint32_t token_value;              // token_value for reference operation
 
-    uint64_t status : 32;                 // umq_buf_status_t
-    uint64_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
-    uint64_t has_user_tseg : 1;
-    uint64_t buf_ref_id_type : 1;         // 0: enable umq_id, invalid to user, 1: enable tphandel
-    uint64_t buf_ref_id : 18;             // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
-    uint64_t rsvd3 : 10;
+    uint16_t status;                   // umq_buf_status_t
+    union {
+        uint16_t port_id_value;
+        struct {
+            umq_port_id_t id;          // local physical port on which this RX WR completed;
+        } rx_port;
+    };
+
+    uint32_t has_port_id : 1;     // 1 when the provider reports an available RX port
+    uint32_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
+    uint32_t has_user_tseg : 1;
+    uint32_t buf_ref_id_type : 1;         // 0: enable umq_id, invalid to user, 1: enable tphandel
+    uint32_t buf_ref_id : 18;             // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
+    uint32_t rsvd3 : 9;
 
     uint64_t user_tseg;
 
@@ -699,6 +707,7 @@ typedef struct umq_cfg_get {
 #define UMQ_IO_OPTION_FLAG_DIRECTION (1)          // enable io_direction
 #define UMQ_IO_OPTION_FLAG_TP_HANDLE_IDX (1 << 1) // enable tp_handle_idx
 #define UMQ_IO_OPTION_FLAG_TAG_TIMESTAMP (1 << 2) // enable tag timestamp
+#define UMQ_IO_OPTION_FLAG_PORT (1 << 3)          // post qbufs through the selected local bonding member
 
 typedef struct umq_io_option {
     uint32_t flag; // indicates which below property takes effect
@@ -706,6 +715,7 @@ typedef struct umq_io_option {
     uint32_t tp_handle_idx;
     uint64_t tag_timestamp;
     uint32_t tp_handle_free_num;
+    umq_port_id_t port; // selected local member; bonding chip_id and die_id must be in [0, 15]
 } umq_io_option_t;
 
 #define UMQ_TP_CREATE_FLAG_USED_PORTS (1) // enable arg used ports when create transport pool resource
