@@ -1916,3 +1916,14 @@ int umq_transport_pool_resource_destroy(uint64_t umqh, uint32_t tp_handle_idx)
     }
     return ops->umq_tp_transport_pool_resource_destroy(umqh, tp_handle_idx);
 }
+
+int umq_modify(uint64_t umqh, umq_modify_option_t *option)
+{
+    umq_t *umq = (umq_t *)(uintptr_t)umqh;
+    umq_ops_t *ops = (umq == NULL) ? NULL : umq_tp_ops_get(umq->mode);
+    if (umq == NULL || ops == NULL || ops->umq_tp_modify == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "umq modify failed, transport ops not available\n");
+        return -UMQ_ERR_EINVAL;
+    }
+    return ops->umq_tp_modify(umqh, option);
+}

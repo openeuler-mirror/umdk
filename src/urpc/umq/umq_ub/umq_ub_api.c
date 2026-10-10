@@ -272,6 +272,11 @@ static bool umq_tp_ub_exiting_get(void)
     return umq_ub_exiting_get_impl();
 }
 
+static int umq_tp_ub_modify(uint64_t umqh_tp, umq_modify_option_t *option)
+{
+    return umq_ub_modify_impl(umqh_tp, option);
+}
+
 static umq_ops_t g_umq_ub_ops = {
     .mode = UMQ_TRANS_MODE_UB,
     // control plane api
@@ -306,6 +311,7 @@ static umq_ops_t g_umq_ub_ops = {
     .umq_tp_transport_pool_resource_destroy = umq_tp_ub_transport_pool_resource_destroy,
     .umq_tp_exiting_set = umq_tp_ub_exiting_set,
     .umq_tp_exiting_get = umq_tp_ub_exiting_get,
+    .umq_tp_modify = umq_tp_ub_modify,
 
     // datapath plane api
     .umq_tp_buf_alloc = umq_tp_ub_buf_alloc,
