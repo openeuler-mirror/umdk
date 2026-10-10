@@ -19,7 +19,7 @@ static int umq_tp_ub_symbol_load(void)
 {
     umq_symbol_urma_t *sym = umq_symbol_urma();
     if (umq_symbol_urma_load(sym) != 0) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "Failed to load urma/uvs symbols\n");
+        UMQ_VLOG_ERR(VLOG_UMQ, "Failed to load urma/ubagg/uvs symbols\n");
         return -1;
     }
     return 0;

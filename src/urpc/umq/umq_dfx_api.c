@@ -137,15 +137,15 @@ int umq_stats_qbuf_pool_get(uint64_t umqh, umq_qbuf_pool_stats_t *qbuf_pool_stat
     if (umqh == UMQ_INVALID_HANDLE) {
         qbuf_pool_stats->num = 0;
         qbuf_pool_stats->local_qbuf_pool_num = 0;
-        ret = umq_tiny_qbuf_pool_info_get(qbuf_pool_stats);
-        if (ret != UMQ_SUCCESS) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "umq tiny qbuf pool info get failed\n");
-            return ret;
-        }
-
         ret = umq_qbuf_pool_info_get(qbuf_pool_stats);
         if (ret != UMQ_SUCCESS) {
             UMQ_VLOG_ERR(VLOG_UMQ, "umq qbuf pool info get failed\n");
+            return ret;
+        }
+
+        ret = umq_tiny_qbuf_pool_info_get(qbuf_pool_stats);
+        if (ret != UMQ_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "umq tiny qbuf pool info get failed\n");
             return ret;
         }
 
@@ -317,14 +317,21 @@ int umq_transport_pool_stats_to_str(const umq_transport_pool_stats_t *umq_transp
                          "                                         Transport Pool Statistics");
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_EQUALS_120);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n", "TotalTpCnt",
-                         "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt", "AccAllocTpCnt", "AccFreeTpCnt",
-                         "AccMissTpCnt");
-    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
+    // Row 1: current-state counters (total/global/cache/in_use/error/recovering/deprecated).
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15s %-15s %-15s %-15s %-15s %-15s %-15s\n", "TotalTpCnt",
+                         "GlobalTpCnt", "CacheTpCnt", "InUseTpCnt", "ErrorTpCnt", "RecoveringTpCnt", "DeprecatedTpCnt");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
                          umq_transport_pool_stats->total_num, umq_transport_pool_stats->global_num,
                          umq_transport_pool_stats->cache_num, umq_transport_pool_stats->in_use_num,
-                         umq_transport_pool_stats->error_num, umq_transport_pool_stats->acc_alloc_num,
-                         umq_transport_pool_stats->acc_free_num, umq_transport_pool_stats->acc_miss_num);
+                         umq_transport_pool_stats->error_num, umq_transport_pool_stats->recovering_num,
+                         umq_transport_pool_stats->deprecated_num);
+    // Row 2: cumulative (Acc) counters (alloc/free/miss/probe/revive/all_dead).
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15s %-15s %-15s %-15s %-15s %-15s\n", "AccAllocTpCnt",
+                         "AccFreeTpCnt", "AccMissTpCnt", "AccProbeTpCnt", "AccReviveTpCnt", "AccAllDeadTpCnt");
+    UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%-15lu %-15lu %-15lu %-15lu %-15lu %-15lu\n",
+                         umq_transport_pool_stats->acc_alloc_num, umq_transport_pool_stats->acc_free_num,
+                         umq_transport_pool_stats->acc_miss_num, umq_transport_pool_stats->acc_probe_num,
+                         umq_transport_pool_stats->acc_revive_num, umq_transport_pool_stats->acc_all_dead_num);
     UMQ_DFX_SNPRINTF_BUF(buf, max_buf_len, str_size, "%s\n", UMQ_DFX_UNDERLINE_120);
     return str_size;
 }

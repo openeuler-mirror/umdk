@@ -60,6 +60,9 @@ typedef urma_status_t (*urma_post_jfr_wr_t)(urma_jfr_t *jfr, urma_jfr_wr_t *wr, 
 typedef urma_status_t (*urma_get_rjetty_t)(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint32_t *length);
 typedef void (*urma_put_rjetty_t)(urma_rjetty_t *rjetty);
 
+// === URMA function pointer types - Bondp ===
+typedef bool (*bondp_jetty_is_available_t)(const urma_jetty_t *jetty);
+
 // === URMA function pointer types - Segment ===
 typedef urma_target_seg_t* (*urma_register_seg_t)(urma_context_t *ctx, urma_seg_cfg_t *seg_cfg);
 typedef urma_status_t (*urma_unregister_seg_t)(urma_target_seg_t *target_seg);
@@ -68,6 +71,8 @@ typedef urma_target_seg_t* (*urma_import_seg_t)(urma_context_t *ctx, urma_seg_t 
 typedef urma_status_t (*urma_unimport_seg_t)(urma_target_seg_t *tseg);
 typedef urma_status_t (*urma_get_seg_ctx_t)(urma_target_seg_t *tseg, urma_seg_t **seg, uint32_t *size);
 typedef void (*urma_put_seg_ctx_t)(urma_seg_t *seg);
+typedef urma_status_t (*urma_fill_user_tseg_t)(urma_target_seg_t *tseg, urma_token_t *token,
+    urma_user_tseg_t *user_tseg, uint32_t *size);
 
 // === URMA function pointer types - Async Event ===
 typedef urma_status_t (*urma_get_async_event_t)(urma_context_t *ctx, urma_async_event_t *event);
@@ -139,6 +144,9 @@ typedef struct umq_symbol_urma {
     urma_get_rjetty_t urma_get_rjetty;
     urma_put_rjetty_t urma_put_rjetty;
 
+    // Bondp
+    bondp_jetty_is_available_t bondp_jetty_is_available;
+
     // Segment
     urma_register_seg_t urma_register_seg;
     urma_unregister_seg_t urma_unregister_seg;
@@ -146,6 +154,7 @@ typedef struct umq_symbol_urma {
     urma_unimport_seg_t urma_unimport_seg;
     urma_get_seg_ctx_t urma_get_seg_ctx;
     urma_put_seg_ctx_t urma_put_seg_ctx;
+    urma_fill_user_tseg_t urma_fill_user_tseg;
 
     // Async Event
     urma_get_async_event_t urma_get_async_event;

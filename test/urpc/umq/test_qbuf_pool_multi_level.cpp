@@ -1061,7 +1061,7 @@ TEST_F(TestQbufPoolMultiLevel, WithoutDataExpansion)
     InitPool(2, 16, BLOCK_SIZE_4K, UMQ_BUF_SPLIT, false, pool8M, 0, 0, 0, bc);
 
     /* Before alloc: without_data headers pre-populated from ext_header_buffer */
-    EXPECT_EQ(g_qbuf_pool.exp_pool_without_date.expansion_count, 0u);
+    EXPECT_EQ(g_qbuf_pool.exp_pool_without_data.expansion_count, 0u);
     EXPECT_GT(g_qbuf_pool.block_pool[0].buf_cnt_without_data, 0u);
 
     /* When: alloc 5 without_data buffers (request_size=0, opt with no headroom) */
@@ -1071,7 +1071,7 @@ TEST_F(TestQbufPoolMultiLevel, WithoutDataExpansion)
     ASSERT_EQ(umq_qbuf_alloc(0, 5, &opt, &list), 0);
 
     /* Then: 5 headers served from pre-populated pool, no expansion needed yet */
-    EXPECT_EQ(g_qbuf_pool.exp_pool_without_date.expansion_count, 0u);
+    EXPECT_EQ(g_qbuf_pool.exp_pool_without_data.expansion_count, 0u);
 
     /* Verify each buffer is without_data (buf_data==NULL, mempool_without_data==1) */
     umq_buf_t *cur;
@@ -2441,7 +2441,7 @@ TEST_F(TestQbufPoolMultiLevel, SlotWithDataInitBudgetExceeded)
     free_expansion_pool_slot(slot);
 }
 
-/* 9.83 expand_global_pool slot init fail (E24-E25, F56) */
+/* 9.83 expand_global_pool_impl slot init fail (E24-E25, F56) */
 TEST_F(TestQbufPoolMultiLevel, ExpandGlobalPoolSlotInitFail)
 {
     const uint64_t smallPool = 8 * 1024 * 1024;
@@ -2450,7 +2450,7 @@ TEST_F(TestQbufPoolMultiLevel, ExpandGlobalPoolSlotInitFail)
 
     uint64_t saved = g_qbuf_pool.expansion_mem_size_max;
     g_qbuf_pool.expansion_mem_size_max = 1;
-    EXPECT_NE(expand_global_pool(true, 0, 0), UMQ_SUCCESS);
+    EXPECT_NE(expand_global_pool_impl(true, 0, false, 0), UMQ_SUCCESS);
     g_qbuf_pool.expansion_mem_size_max = saved;
 }
 
@@ -2648,7 +2648,7 @@ TEST_F(TestQbufPoolMultiLevel, SlotWithoutDataInitBudgetExceeded)
 
     uint64_t saved = g_qbuf_pool.expansion_mem_size_max;
     g_qbuf_pool.expansion_mem_size_max = 1;
-    EXPECT_NE(slot_without_data_init(&g_qbuf_pool.exp_pool_without_date, slot), UMQ_SUCCESS);
+    EXPECT_NE(slot_without_data_init(&g_qbuf_pool.exp_pool_without_data, slot), UMQ_SUCCESS);
     g_qbuf_pool.expansion_mem_size_max = saved;
 
     free_expansion_pool_slot(slot);

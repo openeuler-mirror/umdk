@@ -130,6 +130,7 @@ typedef struct ub_import_mempool_info {
 _Static_assert(sizeof(ub_import_mempool_info_t) == 72, "ub_import_mempool_info_t must be 72B");
 _Static_assert(offsetof(ub_import_mempool_info_t, seg) == 24,
                "seg must follow the 24B aligned offset (20B header + 4B padding)");
+_Static_assert(sizeof(urma_user_tseg_t) == 12, "urma_user_tseg_t must be 12B");
 
 /* Fixed header before the variable-length seg blob. Entry total size =
  * UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + entry->seg_size. */
@@ -522,6 +523,7 @@ typedef struct jetty_pool_node {
     uint32_t borrow_limit;              // Max WRs per borrow (0 = unlimited)
     bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
     bool is_jetty_err;
+    bool is_jetty_recovering;         // bond ACK_TIMEOUT: urma async rebuild in flight (parked in recover_q)
     uint16_t node_list_pos;             // index of this node's slot id in jetty_node_list->valid_idx[]
                                         // (valid only while the slot is occupied; 0-initialized on alloc)
     bool tx_flush_done;                 // polled URMA_CR_WR_FLUSH_ERR_DONE on this jetty; flush_sqe pending
@@ -664,7 +666,8 @@ rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
  *         or 0 on failure (urma_get_seg_ctx failed or out_cap too small)
  */
 uint32_t umq_ub_fill_seg_ctx(urma_target_seg_t *tseg, uint32_t mempool_id, uint32_t token_value,
-                             uint32_t version, ub_import_mempool_info_t *out, uint32_t out_cap);
+                             uint32_t version, ub_import_mempool_info_t *out, uint32_t out_cap,
+                             bool use_user_tseg);
 
 int umq_ub_post_rx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
 int umq_ub_post_tx(uint64_t umqh, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
@@ -809,6 +812,11 @@ void umq_ub_tseg_remove(import_tseg_table_t *tseg_table, uint32_t mempool_id);
 static ALWAYS_INLINE bool umq_ub_enable_import_remote_mem(uint32_t feature)
 {
     return (feature & UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS) != 0;
+}
+
+static ALWAYS_INLINE bool umq_ub_enable_user_tseg(uint32_t feature)
+{
+    return (feature & UMQ_FEATURE_ENABLE_USER_TSEG) != 0;
 }
 
 // Logic UMQ: SHARE_TRANSPORT + SHARE_RQ, without MAIN_UMQ and SUB_UMQ flags
