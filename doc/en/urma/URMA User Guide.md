@@ -1414,6 +1414,8 @@ Balance Mode:
 
 ![](figures/urma-feat-aggr-concept-03.png)
 
+**Immediate data on aggregation devices**: For `URMA_OPC_SEND_IMM` through an aggregation device, applications can use bits 0–20 of immediate data when MSN is enabled. When MSN is disabled, bits 40–63 are also available, for a total of 45 bits. Bits 21–39 are unavailable. When MSN is disabled, applications can use the mask `0xFFFFFF00001FFFFFULL` both before sending and after receiving immediate data: it retains the available bits before sending and retrieves the user data after receiving. This restriction does not apply when using a non-aggregation device directly.
+
 See the URMA Programming API User Manual for details on the related interfaces, including: urma_set_context_opt and other APIs.
 
 If you wish to communicate directly using UB devices, you need to query the network topology. The URMA management tool provides the `urma_admin show topo` command to query topology information. This tool displays the logical networking relationships among the aggregation device EID (bondingEID), primaryEID, and portEID. **Note: Whether physical ports can communicate depends on the hardware state. This tool only supports querying the logical networking relationships among EIDs; it does not guarantee that the physical ports corresponding to this logical networking can actually communicate.**
