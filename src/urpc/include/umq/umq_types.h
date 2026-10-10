@@ -601,6 +601,7 @@ typedef struct umq_async_event {
     } element;
     umq_async_event_type_t event_type;
     int original_code; // record original event
+    umq_port_id_t port; // local bonding member port for JFR_LIMIT events; value=0 means unavailable
     void *priv;
 } umq_async_event_t;
 
@@ -754,6 +755,16 @@ typedef struct umq_tp_resource_create_option {
     (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_URMA_SEG_SIZE + UMQ_IMPORT_MEMPOOL_INFO_EXTERN)
 #define UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE \
     (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_USER_TSEG_SIZE + UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN)
+
+#define UMQ_MODIFY_OPTION_FLAG_DIRECTION (1)
+#define UMQ_MODIFY_OPTION_FLAG_RX_THRESHOLD (1 << 1)
+
+typedef struct umq_modify_option {
+    uint32_t flag;
+    umq_io_direction_t io_direction;
+    uint32_t rx_threshold;
+    umq_port_id_t port;
+} umq_modify_option_t;
 
 #ifdef __cplusplus
 }

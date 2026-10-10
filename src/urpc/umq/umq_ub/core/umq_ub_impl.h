@@ -113,6 +113,8 @@ int umq_ub_transport_pool_resource_destroy_impl(uint64_t umqh_tp, uint32_t tp_ha
 
 int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats);
 
+int umq_ub_modify_impl(uint64_t umqh_tp, umq_modify_option_t *option);
+
 #ifdef __cplusplus
 }
 #endif
