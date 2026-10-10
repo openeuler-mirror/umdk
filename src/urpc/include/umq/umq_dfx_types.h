@@ -532,6 +532,11 @@ typedef struct umq_transport_pool_stats {
     uint64_t acc_alloc_num;
     uint64_t acc_free_num;
     uint64_t acc_miss_num;
+    uint64_t recovering_num;    // Nodes parked in recover_q (bond ACK_TIMEOUT, urma rebuild pending)
+    uint64_t deprecated_num;    // Nodes parked in relay_q awaiting urma destroy (terminal err)
+    uint64_t acc_probe_num;     // Cumulative bondp_jetty_is_available calls
+    uint64_t acc_revive_num;    // Cumulative nodes revived from recover_q
+    uint64_t acc_all_dead_num;  // Cumulative all-recover-dead events (entire pool dead -> ENOSR)
 } umq_transport_pool_stats_t;
 
 #ifdef __cplusplus

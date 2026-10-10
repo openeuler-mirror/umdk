@@ -223,6 +223,7 @@ typedef struct umq_trans_info {
 #define UMQ_FEATURE_ENABLE_PERF (1 << 3)              // enable performance collection
 #define UMQ_FEATURE_ENABLE_FLOW_CONTROL (1 << 4)      // enable flow control
 #define UMQ_FEATURE_ENABLE_REMOTE_MEM_ACCESS (1 << 5) // enable single side memory access
+#define UMQ_FEATURE_ENABLE_USER_TSEG (1 << 6)         // enable user_tseg path, skip urma_import_seg
 
 typedef struct umq_flow_control_cfg {
     // initial available credit for each umq
@@ -410,6 +411,10 @@ struct umq_buf {
 
     uint32_t data_size;          // size of umq buf data
     uint16_t headroom_size;      // size of umq buf headroom
+    /* CAUTION: headroom_size (lo 16 bits) + the bitfield group below are written
+     * together by a single 4-byte store in umq_qbuf_pool_base.h (hs_field), an
+     * instruction-set optimization (SIMD/STP on aarch64). Keep this group 16 bits
+     * wide and the fields contiguous; a layout change breaks that combined write. */
     uint16_t first_fragment : 1; // first piece of each batch buf
     uint16_t alloc_state : 1;    // 0: free; 1: allocated
     uint16_t rx_fallback : 1;    // 1: RX pool exhausted, fallback alloc from normal pool
@@ -422,11 +427,12 @@ struct umq_buf {
 
     uint64_t status : 32;                 // umq_buf_status_t
     uint64_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
-    uint64_t rsvd3 : 11;
-    uint64_t buf_ref_id_type : 1;          // 0: enable umq_id, invalid to user, 1: enable tphandel
-    uint64_t buf_ref_id : 18;              // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
+    uint64_t has_user_tseg : 1;
+    uint64_t buf_ref_id_type : 1;         // 0: enable umq_id, invalid to user, 1: enable tphandel
+    uint64_t buf_ref_id : 18;             // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
+    uint64_t rsvd3 : 10;
 
-    uint64_t rsvd4;
+    uint64_t user_tseg;
 
     char *buf_data; // point to data[0]
 
@@ -438,11 +444,14 @@ struct umq_buf {
 
 #define UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE (1) // enable arg headroom_size
 #define UMQ_ALLOC_FLAG_POOL_TYPE (2)      // enable arg pool_type
+#define UMQ_ALLOC_FLAG_TIMEOUT (4)        // enable arg timeout_ms
+#define UMQ_ALLOC_TIMEOUT_MS_MAX (1000)   // max timeout in milliseconds
 
 typedef struct umq_alloc_option {
     uint32_t flag; // indicates which below property takes effect
     uint16_t headroom_size;
     umq_alloc_pool_type_t pool_type;
+    uint16_t timeout_ms; // timeout in milliseconds, 0 = no timeout, valid range [0, UMQ_ALLOC_TIMEOUT_MS_MAX]
 } umq_alloc_option_t;
 
 typedef enum umq_dfx_module_id {
@@ -712,12 +721,16 @@ typedef struct umq_tp_resource_create_option {
  * compute wire budgets without seeing the struct; the value is pinned by
  * static_asserts in umq_ub_private.h. */
 #define UMQ_MEMPOOL_INFO_HDR_SIZE 24u
-
+#define UMQ_USER_TSEG_SIZE 12u  /* sizeof(urma_user_tseg_t) */
+#define UMQ_IMPORT_MEMPOOL_INFO_EXTERN 128u
+#define UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN 64u
 /* Worst-case blob size = fixed header (UMQ_MEMPOOL_INFO_HDR_SIZE) +
  * sizeof(urma_seg_t) (48B) + bonding has_user_info extension tail (up to ~101B
  * uncompressed; 128B covers it with slack, so one umq build runs against
  * either umdk variant). Callers size stack buffers to this. */
-#define UMQ_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + 128u)
+#define UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE (UMQ_MEMPOOL_INFO_HDR_SIZE + 48u + UMQ_IMPORT_MEMPOOL_INFO_EXTERN)
+#define UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE \
+    (UMQ_MEMPOOL_INFO_HDR_SIZE + UMQ_USER_TSEG_SIZE + UMQ_NOIMPORT_MEMPOOL_INFO_EXTERN)
 
 #ifdef __cplusplus
 }

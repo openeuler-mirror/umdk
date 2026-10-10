@@ -1001,18 +1001,23 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     uint64_t start_timestamp = umq_perf_get_start_timestamp();
     if (!g_umq_inited || request_qbuf_num == 0 || request_size > UMQ_MAX_BUF_REQUEST_SIZE) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "param invalid or umq not initialized\n");
+        errno = EINVAL;
         return NULL;
     }
     uint32_t headroom_size = (option != NULL && (option->flag & UMQ_ALLOC_FLAG_HEAD_ROOM_SIZE) != 0) ?
         option->headroom_size : umq_qbuf_headroom_get();
     if (headroom_size > UMQ_HEADROOM_SIZE_LIMIT) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "headroom size %u exceeds the maximum value\n", headroom_size);
+        errno = EINVAL;
         return NULL;
     }
     if (umqh == UMQ_INVALID_HANDLE) {
         umq_buf_list_t head;
         QBUF_LIST_INIT(&head);
-        if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+        int ret = umq_qbuf_alloc(request_size, request_qbuf_num, option, &head);
+        if (ret != UMQ_SUCCESS) {
+            // UMQ_ERR_* codes mirror errno values (umq_errno.h)
+            errno = -ret;
             return NULL;
         }
 
@@ -1024,6 +1029,7 @@ umq_buf_t *umq_buf_alloc(uint32_t request_size, uint32_t request_qbuf_num, uint6
     umq_ops_t *ops = (umq == NULL) ? NULL : umq_tp_ops_get(umq->mode);
     if ((umq == NULL) || (ops == NULL) || (ops->umq_tp_buf_alloc == NULL)) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umqh or qbuf invalid\n");
+        errno = EINVAL;
         return NULL;
     }
 

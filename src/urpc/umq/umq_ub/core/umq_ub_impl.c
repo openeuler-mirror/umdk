@@ -267,7 +267,10 @@ umq_buf_t *umq_ub_buf_alloc_impl(uint32_t request_size, uint32_t request_qbuf_nu
     (void)umqh_tp;
     umq_buf_list_t head;
     QBUF_LIST_INIT(&head);
-    if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+    int ret = umq_qbuf_alloc(request_size, request_qbuf_num, option, &head);
+    if (ret != UMQ_SUCCESS) {
+        // UMQ_ERR_* codes mirror errno values (umq_errno.h)
+        errno = -ret;
         return NULL;
     }
     return QBUF_LIST_FIRST(&head);
@@ -279,7 +282,10 @@ umq_buf_t *umq_ub_plus_buf_alloc_impl(uint32_t request_size, uint32_t request_qb
     (void)umqh_tp;
     umq_buf_list_t head;
     QBUF_LIST_INIT(&head);
-    if (umq_qbuf_alloc(request_size, request_qbuf_num, option, &head) != UMQ_SUCCESS) {
+    int ret = umq_qbuf_alloc(request_size, request_qbuf_num, option, &head);
+    if (ret != UMQ_SUCCESS) {
+        // UMQ_ERR_* codes mirror errno values (umq_errno.h)
+        errno = -ret;
         return NULL;
     }
     return QBUF_LIST_FIRST(&head);
@@ -595,10 +601,14 @@ static void umq_ub_unregister_seg_callback(uint8_t *ctx, uint16_t mempool_id);
 
 static int umq_ub_ctx_init_one(umq_ub_ctx_t *ctx, umq_trans_info_t *info, umq_init_cfg_t *cfg)
 {
-    ctx->remote_imported_info = umq_ub_ctx_imported_info_create();
-    if (ctx->remote_imported_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "imported info create failed\n");
-        return -UMQ_ERR_ENOMEM;
+    /* user_tseg path: no remote-import registration, so skip the imported-info
+     * table (and its remote_eid hash/table) allocation. */
+    if (!umq_ub_enable_user_tseg(cfg->feature)) {
+        ctx->remote_imported_info = umq_ub_ctx_imported_info_create();
+        if (ctx->remote_imported_info == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "imported info create failed\n");
+            return -UMQ_ERR_ENOMEM;
+        }
     }
 
     int ret = umq_find_ub_device(info, ctx);
@@ -2387,7 +2397,9 @@ int umq_ub_unbind_impl(uint64_t umqh)
     } else {
         queue->bind_ctx = NULL;
     }
-    (void)umq_ub_remote_tseg_info_release(qcfg->dev_ctx->remote_imported_info, bind_ctx);
+    if (!umq_ub_enable_user_tseg(qcfg->dev_ctx->feature)) {
+        (void)umq_ub_remote_tseg_info_release(qcfg->dev_ctx->remote_imported_info, bind_ctx);
+    }
     UMQ_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind jetty\n", queue->umq_id,
         EID_ARGS(tjetty->id.eid), tjetty->id.id);
     if (qcfg->tp_mode == URMA_TM_RC) {
@@ -2837,11 +2849,15 @@ int umq_ub_dev_add_impl(umq_trans_info_t *info, umq_init_cfg_t *cfg)
     (void)pthread_spin_init(&g_ub_ctx[g_ub_ctx_count].tseg_list_lock, PTHREAD_PROCESS_PRIVATE);
 
     // create ub ctx
-    g_ub_ctx[g_ub_ctx_count].remote_imported_info = umq_ub_ctx_imported_info_create();
-    if (g_ub_ctx[g_ub_ctx_count].remote_imported_info == NULL) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "imported info create failed\n");
-        ret = -UMQ_ERR_ENOMEM;
-        goto LOCK_DESTROY;
+    /* user_tseg path: no remote-import registration, so skip the imported-info
+     * table (and its remote_eid hash/table) allocation entirely. */
+    if (!umq_ub_enable_user_tseg(cfg->feature)) {
+        g_ub_ctx[g_ub_ctx_count].remote_imported_info = umq_ub_ctx_imported_info_create();
+        if (g_ub_ctx[g_ub_ctx_count].remote_imported_info == NULL) {
+            UMQ_VLOG_ERR(VLOG_UMQ, "imported info create failed\n");
+            ret = -UMQ_ERR_ENOMEM;
+            goto LOCK_DESTROY;
+        }
     }
 
     ret = umq_find_ub_device(info, &g_ub_ctx[g_ub_ctx_count]);
@@ -3026,7 +3042,8 @@ int umq_ub_mempool_state_get_impl(uint64_t umqh_tp, uint32_t mempool_id, umq_mem
         return -UMQ_ERR_EINVAL;
     }
 
-    if (urpc_bitmap_is_set(queue->bind_ctx->tseg_imported, mempool_id)) {
+    if (queue->bind_ctx->tseg_imported != NULL &&
+        urpc_bitmap_is_set(queue->bind_ctx->tseg_imported, mempool_id)) {
         mempool_state->import_state = MEMPOOL_STATE_IMPORTED;
     } else {
         mempool_state->import_state = MEMPOOL_STATE_NON_IMPORTED;
@@ -3098,7 +3115,8 @@ int umq_ub_mempool_state_refresh_impl(uint64_t umqh_tp, uint32_t mempool_id)
     uint32_t ver = qcfg->dev_ctx->mempool_version[mempool_id];
     uint32_t cap = (uint32_t)umq_buf_size_small() - (uint32_t)sizeof(umq_imm_head_t);
     uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
-                                           import_mempool_info, cap);
+                                           import_mempool_info, cap,
+                                           umq_ub_enable_user_tseg(qcfg->dev_ctx->feature));
     if (written == 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, fill_seg_ctx failed, mempool_id: %u\n",
                            EID_ARGS(*eid), id, mempool_id);
@@ -3170,10 +3188,10 @@ int umq_ub_mempool_info_get_impl(uint64_t umqh_tp, uint32_t mempool_id, uint8_t 
      * blob (urma_seg_t + has_user_info ext tail on bonding), so the peer imports
      * via the has_user_info=true branch and reads peer_p_seg[] directly from
      * the extension — no reliance on the kernel driver reconstructing it. The
-     * caller's buffer (sized to UMQ_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
+     * caller's buffer (sized to UMQ_NOIMPORT_MEMPOOL_INFO_MAX_SIZE in ubsocket) reserves
      * slack for the worst-case extension tail. */
-    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver,
-                                           import_mempool_info, cap);
+    uint32_t written = umq_ub_fill_seg_ctx(tseg, mempool_id, (uint32_t)tseg->user_ctx, ver, import_mempool_info, cap,
+        umq_ub_enable_user_tseg(qcfg->dev_ctx->feature));
     (void)pthread_spin_unlock(&qcfg->dev_ctx->tseg_list_lock);
     if (written == 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub get mempool info failed, mempool %u fill_seg_ctx failed\n", mempool_id);
@@ -3191,7 +3209,7 @@ int umq_ub_mempool_info_set_impl(uint64_t umqh_tp, const uint8_t *mempool_info, 
     ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
     if (qcfg->dev_ctx == NULL || queue->bind_ctx == NULL || mempool_info == NULL ||
         mempool_info_len < UB_IMPORT_MEMPOOL_INFO_HDR_SIZE + sizeof(urma_seg_t) ||
-        mempool_info_len > UMQ_MEMPOOL_INFO_MAX_SIZE) {
+        mempool_info_len > UMQ_IMPORT_MEMPOOL_INFO_MAX_SIZE) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "umq ub set mempool info parameter invalid\n");
         return -UMQ_ERR_EINVAL;
     }
@@ -3636,5 +3654,10 @@ int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats)
     stats->acc_alloc_num = pool_stats.acc_alloc_num;
     stats->acc_free_num = pool_stats.acc_free_num;
     stats->acc_miss_num = pool_stats.acc_miss_num;
+    stats->recovering_num = pool_stats.recovering_num;
+    stats->deprecated_num = pool_stats.deprecated_num;
+    stats->acc_probe_num = pool_stats.acc_probe_num;
+    stats->acc_revive_num = pool_stats.acc_revive_num;
+    stats->acc_all_dead_num = pool_stats.acc_all_dead_num;
     return UMQ_SUCCESS;
 }
