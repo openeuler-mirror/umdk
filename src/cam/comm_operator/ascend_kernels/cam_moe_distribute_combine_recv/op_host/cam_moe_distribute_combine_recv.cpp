@@ -41,6 +41,8 @@ constexpr static int ATTR_ENUM_HCCL_GROUP_NAME = 9;
 
 constexpr static int TILING_KEY_BF16 = 100;
 constexpr static int TILING_KEY_FP16 = 101;
+constexpr static int TILING_KEY_BF16_PREFIX = 102;
+constexpr static int TILING_KEY_FP16_PREFIX = 103;
 
 constexpr static int LIMIT_BATCH_SIZE_MIN = 1;
 constexpr static int LIMIT_BATCH_SIZE_MAX = 1024 * 256;
@@ -193,11 +195,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tilingData->moeDistributeCombineInfo.totalUbSize = ubSize;
     tilingData->moeDistributeCombineInfo.totalWorkspaceSize = sharedMemSize;
 
+    // Keep the original kernel for at most one token per core; larger batches reuse dispatch prefixes.
+    bool useDispatchPrefix = batchSize > static_cast<int64_t>(aivNum);
     auto xDtype = context->GetInputDesc(0)->GetDataType();
     if (xDtype == ge::DT_BF16) {
-        context->SetTilingKey(TILING_KEY_BF16);
+        context->SetTilingKey(useDispatchPrefix ? TILING_KEY_BF16_PREFIX : TILING_KEY_BF16);
     } else if (xDtype == ge::DT_FLOAT16) {
-        context->SetTilingKey(TILING_KEY_FP16);
+        context->SetTilingKey(useDispatchPrefix ? TILING_KEY_FP16_PREFIX : TILING_KEY_FP16);
     }
 
     return ge::GRAPH_SUCCESS;

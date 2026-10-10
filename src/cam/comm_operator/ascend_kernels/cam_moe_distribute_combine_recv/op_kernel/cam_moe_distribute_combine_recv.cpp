@@ -25,11 +25,19 @@ extern "C" __global__ __aicore__ void cam_moe_distribute_combine_recv(
     int32_t isCamComm = 1;
     GET_TILING_DATA_WITH_STRUCT(CamMoeDistributeCombineRecvTilingData, tilingData, tilingGM);
     if (TILING_KEY_IS(100)) {
-        CamMoeDistributeCombineRecv<bfloat16_t> op;
+        CamMoeDistributeCombineRecv<bfloat16_t, false> op;
         op.Init(expandX, expertIds, expertScales, xOut, workspaceGM, &pipe, &tilingData, commArgs, isCamComm);
         op.Process();
     } else if (TILING_KEY_IS(101)) {
-        CamMoeDistributeCombineRecv<float16_t> op;
+        CamMoeDistributeCombineRecv<float16_t, false> op;
+        op.Init(expandX, expertIds, expertScales, xOut, workspaceGM, &pipe, &tilingData, commArgs, isCamComm);
+        op.Process();
+    } else if (TILING_KEY_IS(102)) {
+        CamMoeDistributeCombineRecv<bfloat16_t, true> op;
+        op.Init(expandX, expertIds, expertScales, xOut, workspaceGM, &pipe, &tilingData, commArgs, isCamComm);
+        op.Process();
+    } else if (TILING_KEY_IS(103)) {
+        CamMoeDistributeCombineRecv<float16_t, true> op;
         op.Init(expandX, expertIds, expertScales, xOut, workspaceGM, &pipe, &tilingData, commArgs, isCamComm);
         op.Process();
     }
