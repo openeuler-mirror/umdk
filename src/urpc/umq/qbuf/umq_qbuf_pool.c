@@ -1006,6 +1006,7 @@ static void slot_uninit(bool with_data, qbuf_expansion_pool_slot_t *slot)
     if (slot->buffer != NULL) {
         free(slot->buffer);
         slot->buffer = NULL;
+        (void)malloc_trim(0);
     }
 }
 
