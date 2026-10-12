@@ -63,7 +63,7 @@ void exec_deploy_ums_agent(const char *host2ip)
     char execscript[1024];
     char cmd[1024];
     exec_cmd(getpath, MAX_EXEC_CMD_RET_LEN, "find / -name 'master_deploy_ums_agent.sh' | head -n 1");
-    snprintf(execscript, "sudo sh -c 'chcon -t bin_t' %s 2>/dev/null; sh %s %s", getpath, getpath, host2ip);
+    snprintf(execscript, sizeof(execscript), "sudo sh -c 'chcon -t bin_t' %s 2>/dev/null; sh %s %s", getpath, getpath, host2ip);
     exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, execscript);
     sleep(5);
 }
