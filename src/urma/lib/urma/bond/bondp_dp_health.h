@@ -68,6 +68,12 @@ int bondp_hc_fill_seg_info(const struct bondp_context *bdp_ctx,
  */
 void bondp_hc_tjetty_sync_valid(const struct bondp_target_jetty *bdp_tjetty);
 
+/**
+ * Mark the local port (by active index) as bad in the context-wide status.
+ * Edge-triggered: a WARN log is printed only on the false->true transition.
+ */
+void bondp_set_port_status_bad(struct bondp_context *bdp_ctx, uint32_t local_idx);
+
 #ifdef __cplusplus
 }
 #endif
