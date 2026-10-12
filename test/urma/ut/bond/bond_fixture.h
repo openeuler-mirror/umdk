@@ -521,6 +521,8 @@ struct BondPublicApiFixture {
         phyCtx.ops = &phyOps;
         phyCtx.eid_index = 0;
         phyCtx.ref.atomic_cnt.store(1);
+        phyOps.alloc_token_id = bondp_alloc_token_id;
+        phyOps.free_token_id = bondp_free_token_id;
         pthread_rwlock_init(&ctx.p_vjetty_id_table.lock, nullptr);
 
         jfce.bondp_ctx = &ctx;
@@ -584,6 +586,7 @@ struct BondPublicApiFixture {
     {
         ctx.dev_num = 1;
         ctx.p_ctxs[0] = &phyCtx;
+        ctx.token_ids[0] = urma_alloc_token_id(&phyCtx);
         jfc.dev_num = 1;
         phyOps.create_jfc = MockCreatePhysicalJfc;
         phyOps.modify_jfc = MockModifyPhysicalJfc;
@@ -598,8 +601,6 @@ struct BondPublicApiFixture {
         phyOps.create_jetty = MockCreatePhysicalJetty;
         phyOps.modify_jetty = MockModifyPhysicalJetty;
         phyOps.delete_jetty = MockDeletePhysicalJetty;
-        phyOps.alloc_token_id = bondp_alloc_token_id;
-        phyOps.free_token_id = bondp_free_token_id;
         phyOps.register_seg = MockRegisterPhysicalSeg;
         phyOps.unregister_seg = MockUnregisterPhysicalSeg;
         phyOps.import_seg = MockImportPhysicalSeg;
