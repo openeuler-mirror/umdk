@@ -351,6 +351,13 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
         bdp_ctx->p_ctxs[i] = ctx;
         URMA_LOG_DEBUG("bondp create_pctx, eid_idx is %u.\n", bdp_ctx->p_ctxs[i]->eid_index);
 
+        bdp_ctx->token_ids[i] = urma_alloc_token_id(ctx);
+        if (bdp_ctx->token_ids[i] == NULL) {
+            URMA_LOG_ERR("Failed to alloc token_id for pctx, idx=%d, dev=%s, eid_idx=%d\n",
+                         i, m->dev->name, m->eid_index);
+            return -1;
+        }
+
         int fd = ctx->async_fd;
         if (set_fd_noblock(fd) != 0) {
             URMA_LOG_ERR("Failed to set async fd nonblocking, dev=%s, eid_idx=%u, fd=%d\n",
@@ -376,9 +383,30 @@ static int bondp_create_pcontext(bondp_context_t *bdp_ctx, bondp_bonding_mode_t 
     return 0;
 }
 
+static int bondp_free_pcontext_token_ids(bondp_context_t *bdp_ctx)
+{
+    int ret = 0;
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
+        if (bdp_ctx->token_ids[i] == NULL) {
+            continue;
+        }
+        if (urma_free_token_id(bdp_ctx->token_ids[i]) != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to free token_id, idx=%d.\n", i);
+            ret = URMA_FAIL;
+        }
+        bdp_ctx->token_ids[i] = NULL;
+    }
+    return ret;
+}
+
 static int bondp_delete_pcontext(bondp_context_t *bdp_ctx)
 {
-    int ret = 0, sub_ret = 0;
+    int ret = 0;
+    int sub_ret = 0;
+
+    ret = bondp_free_pcontext_token_ids(bdp_ctx);
+
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         if (bdp_ctx->p_ctxs[i] == NULL) {
             continue;
