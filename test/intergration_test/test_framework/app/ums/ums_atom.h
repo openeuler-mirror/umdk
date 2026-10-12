@@ -42,6 +42,6 @@ int query_proc_net_ums_detail_stream_num(const char *fbk, const char *msg);
 void destroy_test_ums_ctx(test_ums_ctx_t *ctx);
 int query_ums_reference_count();
 void exec_deploy_ums_agent(const char *host2ip);
-int is_ums_agent_running();
+bool is_ums_agent_running();
 
 #endif
