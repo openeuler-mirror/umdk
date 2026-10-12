@@ -27,6 +27,21 @@ static int run_test(test_ums_ctx_t *ctx)
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
 
     ums_refer_cnt_before = query_ums_reference_count();
+
+    int check1 = 0;
+    int check2 = 0;
+    if (ctx->app_id == PROC_1) {
+        check1 = is_ums_agent_running();
+    }
+    if (ctx->app_id == PROC_2) {
+        check2 = is_ums_agent_running();
+    }
+    if (check1 + check2 != 0) {
+        if (ctx->app_id == PROC_1) {
+            exec_deploy_ums_agent(ctx->test_ip_host2);
+        }
+    }
+    
     // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(3);
     sync_time("----------------------------0");

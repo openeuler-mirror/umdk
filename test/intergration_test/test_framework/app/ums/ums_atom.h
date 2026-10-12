@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <limits.h>
 #include <climits>
+#include <string>
 #include "../common/common.h"
 
 
@@ -40,5 +41,7 @@ test_ums_ctx_t *test_ums_ctx_init(int argc, char *argv[], int thread_num);
 int query_proc_net_ums_detail_stream_num(const char *fbk, const char *msg);
 void destroy_test_ums_ctx(test_ums_ctx_t *ctx);
 int query_ums_reference_count();
+void exec_deploy_ums_agent(const char *host2ip);
+int is_ums_agent_running();
 
 #endif
