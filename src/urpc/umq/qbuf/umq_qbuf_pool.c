@@ -936,6 +936,16 @@ static void free_expansion_pool_slot(qbuf_expansion_pool_slot_t *slot)
         exp_addr_remove(slot->slot_id);
     }
     urpc_id_generator_free(&g_global_exp_id_gen, slot->slot_id);
+    /* The global id table is shared by all expansion pools. Returning an id
+     * releases the "id exhausted" backoff of every pool: a with_data pool may
+     * have failed only because a without_data pool held all ids, and its
+     * stale last_expand_failed would strand it (async_expand_global_pool
+     * short-circuits on the stale flag). Non-id failures (e.g. memory cap)
+     * re-fail fast and re-set the flag on the next attempt, so no spin. */
+    for (uint32_t i = 0; i < UMQ_QBUF_SIZE_CLASS_MAX; i++) {
+        __atomic_store_n(&g_qbuf_pool.exp_pool_with_data[i].last_expand_failed, 0, __ATOMIC_RELEASE);
+    }
+    __atomic_store_n(&g_qbuf_pool.exp_pool_without_data.last_expand_failed, 0, __ATOMIC_RELEASE);
     if (slot->buffer != NULL) {
         free(slot->buffer);
         slot->buffer = NULL;
@@ -1466,10 +1476,15 @@ static void *async_shrink_global_pool_callback(void *arg)
             uint64_t shrink_sc_outstanding_max = shrink_wd ?
                 __atomic_load_n(&g_qbuf_pool.outstanding_max[shrink_sc], __ATOMIC_RELAXED) :
                 __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
-            uint32_t shrink_blk_and_hdr = g_qbuf_pool.block_sizes[shrink_sc] + (uint32_t)sizeof(umq_buf_t);
-            double shrink_outstanding_mb = (double)(shrink_sc_outstanding * shrink_blk_and_hdr) / QBUF_BYTES_PER_MB;
+            /* ND pool block = sizeof(umq_buf_t) (128B, no data area); WD pool
+             * block = block_sizes[sc] + header. outstanding is in blocks, so
+             * the MB conversion must use the correct per-block bytes. */
+            uint64_t shrink_per_block_bytes = shrink_wd ?
+                (uint64_t)g_qbuf_pool.block_sizes[shrink_sc] + (uint32_t)sizeof(umq_buf_t) :
+                (uint64_t)sizeof(umq_buf_t);
+            double shrink_outstanding_mb = (double)(shrink_sc_outstanding * shrink_per_block_bytes) / QBUF_BYTES_PER_MB;
             double shrink_outstanding_max_mb =
-                (double)(shrink_sc_outstanding_max * shrink_blk_and_hdr) / QBUF_BYTES_PER_MB;
+                (double)(shrink_sc_outstanding_max * shrink_per_block_bytes) / QBUF_BYTES_PER_MB;
             UMQ_VLOG_INFO(VLOG_UMQ,
                 "%s_SHRINK sc=%u slot_id=%u blk_count=%llu "
                 "shrink_line=%llu "
@@ -2931,9 +2946,14 @@ static int expand_global_pool_impl(bool with_data, uint32_t sc, bool already_loc
     uint64_t sc_outstanding = (sc_alloc > sc_free) ? (sc_alloc - sc_free) : 0;
     uint64_t sc_outstanding_max = with_data ? __atomic_load_n(&g_qbuf_pool.outstanding_max[sc], __ATOMIC_RELAXED)
                                            : __atomic_load_n(&g_qbuf_pool.nodata_outstanding_max, __ATOMIC_RELAXED);
-    uint32_t sc_blk_and_hdr = g_qbuf_pool.block_sizes[sc] + (uint32_t)sizeof(umq_buf_t);
-    double sc_outstanding_mb = (double)(sc_outstanding * sc_blk_and_hdr) / QBUF_BYTES_PER_MB;
-    double sc_outstanding_max_mb = (double)(sc_outstanding_max * sc_blk_and_hdr) / QBUF_BYTES_PER_MB;
+    /* ND pool block = sizeof(umq_buf_t) (128B, no data area); WD pool
+     * block = block_sizes[sc] + header. outstanding is in blocks, so
+     * the MB conversion must use the correct per-block bytes. */
+    uint64_t expand_per_block_bytes = with_data ?
+        (uint64_t)g_qbuf_pool.block_sizes[sc] + (uint32_t)sizeof(umq_buf_t) :
+        (uint64_t)sizeof(umq_buf_t);
+    double sc_outstanding_mb = (double)(sc_outstanding * expand_per_block_bytes) / QBUF_BYTES_PER_MB;
+    double sc_outstanding_max_mb = (double)(sc_outstanding_max * expand_per_block_bytes) / QBUF_BYTES_PER_MB;
     UMQ_VLOG_INFO(VLOG_UMQ,
         "%s_EXPAND_%s sc=%u slot_id=%u mpool=%u blk_count=%llu total_size=%.1fMB "
         "expand_threshold=%llu->%llu "
