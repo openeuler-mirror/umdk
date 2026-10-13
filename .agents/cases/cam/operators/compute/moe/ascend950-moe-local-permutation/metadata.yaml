@@ -1,0 +1,60 @@
+id: ascend950-moe-local-permutation
+name: Ascend950 MoE Local Permutation
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  paths:
+    gating: moe/moe_gating_top_k/
+    init: moe/moe_init_routing_v3/
+    finalize: moe/moe_finalize_routing_v2/
+category: compute
+algorithm: moe-local-permutation
+hardware:
+- ascend950
+compute_engine:
+- vector
+memory_pattern:
+- gather
+- scatter
+- irregular
+pipeline_pattern:
+- copy-compute-copy
+communication_pattern: none
+dtypes:
+  input:
+  - fp16
+  - bf16
+  - fp32
+  - int32
+  output:
+  - fp16
+  - bf16
+  - fp32
+  accumulator:
+  - fp32
+  scale: []
+key_techniques:
+- token-major-vs-expert-major
+- expanded-row-idx-layout
+- tensor-name-neq-lifetime
+- gating-as-upstream-contract
+- mix-neq-cube
+related_cases:
+- ascend950-moe-ep-dispatch-combine
+- ascend950-gmm-swiglu-mx-quant
+- ascend950-mega-moe-fused-ep-ffn
+- ascend950-grouped-matmul-slice-m
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Single-device loop only. Gating is upstream contract, not its own Case. Init is not a predecessor
+  of Dispatch. expanded_row_idx pairing is conditional-direct and unproven as a specific attr pair. Init
+  counts are not the EP GMM groupList edge.
+
+  '

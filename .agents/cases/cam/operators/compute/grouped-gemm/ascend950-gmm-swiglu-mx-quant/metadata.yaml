@@ -1,0 +1,62 @@
+id: ascend950-gmm-swiglu-mx-quant
+name: Ascend950 GMM + SwiGLU + MX Quant
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  paths:
+    op: gmm/grouped_matmul_swiglu_quant_v2/
+    apt: gmm/grouped_matmul_swiglu_quant_v2/op_kernel/grouped_matmul_swiglu_quant_v2_apt.cpp
+category: compute
+algorithm: grouped-gemm-swiglu-quant
+hardware:
+- ascend950
+compute_engine:
+- cube
+- vector
+memory_pattern:
+- continuous
+- reuse
+- workspace
+pipeline_pattern:
+- vector-cube-overlap
+communication_pattern: none
+dtypes:
+  input:
+  - fp8_e4m3
+  - fp8_e5m2
+  - e8m0
+  output:
+  - fp8_e4m3
+  - int8
+  accumulator:
+  - fp32
+  scale:
+  - e8m0
+base_case:
+- ascend950-grouped-matmul-slice-m
+- ascend950-fp8-mx-matmul
+related_cases:
+- ascend950-moe-ep-dispatch-combine
+- ascend950-moe-local-permutation
+- ascend950-mega-moe-fused-ep-ffn
+key_techniques:
+- production-60-53-extension
+- mix-aic-gmm-aiv-swiglu
+- output-requant
+- post-ep-grouplist-contract
+- count-vs-cumsum-default-mismatch
+- gmm1-is-not-combine-payload
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Do not re-teach GMM or MmadMx. Teaching is MIX fusion + production groupList producer (dispatch
+  expert_token_nums) + GMM1 y is not Combine expand_x. GMM2 is an interface footnote, not a fourth Case.
+  A2 A8W8/MSD not taught.
+
+  '

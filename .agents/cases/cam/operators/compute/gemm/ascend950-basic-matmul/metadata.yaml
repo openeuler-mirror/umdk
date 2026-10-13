@@ -1,0 +1,85 @@
+id: ascend950-basic-matmul
+name: Ascend950 Basic Matmul (Pingpong / TLA)
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/43_ascend950_basic_matmul/basic_matmul_tla.cpp
+    kernel: include/catlass/gemm/kernel/basic_matmul_tla.hpp
+    block: include/catlass/gemm/block/block_mmad_pingpong_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_43_ascend950_basic_matmul.py
+category: compute
+algorithm: gemm
+hardware:
+- ascend950
+compute_engine:
+- cube
+memory_pattern:
+- continuous
+- reuse
+- double-buffer
+pipeline_pattern:
+- double-buffer
+communication_pattern: none
+dtypes:
+  input:
+  - fp32
+  output:
+  - fp32
+  accumulator:
+  - fp32
+  scale: []
+layout:
+  A: RowMajor
+  B: RowMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadPingpong
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 128
+  l0_tile:
+  - 256
+  - 256
+  - 32
+  l1_a_stages: 2
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: empty
+key_techniques:
+- catlass-layering
+- l1-l0-double-buffer
+- mmad-pingpong
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-20
+related_cases:
+- id: ascend950-streamk-matmul
+  relation: complement
+- id: ascend950-multi-core-splitk-matmul
+  relation: complement
+- id: ascend950-fp8-mx-matmul
+  relation: complement
+- id: ascend950-matmul-full-loadA
+  relation: complement
+notes: 'Case Card describes the live MmadPingpong path only. Mutex/Preload/ShuffleK are non-active. Upstream
+  README vs static_assert conflict on Mutex hardware scope is recorded, not resolved. K-partition children:
+  66 StreamK, 68 SplitK. Block variants: 53 MmadMx, 73 FullLoadA.
+
+  '

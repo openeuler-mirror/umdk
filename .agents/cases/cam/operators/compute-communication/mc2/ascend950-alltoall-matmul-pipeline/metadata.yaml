@@ -1,0 +1,103 @@
+id: ascend950-alltoall-matmul-pipeline
+name: Ascend950 AllToAll ↔ Matmul Pipeline
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  upstream_presence:
+    verified: false
+    note: 'Same checkout as MoE A–D and the RS Case. cann/ops-transformer was not fetched. Live path is
+      the scanned fork commit.
+
+      '
+  paths:
+    op: mc2/allto_all_matmul/
+    sibling_op: mc2/matmul_allto_all/
+    live_entry: mc2/allto_all_matmul/op_kernel/arch35/allto_all_matmul_apt.cpp
+    live_pipeline: mc2/allto_all_matmul/op_kernel/allto_all_matmul_pipeline.h
+    communicator: mc2/common/op_kernel/mc2_templates/communication/communicator/hccl_communicator.h
+    host_tiling: mc2/allto_all_matmul/op_host/op_tiling/arch35/allto_all_fp_matmul_tiling_base.cpp
+acceptance:
+  content_review: passed
+  content_reviewed_at: 2026-08-21
+  upstream_identity_verify: not-required
+  upstream_identity_verify_note: 'Not an accepted gate. SoT is the scanned fork commit, same policy as
+    MoE A–D and MC2 RS. Do not copy Sparse Attention''s sgl-project verify.
+
+    '
+category: compute-communication
+algorithm: alltoall-matmul-pipeline
+hardware:
+- ascend950
+compute_engine:
+- cube
+- vector
+- communication
+memory_pattern:
+- workspace
+- continuous
+pipeline_pattern:
+- communication-compute-overlap
+- multi-stage
+communication_pattern: hccl-alltoall
+execution:
+  task_type: mix
+  engines:
+  - cube
+  - vector
+  - communication
+dtypes:
+  input:
+  - fp16
+  - bf16
+  output:
+  - fp16
+  - bf16
+  accumulator:
+  - fp32
+  scale: []
+instantiated:
+  variant: wait-one-a2a-then-mm
+  dtype: fp16-or-bf16
+  pipeline: AlltoAllMatmulPipeLine
+  aic_sync: false
+  send_cnt: 0
+  recv_cnt: 1
+variants:
+- dtype: fp16
+  note: same WAIT_ONE pipeline as bf16
+- dtype: bf16
+  note: same WAIT_ONE pipeline as fp16
+- op: matmul_allto_all
+  note: SEND_ONE reverse sibling on this card; not a second Case
+key_techniques:
+- three-stage-a2a-permute-mm
+- hccl-communicator-aiv0
+- commit-is-progress-not-visibility
+- wait-is-consumer-gate
+- aiv-rank-block-permute-not-x2transpose
+- flag8-9-aic-aiv-not-cross-rank
+- pipeline-permits-overlap-unmeasured
+- compute-baseline-43
+related_cases:
+- ascend950-matmul-native-reduce-scatter
+- ascend950-basic-matmul
+- ascend950-moe-ep-dispatch-combine
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Pattern Case: AllToAll + AIV rank-block permute + ASW Cube, not an op-name Case and not M1 with
+  a different collective. Canonical is allto_all_matmul WAIT_ONE fp16/bf16. matmul_allto_all is reverse
+  sibling. Commit = communication progress; Wait = consumer gate; Commit is not cross-rank visibility.
+  Pipeline permits overlap; do not claim measured overlap. X2TRANSPOSE is Cube B, not the AIV permute.
+  compute baseline = 43. No MC2 Knowledge. AR/M3 not in scope. Upstream identity verify is NOT an accepted
+  gate. content_review passed 2026-08-21. Technical teaching frozen. AllToAll job happens to match live
+  Hccl::AlltoAll on this pinned path; job ≠ mechanism remains the general rule. RS is M1 mechanism contrast,
+  not a sibling family. True sibling is matmul_allto_all on this card.
+
+  '

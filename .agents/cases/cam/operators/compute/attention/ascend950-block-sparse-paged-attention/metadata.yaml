@@ -1,0 +1,110 @@
+id: ascend950-block-sparse-paged-attention
+name: SGLang Ascend950 Block-Sparse Paged Attention
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: sgl-project/sgl-kernel-npu
+  commit: 8d76a8da75315ae9add5cfd2458b8028289f1ada
+  branch: main
+  official_remote: https://github.com/sgl-project/sgl-kernel-npu.git
+  upstream_presence:
+    verified: true
+    repo: sgl-project/sgl-kernel-npu
+    branch: main
+    commit: ee334193e5278d7b3a64afcc2e3ee5243133c4a0
+    scanned_fork_commit: 8d76a8da75315ae9add5cfd2458b8028289f1ada
+    verified_at: 2026-08-21
+    paths_verified:
+    - csrc/sparse_attention_score/op_host/tiling/sparse_attention_score_tiling.cpp
+    - csrc/sparse_attention_score/op_kernel/arch35/sparse_attention_score_kernel_arch35.h
+    - csrc/sparse_attention_score/op_kernel/attn_infra/gemm/block/block_mmad_qk_arch35_ABf16_C_to_UB.hpp
+    note: 'Intended SoT is sgl-project main HEAD at verify time, not a forced SHA match with the scanned
+      fork. The three evidence files are byte-identical between scanned_fork_commit and this upstream
+      commit. Close-read markers still hold: GenerateTilingKey 10001/10002/10003 + fp16 fall-through,
+      SasaRegularKernelArch35, PRE_LAUNCH=2, validPhysicalIds, MmadAtlasA5BsaQK.
+
+      '
+  paths:
+    op: csrc/sparse_attention_score/
+    live_kernel: csrc/sparse_attention_score/op_kernel/arch35/sparse_attention_score_kernel_arch35.h
+    live_qk: csrc/sparse_attention_score/op_kernel/attn_infra/gemm/block/block_mmad_qk_arch35_ABf16_C_to_UB.hpp
+    host_tiling: csrc/sparse_attention_score/op_host/tiling/sparse_attention_score_tiling.cpp
+category: compute
+algorithm: block-sparse-paged-attention
+hardware:
+- ascend950
+compute_engine:
+- cube
+- vector
+memory_pattern:
+- gather
+- irregular
+- workspace
+pipeline_pattern:
+- vector-cube-overlap
+- multi-stage
+communication_pattern: none
+execution:
+  task_type: mix
+  engines:
+  - cube
+  - vector
+dtypes:
+  input:
+  - bf16
+  - fp16
+  - fp8_e4m3
+  output:
+  - bf16
+  - fp16
+  accumulator:
+  - fp32
+  scale:
+  - fp32
+instantiated:
+  variant: regular
+  dtype: bf16
+  tiling_key: 10002
+  kernel: SasaRegularKernelArch35
+  qk_block: block_mmad_qk_arch35_ABf16_C_to_UB.hpp
+  mmad_base_shape:
+  - 128
+  - 128
+  - 128
+  q_base_tile: 128
+  block_size: 128
+  pre_launch: 2
+  p_l1_buf_num: 3
+  group_size: numHeads / kvHeads
+variants:
+- tiling_key: 10001
+  dtype: fp16
+  kernel: SasaRegularKernelArch35
+  note: same Regular mechanism as 10002
+- tiling_key: 10003
+  dtype: fp8_e4m3
+  kernel: SasaFullQuantKernelArch35
+  note: FullQuant sibling; same block-sparse paged outer loop
+key_techniques:
+- logical-select-idx-to-physical-page
+- sparsity-before-mma
+- qtoken-kvhead-task
+- qk-softmax-pv-prelaunch
+- online-softmax-state-across-sparse-blocks
+- host-fallback-neq-supported-contract
+related_cases:
+- ascend950-basic-matmul
+- ascend950-fp8-mx-matmul
+license: MIT
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Pattern Case, not an op-name Case. Canonical is Regular bf16 10002. fp16/fp8 are siblings on the
+  same card. A2 in-block gSelectIdx is not the 950 SoT. Host fall-through to 10001 is not a supported-dtype
+  contract. content_review passed 2026-08-21. FA-pipeline Knowledge is accepted (online-softmax + O-merge
+  invariant + logical→physical block_table); this Case remains select_idx SoT. 49/FIA are FA-pipeline
+  peers, not Sparse alternatives and not Cases. Do not open a second Attention Case for FullQuant. Not
+  43 / not FIA.
+
+  '

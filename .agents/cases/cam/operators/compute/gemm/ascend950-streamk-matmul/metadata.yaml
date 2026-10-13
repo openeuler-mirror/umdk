@@ -1,0 +1,88 @@
+id: ascend950-streamk-matmul
+name: Ascend950 StreamK Matmul
+status: reviewed
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/66_ascend950_streamk_matmul/streamk_matmul.cpp
+    kernel: include/catlass/gemm/kernel/streamk_matmul_tla.hpp
+    scheduler: include/catlass/gemm/block/block_swizzle.hpp
+    block: include/catlass/gemm/block/block_mmad_pingpong_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_66_ascend950_streamk_matmul.py
+category: compute
+algorithm: gemm-streamk
+hardware:
+- ascend950
+compute_engine:
+- vector+cube
+memory_pattern:
+- continuous
+- workspace
+- reduce
+- double-buffer
+pipeline_pattern:
+- double-buffer
+- multi-stage
+communication_pattern: none
+dtypes:
+  input:
+  - fp32
+  output:
+  - fp32
+  accumulator:
+  - fp32
+  scale: []
+layout:
+  A: RowMajor
+  B: RowMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadPingpong
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 128
+  l0_tile:
+  - 256
+  - 256
+  - 32
+  l1_a_stages: 2
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: inline-workspace-add
+  scheduler: StreamkGemmIdentityBlockSwizzle<3,0>
+  workspace: two-l1-tiles-per-aic
+base_case: ascend950-basic-matmul
+related_cases:
+- id: ascend950-multi-core-splitk-matmul
+  relation: sibling
+key_techniques:
+- catlass-layering
+- streamk-b-mod-c-region
+- per-aic-workspace-slots
+- remainder-aiv-reduce
+- l1-l0-double-buffer
+- mmad-pingpong
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Live path only: fp32 mix StreamkMatmulTla + same Block as 43. Split is remainder MN tiles (mnTiles
+  % nAic), not a default complete-wave tail. README B/C heuristic is design-doc (B=mnTiles, C=nAic). Shipped
+  256x512 has mnTiles=2. Example vs JIT L1-K conflict recorded, not resolved.
+
+  '

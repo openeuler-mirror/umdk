@@ -1,0 +1,94 @@
+id: ascend950-matmul-native-reduce-scatter
+name: Ascend950 Matmul + Native ReduceScatter
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  upstream_presence:
+    verified: false
+    note: 'Same checkout as MoE Cases A–D. cann/ops-transformer was not fetched. Live path is the scanned
+      fork commit.
+
+      '
+  paths:
+    op: mc2/matmul_reduce_scatter_v2/
+    live_kernel: mc2/matmul_reduce_scatter_v2/op_kernel/arch35/matmul_reduce_scatter_fp16_bf16.h
+    live_entry: mc2/matmul_reduce_scatter_v2/op_kernel/arch35/matmul_reduce_scatter_v2_apt.cpp
+    host_tiling: mc2/matmul_reduce_scatter_v2/op_host/op_tiling/matmul_reduce_scatter_tiling_base.cpp
+acceptance:
+  content_review: passed
+  content_reviewed_at: 2026-08-21
+  upstream_identity_verify: not-required
+  upstream_identity_verify_note: 'Not an accepted gate for this Case. SoT is the scanned fork commit,
+    same policy as MoE A–D. Sparse Attention is the Case that required sgl-project verify; do not copy
+    that gate here.
+
+    '
+category: compute-communication
+algorithm: matmul-native-reduce-scatter
+hardware:
+- ascend950
+compute_engine:
+- cube
+- communication
+memory_pattern:
+- workspace
+- continuous
+pipeline_pattern:
+- communication-compute-overlap
+communication_pattern: hccl-reduce-scatter
+execution:
+  task_type: mix
+  engines:
+  - cube
+  - communication
+dtypes:
+  input:
+  - fp16
+  - bf16
+  output:
+  - fp16
+  - bf16
+  accumulator:
+  - fp32
+  scale: []
+instantiated:
+  variant: native-reduce-scatter
+  dtype: fp16-or-bf16
+  kernel: MatmulReduceScatterFP16BF16
+  tpl_commalg: TPL_CCU_REDUCESUM
+  not_default_on: 950-4P-or-8P-CCU
+variants:
+- dtype: fp16
+  note: same native RS mechanism as bf16
+- dtype: bf16
+  note: same native RS mechanism as fp16
+key_techniques:
+- chunked-mm-collective-coupling
+- native-reducescatter-not-job-name
+- per-tile-wait-deferred
+- rs-i-overlaps-mm-i-plus-1
+- flag3-same-device-not-cross-rank
+- workspace-send-api-c-shard
+- ag-reverse-sibling-not-case
+- compute-baseline-43
+related_cases:
+- ascend950-basic-matmul
+- ascend950-moe-ep-dispatch-combine
+- ascend950-mega-moe-fused-ep-ffn
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Pattern Case: Cube C-tile → native Hccl::ReduceScatter, not an op-name Case. Canonical is TPL_CCU_REDUCESUM
+  fp16/bf16. compute baseline = 43; do not reteach MN pingpong. per-tile Wait deferred; RS_i overlaps
+  MM_{i+1}. 950 4P/8P CCU default is A2A+vec sibling — not this card. Host OUTPUT_TYPE_IS_FP8 slot is
+  not output dtype. AG v2 is reverse-coupling sibling on this card; do not open an AG Case. AR stays pending.
+  Do not write MC2 Knowledge. Next family is M2 A2A↔MM. content_review passed 2026-08-21. Upstream identity
+  verify is NOT an accepted gate (fork SoT, same as MoE A–D). Technical teaching frozen.
+
+  '

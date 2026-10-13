@@ -1,0 +1,63 @@
+id: ascend950-moe-ep-dispatch-combine
+name: Ascend950 MoE EP Dispatch / Combine
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  paths:
+    dispatch: mc2/moe_distribute_dispatch_v2/
+    combine: mc2/moe_distribute_combine_v2/
+category: compute-communication
+algorithm: moe-ep-dispatch-combine
+hardware:
+- ascend950
+compute_engine:
+- vector
+- communication
+memory_pattern:
+- shared-window
+- irregular
+- workspace
+pipeline_pattern:
+- communication-compute-overlap
+communication_pattern: mte-window
+dtypes:
+  input:
+  - fp16
+  - bf16
+  - int32
+  output:
+  - fp16
+  - bf16
+  - int64
+  - int32
+  accumulator: []
+  scale:
+  - fp32
+  - e8m0
+key_techniques:
+- mte-window-ep
+- assist-info-triples
+- post-ep-expert-token-nums
+- count-vs-cumsum-default-mismatch
+- dispatch-combine-pair
+- combine-replaces-finalize
+related_cases:
+- ascend950-moe-local-permutation
+- ascend950-gmm-swiglu-mx-quant
+- ascend950-mega-moe-fused-ep-ffn
+- ascend950-grouped-matmul-slice-m
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Coordinates first. README AllToAllV is the job name; live 950 is MTE window. InitRouting is a
+  sibling permute, not a predecessor. Combine restores token-major and applies gate weights; Finalize
+  is not next. expert_token_nums → GMM groupList is conditional-direct (local E, matching type). gating.y
+  → expert_scales only if fp32.
+
+  '
