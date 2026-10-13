@@ -369,3 +369,92 @@ umdk_cam_op_lib.moe_combine_normal_zb(
 11. If `send_token_idx` is provided, it must come directly from `get_dispatch_layout_zb`.
 12. `comm_meta_ptr` must be valid and from the same communication-domain init as dispatch.
 13. A2 is not supported (A3 only).
+
+ #### 1.2.4 zb_fused_deep_moe ▶
+##### 1.2.4.1 Prototype
+```python
+ZbBuffer.zb_fused_deep_moe(
+    Tensor x,
+    Tensor expert_ids,
+    Tensor[] gmm1_weight,
+    Tensor[] gmm1_weight_scale,
+    Tensor[] gmm2_weight,
+    Tensor[] gmm2_weight_scale,
+    Tensor expert_scales,
+    Tensor? share_gmm1_weight,
+    Tensor? share_gmm1_weight_scale,
+    Tensor? share_gmm2_weight,
+    Tensor? share_gmm2_weight_scale,
+    Tensor? expert_smooth_scales,
+    Tensor? share_smooth_scales,
+    Tensor? x_active_mask,
+    Tensor[] gmm1_bias,
+    Tensor[] gmm2_bias,
+    Tensor? share_gmm1_bias,
+    Tensor? share_gmm2_bias,
+    str group_ep,
+    int ep_rank_size,
+    int ep_rank_id,
+    int moe_expert_num,
+    int quant_mode,
+    int global_bs
+) -> output: Tuple[Tensor, Tensor, Tensor]
+```
+##### 1.2.4.2 Interface Description
+Fused computation-communication operator on the Zero-Buffer (SHMEM) path, merging [Dispatch + FFN(GMM1 + SwiGLU + GMM2) + Combine]. The HCCL data plane is replaced by SHMEM shared-memory direct writes. It supports W8A8 / W4A8 quantization modes (W4A8 is auto-detected by the presence of the `gmm1_bias` input), built-in shared experts, and multi-round round-buffer reuse. `ZbBuffer` must be initialized with a SHMEM pool (`local_mem_size`) first. The underlying call is `aclnnFusedDeepMoeZb`; the three attributes `ext_info`, `shmem_workspace`, `shmem_workspace_size` are injected internally by `ZbBuffer` and do not need to be passed by the user.
+##### 1.2.4.3 Input Parameters
+| **📌Parameter** | **🔧Type** | **✅Required/Optional** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|--------------|----------|
+|x|Tensor|Required|Shape: `(batch_size, token_length)`, supports bf16 / float16, FORMAT_ND|Token to be dispatched in this rank|
+|expert_ids|Tensor|Required|Shape: `(batch_size, topk)`, dtype `torch.int32`, range `[-1, moe_expert_num)`; -1 is a placeholder, a token cannot be sent to the same expert more than once|Target expert ids of each token|
+|gmm1_weight|Tensor[]|Required|Coupling mode: 1 Tensor of shape `(local_expert_num, token_length, gmm1_hidden_size)`; separated mode: `local_expert_num` Tensors each of shape `(token_length, gmm1_hidden_size)`; `torch.int8` for W8A8, `torch.int32` for W4A8 (INT4 packed, hidden dim stored as `gmm1_hidden_size/8`)|GMM1 weight matrix list, supports coupling / separated modes|
+|gmm1_weight_scale|Tensor[]|Required|Coupling mode: 1 Tensor of shape `(local_expert_num, gmm1_hidden_size)`; separated mode: `local_expert_num` Tensors each of shape `(gmm1_hidden_size)`; dtype float32 / bf16 / fp16|GMM1 weight quant scale, mode must match gmm1_weight|
+|gmm2_weight|Tensor[]|Required|Coupling mode: 1 Tensor of shape `(local_expert_num, gmm1_hidden_size/2, token_length)`; separated mode: `local_expert_num` Tensors each of shape `(gmm1_hidden_size/2, token_length)`; `torch.int8` for W8A8, `torch.int32` for W4A8 (INT4 packed, output dim compressed by 1/8)|GMM2 weight matrix list, supports coupling / separated modes|
+|gmm2_weight_scale|Tensor[]|Required|Coupling mode: 1 Tensor of shape `(local_expert_num, token_length)`; separated mode: `local_expert_num` Tensors each of shape `(token_length)`; dtype float32 / bf16 / fp16|GMM2 weight quant scale, mode must match gmm2_weight|
+|expert_scales|Tensor|Required|Shape: `(batch_size, topk)`, dtype `torch.float32`|Weights of topk experts per token, used in combine phase|
+|share_gmm1_weight|Tensor?|Optional|Shape: `(token_length, share_mm1_hidden_size)`; `torch.int8` for W8A8, `torch.int32` for W4A8|Shared expert MM1 weight matrix|
+|share_gmm1_weight_scale|Tensor?|Optional|Shape: `(share_mm1_hidden_size)`, dtype must match gmm1_weight_scale|Shared expert MM1 weight quant scale|
+|share_gmm2_weight|Tensor?|Optional|Shape: `(share_mm1_hidden_size/2, token_length)`; `torch.int8` for W8A8, `torch.int32` for W4A8|Shared expert MM2 weight matrix|
+|share_gmm2_weight_scale|Tensor?|Optional|Shape: `(token_length)`, dtype must match gmm2_weight_scale|Shared expert MM2 weight quant scale|
+|expert_smooth_scales|Tensor?|Optional|Shape: `(moe_expert_num, token_length)`, dtype `torch.float32`|Smooth quant scales of routed experts|
+|share_smooth_scales|Tensor?|Optional|Shape: `(token_length)`, dtype `torch.float32`|Smooth quant scales of shared experts|
+|x_active_mask|Tensor?|Optional|Shape: `(batch_size)`, dtype bool, values in `[true, false]`, true values must come before false values|Mask for dispatch; true means the token is dispatched, false means not|
+|gmm1_bias|Tensor[]|Required for W4A8|Coupling mode: 1 Tensor of shape `(local_expert_num, gmm1_hidden_size)`; separated mode: `local_expert_num` Tensors each of shape `(gmm1_hidden_size)`; dtype `torch.float32`|W4A8 dequant compensation matrix, `8.0 × Σ(INT4 weight) × weight_scale`; pass an empty TensorList for W8A8|
+|gmm2_bias|Tensor[]|Required for W4A8|Coupling mode: 1 Tensor of shape `(local_expert_num, token_length)`; separated mode: `local_expert_num` Tensors each of shape `(token_length)`; dtype `torch.float32`|W4A8 dequant compensation matrix, `8.0 × Σ(INT4 weight) × weight_scale`; pass an empty TensorList for W8A8|
+|share_gmm1_bias|Tensor?|Optional|Shape: `(share_mm1_hidden_size)`, dtype `torch.float32`|W4A8 dequant compensation matrix for shared expert MM1|
+|share_gmm2_bias|Tensor?|Optional|Shape: `(token_length)`, dtype `torch.float32`|W4A8 dequant compensation matrix for shared expert MM2|
+|group_ep|str|Required|Pass empty string `""` on the Zero-Buffer path|HCCL communication group name (reserved; the data plane uses SHMEM direct writes, no real communication domain needed)|
+|ep_rank_size|int|Required|> 0, and `moe_expert_num_per_rank * ep_rank_size <= 512`|EP group size|
+|ep_rank_id|int|Required|Range: `[0, ep_rank_size)`|Rank id in the communication group|
+|moe_expert_num|int|Required|Range: `(0, 512]`, and `moe_expert_num % ep_rank_size == 0`|Number of routed MoE experts|
+|quant_mode|int|Required|Reserved parameter, currently only 0 is supported|Quantization mode; W4A8 is auto-detected by the presence of the gmm1_bias input and does not rely on this parameter|
+|global_bs|int|Required|Pass 0 if all ranks have the same token count (equivalent to `batch_size * ep_rank_size`); otherwise must be > 0 and `global_bs % ep_rank_size == 0`|Max token number among all ranks|
+##### 1.2.4.4 Return Value
+Returns a Tuple of 3 Tensors: `output`, `share_output`, `expert_token_nums`.
+| **📌Parameter** | **🔧type** | **📋Value Range** | **📝Details** |
+|----------|----------|--------------|----------|
+|output|Tensor|Shape: `(batch_size, token_length)`, same dtype as x|Combined result of tokens processed by experts on this rank|
+|share_output|Tensor|Shape: `(batch_size, token_length)`, same dtype as x|Result from the built-in shared expert; returned as a placeholder even when shared expert is disabled|
+|expert_token_nums|Tensor|Shape: `(moe_expert_num / ep_rank_size)`, dtype `torch.int64`|Number of tokens received by each local expert on this rank|
+##### 1.2.4.5 Constraints and Precautions ⚠️
+1. Input shapes must strictly satisfy the definitions above.
+2. Only the Zero-Buffer (ZERO_BUFFER) mode is supported: `shmemWorkspacePtr` must be non-zero and is injected internally by `ZbBuffer`; `ZbBuffer` must be initialized (with `local_mem_size` providing the SHMEM pool) before the call.
+3. Current interface supports A3 only.
+4. Current interface does not support concurrent usage. In extreme cases, repeatedly calling the same operator in a single forward pass may result in undefined behavior; add `torch.npu.synchronize()` between operator executions to avoid potential asynchronous timing issues.
+5. Support AclGraph only when graph mode is on.
+6. Do not support external shared experts (i.e., shared experts deployed on dedicated cards).
+7. Other constraints need to be satisfied:
+ - Required: batch_size range: `[0, 40960]` (Zero-Buffer upper bound)
+ - Required: token_length range: `[512, 7168]`
+ - Required: gmm1_hidden_size range: `[1024, 6144]`
+ - Required: topk <= 12 and topk <= moe_expert_num
+ - Required: moe_expert_num range: `(0, 512]`, and `moe_expert_num % ep_rank_size == 0`
+ - Required: `moe_expert_num_per_rank * ep_rank_size <= 512`
+ - Required: `global_bs >= 0` and `global_bs % ep_rank_size == 0` (when 0 is passed, it is computed as `batch_size * ep_rank_size`)
+ - Required: gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale must be in the same mode (coupling or separated)
+8. W4A8 mode: gmm1_bias and gmm2_bias must be provided, and W4A8 is auto-detected by their presence (`EXEC_FLAG_W4A8`); pass an empty TensorList in W8A8 mode.
+9. Shared expert: if share_gmm1_weight is provided, share_gmm1_weight_scale, share_gmm2_weight, share_gmm2_weight_scale must exist at the same time; the shared scale dtypes must match the routed expert side.
+10. Smooth quant: if expert_smooth_scales (shape `(moe_expert_num, token_length)`, float32) is provided, share_smooth_scales (shape `(token_length)`, float32) must also exist when the shared expert is enabled.
+11. x_active_mask: if provided, shape must be `(batch_size)` and true values must come before false values.
+12. SHMEM space constraints: `shmemWorkspaceSize` must be positive and no smaller than the fixed overhead (expert token-count metadata + combineSend + roundInfo + 16MB safety margin), otherwise `SHMEM workspace is too small` is reported; the per-round token count is derived from the remaining space, aligned down to 64 (GMM1_EPIM), and an error is raised if it is below 64.
+13. On the Zero-Buffer path the data plane uses SHMEM direct writes, so there is no need to configure a large HCCL_BUFFSIZE according to `moe_expert_num_per_rank * global_bs * h * sizeof(x) * 2` (that check only applies to the non-Zero-Buffer path).
