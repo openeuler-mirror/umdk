@@ -286,6 +286,8 @@ typedef struct bondp_p_target_jetty {
     urma_target_jetty_t *p_tjetty;
     uint64_t hc_va;
     uint32_t hc_token_id;
+    /* Protected by the health-check node lock; excluded after status 8. */
+    bool hc_probe_bad;
     uint8_t local_indice;
     uint8_t remote_indice;
 #ifndef __cplusplus

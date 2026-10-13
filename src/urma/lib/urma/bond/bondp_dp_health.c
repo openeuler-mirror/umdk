@@ -242,7 +242,7 @@ static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t loca
     pthread_rwlock_rdlock(&node->lock);
     UB_LIST_FOR_EACH (bdp_tjetty, hc_entry, &node->tjetty_list) {
         bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
-        if (p_tjetty != NULL) {
+        if (p_tjetty != NULL && !p_tjetty->hc_probe_bad) {
             bool expected = false;
             if (atomic_compare_exchange_strong(&p_tjetty->valid, &expected, true)) {
                 recovered_cnt++;
@@ -290,6 +290,9 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
     }
 }
 
+static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
+                                   bondp_context_t *bdp_ctx);
+
 static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urma_cr_t *cr)
 {
     uint32_t node_idx;
@@ -307,16 +310,32 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     }
     bool ok = (cr->status == URMA_CR_SUCCESS);
 
-    /* paths may be replaced by a concurrent register (array growth), so the
-     * lookup must hold the read lock. Recovery helpers take the lock themselves
-     * and are called after unlocking to avoid recursive rdlock. */
-    pthread_rwlock_rdlock(&node->lock);
+    /* Hold the write lock for path updates and probe target replacement.
+     * Recovery helpers take the lock themselves and run after unlocking. */
+    pthread_rwlock_wrlock(&node->lock);
     bondp_hc_path_t *path = hc_find_path(node, (uint32_t)local_idx, target_idx);
     if (path == NULL) {
         pthread_rwlock_unlock(&node->lock);
         return;
     }
     bondp_target_jetty_t *bdp_tjetty = path->tjetty;
+    if (cr->status == URMA_CR_REM_ACCESS_ABORT_ERR) { /* status 8 */
+        if (bdp_tjetty != NULL) {
+            bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, (uint32_t)local_idx, target_idx);
+            if (p_tjetty != NULL) {
+                p_tjetty->hc_probe_bad = true;
+                atomic_store(&p_tjetty->valid, false);
+            }
+            bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(bdp_tjetty->v_tjetty.urma_ctx, bondp_context_t, v_ctx);
+            (void)hc_switch_probe_target(node, path, bdp_ctx);
+        }
+        path->no_cqe_round = 0;
+        path->probe_checked = false;
+        /* This target's access error says nothing about path health. Retry
+         * with the next target without counting this as a checked result. */
+        pthread_rwlock_unlock(&node->lock);
+        return;
+    }
     atomic_store(&path->valid, ok);
     path->no_cqe_round = 0;
     path->probe_checked = true;
@@ -1084,74 +1103,80 @@ static bondp_target_jetty_t *hc_find_tjetty_for_path(bondp_hc_node_t *node, uint
 
     UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
         const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(tjetty, local_idx, target_idx);
-        if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL && p_tjetty->hc_va != 0) {
+        if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL &&
+            p_tjetty->hc_va != 0 && !p_tjetty->hc_probe_bad) {
             return tjetty;
         }
     }
     return NULL;
 }
 
-static void hc_unregister_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t *bdp_tjetty,
-                                      bondp_context_t *bdp_ctx)
+/* Caller holds node->lock for writing. This helper does not change path health. */
+static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
+                                   bondp_context_t *bdp_ctx)
 {
+    uint32_t i = path->local_idx;
+    uint32_t j = path->target_idx;
+    path->tjetty = NULL;
+    path->no_cqe_round = 0;
+    if (path->tseg != NULL) {
+        urma_status_t ret = urma_unimport_seg(path->tseg);
+        if (ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u, ret=%d.\n", i, j, ret);
+            return false;
+        }
+        path->tseg = NULL;
+    }
+
+    bondp_target_jetty_t *backup = hc_find_tjetty_for_path(node, i, j);
+    if (backup == NULL) {
+        return true;
+    }
+
+    /* Re-import with the backup's physical identity, VA and token. */
+    const bondp_p_target_jetty_t *backup_path = bondp_find_p_tjetty_const(backup, i, j);
+    if (backup_path == NULL || backup_path->p_tjetty == NULL || bdp_ctx->p_ctxs[i] == NULL) {
+        return false;
+    }
     urma_import_seg_flag_t flag = {
         .bs.cacheable = URMA_NON_CACHEABLE,
         .bs.mapping = URMA_SEG_NOMAP,
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE,
     };
+    urma_seg_t seg = {
+        .ubva = {
+            .eid = backup_path->p_tjetty->id.eid,
+            .uasid = backup_path->p_tjetty->id.uasid,
+            .va = backup_path->hc_va,
+        },
+        .len = HC_PROBE_SEG_LEN,
+        .attr = {
+            .bs = {
+                .token_policy = URMA_TOKEN_NONE,
+                .cacheable = URMA_NON_CACHEABLE,
+                .access = URMA_ACCESS_WRITE | URMA_ACCESS_READ,
+            },
+        },
+        .token_id = backup_path->hc_token_id,
+    };
+    path->tseg = urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
+    if (path->tseg == NULL) {
+        URMA_LOG_ERR("Failed to re-import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
+        return false;
+    }
+    path->tjetty = backup;
+    return true;
+}
 
+static void hc_unregister_tjetty_path(bondp_hc_node_t *node, bondp_target_jetty_t *bdp_tjetty,
+                                      bondp_context_t *bdp_ctx)
+{
     for (uint32_t p = 0; p < node->path_cnt; ++p) {
         bondp_hc_path_t *path = &node->paths[p];
         if (path->tjetty != bdp_tjetty) {
             continue;
         }
-        uint32_t i = path->local_idx;
-        uint32_t j = path->target_idx;
-        if (path->tseg != NULL) {
-            if (urma_unimport_seg(path->tseg) != URMA_SUCCESS) {
-                URMA_LOG_ERR("Failed to unimport health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
-                path->tjetty = NULL;
-                atomic_store(&path->valid, false);
-                continue;
-            }
-            path->tseg = NULL;
-        }
-
-        bondp_target_jetty_t *backup = hc_find_tjetty_for_path(node, i, j);
-        path->tjetty = backup;
-        path->no_cqe_round = 0;
-
-        if (backup == NULL) {
-            continue;
-        }
-
-        /* Backup found: re-import seg using backup's va and token_id.
-         * eid/uasid come from the backup's physical target jetty;
-         * len and attr are fixed for health check segs. */
-        const bondp_p_target_jetty_t *backup_path = bondp_find_p_tjetty_const(backup, i, j);
-        if (backup_path == NULL || backup_path->p_tjetty == NULL || bdp_ctx->p_ctxs[i] == NULL) {
-            continue;
-        }
-        urma_seg_t seg = {
-            .ubva = {
-                .eid = backup_path->p_tjetty->id.eid,
-                .uasid = backup_path->p_tjetty->id.uasid,
-                .va = backup_path->hc_va,
-            },
-            .len = HC_PROBE_SEG_LEN,
-            .attr = {
-                .bs = {
-                    .token_policy = URMA_TOKEN_NONE,
-                    .cacheable = URMA_NON_CACHEABLE,
-                    .access = URMA_ACCESS_WRITE | URMA_ACCESS_READ,
-                },
-            },
-            .token_id = backup_path->hc_token_id,
-        };
-        path->tseg = urma_import_seg(bdp_ctx->p_ctxs[i], &seg, NULL, 0, flag);
-        if (path->tseg == NULL) {
-            URMA_LOG_ERR("Failed to re-import health probe seg, local_idx=%u, target_idx=%u.\n", i, j);
-            path->tjetty = NULL;
+        if (!hc_switch_probe_target(node, path, bdp_ctx)) {
             atomic_store(&path->valid, false);
         }
     }
