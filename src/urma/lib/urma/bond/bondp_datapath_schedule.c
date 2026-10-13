@@ -14,10 +14,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bondp_cp_tjetty.h"
 #include "bondp_dp_health.h"
 #include "bondp_env.h"
 #include "bondp_types.h"
-#include "bondp_cp_tjetty.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_schedule.h"
@@ -35,7 +35,6 @@ static urma_transport_mode_t get_comp_urma_trans_mode(const bondp_comp_t *bdp_co
             return URMA_TM_RM;
     }
 }
-
 
 static uint32_t select_path_by_priority(const bondp_comp_t *bdp_comp,
                                         const bondp_target_jetty_t *bdp_tjetty,
@@ -87,7 +86,7 @@ static uint32_t select_path_by_chip(const bondp_comp_t *bdp_comp,
     // printf("src_chip_id=%u, dst_chip_id=%u\n", info->src_chip_id, info->dst_chip_id);
     const uint32_t *failover_route =
         g_bondp_env.failover_route[src_chip_id][dst_chip_id][route_id];
-    for (int i = 0 ; i < URMA_FAILOVER_LINK_NUM; i++) {
+    for (int i = 0; i < URMA_FAILOVER_LINK_NUM; i++) {
         path_idx = failover_route[i];
         if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
             break;
@@ -274,7 +273,7 @@ static bool is_in_failover_route(const bondp_chip_id_info_t *info, uint32_t rout
     uint32_t src_chip_id = info->src_chip_id - 1;
     uint32_t dst_chip_id = info->dst_chip_id - 1;
     const uint32_t *failover_route =
-    g_bondp_env.failover_route[src_chip_id][dst_chip_id][route_id];
+        g_bondp_env.failover_route[src_chip_id][dst_chip_id][route_id];
     for (int i = 0; i < URMA_FAILOVER_LINK_NUM; i++) {
         uint32_t path_idx = failover_route[i];
         if (path_idx > IODIE_NUM * IODIE_NUM * URMA_ACTIVE_PORT_PER_DIE) {
@@ -329,7 +328,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
     uint32_t max[2] = {0};
 
     if (min_active_count == 0) {
-        URMA_LOG_ERR("Invalid min_active_count.\n");
+        URMA_LOG_ERR_RL("Invalid min_active_count.\n");
         return URMA_EINVAL;
     }
 
@@ -355,7 +354,7 @@ static int schedule_send_balance(const bondp_comp_t *bdp_comp, const bondp_targe
             min[0] = min[1] = IODIE_NUM;
             max[0] = max[1] = URMA_UBAGG_DEV_MAX_NUM;
         } else {
-            URMA_LOG_ERR("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
+            URMA_LOG_ERR_RL("Unsupported bonding level=%d.\n", bdp_comp->bondp_ctx->bonding_level);
             return URMA_EINVAL;
         }
         select_least_load_path(bdp_comp, bdp_tjetty, min, max, least_load_path, &least_load_cnt);
@@ -427,12 +426,12 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
 {
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
-        URMA_LOG_ERR("Invalid wr->tjetty: NULL\n");
+        URMA_LOG_ERR_RL("Invalid wr->tjetty: NULL\n");
         return URMA_EINVAL;
     }
 
     if (bdp_comp->active_count == 0 || bdp_tjetty->active_count == 0) {
-        URMA_LOG_ERR("No active port\n");
+        URMA_LOG_ERR_RL("No active port\n");
         return -1;
     }
 
@@ -451,7 +450,7 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx)
 {
     if (bdp_comp->active_count == 0) {
-        URMA_LOG_ERR("No active port\n");
+        URMA_LOG_ERR_RL("No active port\n");
         return -1;
     }
 
@@ -471,12 +470,12 @@ int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cn
     uint32_t current_load[URMA_UBAGG_DEV_MAX_NUM] = {0};
 
     if (recv_wr_cnt == NULL) {
-        URMA_LOG_ERR("Invalid recv_wr_cnt: NULL\n");
+        URMA_LOG_ERR_RL("Invalid recv_wr_cnt: NULL\n");
         return URMA_EINVAL;
     }
 
     if (bdp_comp->active_count == 0) {
-        URMA_LOG_ERR("No active port\n");
+        URMA_LOG_ERR_RL("No active port\n");
         return -1;
     }
     uint32_t *rqe_cnt;

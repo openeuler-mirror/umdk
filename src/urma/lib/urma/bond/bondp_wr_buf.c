@@ -344,8 +344,8 @@ void jfs_wr_buf_release_batch(wr_buf_t *buf, jfs_wr_entry_t **entries, uint32_t 
         return;
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
-        URMA_LOG_ERR("JFS WR buf release failed: count = %u, limit = %u",
-                     count, BONDP_BATCH_POST_MAX_NUM);
+        URMA_LOG_ERR_RL("JFS WR buf release failed: count = %u, limit = %u",
+                        count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {
@@ -361,8 +361,8 @@ void jfr_wr_buf_release_batch(wr_buf_t *buf, jfr_wr_entry_t **entries, uint32_t 
         return;
     }
     if (count > BONDP_BATCH_POST_MAX_NUM) {
-        URMA_LOG_ERR("JFR WR buf release failed: count = %u, limit = %u",
-                     count, BONDP_BATCH_POST_MAX_NUM);
+        URMA_LOG_ERR_RL("JFR WR buf release failed: count = %u, limit = %u",
+                        count, BONDP_BATCH_POST_MAX_NUM);
         return;
     }
     for (uint32_t i = 0; i < count; i++) {
