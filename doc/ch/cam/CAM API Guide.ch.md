@@ -368,3 +368,92 @@ umdk_cam_op_lib.moe_combine_normal_zb(
 11. `send_token_idx` 若传入，必须直接使用 `get_dispatch_layout_zb` 的出参。
 12. 调用前需保证 `comm_meta_ptr` 有效，且与 dispatch 使用同一通信域初始化结果。
 13. 不支持 A2 环境（仅 A3）。
+
+ #### 1.2.4 zb_fused_deep_moe ▶
+##### 1.2.4.1 接口原型
+```python
+ZbBuffer.zb_fused_deep_moe(
+    Tensor x,
+    Tensor expert_ids,
+    Tensor[] gmm1_weight,
+    Tensor[] gmm1_weight_scale,
+    Tensor[] gmm2_weight,
+    Tensor[] gmm2_weight_scale,
+    Tensor expert_scales,
+    Tensor? share_gmm1_weight,
+    Tensor? share_gmm1_weight_scale,
+    Tensor? share_gmm2_weight,
+    Tensor? share_gmm2_weight_scale,
+    Tensor? expert_smooth_scales,
+    Tensor? share_smooth_scales,
+    Tensor? x_active_mask,
+    Tensor[] gmm1_bias,
+    Tensor[] gmm2_bias,
+    Tensor? share_gmm1_bias,
+    Tensor? share_gmm2_bias,
+    str group_ep,
+    int ep_rank_size,
+    int ep_rank_id,
+    int moe_expert_num,
+    int quant_mode,
+    int global_bs
+) -> output: Tuple[Tensor, Tensor, Tensor]
+```
+##### 1.2.4.2 接口描述
+Zero-Buffer（SHMEM）路径下的通算大融合算子，融合 [Dispatch + FFN(GMM1 + SwiGLU + GMM2) + Combine]，通过 SHMEM 共享内存直写替代 HCCL 数据平面，支持 W8A8 / W4A8 两种量化模式（W4A8 以 `gmm1_bias` 输入是否存在自动识别）、内置共享专家与多轮 round buffer 复用。需先完成 `ZbBuffer` 初始化并提供 SHMEM 池（`local_mem_size`），底层调用 `aclnnFusedDeepMoeZb`；`ext_info`、`shmem_workspace`、`shmem_workspace_size` 三个 attr 由 `ZbBuffer` 内部自动注入，用户无需传入。
+##### 1.2.4.3 入参
+| **📌参数** | **🔧类型** | **✅是否必选** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|--------------|----------|
+|x|Tensor|必选|形状：`(batch_size, token_length)`，支持 bf16、float16，FORMAT_ND|本卡 dispatch 阶段待处理的 token|
+|expert_ids|Tensor|必选|形状：`(batch_size, topk)`，数据类型 `torch.int32`，取值范围 `[-1, moe_expert_num)`，-1 用于占位，一个 token 不允许重复发给同一个专家|每个 token 的目标专家 ID 信息|
+|gmm1_weight|Tensor[]|必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, token_length, gmm1_hidden_size)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(token_length, gmm1_hidden_size)`；W8A8 为 `torch.int8`，W4A8 为 `torch.int32`（INT4 打包，隐藏维按 `gmm1_hidden_size/8` 存储）|GMM1 权重矩阵列表，支持耦合/分离两种模式|
+|gmm1_weight_scale|Tensor[]|必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, gmm1_hidden_size)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(gmm1_hidden_size)`；数据类型 float32/bf16/fp16|GMM1 权重量化缩放系数，模式须与 gmm1_weight 一致|
+|gmm2_weight|Tensor[]|必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, gmm1_hidden_size/2, token_length)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(gmm1_hidden_size/2, token_length)`；W8A8 为 `torch.int8`，W4A8 为 `torch.int32`（隐藏维按 `gmm1_hidden_size/2` 存储，INT4 打包时输出维按 1/8 压缩）|GMM2 权重矩阵列表，支持耦合/分离两种模式|
+|gmm2_weight_scale|Tensor[]|必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, token_length)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(token_length)`；数据类型 float32/bf16/fp16|GMM2 权重量化缩放系数，模式须与 gmm2_weight 一致|
+|expert_scales|Tensor|必选|形状：`(batch_size, topk)`，数据类型 `torch.float32`|每个 token 的 topk 个专家权重，combine 阶段使用|
+|share_gmm1_weight|Tensor?|可选|形状：`(token_length, share_mm1_hidden_size)`，W8A8 为 `torch.int8`，W4A8 为 `torch.int32`|共享专家 MM1 权重矩阵|
+|share_gmm1_weight_scale|Tensor?|可选|形状：`(share_mm1_hidden_size)`，数据类型须与 gmm1_weight_scale 一致|共享专家 MM1 权重量化缩放系数|
+|share_gmm2_weight|Tensor?|可选|形状：`(share_mm1_hidden_size/2, token_length)`，W8A8 为 `torch.int8`，W4A8 为 `torch.int32`|共享专家 MM2 权重矩阵|
+|share_gmm2_weight_scale|Tensor?|可选|形状：`(token_length)`，数据类型须与 gmm2_weight_scale 一致|共享专家 MM2 权重量化缩放系数|
+|expert_smooth_scales|Tensor?|可选|形状：`(moe_expert_num, token_length)`，数据类型 `torch.float32`|各个路由专家的 smooth quant 平滑因子|
+|share_smooth_scales|Tensor?|可选|形状：`(token_length)`，数据类型 `torch.float32`|共享专家的 smooth quant 平滑因子|
+|x_active_mask|Tensor?|可选|形状：`(batch_size)`，数据类型 bool，取值范围 `[true, false]`，true 值必须排在 false 之前|dispatch 分发 token 时的 mask，true 代表正常分发，false 代表不分发|
+|gmm1_bias|Tensor[]|W4A8 必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, gmm1_hidden_size)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(gmm1_hidden_size)`；数据类型 `torch.float32`|W4A8 反量化补偿矩阵，`8.0 × Σ(INT4 权重) × weight_scale`，W8A8 传空 TensorList|
+|gmm2_bias|Tensor[]|W4A8 必选|耦合模式下仅有 1 个 Tensor，形状：`(local_expert_num, token_length)`；分离模式下包含 `local_expert_num` 个 Tensor，每个形状：`(token_length)`；数据类型 `torch.float32`|W4A8 反量化补偿矩阵，`8.0 × Σ(INT4 权重) × weight_scale`，W8A8 传空 TensorList|
+|share_gmm1_bias|Tensor?|可选|形状：`(share_mm1_hidden_size)`，数据类型 `torch.float32`|共享专家 MM1 的 W4A8 反量化补偿矩阵|
+|share_gmm2_bias|Tensor?|可选|形状：`(token_length)`，数据类型 `torch.float32`|共享专家 MM2 的 W4A8 反量化补偿矩阵|
+|group_ep|str|必选|Zero-Buffer 路径传空字符串 `""`|HCCL 通信域名称（预留；数据平面走 SHMEM 直写，无需真实通信域）|
+|ep_rank_size|int|必选|> 0，且 `moe_expert_num_per_rank * ep_rank_size <= 512`|EP 通信域大小|
+|ep_rank_id|int|必选|取值范围 `[0, ep_rank_size)`|本卡在通信域中的 rankID|
+|moe_expert_num|int|必选|取值范围 `(0, 512]`，且 `moe_expert_num % ep_rank_size == 0`|MOE 路由专家数量|
+|quant_mode|int|必选|预留入参，当前只支持传 0|量化模式；W4A8 由 gmm1_bias 输入存在性自动识别，不依赖该入参|
+|global_bs|int|必选|若所有卡 token 数量一致，可传 0（等价于 `batch_size * ep_rank_size`）；否则须 > 0 且 `global_bs % ep_rank_size == 0`|所有卡的最大 token 总数|
+##### 1.2.4.4 返回值
+函数返回值是一个 3 个 Tensor 构成的 Tuple，分别存放：output、share_output、expert_token_nums。
+| **📌参数** | **🔧类型** | **📋取值说明** | **📝描述** |
+|----------|----------|--------------|----------|
+|output|Tensor|形状：`(batch_size, token_length)`，数据类型与 x 一致|当前 rank 上 token 经各个专家处理后汇聚的结果|
+|share_output|Tensor|形状：`(batch_size, token_length)`，数据类型与 x 一致|内置共享专家处理后的结果，即使不进行共享专家计算也会返回占位值|
+|expert_token_nums|Tensor|形状：`(moe_expert_num / ep_rank_size)`，数据类型 `torch.int64`|本卡各个本地专家收到的 token 数量|
+##### 1.2.4.5 约束和注意事项 ⚠️
+1. 入参形状需严格满足上述入参描述中的形状定义。
+2. 仅支持 Zero-Buffer（ZERO_BUFFER）模式：`shmemWorkspacePtr` 必须非零，由 `ZbBuffer` 内部注入；调用前必须完成 `ZbBuffer` 初始化（`local_mem_size` 提供 SHMEM 池）。
+3. 当前接口只支持 A3 环境调用。
+4. 当前接口不支持并发调用。极端情况下在单次 forward 中连续调用相同算子会产生未定义行为，这种场景需要在算子执行间添加 `torch.npu.synchronize()` 避免潜在的异步时序问题。
+5. 当前接口图模式只支持 AclGraph 模式。
+6. 不支持外置共享专家（即有的卡只放置共享专家）。
+7. 除满足上述形状约束外，其他参数取值要求：
+ - 需要满足：batch_size 取值范围 `[0, 40960]`（Zero-Buffer 模式上界）
+ - 需要满足：token_length 取值范围 `[512, 7168]`
+ - 需要满足：gmm1_hidden_size 取值范围 `[1024, 6144]`
+ - 需要满足：topk <= 12 且 topk <= moe_expert_num
+ - 需要满足：moe_expert_num 取值范围 `(0, 512]` 且 `moe_expert_num % ep_rank_size == 0`
+ - 需要满足：`moe_expert_num_per_rank * ep_rank_size <= 512`
+ - 需要满足：`global_bs >= 0` 且 `global_bs % ep_rank_size == 0`（传 0 时自动按 `batch_size * ep_rank_size` 计算）
+ - 需要满足：gmm1_weight、gmm1_weight_scale、gmm2_weight、gmm2_weight_scale 四个入参的模式必须统一，不能一部分耦合模式一部分分离模式
+8. W4A8 模式：gmm1_bias、gmm2_bias 必须传入，且通过其存在性自动识别为 W4A8（`EXEC_FLAG_W4A8`）；W8A8 模式传空 TensorList。
+9. 共享专家：若传入 share_gmm1_weight，则 share_gmm1_weight_scale、share_gmm2_weight、share_gmm2_weight_scale 必须同时存在；share 侧 scale 的数据类型必须与路由专家侧一致。
+10. smooth quant：若传入 expert_smooth_scales（形状 `(moe_expert_num, token_length)`，float32），当同时启用共享专家时 share_smooth_scales（形状 `(token_length)`，float32）也必须存在。
+11. x_active_mask：若传入，形状必须为 `(batch_size)` 且 true 值必须在 false 之前。
+12. SHMEM 空间约束：`shmemWorkspaceSize` 必须大于 0，且不小于固定开销（专家 token 数元数据 + combineSend + roundInfo + 16MB 安全余量），否则报 `SHMEM workspace is too small`；round buffer 每轮 token 数由剩余空间推算，向下对齐 64（GMM1_EPIM），不足 64 时报错。
+13. Zero-Buffer 路径数据平面走 SHMEM 直写，无需按 `moe_expert_num_per_rank * global_bs * h * sizeof(x) * 2` 配置大 HCCL_BUFFSIZE（该校验仅作用于非 Zero-Buffer 路径）。
