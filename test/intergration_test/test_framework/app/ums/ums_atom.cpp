@@ -56,33 +56,3 @@ int query_ums_reference_count()
 
     return atoi(cmd);
 }
-
-void exec_deploy_ums_agent(const char *host2ip)
-{
-    char getpath[1024];
-    char path[1024];
-    char execscript[1024];
-    char cmd[1024];
-    exec_cmd(getpath, MAX_EXEC_CMD_RET_LEN, "find / -name 'master_deploy_ums_agent.sh' | head -n 1");
-    if (!getpath.empty() && getpath.back() == '\n') {
-        getpath.popback();
-    }
-    snprintf(execscript, sizeof(execscript), "sudo sh -c 'chcon -t bin_t' %s 2>/dev/null; sh %s %s", getpath, getpath, host2ip);
-    exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, execscript);
-    sleep(5);
-}
-
-bool is_ums_agent_running()
-{
-    char cmd[1024];
-    char result[MAX_EXEC_CMD_RET_LEN] = {0};
-    exec_cmd(cmd, MAX_EXEC_CMD_RET_LEN, "systemctl is-active ums_agent 2>/dev/null");
-    std::string trimmed = cmd;
-    size_t start = trimmed.find_first_not_of(" \t\r\n");
-    size_t end = trimmed.find_last_not_of(" \t\r\n");
-    trimmed = trimmed.substr(start, end - start + 1);
-    if (trimmed.compare("active") != 0) {
-        return false;
-    }
-    return true;
-}

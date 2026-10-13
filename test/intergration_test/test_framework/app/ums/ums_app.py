@@ -7,6 +7,8 @@
 import logging
 import os
 import random
+import shlex
+import time
 
 from common.constants import const
 
@@ -36,6 +38,74 @@ def prepare_test_case(host_list, case_path, case_name="test_case"):
         if p.ret != 0:
             log.error("gcc test_case failed!")
             raise
+    for host in host_list:
+        if is_ums_agent_running():
+            print("UMS Agent is running.")
+        else:
+            print("UMS Agent is not running.")
+            exec_deploy_ums_agent(host_list)
+
+def get_ums_agent_deploy_path():
+    cmd = "find / -name 'master_deploy_ums_agent,sh' -type f 2>/dev/null | head -n 1"
+    try:
+        res = self.exec_cmd(cmd, silence=2, timeout=30)
+        
+        if res.ret != 0:
+            if not res.stdout.strip():
+                return None
+            pass
+        
+        output = str(res.stdout).strip()
+
+        if output:
+            return output
+        else:
+            return None
+    except Exception as e:
+        return None
+
+def exec_deploy_ums_agent(host_list):
+    if not host_list[1]:
+        print("Host2 IP is empty, skip.")
+        return
+    
+    getpath = get_ums_agent_deploy_path()
+    if not getpath:
+        print("Deploy script not found!")
+        return
+    
+    safe_path = shlex.quote(getpath)
+    safe_host = shlex.quote(host_list[1])
+
+    command = f"sudo sh -c 'chcon -t bin_t {safe_path} 2>/dev/null; sh {safe_path} {safe_host}'"
+    try:
+        res = host_list[0].exec_cmd(command, silence=2, timeout=90)
+
+        if res.ret != 0:
+            print(f"Deployment failed with return code {res.ret}")
+            print(f"Output: {res.stdout}")
+            print(f"Error: {res.stderr}")
+        else:
+            print("Deployment command executed successfully.")
+    except Exception as e:
+        print(f"Error during deployment: {e}")
+
+    time.sleep(5)
+
+def is_ums_agent_running() -> bool:
+    cmd = "systemctl is-active ums_agent 2>/dev/null"
+
+    try:
+        res = self.exec_cmd(cmd, silence=2)
+
+        status = str(res.stdout).strip()
+
+        if status == 'active':
+            return True
+        else:
+            return False
+    except Exception as e:
+        return False
 
 def check_port_nouse(host_list, port):
     cmd = f'cat /tmp/netstat.txt | grep {port} | wc -l'

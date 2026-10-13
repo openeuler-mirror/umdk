@@ -18,15 +18,7 @@ static int run_test(test_ums_ctx_t *ctx)
     int ums_refer_cnt_before = 0;
     int ums_refer_cnt_after = 0;
     int ums_refer_cnt_diff = 0;
-    int check1 = 0;
-    if (ctx->app_id == PROC_1) {
-        if (is_ums_agent_running) {
-            printf("ums_agent is running correctly");
-        } else {
-            printf("ums_agent is not running correctly");
-            exec_deploy_ums_agent(ctx->test_ip_host2);
-        }
-    }
+
     ums_refer_cnt_before = query_ums_reference_count();
     if (ctx->app_id == PROC_1) {
         char buf0[MAX_EXEC_CMD_RET_LEN];
