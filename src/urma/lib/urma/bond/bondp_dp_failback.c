@@ -497,8 +497,8 @@ int bondp_fb_add_task(bondp_context_t *bond_ctx, uint32_t vjetty_id, uint32_t pj
                                 &fb_task->worker_task_id);
     if (ret != 0) {
         ub_hmap_remove(&fb_ctx->task_map, &fb_task->hmap_node);
-        URMA_LOG_ERR("Failed to schedule failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d.\n",
-                     vjetty_id, pjetty_idx, ret);
+        URMA_LOG_ERR_RL("Failed to schedule failback task, vjetty_id=%u, pjetty_idx=%u, ret=%d.\n",
+                        vjetty_id, pjetty_idx, ret);
     }
 
 out_unlock:

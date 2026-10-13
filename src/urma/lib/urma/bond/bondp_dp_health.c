@@ -173,7 +173,7 @@ static urma_jetty_t *hc_create_probe_jetty(urma_context_t *p_ctx, urma_jfc_t *jf
     };
     urma_jetty_t *jetty = urma_create_jetty(p_ctx, &p_cfg);
     if (jetty == NULL) {
-        URMA_LOG_ERR("Failed to create health probe jetty, local_idx=%d.\n", local_idx);
+        URMA_LOG_ERR_RL("Failed to create health probe jetty, local_idx=%d.\n", local_idx);
     }
     return jetty;
 }
@@ -182,7 +182,7 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
 {
     int local_idx = res->local_idx;
     if (res->jfc == NULL || res->jfc->urma_ctx == NULL || res->jfr == NULL) {
-        URMA_LOG_ERR("Invalid health probe resource for jetty rebuild, local_idx=%d.\n", local_idx);
+        URMA_LOG_ERR_RL("Invalid health probe resource for jetty rebuild, local_idx=%d.\n", local_idx);
         return;
     }
     if (res->jetty == NULL) {
@@ -197,13 +197,13 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
 
     urma_status_t ret = urma_modify_jetty(res->jetty, &attr);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_WARN("Failed to modify health probe jetty to error, local_idx=%d, ret=%d.\n",
-                      local_idx, ret);
+        URMA_LOG_WARN_RL("Failed to modify health probe jetty to error, local_idx=%d, ret=%d.\n",
+                         local_idx, ret);
     }
     ret = urma_delete_jetty(res->jetty);
     if (ret != URMA_SUCCESS) {
-        URMA_LOG_ERR("Failed to delete old health probe jetty, local_idx=%d, ret=%d.\n",
-                     local_idx, ret);
+        URMA_LOG_ERR_RL("Failed to delete old health probe jetty, local_idx=%d, ret=%d.\n",
+                        local_idx, ret);
         return;
     }
     res->jetty = NULL;
@@ -230,7 +230,7 @@ static void hc_rebuild_probe_jetty(bondp_hc_ctx_t *hc_ctx, bondp_probe_res_t *re
      * destroying, and the start paths are serialized by ctx->mutex. */
     res->jetty = hc_create_probe_jetty(p_ctx, res->jfc, res->jfr, local_idx, hc_ctx->priority);
     if (res->jetty == NULL) {
-        URMA_LOG_ERR("Failed to rebuild health probe jetty, local_idx=%d.\n", local_idx);
+        URMA_LOG_ERR_RL("Failed to rebuild health probe jetty, local_idx=%d.\n", local_idx);
     }
 }
 
@@ -383,8 +383,8 @@ static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
             }
         }
         if ((uint32_t)n > res->inflight) {
-            URMA_LOG_WARN("Health probe inflight underflow, local_idx=%d, inflight=%u, poll_cnt=%d.\n",
-                          local_idx, res->inflight, n);
+            URMA_LOG_WARN_RL("Health probe inflight underflow, local_idx=%d, inflight=%u, poll_cnt=%d.\n",
+                             local_idx, res->inflight, n);
             res->inflight = 0;
         } else {
             res->inflight -= (uint32_t)n;
@@ -467,8 +467,8 @@ static void hc_probe_link(bondp_hc_ctx_t *hc_ctx, bondp_hc_node_t *node, bondp_h
         res->inflight++;
         path->no_cqe_round = 1;
     } else {
-        URMA_LOG_WARN("Failed to send health probe, node_idx=%u, local_idx=%u, target_idx=%u, ret=%d.\n",
-                      node->node_idx, local_idx, target_idx, ret);
+        URMA_LOG_WARN_RL("Failed to send health probe, node_idx=%u, local_idx=%u, target_idx=%u, ret=%d.\n",
+                         node->node_idx, local_idx, target_idx, ret);
         atomic_store(&path->valid, false);
     }
 }
@@ -547,7 +547,7 @@ static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
     if (ret == 0) {
         atomic_store(&hc_ctx->probe_task_id, task_id);
     } else {
-        URMA_LOG_ERR("Failed to reschedule health probe task, ret=%d.\n", ret);
+        URMA_LOG_ERR_RL("Failed to reschedule health probe task, ret=%d.\n", ret);
     }
 }
 
@@ -1258,6 +1258,6 @@ void bondp_set_port_status_bad(bondp_context_t *bdp_ctx, uint32_t local_idx)
         return;
     }
     bondp_port_id_t pid = bondp_active_index_to_port_id(local_idx);
-    URMA_LOG_WARN("Port status changed to bad, local_idx=%u, chip_id=%u, die_id=%u, port_idx=%u\n",
-                  local_idx, pid.bs.chip_id, pid.bs.die_id, pid.bs.port_idx);
+    URMA_LOG_WARN_RL("Port status changed to bad, local_idx=%u, chip_id=%u, die_id=%u, port_idx=%u\n",
+                     local_idx, pid.bs.chip_id, pid.bs.die_id, pid.bs.port_idx);
 }

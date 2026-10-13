@@ -27,7 +27,7 @@ typedef struct bondp_conn_node {
 static int bdp_v_conn_init(bondp_conn_t *v_conn)
 {
     if (bdp_slide_wnd_init(&v_conn->recv_wnd, BONDP_MAX_BITMAP_SIZE, BONDP_RECV_WND_SIZE, 0)) {
-        URMA_LOG_ERR("Failed to init slide window in bdp_v_conn_table_add\n");
+        URMA_LOG_ERR_RL("Failed to init slide window in bdp_v_conn_table_add\n");
         return -1;
     }
     return 0;

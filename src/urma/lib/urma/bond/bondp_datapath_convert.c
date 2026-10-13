@@ -13,9 +13,9 @@
 
 #include "ub_util.h"
 
+#include "bondp_cp_tjetty.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
-#include "bondp_cp_tjetty.h"
 #include "urma_log.h"
 
 #include "bondp_datapath_convert.h"
@@ -64,8 +64,8 @@ static int copy_sg_list(const urma_sg_t *src, urma_sg_t *dst, urma_sge_t *preall
     if (dst->num_sge > 0) {
         if (prealloc_sge != NULL) {
             if (dst->num_sge > max_sge) {
-                URMA_LOG_ERR("The number of SGE(%u) exceeds the limit(%u)",
-                             dst->num_sge, max_sge);
+                URMA_LOG_ERR_RL("The number of SGE(%u) exceeds the limit(%u)",
+                                dst->num_sge, max_sge);
                 return -1;
             }
             dst->sge = prealloc_sge;
@@ -386,12 +386,12 @@ static urma_status_t bondp_clone_sge_user_tseg(urma_sge_t *sge, bool remote, uin
          * or oversize. attr+token_id+head bytes tell them apart at a glance. */
         const urma_user_tseg_t *ut = sge->user_tseg;
         const uint8_t *raw = (const uint8_t *)ut;
-        URMA_LOG_ERR("Invalid bonding user_tseg buffer (no extension or oversize): "
-                     "attr=0x%08x, has_user_info=%u, token_id=%u, head="
-                     "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.\n",
-                     ut->attr.value, ut->attr.bs.has_user_info, ut->token_id,
-                     raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
-                     raw[6], raw[7], raw[8], raw[9], raw[10], raw[11]);
+        URMA_LOG_ERR_RL("Invalid bonding user_tseg buffer (no extension or oversize): "
+                        "attr=0x%08x, has_user_info=%u, token_id=%u, head="
+                        "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.\n",
+                        ut->attr.value, ut->attr.bs.has_user_info, ut->token_id,
+                        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
+                        raw[6], raw[7], raw[8], raw[9], raw[10], raw[11]);
         return URMA_EINVAL;
     }
     /* Full validation (incl. the O(peer_cnt^2) duplicate-peer scan) runs here,
@@ -399,14 +399,14 @@ static urma_status_t bondp_clone_sge_user_tseg(urma_sge_t *sge, bool remote, uin
      * only re-verify the O(1) header fields via bondp_user_tseg_get_ext. */
     const urma_bond_user_tseg_ext_v0_t *ext = bondp_user_tseg_get_ext(sge->user_tseg);
     if (ext == NULL || !bondp_user_tseg_peer_ctx_valid(ext)) {
-        URMA_LOG_ERR("Invalid bonding user_tseg ext (bad header/version/len or "
-                     "peer_idx out of range/duplicated): attr=0x%08x, token_id=%u.\n",
-                     sge->user_tseg->attr.value, sge->user_tseg->token_id);
+        URMA_LOG_ERR_RL("Invalid bonding user_tseg ext (bad header/version/len or "
+                        "peer_idx out of range/duplicated): attr=0x%08x, token_id=%u.\n",
+                        sge->user_tseg->attr.value, sge->user_tseg->token_id);
         return URMA_EINVAL;
     }
     if (*slot_idx >= max_slots) {
-        URMA_LOG_ERR("Bonding user_tseg slots exhausted, slot_idx=%u, max_slots=%u.\n",
-                     *slot_idx, max_slots);
+        URMA_LOG_ERR_RL("Bonding user_tseg slots exhausted, slot_idx=%u, max_slots=%u.\n",
+                        *slot_idx, max_slots);
         return URMA_EINVAL;
     }
 
@@ -482,11 +482,11 @@ static int check_local_sge(const urma_sge_t *sge, int send_idx, int target_idx)
     /* Case 1: no tseg at all - the caller put nothing (or a user_tseg) on a
      * local SGE. Local memory must be described by a registered tseg. */
     if (sge == NULL || sge->tseg == NULL) {
-        URMA_LOG_ERR("Local sge has no tseg (sge=%p, tseg=%p, user_tseg=%p): local SGEs "
-                     "must use a registered tseg, user_tseg is not allowed. "
-                     "send_idx=%d, target_idx=%d.\n",
-                     (const void *)sge, sge != NULL ? (void *)sge->tseg : NULL,
-                     sge != NULL ? (void *)sge->user_tseg : NULL, send_idx, target_idx);
+        URMA_LOG_ERR_RL("Local sge has no tseg (sge=%p, tseg=%p, user_tseg=%p): local SGEs "
+                        "must use a registered tseg, user_tseg is not allowed. "
+                        "send_idx=%d, target_idx=%d.\n",
+                        (const void *)sge, sge != NULL ? (void *)sge->tseg : NULL,
+                        sge != NULL ? (void *)sge->user_tseg : NULL, send_idx, target_idx);
         return -1;
     }
 
@@ -508,11 +508,11 @@ static int check_local_sge(const urma_sge_t *sge, int send_idx, int target_idx)
         } else {
             (void)snprintf(covered, sizeof(covered), "<imported seg>");
         }
-        URMA_LOG_ERR("Local seg not registered on slave %d (covered slaves: [%s]): "
-                     "the seg was registered before the bonding mode/level was applied "
-                     "on this context, or belongs to another context. "
-                     "send_idx=%d, target_idx=%d.\n",
-                     send_idx, covered, send_idx, target_idx);
+        URMA_LOG_ERR_RL("Local seg not registered on slave %d (covered slaves: [%s]): "
+                        "the seg was registered before the bonding mode/level was applied "
+                        "on this context, or belongs to another context. "
+                        "send_idx=%d, target_idx=%d.\n",
+                        send_idx, covered, send_idx, target_idx);
         return -1;
     }
     return 0;
@@ -526,14 +526,14 @@ static int check_remote_sge(const urma_sge_t *sge, int send_idx, int target_idx)
     if (sge->tseg != NULL) {
         /* Import path: user_tseg is ignored when both are set (API contract). */
         if (get_p_tseg(sge->tseg, send_idx, target_idx) == NULL) {
-            URMA_LOG_ERR("Failed to bind remote seg to path, send_idx=%d, target_idx=%d.\n",
-                         send_idx, target_idx);
+            URMA_LOG_ERR_RL("Failed to bind remote seg to path, send_idx=%d, target_idx=%d.\n",
+                            send_idx, target_idx);
             return -1;
         }
         return 0;
     }
     if (sge->user_tseg == NULL) {
-        URMA_LOG_ERR("Remote sge has neither tseg nor user_tseg.\n");
+        URMA_LOG_ERR_RL("Remote sge has neither tseg nor user_tseg.\n");
         return -1;
     }
 
@@ -542,20 +542,22 @@ static int check_remote_sge(const urma_sge_t *sge, int send_idx, int target_idx)
     const urma_bond_user_tseg_ext_v0_t *ext = bondp_user_tseg_get_ext(sge->user_tseg);
     uint32_t token_id = 0;
     if (ext == NULL) {
-        URMA_LOG_ERR("Import-free seg ext invalid (outer token_id=%u, has_user_info=%u).\n",
-                     sge->user_tseg->token_id, sge->user_tseg->attr.bs.has_user_info);
+        URMA_LOG_ERR_RL("Import-free seg ext invalid (outer token_id=%u, has_user_info=%u).\n",
+                        sge->user_tseg->token_id, sge->user_tseg->attr.bs.has_user_info);
         return -1;
     }
     if (bondp_user_tseg_lookup_token(ext, target_idx, &token_id) != 0) {
         const bondp_user_tseg_peer_ctx_t *peer_ctx =
             (const bondp_user_tseg_peer_ctx_t *)((uintptr_t)ext + sizeof(*ext));
         for (uint32_t i = 0; i < ext->peer_cnt && i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
-            URMA_LOG_ERR("Import-free ext peer[%u]: peer_idx=%u, token_id=%u "
-                         "(need target_idx=%d).\n", i, peer_ctx[i].peer_idx,
-                         peer_ctx[i].token_id, target_idx);
+            URMA_LOG_ERR_RL("Import-free ext peer[%u]: peer_idx=%u, token_id=%u "
+                            "(need target_idx=%d).\n",
+                            i, peer_ctx[i].peer_idx,
+                            peer_ctx[i].token_id, target_idx);
         }
-        URMA_LOG_ERR("Failed to bind import-free seg to path, no peer for target_idx=%d, "
-                     "send_idx=%d, peer_cnt=%u.\n", target_idx, send_idx, ext->peer_cnt);
+        URMA_LOG_ERR_RL("Failed to bind import-free seg to path, no peer for target_idx=%d, "
+                        "send_idx=%d, peer_cnt=%u.\n",
+                        target_idx, send_idx, ext->peer_cnt);
         return -1;
     }
     return 0;
@@ -638,9 +640,10 @@ static int check_user_tseg_opcode(urma_jfs_wr_t *wr)
             break;
     }
     if (unsupported) {
-        URMA_LOG_ERR("Import-free seg (user_tseg) is not supported by opcode %u "
-                     "(only WRITE/WRITE_IMM/READ are implemented in the bare device); "
-                     "use an imported tseg for this operation.\n", (uint32_t)wr->opcode);
+        URMA_LOG_ERR_RL("Import-free seg (user_tseg) is not supported by opcode %u "
+                        "(only WRITE/WRITE_IMM/READ are implemented in the bare device); "
+                        "use an imported tseg for this operation.\n",
+                        (uint32_t)wr->opcode);
         return -1;
     }
     return 0;
@@ -649,8 +652,8 @@ static int check_user_tseg_opcode(urma_jfs_wr_t *wr)
 urma_status_t check_jfs_wr_path(urma_jfs_wr_t *wr, int send_idx, int target_idx)
 {
     if (get_p_tjetty(wr->tjetty, send_idx, target_idx) == NULL) {
-        URMA_LOG_ERR("Failed to bind WR to path, pjetty is NULL, send_idx=%d, target_idx=%d.\n",
-                     send_idx, target_idx);
+        URMA_LOG_ERR_RL("Failed to bind WR to path, pjetty is NULL, send_idx=%d, target_idx=%d.\n",
+                        send_idx, target_idx);
         return URMA_EINVAL;
     }
 
@@ -697,7 +700,7 @@ static void map_user_tseg_sge_to_path(urma_sge_t *sge, int target_idx,
         return; /* import path (or empty SGE): handled by the tseg mapping */
     }
     if (bare_ut_scratch == NULL || ut_ext_ptr_save == NULL) {
-        URMA_LOG_ERR("No import-free scratch slots available.\n");
+        URMA_LOG_ERR_RL("No import-free scratch slots available.\n");
         return;
     }
 
@@ -709,9 +712,9 @@ static void map_user_tseg_sge_to_path(urma_sge_t *sge, int target_idx,
     if (ext == NULL || bondp_user_tseg_lookup_token(ext, target_idx, &peer_token_id) != 0) {
         /* Unreachable after check_jfs_wr_path; keep the virtual-form copy so
          * the provider fails the WR instead of crashing on a NULL deref. */
-        URMA_LOG_ERR("No peer token for target_idx=%d on import-free seg "
-                     "(ext=%p, outer token_id=%u, has_user_info=%u).\n",
-                     target_idx, ext, copied->token_id, copied->attr.bs.has_user_info);
+        URMA_LOG_ERR_RL("No peer token for target_idx=%d on import-free seg "
+                        "(ext=%p, outer token_id=%u, has_user_info=%u).\n",
+                        target_idx, ext, copied->token_id, copied->attr.bs.has_user_info);
         (*slot_idx)++;
         return;
     }
@@ -901,7 +904,7 @@ void encode_jfs_wr_msn(urma_jfs_wr_t *wr, bondp_comp_t *bdp_comp, uint32_t msn, 
             /* No MSN encoding needed for these opcodes */
             return;
         default:
-            URMA_LOG_ERR("Unsupported send opcode\n");
+            URMA_LOG_ERR_RL("Unsupported send opcode\n");
             return;
     }
 }
