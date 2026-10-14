@@ -8,8 +8,6 @@
 package com.huawei.umdk.snc;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -20,14 +18,12 @@ import java.util.stream.Collectors;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.umdk.snc.entity.DeviceEntity;
-import com.huawei.umdk.snc.entity.DeviceType;
 import com.huawei.umdk.snc.entity.ForwardingChip;
 import com.huawei.umdk.snc.entity.MgmtInfo;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
 import com.huawei.umdk.snc.entity.OutPortInfo;
-import com.huawei.umdk.snc.entity.PortEntity;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
 import com.huawei.umdk.snc.entity.RoutingTable;

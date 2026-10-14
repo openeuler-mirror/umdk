@@ -65,10 +65,10 @@
     </dependencies>
 
     <build>
-        <testSourceDirectory>${project.basedir}/../../test/snc/java</testSourceDirectory>
+        <testSourceDirectory>${project.basedir}/../../../test/snc/java</testSourceDirectory>
         <testResources>
             <testResource>
-                <directory>${project.basedir}/../../test/snc/resources</directory>
+                <directory>${project.basedir}/../../../test/snc/resources</directory>
             </testResource>
         </testResources>
         <plugins>

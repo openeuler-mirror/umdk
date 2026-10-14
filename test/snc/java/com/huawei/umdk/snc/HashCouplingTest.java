@@ -11,8 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import com.huawei.umdk.snc.util.HashUtils;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 class HashCouplingTest {
 
     @Test

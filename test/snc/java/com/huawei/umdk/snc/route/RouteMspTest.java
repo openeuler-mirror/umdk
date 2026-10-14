@@ -10,7 +10,6 @@
 package com.huawei.umdk.snc.route;
 
 import com.huawei.umdk.snc.SncService;
-import com.huawei.umdk.snc.config.SNCConfig;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.route.model.NextHopPort;
 import com.huawei.umdk.snc.route.model.RouteEntry;

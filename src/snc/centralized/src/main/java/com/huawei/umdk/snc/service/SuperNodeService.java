@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.huawei.umdk.snc.log.Logger;
-import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.RoutePrefix;
 import com.huawei.umdk.snc.entity.RoutingEntry;
