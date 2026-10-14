@@ -3436,6 +3436,14 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
         return -UMQ_ERR_ENOMEM;
     }
 
+    /* num == 0: reject up front. Without this, actual_buf_count == 0 makes the
+     * alloc loops' ++cnt == expected bounds never fire, handing out the whole
+     * TLS cache instead of zero bufs (see umq_qbuf_alloc_data_with_split). */
+    if (num == 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "alloc num 0 is invalid\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
     if (((uint64_t)request_size * (uint64_t)num) > QBUF_POOL_MEM_SIZE_MAX) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
                            "requested size %u multiplied by the requested num %u exceeds the memory pool size %llu\n",
