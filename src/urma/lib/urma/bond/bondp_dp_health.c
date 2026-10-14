@@ -242,7 +242,7 @@ static void hc_set_tjetty_list_target_valid(bondp_hc_node_t *node, uint32_t loca
     pthread_rwlock_rdlock(&node->lock);
     UB_LIST_FOR_EACH (bdp_tjetty, hc_entry, &node->tjetty_list) {
         bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, local_idx, target_idx);
-        if (p_tjetty != NULL && !p_tjetty->hc_probe_bad) {
+        if (p_tjetty != NULL) {
             bool expected = false;
             if (atomic_compare_exchange_strong(&p_tjetty->valid, &expected, true)) {
                 recovered_cnt++;
@@ -274,11 +274,11 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
             comp->p_jetty[local_idx] == NULL) {
             continue;
         }
+        atomic_store(&comp->bondp_ctx->port_status_bad[local_idx], false);
         if (!atomic_exchange(&comp->rebuild_done[local_idx], false)) {
             continue;
         }
         atomic_store(&comp->hc_valid[local_idx], true);
-        atomic_store(&comp->bondp_ctx->port_status_bad[local_idx], false);
         ready_cnt++;
     }
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
@@ -321,11 +321,6 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     bondp_target_jetty_t *bdp_tjetty = path->tjetty;
     if (cr->status == URMA_CR_REM_ACCESS_ABORT_ERR) { /* status 8 */
         if (bdp_tjetty != NULL) {
-            bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty(bdp_tjetty, (uint32_t)local_idx, target_idx);
-            if (p_tjetty != NULL) {
-                p_tjetty->hc_probe_bad = true;
-                atomic_store(&p_tjetty->valid, false);
-            }
             bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(bdp_tjetty->v_tjetty.urma_ctx, bondp_context_t, v_ctx);
             (void)hc_switch_probe_target(node, path, bdp_ctx);
         }
@@ -1097,17 +1092,21 @@ ERR_ROLLBACK:
 }
 
 static bondp_target_jetty_t *hc_find_tjetty_for_path(bondp_hc_node_t *node, uint32_t local_idx,
-                                                     uint32_t target_idx)
+                                                     uint32_t target_idx, struct ub_list *start)
 {
-    bondp_target_jetty_t *tjetty = NULL;
+    struct ub_list *entry = start;
 
-    UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
-        const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(tjetty, local_idx, target_idx);
-        if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL &&
-            p_tjetty->hc_va != 0 && !p_tjetty->hc_probe_bad) {
-            return tjetty;
+    /* Search one full round, allowing a previously failed target to be retried. */
+    do {
+        if (entry != &node->tjetty_list) {
+            bondp_target_jetty_t *tjetty = CONTAINER_OF_FIELD(entry, bondp_target_jetty_t, hc_entry);
+            const bondp_p_target_jetty_t *p_tjetty = bondp_find_p_tjetty_const(tjetty, local_idx, target_idx);
+            if (p_tjetty != NULL && p_tjetty->p_tjetty != NULL && p_tjetty->hc_va != 0) {
+                return tjetty;
+            }
         }
-    }
+        entry = entry->next;
+    } while (entry != start);
     return NULL;
 }
 
@@ -1117,6 +1116,9 @@ static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
 {
     uint32_t i = path->local_idx;
     uint32_t j = path->target_idx;
+    /* ub_list_remove preserves next, so this also works during unregister. */
+    struct ub_list *start = path->tjetty != NULL ? path->tjetty->hc_entry.next : node->tjetty_list.next;
+    bondp_target_jetty_t *backup = hc_find_tjetty_for_path(node, i, j, start);
     path->tjetty = NULL;
     path->no_cqe_round = 0;
     if (path->tseg != NULL) {
@@ -1128,7 +1130,6 @@ static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
         path->tseg = NULL;
     }
 
-    bondp_target_jetty_t *backup = hc_find_tjetty_for_path(node, i, j);
     if (backup == NULL) {
         return true;
     }
