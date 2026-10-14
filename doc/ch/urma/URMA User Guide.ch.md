@@ -2243,9 +2243,9 @@ RDMA over UB 会基于系统中已有的 UB 设备动态创建对应的 IB 设�
 
 <!-- -->
 
-1.  在模块加载后，会自动根据UB设备上的EID为对应的ipourma设备配置IP，默认IP=EID。不支持用户手动配置IP。
+1.  在模块加载后，会自动根据UB设备上的EID为对应的ipourma设备配置IP，默认IP=EID。不支持用户手动配置IP，不支持用户在线修改EID的方式配置IP。
 
-2.  不进行地址解析，不支持ND、ARP、RARP。仅支持IPv6地址，用户在使用socket时需绑定源IP。
+2.  不进行地址解析，不支持ND、ARP、RARP。仅支持IPv6地址，用户在使用ipourma网卡通信时需绑定源IP。
 
 3.  ipourma设备会为从协议栈收到的IP数据报加上2字节的IPoURMA报文头。
 
