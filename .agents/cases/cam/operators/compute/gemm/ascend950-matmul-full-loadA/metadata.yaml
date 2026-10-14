@@ -1,0 +1,83 @@
+id: ascend950-matmul-full-loadA
+name: Ascend950 Matmul Full Load A
+status: reviewed
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/73_ascend950_matmul_full_loadA/matmul_full_loadA_tla.cpp
+    kernel: include/catlass/gemm/kernel/matmul_full_loadA_tla.hpp
+    block: include/catlass/gemm/block/block_mmad_pingpong_full_loadA_ascend950_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_73_ascend950_matmul_full_loadA.py
+category: compute
+algorithm: gemm-full-k-a
+hardware:
+- ascend950
+compute_engine:
+- cube
+memory_pattern:
+- continuous
+- reuse
+- double-buffer
+pipeline_pattern:
+- double-buffer
+communication_pattern: none
+dtypes:
+  input:
+  - fp16
+  output:
+  - fp16
+  accumulator:
+  - fp32
+  scale: []
+layout:
+  A: RowMajor
+  B: RowMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadAscend950FullLoadA
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 128
+  l0_tile:
+  - 256
+  - 256
+  - 32
+  l1_a_stages: 1
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: empty
+  scheduler: Identity<3,0> if M<=L1_M else FullLoad<1,0>
+  l1a_named: L1_SIZE/2
+base_case: ascend950-basic-matmul
+related_cases: []
+key_techniques:
+- catlass-layering
+- full-k-a-load
+- cross-n-a-reuse
+- canimplement-partial-guard
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Frozen term: full-K A load + cross-N A reuse. Not L1 resident A. ENABLE_L1_RESIDENT is false (B-side
+  knob, unused). Host live branches: M<=256 Identity, M>256 FullLoad swizzle. CanImplement is A+B vs L1_SIZE,
+  not L1A_TILE_SIZE and not README half-L1. Host cout "cannot be full loaded" is not the predicate. Index:
+  knowledge/cam/engineering/canimplement-is-not-all-constraints.md. Example vs JIT L1-K recorded, not
+  resolved.
+
+  '

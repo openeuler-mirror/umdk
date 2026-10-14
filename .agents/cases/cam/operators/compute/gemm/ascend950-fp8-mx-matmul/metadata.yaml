@@ -1,0 +1,82 @@
+id: ascend950-fp8-mx-matmul
+name: Ascend950 MXFP8 Matmul
+status: reviewed
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/53_ascend950_fp8_mx_matmul/fp8_mx_matmul.cpp
+    kernel: include/catlass/gemm/kernel/mx_matmul_tla.hpp
+    block: include/catlass/gemm/block/block_mmad_mx_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_53_ascend950_fp8_mx_matmul_aswt.py
+category: compute
+algorithm: mx-quant-gemm
+hardware:
+- ascend950
+compute_engine:
+- cube
+memory_pattern:
+- continuous
+- reuse
+- double-buffer
+pipeline_pattern:
+- double-buffer
+communication_pattern: none
+dtypes:
+  input:
+  - fp8_e4m3
+  output:
+  - fp32
+  accumulator:
+  - fp32
+  scale:
+  - e8m0
+layout:
+  A: RowMajor
+  B: ColumnMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadMx
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 256
+  l0_tile:
+  - 256
+  - 256
+  - 128
+  l1_scale_factor_k: 16
+  l1_a_stages: 2
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: empty
+  scheduler: GemmIdentityBlockSwizzle<3,0>
+  mx_scale_group: 32
+base_case: ascend950-basic-matmul
+related_cases: []
+key_techniques:
+- catlass-layering
+- mx-block-scale
+- mmad-mx
+- packed-mx-tile-copy
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Live path only: e4m3 Identity MmadMx. ASWT optest recorded, not taught. e5m2 is not this Case''s
+  dtypes. README k/64 is C0 packing of group-32.
+
+  '

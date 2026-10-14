@@ -1,0 +1,79 @@
+id: ascend950-grouped-matmul-slice-m
+name: Ascend950 Grouped Matmul Slice-M
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/60_ascend950_grouped_matmul_slice_m/grouped_matmul_slice_m.cpp
+    kernel: include/catlass/gemm/kernel/grouped_matmul_slice_m_tla.hpp
+    block: include/catlass/gemm/block/block_mmad_pingpong_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_60_ascend950_grouped_matmul_slice_m.py
+category: compute
+algorithm: grouped-gemm
+hardware:
+- ascend950
+compute_engine:
+- cube
+memory_pattern:
+- continuous
+- irregular
+pipeline_pattern:
+- double-buffer
+communication_pattern: none
+dtypes:
+  input:
+  - fp16
+  output:
+  - fp16
+  accumulator:
+  - fp32
+  scale: []
+layout:
+  A: RowMajor
+  B: RowMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadPingpong
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 256
+  l0_tile:
+  - 256
+  - 256
+  - 64
+  l1_a_stages: 2
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: empty
+  group_list: prefix-sum int64
+key_techniques:
+- catlass-layering
+- grouped-matmul-slice-m
+- prefix-sum-grouplist
+- rotating-startcoreidx
+- l1-l0-double-buffer
+- mmad-pingpong
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Case Card describes the live GroupedMatmulSliceMTla + MmadPingpong path only. Cube Block is the
+  same as 43; teaching is Kernel groupList scheduling. Example vs optest swizzle heuristics are recorded,
+  not resolved. Segmented groupList is non-active.
+
+  '

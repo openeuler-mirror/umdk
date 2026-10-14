@@ -28,11 +28,17 @@
 # Directory Structures
 ```text
 UMDK/
+|--- AGENTS.md                       # repository-wide agent entry
+|--- CLAUDE.md                       # Claude Code entry importing AGENTS.md
+|--- .agents/                        # canonical Agent Skills and supporting assets
+|    |--- skills/cam/                # callable CAM skills
+|--- .claude/                        # optional Claude Code adaptation instructions
 |--- build/
 |    |--- cam/                      # build script for cam project
 |    |    |--- comm_operator/       # build script for cam communication operator
 |--- src/
-|    |--- cam/  
+|    |--- cam/
+|    |    |--- AGENTS.md            # CAM-local agent rules
 |    |    |--- comm_operator/       # code of communication operator
 |    |    |    |--- ascend_kernels/ # code of ascend kernels
 |    |    |    |    |--- operator_registry.json  # operator -> SOC mapping + build metadata
@@ -43,6 +49,15 @@ UMDK/
 |--- test/
 |    |--- cam/                      # UT test code of cam
 ```
+
+# Agent skills
+
+Open UMDK at the Git repository root. Repository Agent assets have a single
+canonical home under `.agents/`.
+
+- CAM conventions and compile/CI pointers: [`AGENTS.md`](AGENTS.md)
+- AscendC operator workflows: [`.agents/README.md`](../../.agents/README.md) and [`.agents/AGENTS.md`](../../.agents/AGENTS.md)
+- Local compile: `.agents/skills/cam/cam-build`; GitCode/Jenkins gate: `.agents/skills/cam/cam-ci`
 
 # Quick Start
 ## 1. Basic Environment Requirements

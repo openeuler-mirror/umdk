@@ -1,0 +1,66 @@
+id: ascend950-mega-moe-fused-ep-ffn
+name: Ascend950 MegaMoe fused EP+FFN
+status: accepted
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/ops-transformer
+  official_remote: https://gitcode.com/cann/ops-transformer.git
+  commit: 9311b63bcd065b9779eb08a7d634e9463ee41ef1
+  branch: master
+  paths:
+    op: mc2/mega_moe/
+    live_950: mc2/mega_moe/op_kernel/arch35/mega_moe.h
+category: compute-communication
+algorithm: mega-moe-fusion-compression
+hardware:
+- ascend950
+compute_engine:
+- cube
+- vector
+- communication
+memory_pattern:
+- shared-window
+- workspace
+- irregular
+pipeline_pattern:
+- communication-compute-overlap
+- multi-stage
+communication_pattern: mte-window
+dtypes:
+  input:
+  - bf16
+  - fp8_e4m3
+  - fp8_e5m2
+  - int32
+  output:
+  - bf16
+  - int32
+  accumulator:
+  - fp32
+  scale:
+  - e8m0
+  - fp32
+base_case:
+- ascend950-moe-ep-dispatch-combine
+- ascend950-gmm-swiglu-mx-quant
+related_cases:
+- ascend950-moe-ep-dispatch-combine
+- ascend950-gmm-swiglu-mx-quant
+- ascend950-moe-local-permutation
+- ascend950-grouped-matmul-slice-m
+key_techniques:
+- api-visible-handoff-internalized
+- metadata-to-workspace-window
+- host-launch-to-wave-flags
+- world-sync-not-deleted
+- source-window-pull
+- preserve-m
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Compression of B+C+GMM2, not a fourth GEMM Case. Table is handoff role → replacement/internal
+  state, not “same tensor moved”. Live 950 is MTE MegaMoe.
+
+  '

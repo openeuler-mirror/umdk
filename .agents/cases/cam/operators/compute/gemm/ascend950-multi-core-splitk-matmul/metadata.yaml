@@ -1,0 +1,88 @@
+id: ascend950-multi-core-splitk-matmul
+name: Ascend950 Multi-Core SplitK Matmul
+status: reviewed
+lifecycle:
+- development
+- optimization
+source:
+  repository: cann/catlass
+  official_remote: https://gitcode.com/cann/catlass.git
+  commit: a8b4fffbd9cabc021dfd47253e907a1cde59de25
+  branch: master
+  paths:
+    example: examples/68_ascend950_multi_core_splitk_matmul/multi_core_splitk_matmul.cpp
+    kernel: include/catlass/gemm/kernel/multi_core_splitk_matmul_tla.hpp
+    scheduler: include/catlass/gemm/block/block_swizzle.hpp
+    reduce: include/catlass/gemm/kernel/splitk_matmul.hpp
+    block: include/catlass/gemm/block/block_mmad_pingpong_tla.hpp
+    arch: include/catlass/arch/arch.hpp
+    test: tests/optest/tests/test_68_ascend950_multi_core_splitk_matmul.py
+category: compute
+algorithm: gemm-splitk
+hardware:
+- ascend950
+compute_engine:
+- vector+cube
+memory_pattern:
+- continuous
+- workspace
+- reduce
+- double-buffer
+pipeline_pattern:
+- double-buffer
+- multi-stage
+communication_pattern: none
+dtypes:
+  input:
+  - fp32
+  output:
+  - fp32
+  accumulator:
+  - fp32
+  scale: []
+layout:
+  A: RowMajor
+  B: RowMajor
+  C: RowMajor
+instantiated:
+  dispatch_policy: MmadPingpong
+  unit_flag: true
+  l1_resident: false
+  hf32: false
+  bias: false
+  l1_tile:
+  - 256
+  - 256
+  - 128
+  l0_tile:
+  - 256
+  - 256
+  - 32
+  l1_a_stages: 2
+  l1_b_stages: 2
+  l0_a_stages: 2
+  l0_b_stages: 2
+  l0_c_stages: 1
+  block_epilogue: void
+  aiv_operator: SplitkReduceAdd
+  scheduler: SplitkGemmIdentityBlockSwizzle<3,0>
+  workspace: full-c-planes-times-factor
+base_case: ascend950-basic-matmul
+related_cases:
+- id: ascend950-streamk-matmul
+  relation: sibling
+key_techniques:
+- catlass-layering
+- multicore-splitk
+- full-c-workspace-planes
+- splitk-reduce-add
+- l1-l0-double-buffer
+- mmad-pingpong
+- unitflag-single-l0c
+license: CANN-OSLA-2.0
+confidence: source-code
+last_reviewed: 2026-08-21
+notes: 'Live path only: fp32 mix MultiCoreSplitkMatmulTla + same Block as 43. README B<=C/2 is design-doc.
+  Binary always SplitKs. Example vs JIT L1-K conflict recorded, not resolved.
+
+  '
