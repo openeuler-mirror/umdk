@@ -887,6 +887,13 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
 {
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
+
+    if (num == 0) {
+        /* The loop bound below (++cnt == num) never fires for num == 0, so
+         * without this guard the whole without_data list would be handed out. */
+        return;
+    }
+
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_without_data)
     {
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
@@ -941,6 +948,12 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     uint32_t remaining_size = request_size;
     uint32_t max_data_capacity = block_size - headroom_size_temp;
     bool first_fragment = true;
+
+    if (param->actual_buf_count == 0) {
+        /* The loop bound below (++cnt == actual_buf_count) never fires for 0,
+         * so without this guard the whole with_data list would be handed out. */
+        return;
+    }
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data[sc])
     {
@@ -1022,6 +1035,12 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     uint32_t max_data_size = block_size - sizeof(umq_buf_t);
     uint32_t max_data_capacity = max_data_size - headroom_size_temp;
     bool first_fragment = true;
+
+    if (param->actual_buf_count == 0) {
+        /* The loop bound below (++cnt == actual_buf_count) never fires for 0,
+         * so without this guard the whole with_data list would be handed out. */
+        return;
+    }
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data[sc])
     {

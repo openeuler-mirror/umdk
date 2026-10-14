@@ -56,6 +56,13 @@ static int umq_qbuf_alloc_from_pool(umq_alloc_pool_type_t pool_type, uint32_t re
 
 int umq_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_t *option, umq_buf_list_t *list)
 {
+    /* Reject num == 0 at the dispatch boundary: every pool (tiny/huge/rx/
+     * escape/normal) treats it as invalid, and the normal-pool alloc loops
+     * would otherwise walk the whole TLS list when expected count is 0. */
+    if (num == 0) {
+        return -UMQ_ERR_EINVAL;
+    }
+
     umq_alloc_pool_type_t pool_type = UMQ_ALLOC_POOL_AUTO;
     if (option != NULL && (option->flag & UMQ_ALLOC_FLAG_POOL_TYPE) != 0) {
         if (option->pool_type >= UMQ_ALLOC_POOL_MAX) {
