@@ -40,8 +40,8 @@ __aicore__ inline void SyncFunc()
     AscendC::WaitFlag<event>(eventID);
 }
 
-#define TemplateMC2TypeClass typename XOutType
-#define TemplateMC2TypeFunc XOutType
+#define TemplateMC2TypeClass typename XOutType, bool UseDispatchPrefix
+#define TemplateMC2TypeFunc XOutType, UseDispatchPrefix
 using namespace AscendC;
 using namespace Cam;
 template <TemplateMC2TypeClass>
@@ -288,7 +288,11 @@ __aicore__ inline void CamMoeDistributeCombineRecv<TemplateMC2TypeFunc>::Combine
     GlobalTensor<XOutType> dstTokenStoreGM;
     uint32_t attnSelfRankId = attnRankId_;
     GM_ADDR dstRankWorkspaceGm = GetPeerAddrByRankId(attnSelfRankId) + dispatchOffset_;
-    for (uint32_t topkId = 0; topkId < (topk_ * batchSizePerAivEnd_); ++topkId) {
+    uint32_t topkStart = 0;
+    if constexpr (UseDispatchPrefix) {
+        topkStart = topk_ * batchSizePerAivStart_;
+    }
+    for (uint32_t topkId = topkStart; topkId < (topk_ * batchSizePerAivEnd_); ++topkId) {
         uint32_t routeExpertId = GetIds(topkId);
         uint32_t moeRankId = routeExpertId / routeExpertNumPerMoe_;
         uint32_t expertId = routeExpertId;
@@ -361,6 +365,24 @@ __aicore__ inline void CamMoeDistributeCombineRecv<TemplateMC2TypeFunc>::PreProc
     // Reset each routed expert's occurrence index.
     Duplicate(expertRecvStartIdxTensor_, (uint16_t)0, expertNum_);
     SyncFunc<HardEvent::V_S>();
+    if constexpr (UseDispatchPrefix) {
+        if (aivId_ > 0) {
+            // DispatchSend uses the same token partition and stores inclusive per-AIV counts.
+            // Seed this core's occurrence indices with the preceding core's expert counts.
+            uint32_t statEntriesPerAiv = moeRankNum_ + expertNum_;
+            GlobalTensor<uint32_t> aivStatGMTensor;
+            aivStatGMTensor.SetGlobalBuffer((__gm__ uint32_t *)GetPeerAddrByRankId(attnRankId_));
+            // This buffer is still unused; its final expert prefixes are built below.
+            DataCopyPad(expertPrefixOffsetTensor_,
+                aivStatGMTensor[statEntriesPerAiv * (aivId_ - 1) + moeRankNum_],
+                {1U, static_cast<uint32_t>(sizeof(uint32_t) * expertNum_), 0U, 0U, 0U},
+                {false, 0U, 0U, 0U});
+            SyncFunc<HardEvent::MTE2_S>();
+            for (uint32_t expertId = 0; expertId < expertNum_; ++expertId) {
+                expertRecvStartIdxTensor_(expertId) = expertPrefixOffsetTensor_(expertId);
+            }
+        }
+    }
 
     // Prefixes restart at each MoE rank; local expert 0 contributes real tokens.
     for (uint32_t moeRankId = 0; moeRankId < moeRankNum_; ++moeRankId) {
