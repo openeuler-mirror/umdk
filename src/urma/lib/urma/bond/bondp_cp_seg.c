@@ -227,17 +227,13 @@ static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
     }
 
     urma_seg_cfg_t p_cfg = *seg_cfg;
+    p_cfg.token_id = NULL;
+    p_cfg.flag.bs.token_id_valid = URMA_TOKEN_ID_INVALID;
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_ctx->p_ctxs[i] == NULL) {
             continue;
         }
-        if (bdp_ctx->token_ids[i] == NULL) {
-            URMA_LOG_ERR("No token_id for pctx, idx=%d\n", i);
-            goto DELETE_PSEG;
-        }
-        p_cfg.token_id = bdp_ctx->token_ids[i];
-        p_cfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
         urma_target_seg_t *p_tseg = urma_register_seg(bdp_ctx->p_ctxs[i], &p_cfg);
         if (p_tseg == NULL) {
             URMA_LOG_ERR("Failed to register pseg %d\n", i);
@@ -245,6 +241,9 @@ static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
         }
         URMA_LOG_DEBUG("Registered pseg successfully, idx=%d, token_id=%u\n", i, p_tseg->seg.token_id);
 
+        if (p_tseg->token_id == NULL) {
+            p_tseg->token_id = seg_cfg->token_id;
+        }
         bdp_seg->p_orig_handle[i] = p_tseg->handle;
         p_tseg->handle = (uint64_t)&bdp_seg->v_tseg;
         bdp_seg->p_tseg[i] = p_tseg;

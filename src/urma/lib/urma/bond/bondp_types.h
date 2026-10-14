@@ -151,7 +151,6 @@ typedef struct bondp_context {
     pthread_rwlock_t seg_cache_lock;
     struct ub_hmap seg_cache_map;
     unsigned long seg_cache_insert_cnt;
-    urma_token_id_t *token_ids[URMA_UBAGG_DEV_MAX_NUM];
     bool msn_enable;
     bool seg_cache_enable;
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
