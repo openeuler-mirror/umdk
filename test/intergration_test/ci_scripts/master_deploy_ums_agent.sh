@@ -42,6 +42,8 @@ if [ "$IS_FIRST_DEPLOY" == "true" ]; then
     log_step "4. 初次部署，生成证书"
 
     mkdir -p "$CERTS_DIR"
+    chown root:ums /etc/ums_agent/certs
+    chmod 750 /etc/ums_agent/certs
 
     cd "$CERTS_DIR"
 

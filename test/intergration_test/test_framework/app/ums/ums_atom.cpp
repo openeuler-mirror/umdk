@@ -4,6 +4,7 @@
 * Description: ums app
 */
 #include "ums_atom.h"
+
 test_ums_ctx_t g_test_ums_ctx;
 
 test_ums_ctx_t *test_ums_ctx_init(int argc, char *argv[], int thread_num)
