@@ -15,7 +15,7 @@ from common.constants import const
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 local_path = os.path.dirname(os.path.abspath(__file__))
-
+ums_agent_path = local_path + '/../../../ci_scripts/master_deploy_ums_agent.sh'
 
 def prepare_test_case(host_list, case_path, case_name="test_case"):
     case_cpp = os.path.join(case_path, f"{case_name}.cpp")
@@ -39,45 +39,21 @@ def prepare_test_case(host_list, case_path, case_name="test_case"):
             log.error("gcc test_case failed!")
             raise
     for host in host_list:
-        if is_ums_agent_running():
+        if is_ums_agent_running(host):
             print("UMS Agent is running.")
         else:
             print("UMS Agent is not running.")
             exec_deploy_ums_agent(host_list)
 
-def get_ums_agent_deploy_path():
-    cmd = "find / -name 'master_deploy_ums_agent,sh' -type f 2>/dev/null | head -n 1"
-    try:
-        res = self.exec_cmd(cmd, silence=2, timeout=30)
-        
-        if res.ret != 0:
-            if not res.stdout.strip():
-                return None
-            pass
-        
-        output = str(res.stdout).strip()
-
-        if output:
-            return output
-        else:
-            return None
-    except Exception as e:
-        return None
 
 def exec_deploy_ums_agent(host_list):
     if not host_list[1]:
         print("Host2 IP is empty, skip.")
         return
     
-    getpath = get_ums_agent_deploy_path()
-    if not getpath:
-        print("Deploy script not found!")
-        return
-    
-    safe_path = shlex.quote(getpath)
     safe_host = shlex.quote(host_list[1])
 
-    command = f"sudo sh -c 'chcon -t bin_t {safe_path} 2>/dev/null; sh {safe_path} {safe_host}'"
+    command = f"sudo sh -c 'chcon -t bin_t {ums_agent_path} 2>/dev/null; sh {ums_agent_path} {safe_host}'"
     try:
         res = host_list[0].exec_cmd(command, silence=2, timeout=90)
 
@@ -92,11 +68,11 @@ def exec_deploy_ums_agent(host_list):
 
     time.sleep(5)
 
-def is_ums_agent_running() -> bool:
+def is_ums_agent_running(host) -> bool:
     cmd = "systemctl is-active ums_agent 2>/dev/null"
 
     try:
-        res = self.exec_cmd(cmd, silence=2)
+        res = host.exec_cmd(cmd, silence=2)
 
         status = str(res.stdout).strip()
 
