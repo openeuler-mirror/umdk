@@ -3389,6 +3389,11 @@ static ALWAYS_INLINE int umq_qbuf_alloc_escape(umq_buf_list_t *list, uint32_t sc
     qbuf->total_data_size = blk_size;
     qbuf->first_fragment = true;
     qbuf->mempool_without_data = 0;
+    /* escape buf 不经 pool free-list，但 UBSocket 侧双释放守卫按 alloc_state
+     * 判存活：memalign 内存该位是垃圾值，可能恰好为 0(FREE) 导致合法释放被
+     * 误跳过。escape buf 创建即视为持有、free 即终局（不复用），恒为
+     * ALLOCATED 语义正确。 */
+    qbuf->alloc_state = QBUF_ALLOC_STATE_ALLOCATED;
 
     QBUF_LIST_FIRST(list) = qbuf;
     (void)__atomic_add_fetch(&g_escape_buf_cnt[sc], 1, __ATOMIC_RELAXED);
@@ -3710,6 +3715,13 @@ void umq_qbuf_free(umq_buf_list_t *list)
     umq_buf_t *nodata_tail = NULL;
     umq_buf_t *cur = QBUF_LIST_FIRST(list);
     while (cur != NULL) {
+        /* 链上遇到已归还 pool 的节点（double free）：其 qbuf_next 已被 pool
+         * 改写为 free-list 元数据，沿它继续走会摘到 free-list 节点甚至被
+         * 重新分配的存活块并错误归还（活块被偷）。在污染点截断整条链，
+         * 可疑后缀丢弃（泄漏但安全）。 */
+        if (cur->alloc_state == QBUF_ALLOC_STATE_FREE) {
+            break;
+        }
         umq_buf_t *next = QBUF_LIST_NEXT(cur);
         QBUF_LIST_NEXT(cur) = NULL;
 
