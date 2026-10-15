@@ -20,7 +20,6 @@ static int run_test(test_ums_ctx_t *ctx)
     char close_qperf[MAX_EXEC_CMD_RET_LEN];
     char recover_env[MAX_EXEC_CMD_RET_LEN];
     char check_perf[MAX_EXEC_CMD_RET_LEN];
-
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
     sleep(3);
 

@@ -28,7 +28,6 @@ static int run_test(test_ums_ctx_t *ctx)
     exec_cmd(close_qperf, MAX_EXEC_CMD_RET_LEN, "pkill -9 qperf");
 
     ums_refer_cnt_before = query_ums_reference_count();
-
     // exec_cmd(setup_env, MAX_EXEC_CMD_RET_LEN, "rmmod ums; modprobe ums; service ums_agent restart");
     sleep(3);
 

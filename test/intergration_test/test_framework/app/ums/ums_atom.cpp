@@ -4,10 +4,6 @@
 * Description: ums app
 */
 #include "ums_atom.h"
-#include <string>
-#include <sstream>
-#include <algorithm>
-#include <iostream>
 
 test_ums_ctx_t g_test_ums_ctx;
 
