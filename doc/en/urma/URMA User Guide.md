@@ -2148,9 +2148,9 @@ The Socket interface is currently the core of network programming and is widely 
 
     1.  Specifications and Constraints
 
-1.  After the module is loaded, IP addresses are automatically configured for the corresponding ipourma devices based on the EIDs on the UB devices. The default IP = EID. Users are not supported to manually configure IPs.
+1.  After the module is loaded, IP addresses are automatically configured for the corresponding ipourma devices based on the EIDs on the UB devices, with the default IP matching the EID. Manual IP configuration by users is not supported, nor is configuring IPs by modifying the EID online.
 
-2.  Address resolution is not performed; ND, ARP, and RARP are not supported. Only IPv6 addresses are supported. Users must bind the source IP when using sockets.
+2.  Address resolution is not performed; ND, ARP, and RARP are not supported. Only IPv6 addresses are supported. Users must bind the source IP when communicating via the ipourma network interface card (NIC).
 
 3.  The ipourma device adds a 2-byte IPoURMA header to IP datagrams received from the protocol stack.
 
