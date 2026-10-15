@@ -29,6 +29,9 @@
 #define HC_PROBE_BUF_LEN     (1)
 #define HC_PROBE_QUEUE_DEPTH (1024)
 #define HC_PATH_INIT_CAP     (8)
+/* Dump the status of all CRs received in a probe round every N rounds. If the
+ * trigger round polls no CR, the print defers to the next round that does. */
+#define HC_STATUS_PRINT_INTERVAL (200)
 /* ummu_grant requires page-aligned VA and a length multiple of the page size.
  * The probe payload is only HC_PROBE_BUF_LEN bytes, but the registered segment
  * must cover a full page; the data path keeps its 1-byte sge length. */
@@ -88,6 +91,10 @@ struct bondp_hc_ctx {
     atomic_bool started;    /* Probe jettys and task are started lazily by bondp_hc_start */
     atomic_bool stopping;   /* Set by uninit to stop the probe task from rescheduling */
     uint32_t probe_cur_idx; /* Current polling position for batched node probing */
+    uint32_t probe_round;   /* Probe round counter, only touched by the worker thread */
+    /* Sticky CR-status print flag, set every HC_STATUS_PRINT_INTERVAL rounds, cleared
+     * only after hc_print_cr_status has actually printed at least one CR. */
+    bool probe_print_pending;
     uint32_t node_num;
     bondp_hc_node_t nodes[MAX_NODE_NUM];
 };
@@ -335,7 +342,20 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
     }
 }
 
-static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
+static void hc_print_cr_status(bondp_hc_ctx_t *hc_ctx, int local_idx, const urma_cr_t *cr)
+{
+    uint32_t node_idx;
+    uint32_t target_idx;
+
+    hc_decode_user_ctx(cr->user_ctx, &node_idx, &target_idx);
+    URMA_LOG_INFO_RL("Health probe cr status: round=%u, node_idx=%u, path=[%u, %u], cr_status=%d.\n",
+                 hc_ctx->probe_round, node_idx, (uint32_t)local_idx, target_idx,
+                 (int)cr->status);
+    /* Clear only after a print, so a CR-less trigger round does not consume it. */
+    hc_ctx->probe_print_pending = false;
+}
+
+static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx, bool print_status)
 {
     if (hc_ctx == NULL || local_idx < 0 || local_idx >= URMA_UBAGG_DEV_MAX_NUM) {
         return;
@@ -347,13 +367,15 @@ static void hc_poll_probe_cq(bondp_hc_ctx_t *hc_ctx, int local_idx)
 
     bool has_timeout_cqe = false;
     urma_cr_t cr[HC_CQE_BATCH];
-
     while (true) {
         int n = urma_poll_jfc(res->jfc, HC_CQE_BATCH, cr);
         if (n <= 0) {
             break;
         }
         for (int i = 0; i < n; i++) {
+            if (print_status) {
+                hc_print_cr_status(hc_ctx, local_idx, &cr[i]);
+            }
             if (!has_timeout_cqe) {
                 hc_process_probe_cr(hc_ctx, local_idx, &cr[i]);
             }
@@ -495,12 +517,17 @@ static void hc_probe_fn(bondp_worker_task_reason_t reason, void *arg)
         return;
     }
 
+    if ((hc_ctx->probe_round % HC_STATUS_PRINT_INTERVAL) == 0) {
+        hc_ctx->probe_print_pending = true;
+    }
+    bool print_cr_status = hc_ctx->probe_print_pending;
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (hc_ctx->probes[i].jetty == NULL) {
             continue;
         }
-        hc_poll_probe_cq(hc_ctx, (int)i);
+        hc_poll_probe_cq(hc_ctx, (int)i, print_cr_status);
     }
+    hc_ctx->probe_round++;
 
     uint32_t batch_cnt = MIN(hc_ctx->cfg.batch_node_num, hc_ctx->node_num);
     uint32_t node_idx = hc_ctx->probe_cur_idx % hc_ctx->node_num;
