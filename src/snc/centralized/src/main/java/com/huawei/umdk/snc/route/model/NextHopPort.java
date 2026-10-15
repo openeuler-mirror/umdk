@@ -10,7 +10,6 @@
 package com.huawei.umdk.snc.route.model;
 
 import com.huawei.umdk.snc.route.topo.template.model.PolicyPath;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 

@@ -25,7 +25,7 @@ ACL_LIB_DIR = ${ASCEND_DIR}/lib64
 #
 #paths
 #--------------------------------------------------------------------------------------------------------------------------------------------------
-SRC_DIR := src
+SRC_DIR := ping
 INC_DIR := include
 DEPENDS_DIR := depends
 LOG_DIR := log

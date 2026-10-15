@@ -11,7 +11,6 @@ package com.huawei.umdk.snc.entity;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.huawei.umdk.snc.route.model.RouteEntry;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
