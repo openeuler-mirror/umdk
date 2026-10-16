@@ -3042,6 +3042,15 @@ typedef struct async_expand_pool_param {
 
 static void *async_expand_global_pool_callback(void *arg)
 {
+    /* Detach self so the thread's 8MB stack + guard is reclaimed immediately
+     * on exit instead of lingering as a zombie VMA until pthread_join.
+     * The caller stores the last in-flight tid in expand_thread and joins it
+     * during uninit: for an already-exited detached thread that join returns
+     * ESRCH (ignored), for a still-running one it blocks until completion —
+     * both are safe because is_expanding single-flight guarantees at most one
+     * async expand thread is alive at any time. */
+    (void)pthread_detach(pthread_self());
+
     if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
             QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME, errno);
@@ -3064,6 +3073,17 @@ static void *async_expand_global_pool_callback(void *arg)
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, bool sync_wait)
 {
     if (g_qbuf_pool.disable_scale_cap) {
+        return;
+    }
+
+    /* Hard stop at capacity: once expansion memory reaches the configured
+     * cap, never spawn another expand thread. The last_expand_failed gate
+     * below is not sufficient on its own — when free blocks recover past the
+     * trigger it gets cleared, letting the high-frequency fetch path spawn
+     * futile threads that leak their 8MB stacks even though no slot can be
+     * added. Guarding on the hard cap stops that loop permanently. */
+    if (__atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED) >=
+        g_qbuf_pool.expansion_mem_size_max) {
         return;
     }
 
