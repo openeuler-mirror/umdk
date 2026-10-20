@@ -62,6 +62,8 @@
 #define QBUF_POOL_SHRINK_DECAY_MS_MAX (1800000) // decay window upper bound: 30min (aligns with ubsocket env)
 #define QBUF_POOL_SHRINK_DECAY_MS_DEFAULT (300000) // fallback decay: 5min (aligns with ubsocket default)
 #define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
+#define QBUF_POOL_EXPAND_WAIT_SLICE_US (1000)   // poll slice: 1ms
+#define QBUF_POOL_EXPAND_WAIT_MAX_RETRY (20000)  // 20s safety bound (20000 * 1ms)
 
 // Magic-number replacements (G.CNS.02)
 #define QBUF_LAT_NS_PER_US (1000.0)          // ns -> us conversion factor
@@ -121,7 +123,6 @@ typedef struct expansion_qbuf_pool {
     volatile uint32_t last_expand_failed;
     pthread_t shrink_thread;
     bool shrink_thread_created;
-    pthread_t expand_thread;
     bool expand_thread_created;
     uint64_t trigger_expand_block_num;
     uint32_t expansion_block_count;
@@ -1988,13 +1989,22 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
         exp_pool->shrink_thread_created = false;
     }
 
-    /* Wait for async expand thread to finish, then join it.
-     * Must join before cleaning up slot_list — the expand thread may be
-     * operating on a slot (slot_with_data_init → spin_lock → slot_list
-     * or UNINIT_SLOT path). Joining here guarantees no concurrent slot
-     * access during cleanup below. */
+    /* Wait for async expand thread to finish.
+     * The expand thread is detached (pthread_detach in callback), so
+     * pthread_join on a detached thread is undefined behavior — use
+     * is_expanding as the completion flag instead. The expand thread
+     * clears is_expanding as its last action before exit, guaranteeing
+     * it no longer touches slot_list or locks. */
     if (exp_pool->expand_thread_created) {
-        (void)pthread_join(exp_pool->expand_thread, NULL);
+        uint32_t wait_retry = 0;
+        while (__atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) != 0) {
+            (void)usleep(QBUF_POOL_EXPAND_WAIT_SLICE_US);
+            if (++wait_retry >= QBUF_POOL_EXPAND_WAIT_MAX_RETRY) {
+                UMQ_VLOG_ERR(VLOG_UMQ, "expand thread wait timeout %ums, is_expanding still set, force proceed\n",
+                             QBUF_POOL_EXPAND_WAIT_MAX_RETRY * QBUF_POOL_EXPAND_WAIT_SLICE_US / US_PER_MS);
+                break;
+            }
+        }
         exp_pool->expand_thread_created = false;
     }
 
@@ -3043,12 +3053,11 @@ typedef struct async_expand_pool_param {
 static void *async_expand_global_pool_callback(void *arg)
 {
     /* Detach self so the thread's 8MB stack + guard is reclaimed immediately
-     * on exit instead of lingering as a zombie VMA until pthread_join.
-     * The caller stores the last in-flight tid in expand_thread and joins it
-     * during uninit: for an already-exited detached thread that join returns
-     * ESRCH (ignored), for a still-running one it blocks until completion —
-     * both are safe because is_expanding single-flight guarantees at most one
-     * async expand thread is alive at any time. */
+     * on exit instead of lingering as a zombie VMA. uninit spin-waits on
+     * is_expanding (not pthread_join) — the expand thread clears is_expanding
+     * as its last action before exit, so once is_expanding==0 the thread is
+     * done and no longer touching slot_list. pthread_join is NOT used because
+     * the thread is detached — join on a detached thread is undefined behavior. */
     (void)pthread_detach(pthread_self());
 
     if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
@@ -3125,10 +3134,10 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);
     } else {
-        /* Store tid for pthread_join during uninit. Only one async expand
-         * can be in-flight at a time (guarded by is_expanding CAS above),
-         * so overwriting expand_thread is safe. */
-        exp_pool->expand_thread = tid;
+        /* Mark that an async expand thread is in-flight. uninit spin-waits
+         * on is_expanding (not pthread_join) because the thread is detached.
+         * is_expanding single-flight guarantees at most one async expand
+         * thread is alive at any time. */
         exp_pool->expand_thread_created = true;
         UMQ_VLOG_DEBUG(VLOG_UMQ,
                        "%s_EXPAND_ASYNC_LAUNCH sc=%u free=%llu(g_free=%llu+e_free=%llu) expand_threshold=%llu\n",
