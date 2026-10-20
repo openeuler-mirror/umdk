@@ -23,10 +23,7 @@ public class LogicalPortLoader {
     int portId;
 
     @JSONField(name = "port_cna")
-    String portCna;
-
-    @JSONField(name = "mask")
-    String mask;
+    CnaLoader portCna;
 
     @JSONField(name = "members")
     List<Integer> members;

@@ -118,6 +118,6 @@ public class Label implements  Cloneable{
     }
 
     public static String getL1SwLabel(int index) {
-        return "type:l1_sw|index:" + index;
+        return "type:" + NodeType.L1_SW.getValue() + "|index:" + index;
     }
 }

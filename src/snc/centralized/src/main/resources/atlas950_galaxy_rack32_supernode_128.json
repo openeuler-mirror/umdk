@@ -1,10 +1,13 @@
 {
-  "template_label": "type:128_npu_inter_rack",
+  "template_label": "type:atlas950_galaxy_rack32_supernode_128",
   "topo_nodes": [
     {
       "node_label": "type:l1_sw|index:1",
-      "node_cna": "0xdfdf000e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf004f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -394,8 +397,11 @@
     },
     {
       "node_label": "type:l1_sw|index:2",
-      "node_cna": "0xdfdf010e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf00cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -785,8 +791,11 @@
     },
     {
       "node_label": "type:l1_sw|index:3",
-      "node_cna": "0xdfdf020e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf014f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -1176,8 +1185,11 @@
     },
     {
       "node_label": "type:l1_sw|index:4",
-      "node_cna": "0xdfdf030e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf01cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -1567,8 +1579,11 @@
     },
     {
       "node_label": "type:l1_sw|index:5",
-      "node_cna": "0xdfdf100e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf104f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -1958,8 +1973,11 @@
     },
     {
       "node_label": "type:l1_sw|index:6",
-      "node_cna": "0xdfdf110e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf10cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -2349,8 +2367,11 @@
     },
     {
       "node_label": "type:l1_sw|index:7",
-      "node_cna": "0xdfdf120e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf114f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -2740,8 +2761,11 @@
     },
     {
       "node_label": "type:l1_sw|index:8",
-      "node_cna": "0xdfdf130e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf11cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -3131,8 +3155,11 @@
     },
     {
       "node_label": "type:l1_sw|index:9",
-      "node_cna": "0xdfdf200e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf204f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -3522,8 +3549,11 @@
     },
     {
       "node_label": "type:l1_sw|index:10",
-      "node_cna": "0xdfdf210e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf20cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -3913,8 +3943,11 @@
     },
     {
       "node_label": "type:l1_sw|index:11",
-      "node_cna": "0xdfdf220e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf214f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -4304,8 +4337,11 @@
     },
     {
       "node_label": "type:l1_sw|index:12",
-      "node_cna": "0xdfdf230e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf21cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -4695,8 +4731,11 @@
     },
     {
       "node_label": "type:l1_sw|index:13",
-      "node_cna": "0xdfdf300e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf304f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -5086,8 +5125,11 @@
     },
     {
       "node_label": "type:l1_sw|index:14",
-      "node_cna": "0xdfdf310e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf30cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -5477,8 +5519,11 @@
     },
     {
       "node_label": "type:l1_sw|index:15",
-      "node_cna": "0xdfdf320e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf314f",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -5868,8 +5913,11 @@
     },
     {
       "node_label": "type:l1_sw|index:16",
-      "node_cna": "0xdfdf330e",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdfdf31cf",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 64,
@@ -6259,8 +6307,11 @@
     },
     {
       "node_label": "type:l2_sw|index:1|chip:1",
-      "node_cna": "0xdf000004",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000004",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -7034,8 +7085,11 @@
     },
     {
       "node_label": "type:l2_sw|index:1|chip:2",
-      "node_cna": "0xdf000005",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000005",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -7809,8 +7863,11 @@
     },
     {
       "node_label": "type:l2_sw|index:2|chip:1",
-      "node_cna": "0xdf000006",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000006",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -8584,8 +8641,11 @@
     },
     {
       "node_label": "type:l2_sw|index:2|chip:2",
-      "node_cna": "0xdf000007",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000007",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -9359,8 +9419,11 @@
     },
     {
       "node_label": "type:l2_sw|index:3|chip:1",
-      "node_cna": "0xdf000008",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000008",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -10134,8 +10197,11 @@
     },
     {
       "node_label": "type:l2_sw|index:3|chip:2",
-      "node_cna": "0xdf000009",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000009",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -10909,8 +10975,11 @@
     },
     {
       "node_label": "type:l2_sw|index:4|chip:1",
-      "node_cna": "0xdf00000a",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf00000a",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -11684,8 +11753,11 @@
     },
     {
       "node_label": "type:l2_sw|index:4|chip:2",
-      "node_cna": "0xdf00000b",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf00000b",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,

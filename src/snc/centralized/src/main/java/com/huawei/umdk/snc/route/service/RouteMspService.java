@@ -265,7 +265,7 @@ public class RouteMspService {
             }
             SncNode topoNode = topology.getNodeMap().get(nodeId);
             Collection<Inbound> inbounds = originNode.sortedInboundMapByCost().values();
-            // 获取 primaryCNA
+            // 获取 节点地址和聚合地址
             for (Address address : topoNode.getAddrList()) {
                 genRouteEntry(srcNode, inbounds, address, topoNode, false);
             }

@@ -37,6 +37,7 @@ import com.huawei.umdk.snc.route.service.RouteConvergeService;
 import com.huawei.umdk.snc.route.service.RouteInstantiationService;
 import com.huawei.umdk.snc.route.service.RouteMspService;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
 import com.huawei.umdk.snc.service.LinkEventService;
 import com.huawei.umdk.snc.service.PathService;
@@ -47,15 +48,18 @@ public class SncService {
 
     private static final Logger LOG = new Logger(SncService.class);
 
-    private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList("128_npu_rack.json",
-        "128_npu_inter_rack.json");
+    private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList(
+        SuperNodeType.ATLAS950_GALAXY_RACK32.getValue() + ".json",
+        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json");
 
+    // key: xPod_type
     private final Map<String, SncTopology> topologyMap = new HashMap<>();
 
+    // key1: xPod_type    key2: node label
     private final Map<String, Map<String, RouteTable>> routeTemplateMap = new HashMap<>();
 
-    // 超节点的路由模板
-    private final Map<String, RouteTable> routes = new HashMap<>();
+    // 超节点的路由模板   key1: xPod_type    key2: node label
+    private final Map<String, Map<String, RouteTable>> superNodeRoutes = new HashMap<>();
 
     // 上线的超节点的路由
     private volatile Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
@@ -408,23 +412,30 @@ public class SncService {
 
         topologyMap.clear();
         routeTemplateMap.clear();
-        routes.clear();
+        for (SuperNodeType superNodeType : SuperNodeType.values()) {
+            superNodeRoutes.remove(superNodeType.getValue());
+        }
 
         calculateDefaultTemplateRoute(topologyMap, routeTemplateMap);
 
-        RouteInstantiationService.instantiateXpodRoute(topologyMap, routeTemplateMap, routes);
+        RouteInstantiationService.instantiateXpodRoute(topologyMap, routeTemplateMap, superNodeRoutes);
 
         routeCalculated = true;
     }
 
-    public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode) {
+    public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode, String superNodeType) {
         checkNotUninit();
         if (!routeCalculated) {
-            throw new IllegalStateException("calculate routeCalculate first");
+            routeCalculate();
         }
 
         if (superNode == null) {
             throw new IllegalArgumentException("superNode is null");
+        }
+
+        Map<String, RouteTable> routes = superNodeRoutes.get(superNodeType);
+        if (routes == null) {
+            throw new IllegalArgumentException("no instantiated routes for " + superNodeType);
         }
 
         RouteInstantiationService service = new RouteInstantiationService();

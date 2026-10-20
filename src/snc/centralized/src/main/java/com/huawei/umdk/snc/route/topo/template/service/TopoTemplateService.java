@@ -11,6 +11,7 @@ package com.huawei.umdk.snc.route.topo.template.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.huawei.umdk.snc.log.Logger;
+import com.huawei.umdk.snc.route.topo.template.loader.CnaLoader;
 import com.huawei.umdk.snc.route.topo.template.loader.NodeLoader;
 import com.huawei.umdk.snc.route.topo.template.loader.PathPolicyItemsLoader;
 import com.huawei.umdk.snc.route.topo.template.loader.PathPolicyLoader;
@@ -47,30 +48,46 @@ public class TopoTemplateService {
 
     private static final Integer TOPOLOGY_ADDRESS_MAX_COUNT = 10;
 
-    private static final int MASK_LEN = 32;
+    private static boolean checkCnaLoader(CnaLoader cnaLoader) {
+        if (cnaLoader == null || cnaLoader.getAddress() == null || cnaLoader.getMask() == null) {
+            return false;
+        }
+
+        if (cnaLoader.getLength() < 0 || cnaLoader.getLength() > 32) {
+            return false;
+        }
+
+        return true;
+    }
 
     private static SncNode getNode(NodeLoader templateLoader) {
         SncNode node = new SncNode();
         node.getLabel().refreshAllNames(templateLoader.getNodeLabel());
-        if (templateLoader.getNodeCna() != null && templateLoader.getMask() != null) {
-            long addr = Long.decode(templateLoader.getNodeCna());
-            long mask = Long.decode(templateLoader.getMask());
-            if ("npu".equals(node.type())) {
-                node.getAddrList().add(new Address(addr, MASK_LEN, mask, AddrType.PRIMARY_ADDR));
-            } else {
-                node.getAddrList().add(new Address(addr, MASK_LEN, mask, AddrType.NODE_ADDR));
-            }
+        CnaLoader cna = templateLoader.getNodeCna();
+        if (checkCnaLoader(cna)) {
+            long addr = Long.decode(cna.getAddress());
+            long mask = Long.decode(cna.getMask());
+            node.getAddrList().add(new Address(addr, cna.getLength(), mask, AddrType.NODE_ADDR));
+        }
+
+        cna = templateLoader.getAggregateCna();
+        if (checkCnaLoader(cna)) {
+            long addr = Long.decode(cna.getAddress());
+            long mask = Long.decode(cna.getMask());
+            node.getAddrList().add(new Address(addr, cna.getLength(), mask, AddrType.AGGREGATE_ADDR));
         }
 
         templateLoader.getPortLoaders().forEach(port -> {
             int portId = port.getPortId(); // portid 从0开始算
             SncPort topoPort = new SncPort(portId);
             topoPort.setPortName(port.getPortName());
-            if (port.getPortCna() != null && port.getMask() != null) {
-                long addr = Long.decode(port.getPortCna());
-                long mask = Long.decode(port.getMask());
-                topoPort.getAddrList().add(new Address(addr, MASK_LEN, mask, AddrType.PORT_ADDR));
+            CnaLoader portCna = port.getPortCna();
+            if (checkCnaLoader(portCna)) {
+                long portAddr = Long.decode(portCna.getAddress());
+                long portAddrMask = Long.decode(portCna.getMask());
+                topoPort.getAddrList().add(new Address(portAddr, portCna.getLength(), portAddrMask, AddrType.PORT_ADDR));
             }
+
             topoPort.setPeerNodeId(port.getPeerNodeLabel());
             topoPort.setPeerPortId(port.getPeerPortId());
             topoPort.setJettyId(port.getJettyId());
@@ -79,9 +96,11 @@ public class TopoTemplateService {
         });
 
         templateLoader.getLogicalPortLoaders().forEach(logicalPort -> {
-            if (logicalPort.getPortCna() != null && logicalPort.getMask() != null) {
-                long addr = Long.decode(logicalPort.getPortCna());
-                long mask = Long.decode(logicalPort.getMask());
+            CnaLoader logicalPortCna = logicalPort.getPortCna();
+            if (checkCnaLoader(logicalPortCna)) {
+
+                long logicAddr = Long.decode(logicalPortCna.getAddress());
+                long logicAddrMask = Long.decode(logicalPortCna.getMask());
                 if (logicalPort.getMembers() == null || logicalPort.getMembers().isEmpty()) {
                     throw new IllegalArgumentException("logical port must have at least one member");
                 }
@@ -90,7 +109,8 @@ public class TopoTemplateService {
                     if (sncPort == null) {
                         throw new IllegalArgumentException(String.format("Port %s not found", portId));
                     }
-                    sncPort.getAddrList().add(new Address(addr, MASK_LEN, mask, AddrType.PORT_GROUP_ADDR));
+                    sncPort.getAddrList().add(new Address(logicAddr, logicalPortCna.getLength(), logicAddrMask,
+                        AddrType.PORT_GROUP_ADDR));
                 }
             }
         });
