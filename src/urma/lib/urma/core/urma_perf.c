@@ -193,7 +193,7 @@ static void urma_perf_reset_record_item(bool reset_all_thread, uint32_t thread_i
 static void urma_perf_thread_exit_cleanup(void *arg)
 {
     if (g_perf_record_index >= URMA_PERF_THREAD_MAX_NUM) {
-        URMA_LOG_ERR("Urma perf thread cleanup, thread index %d is invalid\n", g_perf_record_index);
+        URMA_LOG_ERR_RL("Urma perf thread cleanup, thread index %d is invalid\n", g_perf_record_index);
         return;
     }
     // only reset thread_initialized, not reset is_used
@@ -236,7 +236,7 @@ static void urma_perf_thread_context_init(void)
 {
     g_perf_record_index = urma_perf_allocate_record_slot();
     if (g_perf_record_index >= URMA_PERF_THREAD_MAX_NUM) {
-        URMA_LOG_ERR("Urma perf thread context init failed, no available thread slot. pid=%d\n", getpid());
+        URMA_LOG_ERR_RL("Urma perf thread context init failed, no available thread slot. pid=%d\n", getpid());
         return;
     }
 
