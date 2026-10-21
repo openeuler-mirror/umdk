@@ -675,10 +675,30 @@ def run_once(local_rank_id,
 
         return within_tol
 
+    def bench_fused():
+        warmup = 20
+        iters = 100
+        for _ in range(warmup):
+            fused_ops(*input_datas)
+        torch_npu.npu.synchronize(device_id)
+        dist.barrier(group=ep_group)
+        torch_npu.npu.synchronize(device_id)
+
+        start = torch.npu.Event(enable_timing=True)
+        end = torch.npu.Event(enable_timing=True)
+        start.record()
+        for _ in range(iters):
+            output = fused_ops(*input_datas)
+        end.record()
+        torch_npu.npu.synchronize(device_id)
+        print(f"rank-{global_rank_id} fused_deep_moe: warmup={warmup}, iters={iters}, "
+              f"average latency={start.elapsed_time(end) / iters:.3f} ms")
+        return output
+
     if with_share:
         gmm1_weight, gmm1_weight_scale, gmm2_weight, gmm2_weight_scale, smooth_scales, gmm1_bias, gmm2_bias = share_weight_datas
         x, dynamic_scales = small_ops(*input_datas)
-        fused_op_output = fused_ops(*input_datas)
+        fused_op_output = bench_fused()
         fused_op_token_output, fused_op_share_output, fused_op_count_output = fused_op_output
 
         weight_int4 = TorchSimulator._int32_unpack_int4(gmm1_weight)
@@ -697,7 +717,7 @@ def run_once(local_rank_id,
         validate_pair(y2_cpu, fused_op_share_output, "y2_cpu vs fused_op_share_output")
     else:
         combine_output = small_ops(*input_datas)
-        fused_op_output = fused_ops(*input_datas)
+        fused_op_output = bench_fused()
         fused_op_token_output, fused_op_share_output, fused_op_count_output = fused_op_output
         validate_pair(fused_op_token_output, combine_output, "y_npu vs y_cpu")
 
