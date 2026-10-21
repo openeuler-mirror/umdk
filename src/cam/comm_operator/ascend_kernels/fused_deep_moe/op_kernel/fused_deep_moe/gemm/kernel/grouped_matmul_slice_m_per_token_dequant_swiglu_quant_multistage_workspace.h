@@ -933,128 +933,135 @@ public:
     }
 
     CATLASS_DEVICE
-    void GetCumSum(int32_t startRankId, int32_t recvExpertNum, int64_t ubOffset)
+    void GetCumSum(AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
     {
-        // calculate token index in output tensor
-        int64_t subUbOffset = ubOffset;
-        uint32_t recStatusNumPerCore = expertCntUp;
-        AscendC::LocalTensor<int32_t> statusTensor_ = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
-        subUbOffset += CEIL_UP(expertCntUp * UB_BLOCK_SIZE);
-        AscendC::LocalTensor<uint32_t> gatherTmpTensor = (resource.ubBuf.template GetBufferByByte<uint32_t>
-                                                                                                      (subUbOffset));
-        subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
-        AscendC::LocalTensor<float> gatherMaskOutTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
-        subUbOffset += CEIL_UP(expertCntUp * sizeof(float));
-        AscendC::LocalTensor<float> statusFp32Tensor_ = statusTensor_.ReinterpretCast<float>();
-
-        uint64_t rsvdCnt = 0;
-        gatherTmpTensor.SetValue(0, GATHER_SECOND_NUM);
-        AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
-        AscendC::GatherMask(gatherMaskOutTensor, statusFp32Tensor_, gatherTmpTensor, true, GATHER_SECOND_NUM,
-                            {1, (uint16_t)recStatusNumPerCore, 1, 0}, rsvdCnt);
-        AscendC::LocalTensor<float> workLocalTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
-        AscendC::PipeBarrier<PIPE_V>();
-        AscendC::ReduceSum<float>(gatherMaskOutTensor, gatherMaskOutTensor, workLocalTensor,
-                                (startRankId + 1) <= recvExpertNum ? (startRankId + 1) : recvExpertNum);
-        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        auto statusTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        int32_t tokenCount = 0;
+        for (uint32_t index = 0; index < expertCntUp; ++index) {
+            tokenCount += statusTensor.GetValue(index * INT32_COUNT_PER_BLOCK + 1);
+            tokenPrefix.SetValue(index, tokenCount);
+        }
     }
 
     CATLASS_DEVICE
-    void RecvToken(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmEpSendCount, uint32_t &coreTokenCount,
-                   uint32_t startRankId, uint32_t endRankId, uint32_t recvRankNumPerCore, int64_t ubOffset)
+    void InitRecvRankCursor(AscendC::LocalTensor<int32_t> &rankCursor,
+                            AscendC::LocalTensor<int32_t> &tokenPrefix, uint32_t startRankId,
+                            uint32_t startTokenIdx, uint32_t endTokenIdx)
+    {
+        for (uint32_t rank = 0; rank < epRankSize; ++rank) {
+            uint32_t index = startRankId + rank;
+            uint32_t bucketBegin = index == 0 ? 0 : tokenPrefix.GetValue(index - 1);
+            uint32_t bucketEnd = tokenPrefix.GetValue(index);
+            uint32_t begin = startTokenIdx > bucketBegin ? startTokenIdx : bucketBegin;
+            uint32_t end = endTokenIdx < bucketEnd ? endTokenIdx : bucketEnd;
+            rankCursor.SetValue(rank, begin < end ? begin - bucketBegin : bucketEnd - bucketBegin);
+        }
+    }
+
+    CATLASS_DEVICE
+    bool PollRecvTokenFlag(AscendC::LocalTensor<int32_t> &tmpLocalTensor,
+                           AscendC::GlobalTensor<int32_t> &tokGlobalInt32)
+    {
+        AscendC::DataCopy(tmpLocalTensor, tokGlobalInt32, INT32_COUNT_PER_BLOCK);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+        if (tmpLocalTensor.GetValue(1) == tokenFlag) {
+            SetValueAndFlush<int32_t>(tokGlobalInt32, 1, 0);
+            return true;
+        }
+        SPIN_WAIT_CYCLES();
+        return false;
+    }
+
+    CATLASS_DEVICE
+    void StoreRecvToken(AscendC::LocalTensor<int8_t> &xTmpTensor, AscendC::GlobalTensor<int8_t> &tokGlobal,
+                        AscendC::GlobalTensor<int8_t> &expandXOutGlobal,
+                        AscendC::GlobalTensor<float> &scaleOutGlobal, uint32_t outputRow)
+    {
+        auto xOutFp32Tensor = xTmpTensor.template ReinterpretCast<float>();
+        AscendC::DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
+        AscendC::PipeBarrier<PIPE_ALL>();
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        AscendC::DataCopy(xTmpTensor, tokGlobal, axisHCommu);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE3>(0);
+        AscendC::DataCopyPad(scaleOutGlobal[outputRow], xOutFp32Tensor[tokenLength / sizeof(float)],
+                             dataCopyParamsFloat);
+        AscendC::DataCopy(expandXOutGlobal, xTmpTensor, tokenLength);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+    }
+
+    CATLASS_DEVICE
+    void RecvToken(GM_ADDR gmX1, GM_ADDR gmX1Scale, uint32_t groupId, uint32_t startTokenIdx,
+                   uint32_t coreTokenCount, AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
     {
         int64_t subUbOffset = ubOffset;
-        AscendC::LocalTensor<int32_t> statusTensor_ = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
-        subUbOffset += CEIL_UP(expertCntUp * UB_BLOCK_SIZE);
-        AscendC::LocalTensor<uint32_t> gatherTmpTensor = (resource.ubBuf.template GetBufferByByte<uint32_t>
-                                                                                                      (subUbOffset));
-        subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
-        AscendC::LocalTensor<float> gatherMaskOutTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
-        subUbOffset += CEIL_UP(expertCntUp * sizeof(float));
-        AscendC::LocalTensor<float> statusFp32Tensor_ = statusTensor_.ReinterpretCast<float>();
-
-        AscendC::DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
-        AscendC::LocalTensor<int8_t> xTmpTensor_ = resource.ubBuf.template GetBufferByByte<int8_t>(subUbOffset);
+        auto rankCursor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
+        subUbOffset += CEIL_UP(epRankSize * sizeof(int32_t));
+        auto xTmpTensor = resource.ubBuf.template GetBufferByByte<int8_t>(subUbOffset);
         subUbOffset += CEIL_UP(axisHCommu * sizeof(int8_t));
-        AscendC::LocalTensor<float> xOutFp32Tensor_ = xTmpTensor_.template ReinterpretCast<float>();
-        AscendC::LocalTensor<int32_t> tmpLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
-        subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
-        AscendC::LocalTensor<int32_t> gatherMaskOutCountTensor =
-                                    (gatherMaskOutTensor.template ReinterpretCast<int32_t>());
+        auto tmpLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
+
+        uint32_t endTokenIdx = startTokenIdx + coreTokenCount;
+        uint32_t startRankId = groupId * epRankSize;
+        InitRecvRankCursor(rankCursor, tokenPrefix, startRankId, startTokenIdx, endTokenIdx);
+
         AscendC::GlobalTensor<int8_t> tokGlobal;
         AscendC::GlobalTensor<int32_t> tokGlobalInt32;
         AscendC::GlobalTensor<int8_t> expandXOutGlobal;
-        AscendC::GlobalTensor<float> dynamicScalesOutGMTensor_;
-        dynamicScalesOutGMTensor_.SetGlobalBuffer((__gm__ float *)(gmX1Scale));
-        uint32_t beginIdx = 0;
-        uint32_t targetTokenCount = 0;
+        AscendC::GlobalTensor<float> dynamicScalesOutGMTensor;
+        dynamicScalesOutGMTensor.SetGlobalBuffer((__gm__ float *)gmX1Scale);
         uint32_t curRecvTokenCount = 0;
-        for (uint32_t index = startRankId; index < endRankId; index++) {
-            uint32_t i = index - startRankId;
-            if (i > 0) {
-                gatherMaskOutCountTensor.SetValue(
-                    i, gatherMaskOutCountTensor.GetValue(i - 1) + gatherMaskOutCountTensor.GetValue(index));
-            }
-            uint32_t count = statusTensor_.GetValue(index * INT32_COUNT_PER_BLOCK + 1);
-            coreTokenCount += count;
-            beginIdx = gatherMaskOutCountTensor.GetValue(i) - count;
-            countPerRank[i] = count;
-            rankBeginIdx[i] = beginIdx;
-            curTokenIdx[i] = 0;
-            beginIdx += count;
-            targetTokenCount += count;
-        }
         AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
-        while (curRecvTokenCount < targetTokenCount) {
-            for (uint32_t index = startRankId; index < endRankId; index++) {
-                uint32_t i = index - startRankId;
-                beginIdx = rankBeginIdx[i];
-                uint32_t winOffset = index;
-                winOffset = (index % epRankSize) * moeExpertNumPerRank + index / epRankSize;
-                GM_ADDR wAddr = (__gm__ uint8_t *)(GetWindAddrByRankId(epRankId)) + winOffset * expertPerSizeOnWin;
-                for (uint32_t j = curTokenIdx[i]; j < countPerRank[i]; j++) {
+        while (curRecvTokenCount < coreTokenCount) {
+            for (uint32_t rank = 0; rank < epRankSize; ++rank) {
+                uint32_t index = startRankId + rank;
+                uint32_t bucketBegin = index == 0 ? 0 : tokenPrefix.GetValue(index - 1);
+                uint32_t bucketEnd = tokenPrefix.GetValue(index);
+                uint32_t end = endTokenIdx < bucketEnd ? endTokenIdx : bucketEnd;
+                uint32_t ordinalEnd = end > bucketBegin ? end - bucketBegin : 0;
+                uint32_t winOffset = rank * moeExpertNumPerRank + groupId;
+                GM_ADDR wAddr = (__gm__ uint8_t *)GetWindAddrByRankId(epRankId) +
+                                winOffset * expertPerSizeOnWin;
+                for (uint32_t j = rankCursor.GetValue(rank); j < ordinalEnd; ++j) {
+                    uint32_t outputRow = bucketBegin + j;
                     tokGlobal.SetGlobalBuffer((__gm__ int8_t *)(wAddr + j * hCommuSize));
                     tokGlobalInt32.SetGlobalBuffer((__gm__ int32_t *)(wAddr + j * hCommuSize + hOutSize));
-                    expandXOutGlobal.SetGlobalBuffer(
-                        (__gm__ int8_t *)(gmX1) + (beginIdx + j) * tokenLength, tokenLength);
-
-                    AscendC::DataCopy(tmpLocalTensor, tokGlobalInt32, INT32_COUNT_PER_BLOCK);
-                    AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-                    AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-                    if (tmpLocalTensor.GetValue(1) == tokenFlag) {
-                        SetValueAndFlush<int32_t>(tokGlobalInt32, 1, 0);
-                    } else {
-                        SPIN_WAIT_CYCLES();
+                    expandXOutGlobal.SetGlobalBuffer((__gm__ int8_t *)gmX1 + outputRow * tokenLength, tokenLength);
+                    if (!PollRecvTokenFlag(tmpLocalTensor, tokGlobalInt32)) {
                         break;
                     }
-                    curRecvTokenCount += 1;
-                    curTokenIdx[i] += 1;
-                    AscendC::PipeBarrier<PIPE_ALL>();
-
-                    AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
-                    AscendC::DataCopy(xTmpTensor_, tokGlobal, axisHCommu);
-                    AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE3>(0);
-                    AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE3>(0);
-                    AscendC::DataCopyPad(dynamicScalesOutGMTensor_[beginIdx + j],
-                        xOutFp32Tensor_[tokenLength / sizeof(float)], dataCopyParamsFloat);
-                    AscendC::DataCopy(expandXOutGlobal, xTmpTensor_, tokenLength);
-                    AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+                    StoreRecvToken(xTmpTensor, tokGlobal, expandXOutGlobal, dynamicScalesOutGMTensor, outputRow);
+                    rankCursor.SetValue(rank, j + 1);
+                    ++curRecvTokenCount;
                 }
             }
         }
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
         AscendC::PipeBarrier<PIPE_ALL>();
+    }
 
+    CATLASS_DEVICE
+    void NotifyExpertTokens(AscendC::LocalTensor<int32_t> &notifyTensor, uint32_t groupId,
+                            uint32_t coreTokenCount)
+    {
+        AscendC::PipeBarrier<PIPE_ALL>();
+        for (uint32_t field = 0; field < INT32_COUNT_PER_BLOCK; ++field) {
+            notifyTensor.SetValue(field, 0);
+        }
+        notifyTensor.SetValue(CV_FLAG_INDEX, vToCFlag);
+        notifyTensor.SetValue(GROUP_ID_INDEX, groupId);
+        notifyTensor.SetValue(SELF_COUNT_INDEX, coreTokenCount);
         AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+
+        AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
+        groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET));
         AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-        AscendC::DataCopyExtParams dataCopyOutParams = {1U,
-                                                        static_cast<uint32_t>(recvRankNumPerCore * sizeof(int32_t)),
-                                                        0U, 0U, 0U};
-        AscendC::GlobalTensor<int32_t> sendCountsGlobal;
-        sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(gmEpSendCount));
-        AscendC::DataCopyPad(sendCountsGlobal[startRankId], gatherMaskOutCountTensor, dataCopyOutParams);
+        AscendC::SetAtomicAdd<int32_t>();
+        AscendC::DataCopy(groupTokenNumStateTensor[groupId * GROUP_INFO_SIZE], notifyTensor,
+                          INT32_COUNT_PER_BLOCK);
+        AscendC::SetAtomicNone();
+        AscendC::PipeBarrier<PIPE_ALL>();
     }
 
     CATLASS_DEVICE
@@ -1062,53 +1069,46 @@ public:
     {
         ubOffset = 0;
         RecvCount(ubOffset);
+        // RecvCount scratch can be reused once all count loads and reductions have completed.
+        AscendC::PipeBarrier<PIPE_ALL>();
+        int64_t subUbOffset = CEIL_UP(expertCntUp * UB_BLOCK_SIZE);
+        auto tokenPrefix = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
+        subUbOffset += CEIL_UP(expertCntUp * sizeof(int32_t));
+        GetCumSum(tokenPrefix, ubOffset);
 
-        uint32_t recvExpertNum = expertCntUp;
-        uint32_t recvCoreNumPerGroup = recvCoreNum;
-        uint32_t recvRankNumPerCore = epRankSize / recvCoreNumPerGroup;
-        uint32_t remainderRankNum = epRankSize % recvCoreNumPerGroup;
-
-        uint32_t recvCoreIdxInGroup = recvCoreIdx % recvCoreNumPerGroup;
-        uint32_t startRankIdInGroup = recvRankNumPerCore * recvCoreIdxInGroup;
-        if (recvCoreIdxInGroup < remainderRankNum) {
-            recvRankNumPerCore += 1;
-            startRankIdInGroup += recvCoreIdxInGroup;
-        } else {
-            startRankIdInGroup += remainderRankNum;
+        if (recvCoreIdx == 0) {
+            AscendC::GlobalTensor<int32_t> sendCountsGlobal;
+            sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(gmEpSendCount));
+            AscendC::DataCopyExtParams copyParams = {
+                1U, static_cast<uint32_t>(expertCntUp * sizeof(int32_t)), 0U, 0U, 0U};
+            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::DataCopyPad(sendCountsGlobal, tokenPrefix, copyParams);
+            AscendC::PipeBarrier<PIPE_ALL>();
         }
-        uint32_t endRankIdInGroup = startRankIdInGroup + recvRankNumPerCore;
-        uint32_t subUbOffset = CEIL_UP(expertCntUp * UB_BLOCK_SIZE) + CEIL_UP(UB_BLOCK_SIZE) +
-                                CEIL_UP(expertCntUp * sizeof(float));
+
+        int64_t notifyUbOffset = subUbOffset + CEIL_UP(epRankSize * sizeof(int32_t)) +
+                                 CEIL_UP(axisHCommu * sizeof(int8_t)) + UB_BLOCK_SIZE;
+        auto notifyTensor = resource.ubBuf.template GetBufferByByte<int32_t>(notifyUbOffset);
+        uint32_t startCoreIdx = 0;
+        uint32_t expertStart = 0;
         for (uint32_t groupId = 0; groupId < localExpertNum; ++groupId) {
-            uint32_t startRankId = epRankSize * groupId + startRankIdInGroup;
-            uint32_t endRankId = epRankSize * groupId + endRankIdInGroup;
-
-            uint32_t coreTokenCount = 0;
-
-            if (startRankId < recvExpertNum) {
-                // RecvCount, GetCumSum, RecvToken must use the same ubOffset to get right info
-                GetCumSum(startRankId, recvExpertNum, ubOffset);
-                RecvToken(gmX1, gmX1Scale, gmEpSendCount, coreTokenCount, startRankId, endRankId,
-                        recvRankNumPerCore, ubOffset);
+            uint32_t expertEnd = tokenPrefix.GetValue((groupId + 1) * epRankSize - 1);
+            uint32_t currentM = expertEnd - expertStart;
+            uint32_t logicalCoreIdx = (recvCoreIdx + recvCoreNum - startCoreIdx) % recvCoreNum;
+            uint32_t tokensPerCore = currentM / recvCoreNum;
+            uint32_t remainder = currentM % recvCoreNum;
+            uint32_t startTokenIdx = expertStart + logicalCoreIdx * tokensPerCore +
+                                    (logicalCoreIdx < remainder ? logicalCoreIdx : remainder);
+            uint32_t coreTokenCount = tokensPerCore + (logicalCoreIdx < remainder ? 1 : 0);
+            if (coreTokenCount > 0) {
+                RecvToken(gmX1, gmX1Scale, groupId, startTokenIdx, coreTokenCount, tokenPrefix, subUbOffset);
             }
 
-            // recv finish, inform AIC
-            AscendC::PipeBarrier<PIPE_ALL>();
-            AscendC::LocalTensor<int32_t> tmpLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(
-                                                                                                        subUbOffset);
-            tmpLocalTensor.SetValue(CV_FLAG_INDEX, vToCFlag);
-            tmpLocalTensor.SetValue(GROUP_ID_INDEX, groupId);
-            tmpLocalTensor.SetValue(SELF_COUNT_INDEX, coreTokenCount);
-            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
-
-            AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
-            groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET));
-            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-            AscendC::SetAtomicAdd<int32_t>();
-            AscendC::DataCopy(
-                groupTokenNumStateTensor[groupId * GROUP_INFO_SIZE], tmpLocalTensor, INT32_COUNT_PER_BLOCK);
-            AscendC::SetAtomicNone();
-            AscendC::PipeBarrier<PIPE_ALL>();
+            // Every receive core notifies every expert, including empty assignments.
+            NotifyExpertTokens(notifyTensor, groupId, coreTokenCount);
+            startCoreIdx = (startCoreIdx + currentM) % recvCoreNum;
+            expertStart = expertEnd;
         }
     }
 
@@ -1163,7 +1163,8 @@ public:
                     GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
                     CheckSyncFlag(statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(compCoreIdx), target);
                     target += 1;
-                    blockEpilogue(blockShapeMNK, blockCoordMNK, actualBlockShapeMNK);
+                    blockEpilogue(blockShapeMNK, blockCoordMNK, actualBlockShapeMNK,
+                                  true, Callback{}, static_cast<bool>(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE));
                 }
                 startCoreIdx = (startCoreIdx + coreLoops) % aiCoreGroupNum;
                 gmGroupOffsetC += currentM * shareN;
@@ -1221,7 +1222,8 @@ public:
                     GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
                     CheckSyncFlag(statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(compCoreIdx), target);
                     target += 1;
-                    blockEpilogue(blockShapeMNK, blockCoordMNK, actualBlockShapeMNK);
+                    blockEpilogue(blockShapeMNK, blockCoordMNK, actualBlockShapeMNK,
+                                  true, Callback{}, static_cast<bool>(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE));
                 }
 
                 gmGroupOffsetC += currentM * n;
@@ -1358,7 +1360,7 @@ public:
         auto gmSwigluOutput = reinterpret_cast<__gm__ float *>(params.gmSwigluOut);
         auto gmShareSwigluOutput = reinterpret_cast<__gm__ float *>(params.gmShareSwigluOut);
 
-        if (isCompCore) {
+        if (isCompCore && (!(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) || isSendCore)) {
             CompCoreFunc(params.ptrWorkspace, params.ptrShareScale,  params.ptrScale,
                 (__gm__ float*)params.gmShareX1Scale, (__gm__ float*)params.ptrPerTokenScale,
                 gmShareSwigluOutput, gmSwigluOutput, params.ptrGroupList, params.shareN, params.problemShape.n(),
@@ -1457,11 +1459,6 @@ private:
     AscendC::LocalTensor<float> xFp32TmpTensor_;
     AscendC::LocalTensor<float> xFp32AbsTensor_;
     AscendC::LocalTensor<float> xRowMaxTensor_;
-    // count info
-    int32_t countPerRank[16]{0};
-    int32_t curTokenIdx[16]{0};
-    int32_t rankBeginIdx[16]{0};
-
     // rank and expert info
     uint32_t epRankSize{0};
     uint32_t epRankId{0};
