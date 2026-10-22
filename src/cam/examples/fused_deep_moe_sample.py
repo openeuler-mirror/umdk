@@ -442,8 +442,23 @@ def run_once(local_rank_id,
         fused_ops = torch.compile(fused_ops, backend=npu_backend)
     
     small_op_output = small_ops(*input_datas)
-    fused_op_output = fused_ops(*input_datas)
+    warmup = 20
+    iters = 100
+    for _ in range(warmup):
+        fused_ops(*input_datas)
     torch_npu.npu.synchronize(device_id)
+    dist.barrier(group=ep_group)
+    torch_npu.npu.synchronize(device_id)
+
+    start = torch.npu.Event(enable_timing=True)
+    end = torch.npu.Event(enable_timing=True)
+    start.record()
+    for _ in range(iters):
+        fused_op_output = fused_ops(*input_datas)
+    end.record()
+    torch_npu.npu.synchronize(device_id)
+    print(f"rank-{global_rank_id} fused_deep_moe: warmup={warmup}, iters={iters}, "
+          f"average latency={start.elapsed_time(end) / iters:.3f} ms")
     small_op_token_output, small_op_share_output, small_op_count_output = small_op_output
     fused_op_token_output, fused_op_share_output, fused_op_count_output = fused_op_output
     
