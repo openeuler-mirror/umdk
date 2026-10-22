@@ -12,6 +12,7 @@
 #define BONDP_CP_JETTY_H
 
 #include "urma_types.h"
+#include "urma_ubagg.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +39,7 @@ urma_jfr_t *bondp_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg);
 
 urma_status_t bondp_delete_jfr(urma_jfr_t *jfr);
 
-urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
+urma_status_t bondp_modify_jfr_sched(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
 
 urma_status_t bondp_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_attr_t *attr);
 
@@ -47,6 +48,10 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
 urma_status_t bondp_delete_jetty(urma_jetty_t *jetty);
 
 urma_status_t bondp_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
+
+/* be used by bondp_modify_jfr */
+urma_status_t bondp_modify_jfr_internal(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+    bondp_wr_hint_t *hint);
 
 #ifdef __cplusplus
 }

@@ -52,7 +52,7 @@ static urma_ops_t g_bond_ops = {
     .flush_jfs = NULL,
     .delete_jfs = bondp_delete_jfs,
     .create_jfr = bondp_create_jfr,
-    .modify_jfr = bondp_modify_jfr,
+    .modify_jfr = bondp_modify_jfr_sched,
     .query_jfr = bondp_query_jfr,
     .delete_jfr = bondp_delete_jfr,
     .import_jfr = bondp_import_jfr,
@@ -88,7 +88,7 @@ static urma_ops_t g_bond_ops = {
     .unimport_seg = bondp_unimport_seg,
 
     /* Events OPs */
-    .get_async_event = bondp_get_async_event,
+    .get_async_event = bondp_get_async_event_sched,
     .ack_async_event = bondp_ack_async_event,
 
     /* Other OPs */
@@ -104,6 +104,11 @@ static urma_ops_t g_bond_ops = {
     .wait_jfc = bondp_wait_jfc,
     .ack_jfc = bondp_ack_jfc,
 };
+
+bool bondp_is_bond_ctx(urma_context_t *ctx)
+{
+    return ctx != NULL && ctx->ops == &g_bond_ops;
+}
 
 urma_status_t bondp_init(urma_init_attr_t *conf)
 {
