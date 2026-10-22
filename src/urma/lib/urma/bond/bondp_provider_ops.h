@@ -31,6 +31,8 @@ urma_status_t bondp_init(urma_init_attr_t *conf);
 
 urma_status_t bondp_uninit(void);
 
+bool bondp_is_bond_ctx(urma_context_t *ctx);
+
 #ifdef __cplusplus
 }
 #endif

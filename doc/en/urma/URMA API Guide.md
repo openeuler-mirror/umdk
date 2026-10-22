@@ -6939,6 +6939,108 @@ Constraints and ordering:
 
 Return: 0 on success, `URMA_EAGAIN` when the context is still referenced by existing objects, other value on error.
 
+#### 2.5.1.2 bondp_modify_jfr
+
+1. Header File
+
+#include "urma_ubagg.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) bondp_modify_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *attr, bondp_wr_hint_t *hint);
+
+Definition file: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h)
+
+3. Description
+
+Modifies the attributes of a bonding device's virtual JFR. Currently only `JFR_RX_THRESHOLD` (receive watermark threshold) is supported.
+
+This interface supports multi-threaded reentrant operations.
+
+Hint routing rules:
+
+- `hint->mask == 0`: no port is specified, equivalent to modifying all member physical JFRs;
+- `hint->mask` set to `BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID`: modifies only the specified member physical JFR, other members are not affected;
+- `hint` must satisfy: `version == BONDP_WR_HINT_VERSION_V0` and `size == sizeof(bondp_wr_hint_t)`, otherwise `URMA_EINVAL` is returned.
+
+4. Parameters
+
+@param[in] jfr: the bond virtual jfr created before;
+
+@param[in] attr: the attributes to modify, mask must be JFR_RX_THRESHOLD;
+
+@param[in] hint: the routing hint, NULL is not allowed, mask=0 means all members;
+
+5. Return Value
+
+Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, other value on error
+
+6. Example
+
+```c
+/* Scenario 1: modify the receive watermark threshold of all members */
+urma_jfr_attr_t attr = {.mask = JFR_RX_THRESHOLD, .rx_threshold = 8};
+bondp_wr_hint_t hint = {.version = BONDP_WR_HINT_VERSION_V0, .size = sizeof(bondp_wr_hint_t)};
+urma_status_t status = bondp_modify_jfr(v_jfr, &attr, &hint);
+
+/* Scenario 2: modify only the member of chip 1 primary EID */
+hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
+hint.src_id.bs.chip_id = 1;
+hint.src_id.bs.die_id = 1;
+hint.src_id.bs.port_idx = UINT8_MAX; /* primary EID */
+status = bondp_modify_jfr(v_jfr, &attr, &hint);
+```
+
+#### 2.5.1.3 bondp_get_async_event
+
+1. Header File
+
+#include "urma_ubagg.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) bondp_get_async_event([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_async_event_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *event, bondp_port_id_t *port_id);
+
+Definition file: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h)
+
+3. Description
+
+Non-blockingly fetches an asynchronous event from a bonding device's virtual context. The jetty/JFR inside the event has already been mapped to the virtual object; after a successful fetch, `urma_ack_async_event` must be called to release it.
+
+4. Parameters
+
+@param[in] ctx: the bond virtual context created before;
+
+@param[out] event: the async event filled by liburma;
+
+@param[out] port_id: see the sentinel convention below;
+
+5. Return Value
+
+Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond context, `URMA_FAIL` when no event is pending or the event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
+
+6. Sentinel Convention
+
+`port_id->value` is always written, with the following rules:
+
+- When `event->event_type == URMA_EVENT_JFR_LIMIT` and the source JFR of the event belongs to this bond, `port_id` is the local port coordinate (chip_id/die_id/port_idx) of the member physical JFR; the caller may use it to replenish the receive watermark to that specific member through `bondp_modify_jfr` and immediately post RQEs, avoiding RNR;
+
+- In all other cases (non-JFR_LIMIT events, failure returns with no event, or the source JFR does not belong to this bond), it is `UINT16_MAX`, indicating an invalid port.
+
+7. Example
+
+```c
+urma_async_event_t event;
+bondp_port_id_t port_id;
+urma_status_t status = bondp_get_async_event(v_ctx, &event, &port_id);
+if (status == URMA_SUCCESS) {
+    if (event.event_type == URMA_EVENT_JFR_LIMIT && port_id.value != UINT16_MAX) {
+        /* Redirect the waterline reconfiguration and timely replenishment of RQE to the member ports that generate events, avoiding RNR. */
+    }
+    (void)urma_ack_async_event(&event);
+}
+```
+
 ### 2.5.2 Logging
 
 #### 2.5.2.1 urma_register_log_func

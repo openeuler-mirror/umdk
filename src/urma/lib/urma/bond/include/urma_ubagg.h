@@ -377,9 +377,32 @@ urma_status_t bondp_post_jfr_wr_hint(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
 urma_status_t bondp_post_jetty_recv_wr_hint(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
-urma_status_t bondp_modify_jfr_hint(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+
+/**
+ * Modify attributes of a bonding jfr. Only JFR_RX_THRESHOLD is supported for now.
+ * @param[in] [Required] jfr: the bonding jfr created before;
+ * @param[in] [Required] attr: attributes to modify, attr->mask must be JFR_RX_THRESHOLD;
+ * @param[in] [Required] hint: routing hint. If hint->mask is 0, all member jfrs are modified;
+ *      otherwise only the member jfr on the port specified by the hint is modified;
+ * Return: 0 on success, other value on error. URMA_EINVAL if jfr is not a bonding jfr
+ *      or attr->mask is unsupported; URMA_EAGAIN if the jfr is being deleted.
+ */
+urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
     bondp_wr_hint_t *hint);
-urma_status_t bondp_get_async_event_hint(urma_context_t *ctx, urma_async_event_t *event,
+
+/**
+ * Get an asynchronous event from a bonding context (non-blocking, same semantics
+ * as urma_get_async_event on the bond context).
+ * @param[in] [Required] ctx: the bonding context created before;
+ * @param[out] [Required] event: the asynchronous event, element is converted to
+ *      the bonding virtual jetty/jfr;
+ * @param[out] [Required] port_id: only valid when event->event_type is URMA_EVENT_JFR_LIMIT,
+ *      identifies the local port of the member jfr that reported the limit event, so the
+ *      caller can post RQEs to that port to avoid RNR; set to UINT16_MAX for other events;
+ * Return: 0 on success, other value on error. URMA_FAIL if no event is pending or an
+ *      epoll error occurs.
+ */
+urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *event,
     bondp_port_id_t *port_id);
 
 /* Return true when a bonding jetty has at least one valid physical jetty. */
