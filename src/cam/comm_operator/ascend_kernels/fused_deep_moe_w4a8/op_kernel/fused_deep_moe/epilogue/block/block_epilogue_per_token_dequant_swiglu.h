@@ -182,7 +182,8 @@ public:
     CATLASS_DEVICE
     void operator()(GemmCoord const &blockShapeMNK, GemmCoord const &blockCoordMNK,
         GemmCoord const &actualBlockShapeMNK, AscendC::GlobalTensor<ElementC> const &gmBlockC,
-        LayoutC const &layoutBlockC, bool act_left = true, Callback &&callback = Callback{})
+        LayoutC const &layoutBlockC, bool act_left = true, Callback &&callback = Callback{},
+        bool singleAiv = false)
     {
         if (0 == actualBlockShapeMNK.k()) {
             return;
@@ -223,8 +224,9 @@ public:
         auto tileShape = TileShape::ToCoord();
         EpilogueTileSwizzle epilogueTileSwizzle(actualBlockShape, tileShape);
         uint32_t tileLoops = epilogueTileSwizzle.GetLoops();
-        uint32_t subblockIdx = AscendC::GetSubBlockIdx();
-        uint32_t subblockNum = AscendC::GetSubBlockNum();
+        // A single send AIV covers both subblocks' tiles in deep-fuse mode.
+        uint32_t subblockIdx = singleAiv ? 0 : AscendC::GetSubBlockIdx();
+        uint32_t subblockNum = singleAiv ? 1 : AscendC::GetSubBlockNum();
         for (uint32_t loopIdx = subblockIdx; loopIdx < tileLoops; loopIdx += subblockNum) {
             auto tileCoord = epilogueTileSwizzle.GetTileCoord(loopIdx);
             auto actualTileShape = epilogueTileSwizzle.GetActualTileShape(tileCoord);
