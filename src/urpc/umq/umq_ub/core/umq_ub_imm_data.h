@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include "umq_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,6 +24,12 @@ extern "C" {
  * ubsocket-level markers here (e.g. UBS_IMM_BIG_CTRL_BIT at bit 20); umq_ub_fill_wr
  * propagates this window into the wire imm so receivers can read it back. */
 #define UMQ_UB_IMM_RSV1_MASK (0xFFFFF00000ULL)
+
+static inline void umq_ub_buf_set_rx_port(umq_buf_t *buf, bool has_port_id, uint16_t port_id_value)
+{
+    buf->port_id_value = port_id_value;
+    buf->has_port_id = has_port_id;
+}
 
 typedef enum umq_ub_fc_credit_type {
     IMM_TYPE_FC_CREDIT_INIT = 0,

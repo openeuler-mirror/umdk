@@ -2707,6 +2707,8 @@ int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *even
         UMQ_VLOG_ERR(VLOG_UMQ, "umq calloc async event failed\n");
         return -UMQ_ERR_ENOMEM;
     }
+
+    event->port.value = 0;
     urma_status_t status = umq_symbol_urma()->urma_get_async_event(urma_ctx, urma_event);
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_async_event failed, status: %d\n", status);
@@ -3673,4 +3675,41 @@ int umq_ub_transport_pool_stats_get_impl(umq_transport_pool_stats_t *stats)
     stats->acc_revive_num = pool_stats.acc_revive_num;
     stats->acc_all_dead_num = pool_stats.acc_all_dead_num;
     return UMQ_SUCCESS;
+}
+
+int umq_ub_modify_impl(uint64_t umqh_tp, umq_modify_option_t *option)
+{
+    ub_queue_t *queue = (ub_queue_t *)(uintptr_t)umqh_tp;
+    if (queue == NULL || option == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify failed, queue or option is NULL\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if ((option->flag & UMQ_MODIFY_OPTION_FLAG_DIRECTION) == 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify failed, DIRECTION flag required\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if ((option->io_direction != UMQ_IO_RX)) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify failed, only supported RX direction\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    if ((option->flag & UMQ_MODIFY_OPTION_FLAG_RX_THRESHOLD) == 0) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify failed, only supported RX_THRESHOLD valid flag set\n");
+        return -UMQ_ERR_EINVAL;
+    }
+
+    ub_queue_cfg_t *qcfg = umq_ub_queue_cfg_get(queue);
+    if (qcfg == NULL || qcfg->jfr_ctx[UB_QUEUE_JETTY_IO] == NULL ||
+        qcfg->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "modify failed, jfr not available\n");
+        return -UMQ_ERR_ENODEV;
+    }
+
+    urma_jfr_attr_t attr = {0};
+    attr.mask = JFR_RX_THRESHOLD;
+    attr.rx_threshold = option->rx_threshold;
+    return umq_status_convert(
+        umq_symbol_urma()->urma_modify_jfr(qcfg->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, &attr));
 }

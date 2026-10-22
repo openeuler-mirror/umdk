@@ -392,6 +392,8 @@ typedef struct umq_ops {
      * Return true if the process is exiting
      */
     bool (*umq_tp_exiting_get)(void);
+
+    int (*umq_tp_modify)(uint64_t umqh, umq_modify_option_t *option);
 } umq_ops_t;
 
 typedef umq_ops_t* (*umq_ops_get_t)(void);
