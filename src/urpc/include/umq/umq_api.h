@@ -474,6 +474,17 @@ uint32_t umq_transport_pool_resource_create(uint64_t umqh, umq_tp_resource_creat
  */
 int umq_transport_pool_resource_destroy(uint64_t umqh, uint32_t tp_handle_idx);
 
+/**
+ * Modify umq attributes (e.g. per-port rx_threshold).
+ * @param[in] umqh: umq handle
+ * @param[in] option: modify option; flag determines which fields take effect.
+ *                    UMQ_MODIFY_OPTION_FLAG_DIRECTION is required.
+ *                    UMQ_MODIFY_OPTION_FLAG_RX_THRESHOLD + port selects a
+ *                    specific bonding member port for rx_threshold.
+ * Return 0 on success, error code on failure
+ */
+int umq_modify(uint64_t umqh, umq_modify_option_t *option);
+
 #ifdef __cplusplus
 }
 #endif

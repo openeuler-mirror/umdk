@@ -367,30 +367,56 @@ static ALWAYS_INLINE uint32_t allocate_batch(umq_buf_list_t *input, uint32_t n, 
     return cnt;
 }
 
-// release input to output and return count of elements released
+// release input to output and return count of elements released.
+//
+// 双释放处理：遇到 alloc_state==QBUF_ALLOC_STATE_FREE 的节点时，将其从
+// input 链摘除并 **截断整条链**（break，不再继续遍历）。
+//
+// 为什么必须截断而不是摘除后继续：double-free 节点的 qbuf_next 已在
+// 前一次 free 时被 pool 改写为 free-list 元数据（指向下一个空闲块，
+// 甚至可能指向已被重新分配给其它 owner 的存活块）。沿它继续遍历，
+// 摘到的"后续节点"不再是原链成员：FREE 的会误报 double free，
+// ALLOCATED 的会被错误标记 FREE 归还 pool —— 等于把别人的活块偷走
+// （正是当初 TLS 链头被覆写崩溃的放大机制）。截断后可疑后缀整体
+// 丢弃（泄漏但安全），链结构在发生 double free 后本就不可信。
+//
+// 正常节点通过 last_node 追踪链尾，最后一次性链接到 output；
+// input 链清 NULL，防止调用方重复处理悬挂节点。
 static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_t *output, bool shm)
 {
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
+    umq_buf_t *next_node;
     umq_buf_t *last_node = NULL;
+    umq_buf_t *prev_node = NULL;
 
     if (QBUF_LIST_EMPTY(input))
         return 0;
 
-    QBUF_LIST_FOR_EACH(cur_node, input)
+    QBUF_LIST_FOR_EACH_SAFE(cur_node, input, next_node)
     {
-        ++cnt;
-        last_node = cur_node;
-
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_FREE) {
             bool with_data = true;
             uint64_t buf_id = umq_buf_to_id_with_header(input, (char *)cur_node, shm, &with_data);
             // shm id and pool name may not right
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s pool double free\n", buf_id,
-                               with_data ? "with" : "without");
-            return 0;
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "qbuf %lu detect in %s pool double free, truncated\n", buf_id,
+                                with_data ? "with" : "without");
+            /* 摘除 double-free 节点并截断：prev 及之前的正常节点保留，
+             * cur 及之后（经被污染的 qbuf_next 可达）的节点全部丢弃 */
+            if (prev_node == NULL) {
+                QBUF_LIST_FIRST(input) = NULL;
+            } else {
+                QBUF_LIST_NEXT(prev_node) = NULL;
+            }
+            break;
         }
         cur_node->alloc_state = QBUF_ALLOC_STATE_FREE;
+        ++cnt;
+        last_node = cur_node;
+        prev_node = cur_node;
+    }
+    if (cnt == 0) {
+        return 0;
     }
 
     umq_buf_t *output_head = QBUF_LIST_FIRST(output);
@@ -398,6 +424,9 @@ static ALWAYS_INLINE uint32_t release_batch(umq_buf_list_t *input, umq_buf_list_
     QBUF_LIST_FIRST(output) = QBUF_LIST_FIRST(input);
     // set output
     QBUF_LIST_NEXT(last_node) = output_head;
+    // 清理 input 链表：正常节点已全部移至 output，double-free 节点已摘除，
+    // 防止调用方重复处理悬挂节点
+    QBUF_LIST_FIRST(input) = NULL;
     return cnt;
 }
 
@@ -887,6 +916,13 @@ static ALWAYS_INLINE void umq_qbuf_alloc_nodata(local_block_pool_t *local_pool, 
 {
     uint32_t cnt = 0;
     umq_buf_t *cur_node;
+
+    if (num == 0) {
+        /* The loop bound below (++cnt == num) never fires for num == 0, so
+         * without this guard the whole without_data list would be handed out. */
+        return;
+    }
+
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_without_data)
     {
         if (cur_node->alloc_state == QBUF_ALLOC_STATE_ALLOCATED) {
@@ -941,6 +977,12 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_split(local_block_pool_t *loc
     uint32_t remaining_size = request_size;
     uint32_t max_data_capacity = block_size - headroom_size_temp;
     bool first_fragment = true;
+
+    if (param->actual_buf_count == 0) {
+        /* The loop bound below (++cnt == actual_buf_count) never fires for 0,
+         * so without this guard the whole with_data list would be handed out. */
+        return;
+    }
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data[sc])
     {
@@ -1022,6 +1064,12 @@ static ALWAYS_INLINE void umq_qbuf_alloc_data_with_combine(local_block_pool_t *l
     uint32_t max_data_size = block_size - sizeof(umq_buf_t);
     uint32_t max_data_capacity = max_data_size - headroom_size_temp;
     bool first_fragment = true;
+
+    if (param->actual_buf_count == 0) {
+        /* The loop bound below (++cnt == actual_buf_count) never fires for 0,
+         * so without this guard the whole with_data list would be handed out. */
+        return;
+    }
 
     QBUF_LIST_FOR_EACH(cur_node, &local_pool->head_with_data[sc])
     {
