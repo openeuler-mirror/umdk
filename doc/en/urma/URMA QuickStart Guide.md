@@ -44,7 +44,7 @@ The URMA component is a high-performance communication component consisting of u
 1. Install build tools and packages
 
 ```bash
-yum install -y git rpm-build make cmake gcc glibc-devel kernel-devel libnl3-devel openssl-devel
+yum install -y git rpm-build make cmake gcc gcc-c++ glibc-devel kernel-devel libnl3-devel openssl-devel
 ```
 
 2. Download the source code, navigate to `src/`, and create and enter a `build` directory
@@ -120,9 +120,9 @@ After compilation, `.ko` kernel module files will be generated in the `drivers/u
 ```bash
 cd drivers/ub/urma
 find . -type f -name "*.ko"
-# ./drivers/ub/urma/ubcore/ubcore.ko
-# ./drivers/ub/urma/ubagg/ubagg.ko
-# ./drivers/ub/urma/uburma/uburma.ko
+# ./ubcore/ubcore.ko
+# ./ubagg/ubagg.ko
+# ./uburma/uburma.ko
 ```
 
 ---
@@ -188,7 +188,8 @@ yum install -y glibc-devel
 yum install -y openssl-devel
 yum install -y glib2-devel
 yum install -y libnl3-devel
-yum install -y kernel-devel  # ubcore dependency, from the openEuler kernel
+# To also build the UMS kernel module, install the development package matching the target kernel
+# yum install -y kernel-devel
 # The following dependencies are required to build and run RPM packages with UDMA enabled by default
 yum install -y libummu-devel libummu
 ```
