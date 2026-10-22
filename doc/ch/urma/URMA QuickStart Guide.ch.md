@@ -44,7 +44,7 @@ URMA组件是一个高性能通信组件，分为用户态和内核态两部分�
 1. 安装编译工具和软件包
 
 ```bash
-yum install -y git rpm-build make cmake gcc glibc-devel kernel-devel libnl3-devel openssl-devel
+yum install -y git rpm-build make cmake gcc gcc-c++ glibc-devel kernel-devel libnl3-devel openssl-devel
 ```
 
 2. 下载源码，进入源码src/路径下，创建并进入build构建目录
@@ -120,9 +120,9 @@ make M=drivers/ub/urma -j$(nproc)
 ```bash
 cd drivers/ub/urma
 find . -type f -name "*.ko"
-# ./drivers/ub/urma/ubcore/ubcore.ko
-# ./drivers/ub/urma/ubagg/ubagg.ko
-# ./drivers/ub/urma/uburma/uburma.ko
+# ./ubcore/ubcore.ko
+# ./ubagg/ubagg.ko
+# ./uburma/uburma.ko
 ```
 
 ---
@@ -188,7 +188,8 @@ yum install -y glibc-devel
 yum install -y openssl-devel
 yum install -y glib2-devel
 yum install -y libnl3-devel
-yum install -y kernel-devel  # ubcore依赖，来自openEuler内核
+# 如需同时构建 UMS 内核模块，再安装与目标内核匹配的开发包
+# yum install -y kernel-devel
 # 以下依赖用于默认启用 UDMA 的 RPM 构建及运行
 yum install -y libummu-devel libummu
 ```
