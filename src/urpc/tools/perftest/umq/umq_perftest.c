@@ -254,8 +254,12 @@ static int umq_perftest_create_umqh(umq_perftest_config_t *cfg)
 
     if (strstr(cfg->config.dev_name, "bond") != NULL) {
         option.create_flag |= UMQ_CREATE_FLAG_USED_PORTS;
-        option.used_ports.port = &cfg->port_id;
-        option.used_ports.num = 1;
+        option.used_ports.port = cfg->port_id;
+        option.used_ports.num = cfg->used_port_num;
+        for (uint32_t i = 0; i < option.used_ports.num; i++) {
+            LOG_PRINT("used_port[%u]: 0x%x(chip %u die %u idx %u)\n", i, cfg->port_id[i].value,
+                      cfg->port_id[i].bs.chip_id, cfg->port_id[i].bs.die_id, cfg->port_id[i].bs.port_idx);
+        }
     }
 
     if (!cfg->share_jfr) {
@@ -496,6 +500,58 @@ static int umq_perftest_query_eid(umq_perftest_config_t *cfg, umq_eid_t *eid)
     return -1;
 }
 
+static bool umq_perftest_is_new_port(const umq_port_id_t ports[], uint32_t num, const umq_port_id_t *port)
+{
+    for (uint32_t i = 0; i < num; i++) {
+        if (ports[i].value == port->value) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int umq_perftest_fill_used_ports(umq_perftest_config_t *cfg, const umq_eid_t *src_eid,
+                                        const umq_eid_t *dst_eid)
+{
+    umq_route_list_t route_list;
+    umq_route_key_t route_key = {
+        .src_bonding_eid = *src_eid,
+        .dst_bonding_eid = *dst_eid,
+        .tp_type = cfg->tp_type
+    };
+
+    if (umq_get_route_list(&route_key, cfg->trans_mode, &route_list) != UMQ_SUCCESS) {
+        LOG_PRINT("umq_get_route_list for %s failed\n", cfg->config.dev_name);
+        return -1;
+    }
+
+    LOG_PRINT("route list: num %u, tp_type %d\n", route_list.route_num, cfg->tp_type);
+    if (route_list.route_num == 0) {
+        LOG_PRINT("no route between %s and dst eid\n", cfg->config.dev_name);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < route_list.route_num; i++) {
+        umq_route_t *route = &route_list.routes[i];
+        LOG_PRINT("route[%u]: src 0x%x(chip %u die %u idx %u) -> dst 0x%x(chip %u die %u idx %u)\n", i,
+                  route->src_port.value, route->src_port.bs.chip_id,
+                  route->src_port.bs.die_id, route->src_port.bs.port_idx,
+                  route->dst_port.value, route->dst_port.bs.chip_id,
+                  route->dst_port.bs.die_id, route->dst_port.bs.port_idx);
+
+        if (!umq_perftest_is_new_port(cfg->port_id, cfg->used_port_num, &route->src_port)) {
+            continue;
+        }
+        if (cfg->used_port_num >= UMQ_PERFTEST_PORT_NUM) {
+            LOG_PRINT("src port num exceeds %u\n", UMQ_PERFTEST_PORT_NUM);
+            return -1;
+        }
+        cfg->port_id[cfg->used_port_num++] = route->src_port;
+    }
+
+    return 0;
+}
+
 static int umq_perftest_client_exchange_port(umq_perftest_config_t *cfg)
 {
     exchange_info_t send_info = {
@@ -522,43 +578,8 @@ static int umq_perftest_client_exchange_port(umq_perftest_config_t *cfg)
         return -1;
     }
 
-    umq_eid_t *dst = (umq_eid_t *)recv_info.data;
-    umq_route_list_t route_list;
-    umq_route_key_t route_key = {
-        .src_bonding_eid = *eid,
-        .dst_bonding_eid = *dst,
-        .tp_type = UMQ_TP_TYPE_RTP
-    };
-
     if (strstr(cfg->config.dev_name, "bond") != NULL) {
-        if (umq_get_route_list(&route_key, cfg->trans_mode, &route_list) != UMQ_SUCCESS) {
-            LOG_PRINT("umq_get_route_list for %s failed\n", cfg->config.dev_name);
-            return -1;
-        }
-
-        if (route_list.route_num == 0) {
-            LOG_PRINT("umq_get_route_list for %s, route num is 0\n", cfg->config.dev_name);
-            return -1;
-        }
-    }
-
-    send_info.msg_len = (uint32_t)sizeof(umq_port_id_t);
-    umq_port_id_t *port = (umq_port_id_t *)send_info.data;
-    // chose 1st port
-    cfg->port_id = route_list.routes[0].src_port;
-    *port = route_list.routes[0].dst_port;
-
-    if (send_exchange_data(g_umq_perftest_ctx.fd, &send_info) < 0) {
-        return -1;
-    }
-
-    if (recv_exchange_data(g_umq_perftest_ctx.fd, &recv_info) != 0) {
-        return -1;
-    }
-
-    if (recv_info.msg_len != sizeof(umq_port_id_t)) {
-        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
-        return -1;
+        return umq_perftest_fill_used_ports(cfg, eid, (umq_eid_t *)recv_info.data);
     }
 
     return 0;
@@ -703,18 +724,8 @@ static int umq_perftest_server_exchange_port(umq_perftest_config_t *cfg)
         return -1;
     }
 
-    if (recv_exchange_data(g_umq_perftest_ctx.accept_fd, &recv_info) != 0) {
-        return -1;
-    }
-    if (recv_info.msg_len != sizeof(umq_port_id_t)) {
-        LOG_PRINT("recv eid info size %u failed\n", recv_info.msg_len);
-        return -1;
-    }
-
-    cfg->port_id = *((umq_port_id_t *)recv_info.data);
-
-    if (send_exchange_data(g_umq_perftest_ctx.accept_fd, &recv_info) < 0) {
-        return -1;
+    if (strstr(cfg->config.dev_name, "bond") != NULL) {
+        return umq_perftest_fill_used_ports(cfg, eid, (umq_eid_t *)recv_info.data);
     }
 
     return 0;

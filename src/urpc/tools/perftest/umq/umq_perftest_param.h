@@ -20,9 +20,12 @@
 extern "C" {
 #endif
 
+#define UMQ_PERFTEST_PORT_NUM (4)
+
 typedef struct umq_perftest_config {
     perftest_config_t config;
-    umq_port_id_t port_id;
+    umq_port_id_t port_id[UMQ_PERFTEST_PORT_NUM];
+    uint32_t used_port_num;
     uint32_t trans_mode;
     uint32_t feature;
     uint32_t test_round;
