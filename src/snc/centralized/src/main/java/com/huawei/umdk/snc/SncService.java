@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.huawei.umdk.snc.entity.ConvergedRouteResult;
+import com.huawei.umdk.snc.entity.DrainEvent;
 import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.config.HashTuple;
@@ -464,5 +466,9 @@ public class SncService {
         }
 
         return routingEntries;
+    }
+
+    public ConvergedRouteResult routeConvergence(SuperNode supernode, DrainEvent event) {
+        return new ConvergedRouteResult();
     }
 }
