@@ -57,11 +57,11 @@
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 
-#define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
 #define QBUF_POOL_SHRINK_DECAY_SLICE_MS (100) // decay sleep slice: bounds pthread_join wait in uninit
 #define QBUF_POOL_SHRINK_DECAY_MS_MAX (1800000) // decay window upper bound: 30min (aligns with ubsocket env)
 #define QBUF_POOL_SHRINK_DECAY_MS_DEFAULT (300000) // fallback decay: 5min (aligns with ubsocket default)
-#define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
+/* Linux pthread_setname_np caps names at 16 bytes including the NUL terminator. */
+#define QBUF_POOL_THREAD_NAME_MAX (16)
 
 // Magic-number replacements (G.CNS.02)
 #define QBUF_LAT_NS_PER_US (1000.0)          // ns -> us conversion factor
@@ -1339,18 +1339,44 @@ static async_shrink_pool_param_t *async_shrink_pop_param(qbuf_expansion_pool_t *
     return param;
 }
 
+/* Per-pool thread names for the resident shrink/expand workers:
+ * "<role>_wd<sc>" for with_data[sc], "<role>_nd" for the without_data pool
+ * (role = umq_shrink / umq_expand; mirrors the WD/ND tags of EXPAND_ASYNC_LAUNCH
+ * logs), so a slow or stuck pool thread is attributable to its pool in top/gdb.
+ * The pool is identified by pointer comparison — no identity field is stored in
+ * the pool. size_class_count is set before umq_qbuf_expansion_pool_init, so it
+ * is already valid when any pool thread starts. */
+static void qbuf_exp_pool_thread_name(const qbuf_expansion_pool_t *exp_pool, const char *role, char *name,
+                                      size_t name_len)
+{
+    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        if (exp_pool == &g_qbuf_pool.exp_pool_with_data[sc]) {
+            (void)snprintf(name, name_len, "%s_wd%u", role, sc);
+            return;
+        }
+    }
+    if (exp_pool == &g_qbuf_pool.exp_pool_without_data) {
+        (void)snprintf(name, name_len, "%s_nd", role);
+        return;
+    }
+    /* Unreachable: threads are only created by umq_qbuf_exp_pool_inner_init. */
+    (void)snprintf(name, name_len, "%s_unknown", role);
+}
+
 static void *async_shrink_global_pool_callback(void *arg)
 {
-    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME) != 0) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
-            QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME, errno);
-    }
-
     qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
     if (exp_pool == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
         return NULL;
     }
+
+    char thread_name[QBUF_POOL_THREAD_NAME_MAX] = {0};
+    qbuf_exp_pool_thread_name(exp_pool, "umq_shrink", thread_name, sizeof(thread_name));
+    if (pthread_setname_np(pthread_self(), thread_name) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n", thread_name, errno);
+    }
+
     char shrink_start_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
     char shrink_end_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
 
@@ -3158,15 +3184,16 @@ FREE_SLOT:
  * exits promptly; leftovers are freed by umq_qbuf_exp_pool_inner_uninit. */
 static void *async_expand_global_pool_callback(void *arg)
 {
-    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n", QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME,
-                           errno);
-    }
-
     qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
     if (exp_pool == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
         return NULL;
+    }
+
+    char thread_name[QBUF_POOL_THREAD_NAME_MAX] = {0};
+    qbuf_exp_pool_thread_name(exp_pool, "umq_expand", thread_name, sizeof(thread_name));
+    if (pthread_setname_np(pthread_self(), thread_name) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n", thread_name, errno);
     }
 
     while (true) {
