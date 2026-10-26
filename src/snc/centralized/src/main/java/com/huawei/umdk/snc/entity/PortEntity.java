@@ -31,4 +31,5 @@ public abstract class PortEntity {
     private String cna;
     private String linkStatus = "up";   // 链路状态："up" 或 "down"，默认 "up"
     private String updateAt;     // link 状态最近一次更新时间（取自 LinkEvent.eventTime）
+    private boolean drained;
 }
