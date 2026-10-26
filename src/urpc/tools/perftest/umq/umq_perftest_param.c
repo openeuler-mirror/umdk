@@ -67,8 +67,9 @@ static void usage(void)
     (void)printf("      --trans-mode                    set umq_trans_mode_t.\n");
     (void)printf("      --tx-depth                      set queue tx-depth(default 512).\n");
     (void)printf("      --rx-depth                      set queue rx-depth(default 512).\n");
-    (void)printf("      --tp-mode                       set queue umq_tp_mode_t(default UMQ_TM_RC).\n");
-    (void)printf("      --tp-type                       set queue umq_tp_type_t(default UMQ_TP_TYPE_CTP).\n");
+    (void)printf("      --tp-mode                       set queue umq_tp_mode_t, 0 for UMQ_TM_RC, 1 for UMQ_TM_RM(default UMQ_TM_RM).\n");
+    (void)printf("      --tp-type                       set queue umq_tp_type_t, 0 for UMQ_TP_TYPE_RTP, 1 for UMQ_TP_TYPE_CTP, 2 for UMQ_TP_TYPE_UTP(default UMQ_TP_TYPE_CTP).\n");
+    (void)printf("                                      note: UMQ_TM_RC supports RTP/UTP, UMQ_TM_RM supports RTP/CTP/UTP\n");
     (void)printf("      --priority                      set queue priority(default 4).\n");
     (void)printf("      --eid-index                     set eid index.\n");
     (void)printf("      --use_atomic_window             use atomic window when enable flow control.\n");
@@ -101,6 +102,7 @@ static void init_cfg(umq_perftest_config_t *cfg)
     cfg->enable_perf = false;
     cfg->test_round = DEFAULT_LAT_TEST_ROUND;
     cfg->blk_mode = 0;
+    cfg->tp_mode = UMQ_TM_RM;
     cfg->tp_type = UMQ_TP_TYPE_CTP;
     cfg->priority = DEFAULT_PRIORITY;
     cfg->share_jfr = false;
