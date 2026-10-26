@@ -22,14 +22,20 @@ import com.huawei.umdk.snc.route.model.NextHopPort;
 import com.huawei.umdk.snc.route.model.RouteEntry;
 import com.huawei.umdk.snc.route.model.RouteTable;
 import com.huawei.umdk.snc.route.topo.template.model.Label;
+import com.huawei.umdk.snc.route.topo.template.model.NodeType;
 import com.huawei.umdk.snc.route.topo.template.model.Prefix;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class RouteInstantiationService {
     private static final Logger log = new Logger(RouteInstantiationService.class);
@@ -56,7 +62,7 @@ public class RouteInstantiationService {
 
     private static final long DEVICE_COUNT = 4;
 
-    private static final int PREFIX_ADDRESS_LEN = 27;
+    private static final int PREFIX_ADDRESS_LEN = 28;
 
     private static final int DOT_DECIMAL_ONE_PART = 8;
 
@@ -91,7 +97,7 @@ public class RouteInstantiationService {
         return newPrefix;
     }
 
-    private static void instantiateRouteForChassis(int chassisIndex, RouteTable routeTable, RouteTable newRouteTable) {
+    private static void instantiateRouteForNpu(int chassisIndex, RouteTable routeTable, RouteTable newRouteTable) {
         for (Map.Entry<Prefix, RouteEntry> entry : routeTable.getRouteEntries().entrySet()) {
             Prefix prefix = entry.getKey();
             RouteEntry routeEntry = entry.getValue();
@@ -100,6 +106,7 @@ public class RouteInstantiationService {
                     if (chassis == chassisIndex) {
                         continue;
                     }
+                    // 补充其他框 npu 的聚合地址
                     for (int slot = 0; slot < SLOT_COUNT; slot++) {
                         for (int ubpu = 0; ubpu < DEVICE_COUNT; ubpu++) {
                             long addr = (DEFAULT_VALUE << ONE_SECTION_POSITION) |
@@ -110,6 +117,34 @@ public class RouteInstantiationService {
                             newRouteEntry.copyNhpSet(routeEntry);
                             newRouteTable.getRouteEntries().put(newPrefix, newRouteEntry);
                         }
+                    }
+                }
+            } else {
+                Prefix newPrefix = fillHighBitAddress(prefix, chassisIndex);
+                RouteEntry newRouteEntry = new RouteEntry(newPrefix);
+                newRouteEntry.copyNhpSet(routeEntry);
+                newRouteTable.getRouteEntries().put(newPrefix, newRouteEntry);
+            }
+        }
+    }
+
+    private static void instantiateRouteForL1Sw(int chassisIndex, RouteTable routeTable, List<Prefix> l2RoutePrefix,
+                                                RouteTable newRouteTable) {
+        for (Map.Entry<Prefix, RouteEntry> entry : routeTable.getRouteEntries().entrySet()) {
+            Prefix prefix = entry.getKey();
+            RouteEntry routeEntry = entry.getValue();
+            if (prefix.getAddr() == 0) {
+                for (int chassis = 0; chassis < CHASSIS_COUNT; chassis++) {
+                    if (chassis == chassisIndex) {
+                        continue;
+                    }
+                    // 对于l1 sw，还需要补充其他框 l1 sw 和 npu 的明细地址
+                    // l2RoutePrefix 为l1 sw对端的l2 sw的路由前缀列表
+                    for (Prefix tempPrefix : l2RoutePrefix) {
+                        Prefix newPrefix = fillHighBitAddress(tempPrefix, chassis);
+                        RouteEntry newRouteEntry = new RouteEntry(newPrefix);
+                        newRouteEntry.copyNhpSet(routeEntry);
+                        newRouteTable.getRouteEntries().put(newPrefix, newRouteEntry);
                     }
                 }
             } else {
@@ -157,19 +192,66 @@ public class RouteInstantiationService {
         }
     }
 
-    private static Map<String, RouteTable> instantiateNodeRoute(SncTopology interRackTopology, SncNode node,
-                                                          RouteTable routeTable) {
+    private static List<Prefix> getL2SwPrefixes(String l1SwLabel, SncTopology rackTopology,
+                                         Map<String, RouteTable> routeTemplateMap) {
+        SncNode l1SwNode = rackTopology.getNodeMap().get(l1SwLabel);
+        if (l1SwNode == null) {
+            throw new IllegalArgumentException(String.format("l1 sw node %s not found in rack topology", l1SwLabel));
+        }
+
+        // 先收集对端l2 sw的label，Set直接去重
+        Set<String> l2SwLabels = new LinkedHashSet<>();
+        for (SncPort port : l1SwNode.getPortMap().values()) {
+            SncNode peerNode = rackTopology.getNodeMap().get(port.getPeerNodeId());
+            if (peerNode == null || !NodeType.L2_SW.getValue().equals(peerNode.type())) {
+                continue;
+            }
+            l2SwLabels.add(peerNode.getLabel().toString());
+        }
+
+        // 再处理每个l2 sw，记录路由prefix；不同l2 sw的路由prefix可能相同，需去重
+        Set<Prefix> prefixes = new LinkedHashSet<>();
+        for (String l2SwLabel : l2SwLabels) {
+            RouteTable l2SwRouteTable = routeTemplateMap.get(l2SwLabel);
+            if (l2SwRouteTable == null) {
+                log.error("route table not found for l2 sw %s", l2SwLabel);
+                continue;
+            }
+            prefixes.addAll(l2SwRouteTable.getRouteEntries().keySet());
+        }
+        return new ArrayList<>(prefixes);
+    }
+
+    private static Map<String, RouteTable> instantiateNodeRoute(Map<String, SncTopology> topologyMap, SncNode node,
+                                                                Map<String, RouteTable> routeTemplateMap) {
         Map<String, RouteTable> routeTableMap = new HashMap<>();
+        RouteTable routeTable = routeTemplateMap.get(node.getLabel().toString());
+        if (routeTable == null) {
+            throw new IllegalArgumentException(String.format("route table %s not found in rack topology",
+                node.getLabel().toString()));
+        }
+        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
         String nodeType = node.type();
-        if ("npu".equals(nodeType) || "l1_sw".equals(nodeType)) {
+        if (NodeType.NPU.getValue().equals(nodeType)) {
             // 每框实例化一份
             for (int chassisIndex = 0; chassisIndex < CHASSIS_COUNT; chassisIndex++) {
                 RouteTable newRouteTable = new RouteTable();
-                instantiateRouteForChassis(chassisIndex, routeTable, newRouteTable);
+                instantiateRouteForNpu(chassisIndex, routeTable, newRouteTable);
                 String nodeLabel = node.getLabel().addChassis(chassisIndex + 1);
                 routeTableMap.put(nodeLabel, newRouteTable);
             }
-        } else if ("l2_sw".equals(nodeType)) {
+        } else if (NodeType.L1_SW.getValue().equals(nodeType)) {
+            // 根据框内模板，找到l1 sw连接的l2 sw，收集其路由前缀，用于发布地址的转换
+            List<Prefix> l2RoutePrefix = getL2SwPrefixes(node.getLabel().toString(), rackTopology, routeTemplateMap);
+            // 每框实例化一份
+            for (int chassisIndex = 0; chassisIndex < CHASSIS_COUNT; chassisIndex++) {
+                RouteTable newRouteTable = new RouteTable();
+                instantiateRouteForL1Sw(chassisIndex, routeTable, l2RoutePrefix, newRouteTable);
+                String nodeLabel = node.getLabel().addChassis(chassisIndex + 1);
+                routeTableMap.put(nodeLabel, newRouteTable);
+            }
+        } else if (NodeType.L2_SW.getValue().equals(nodeType)) {
             RouteTable newRouteTable = new RouteTable();
             instantiateRouteForL2Sw(interRackTopology, node, routeTable, newRouteTable);
             routeTableMap.put(node.getLabel().toString(), newRouteTable);
@@ -180,34 +262,36 @@ public class RouteInstantiationService {
         return routeTableMap;
     }
 
+    // 对框内模板的路由进行实例化
     public static void instantiateXpodRoute(Map<String, SncTopology> topologyMap,
-        Map<String, Map<String, RouteTable>> routeTemplateMap, Map<String, RouteTable> routes) {
-        // 框内模板的路由进行实例化
-        String xpodType = "128_npu_rack";
+        Map<String, Map<String, RouteTable>> routeTemplateMap, Map<String, Map<String, RouteTable>> superNodeRoutes) {
+        String xpodType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
         Map<String, RouteTable> routeMap = routeTemplateMap.get(xpodType);
         SncTopology topology = topologyMap.get(xpodType);
-        SncTopology interRackTopology = topologyMap.get("128_npu_inter_rack");
-        for (Map.Entry<String, RouteTable> entry : routeMap.entrySet()) {
-            SncNode node = topology.getNodeMap().get(entry.getKey());
-            if (node == null) {
-                throw new IllegalArgumentException(String.format("node %s not found", entry.getKey()));
+        Map<String, RouteTable> routes = new HashMap<>();
+
+        // l1 sw 实例化会用到框内模板计算的l2 sw的路由，所以l1 sw实例化在l2 sw之前
+        // l1 sw 的发布路由，转化成其他框的l1 sw 和 npu的路由，基于l2 sw的路由进行转换，每一框复制一份，补齐高位
+        for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
+            SncNode node = entry.getValue();
+            if (NodeType.L1_SW.getValue().equals(node.type())) {
+                Map<String, RouteTable> routeTableMap = instantiateNodeRoute(topologyMap, node, routeMap);
+                routes.putAll(routeTableMap);
             }
-            Map<String, RouteTable> routeTableMap = instantiateNodeRoute(
-                interRackTopology, node, entry.getValue());
+        }
+
+        // npu和l2 sw进行路由实例化
+        for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
+            SncNode node = entry.getValue();
+            if (NodeType.L1_SW.getValue().equals(node.type())) {
+                continue;
+            }
+
+            Map<String, RouteTable> routeTableMap = instantiateNodeRoute(topologyMap, node, routeMap);
             routes.putAll(routeTableMap);
         }
 
-        // l2 sw的路由合并下
-        xpodType = "128_npu_inter_rack";
-        Map<String, RouteTable> interRouteMap = routeTemplateMap.get(xpodType);
-        for (Map.Entry<String, RouteTable> entry : interRouteMap.entrySet()) {
-            String nodeKey = entry.getKey();
-            if (routes.containsKey(nodeKey)) {
-                RouteTable oldRouteTable = routes.get(nodeKey);
-                RouteTable newRouteTable = entry.getValue();
-                oldRouteTable.addRouteTable(newRouteTable);
-            }
-        }
+        superNodeRoutes.put(xpodType, routes);
         log.info("instantiate xpod route success");
     }
 
@@ -221,7 +305,7 @@ public class RouteInstantiationService {
         }
 
         for (NpuForwardingChip chip : chips.values()) {
-            String label = String.format("type:npu|chassis:%d|slot:%d|ubpu:%d|die:%d",
+            String label = String.format("type:%s|chassis:%d|slot:%d|ubpu:%d|die:%d", NodeType.NPU.getValue(),
                 chassis, npuDevice.getBoardId(), npuDevice.getBoardIndex(), chip.getChipIndex());
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
@@ -251,7 +335,8 @@ public class RouteInstantiationService {
         }
 
         int chassis = extractRackNumber(swDevice.getRack());
-        String label = String.format("type:l1_sw|chassis:%d|index:%d", chassis, swDevice.getIndex());
+        String label = String.format("type:%s|chassis:%d|index:%d", NodeType.L1_SW.getValue(), chassis,
+            swDevice.getIndex());
         RouteTable routeTable = routes.get(label);
         if (routeTable == null) {
             log.error("route not found for label %s", label);
@@ -272,7 +357,7 @@ public class RouteInstantiationService {
         }
 
         for (SwForwardingChip chip : chips.values()) {
-            String label = String.format("type:l2_sw|index:%d|chip:%d",
+            String label = String.format("type:%s|index:%d|chip:%d", NodeType.L2_SW.getValue(),
                 swDevice.getIndex(), chip.getChipIndex());
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
@@ -303,7 +388,8 @@ public class RouteInstantiationService {
 
             RoutingEntry routingEntry = new RoutingEntry(routePrefix, outPortInfoMap, true);
             routingEntry.refreshReachable();
-            result.put(dstAddress, routingEntry);
+            String key = String.format("%s/%d", dstAddress, prefix.getMaskLen());
+            result.put(key, routingEntry);
         }
         return result;
     }

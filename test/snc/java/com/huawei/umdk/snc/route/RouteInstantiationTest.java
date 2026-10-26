@@ -26,13 +26,16 @@ import com.huawei.umdk.snc.route.topo.template.model.Label;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class RouteInstantiationTest {
@@ -59,8 +62,8 @@ public class RouteInstantiationTest {
     private static void constructSuperNode() {
         superNode.setName("SuperNode1");
 
-        SncTopology rackTopology = topologyMap.get("128_npu_rack");
-        SncTopology interRackTopology = topologyMap.get("128_npu_inter_rack");
+        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
 
         Map<String, NpuDevice> npuDevices = new HashMap<>();
         Map<String, SwDevice> swDevices = new HashMap<>();
@@ -247,66 +250,88 @@ public class RouteInstantiationTest {
     private void printRoutingEntry(Map<String, RoutingEntry> routeMap) {
         for (Map.Entry<String, RoutingEntry> entry : routeMap.entrySet()) {
             RoutingEntry routingEntry = entry.getValue();
-            log.info("%s/%d", routingEntry.getPrefix().getDstAddress(),
-                routingEntry.getPrefix().getMaskLength());
+            log.info("address prefix %s", entry.getKey());
+            List<String> interfaceList = new ArrayList<>();
             for (OutPortInfo outPortInfo : routingEntry.getOutPortInfos().values()) {
-                log.info("    %s converged=%s", outPortInfo.getPortName(), outPortInfo.isConverged());
+                interfaceList.add(outPortInfo.getPortName());
+            }
+            // 按端口从低到高打印：端口名中的数字段按数值比较（如 400GUB1/2/10 排在 400GUB1/2/2 之后）
+            interfaceList.sort(RouteInstantiationTest::comparePortName);
+            for (String interfaceName : interfaceList) {
+                log.info("    %s", interfaceName);
             }
         }
     }
 
+    private static int comparePortName(String left, String right) {
+        return Integer.compare(getPortNumber(left), getPortNumber(right));
+    }
+
+    /**
+     * 端口名格式：400GUB1/2/3 或 800GUB1/2/3:1（冒号后为子接口号），
+     * 第2个"/"后面的数字是端口号。
+     */
+    private static int getPortNumber(String portName) {
+        String[] parts = portName.split("/");
+        String portPart = parts[parts.length - 1];
+        int colonIndex = portPart.indexOf(':');
+        if (colonIndex >= 0) {
+            portPart = portPart.substring(0, colonIndex);
+        }
+        return Integer.parseInt(portPart);
+    }
+
     @Test
     void makeRoutesTest() {
-        sncService.routeCalculate();
-        Map<String, Map<String, RoutingEntry>> result = sncService.makeRoutes(superNode);
+        Map<String, Map<String, RoutingEntry>> result = sncService.makeRoutes(superNode,
+            SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         // 拼接该npu对应的路由的key
         String key = npuDevice.getDeviceName().concat("#").concat("2");
         Map<String, RoutingEntry> routeMap = result.get(key);
         printRoutingEntry(routeMap);
-        // 目的为31个npu：每个npu 8个 port cna和1个 pg cna
-        // 目的为4个l1 sw：每个l1 sw 1个 node cna
-        // 目的为4个l2 sw：每个l2 sw 2个 node cna
-        // 框间发布地址：1个
-        Assertions.assertEquals(31 * (8 + 1) + 4 + 4 * 2 + 3 * 32, routeMap.size());
+        // 目的为本框31个npu：每个npu 1个 聚合 cna
+        // 目的为本框4个l1 sw：每个l1 sw 1个 node cna
+        // 框间发布地址转换：
+        // 目的为其他框npu：3框，每框32个npu，每个npu 1个 聚合 cna
+        Assertions.assertEquals(31 + 4 + 3 * 32, routeMap.size());
     }
 
     @Test
     void calculateNpuRouteTest() {
-        sncService.routeCalculate();
-        sncService.makeRoutes(superNode);
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(npuDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
-        // 目的为31个npu：每个npu 8个 port cna和1个 pg cna
-        // 目的为4个l1 sw：每个l1 sw 1个 node cna
-        // 目的为4个l2 sw：每个l2 sw 2个 node cna
-        // 框间发布地址：1个
-        Assertions.assertEquals(31 * (8 + 1) + 4 + 4 * 2 + 3 * 32, routeMap.size());
+        // 目的为本框31个npu：每个npu 1个 聚合 cna
+        // 目的为本框4个l1 sw：每个l1 sw 1个 node cna
+        // 框间发布地址转换：
+            // 目的为其他框npu：3框，每框32个npu，每个npu 1个 聚合 cna
+        Assertions.assertEquals(31 + 4 + 3 * 32, routeMap.size());
     }
 
     @Test
     void calculateL1SwRouteTest() {
-        sncService.routeCalculate();
-        sncService.makeRoutes(superNode);
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 1);
         printRoutingEntry(routeMap);
-        // 目的为32个npu：每个npu 2个 port cna和1个 pg cna
+        // 目的为本框32个npu：每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
         // 目的为1个l2 sw：每个l2 sw 2个 node cna
-        // 框间发布地址：3框，每框32个
-        Assertions.assertEquals(32 * (2 + 1) + 2 + 3 * 32, routeMap.size());
+        // 发布地址转换：
+            // 1.1 目的为其他框l1 sw：3个l1 sw，每个l1 sw 1个 node cna
+            // 1.2 目的为其他框npu：3框，每框32个npu，每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
+        Assertions.assertEquals(32 * (2 + 1 + 1 + 1) + 2 + 3 + 3 * 32 * (2 + 1 + 1 + 1), routeMap.size());
     }
 
     @Test
     void calculateL2SwRouteTest() {
-        sncService.routeCalculate();
-        sncService.makeRoutes(superNode);
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
-        // 目的128个npu：每个npu 2个 port cna和1个 pg cna
+        // 目的128个npu：每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
         // 目的为4个l1 sw：每个l1 sw 1个 node cna
-        Assertions.assertEquals(128 * (2 + 1) + 4, routeMap.size());
+        Assertions.assertEquals(128 * (2 + 1 + 1 + 1) + 4, routeMap.size());
     }
 }

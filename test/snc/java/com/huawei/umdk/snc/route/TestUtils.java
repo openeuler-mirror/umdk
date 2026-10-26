@@ -18,6 +18,7 @@ import com.huawei.umdk.snc.route.topo.template.model.Prefix;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
 
 import java.util.ArrayList;
@@ -86,8 +87,8 @@ public class TestUtils {
         Map<String, SncTopology> topologyMap = new HashMap<>();
 
         List<String> templateFiles = new ArrayList<>();
-        templateFiles.add("128_npu_rack.json");
-        templateFiles.add("128_npu_inter_rack.json");
+        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue() + ".json");
+        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json");
 
         for (String template : templateFiles) {
             SncTopology topology = TopoTemplateService.parseTemplateFile(template);

@@ -1,70 +1,104 @@
 {
-  "template_label": "type:128_npu_rack",
+  "template_label": "type:atlas950_galaxy_rack32",
   "topo_nodes": [
     {
       "node_label": "type:npu|slot:1|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x1a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x10",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB1/2/1",
-          "port_cna": "0x11",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x11",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 0
         },
         {
           "port_id": 1,
           "port_name": "400GUB1/2/2",
-          "port_cna": "0x12",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x12",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 1
         },
         {
           "port_id": 2,
           "port_name": "400GUB1/2/3",
-          "port_cna": "0x13",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x13",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 0
         },
         {
           "port_id": 3,
           "port_name": "400GUB1/2/4",
-          "port_cna": "0x14",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x14",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 1
         },
         {
           "port_id": 4,
           "port_name": "400GUB1/2/5",
-          "port_cna": "0x15",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x15",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 0
         },
         {
           "port_id": 5,
           "port_name": "400GUB1/2/6",
-          "port_cna": "0x16",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x16",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 1
         },
         {
           "port_id": 6,
           "port_name": "400GUB1/2/7",
-          "port_cna": "0x17",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x17",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 0
         },
         {
           "port_id": 7,
           "port_name": "400GUB1/2/8",
-          "port_cna": "0x18",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x18",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 1
         }
@@ -73,8 +107,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x1b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -90,68 +127,102 @@
     },
     {
       "node_label": "type:npu|slot:1|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x3a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x30",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB1/4/1",
-          "port_cna": "0x31",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x31",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 2
         },
         {
           "port_id": 1,
           "port_name": "400GUB1/4/2",
-          "port_cna": "0x32",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x32",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 3
         },
         {
           "port_id": 2,
           "port_name": "400GUB1/4/3",
-          "port_cna": "0x33",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x33",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 2
         },
         {
           "port_id": 3,
           "port_name": "400GUB1/4/4",
-          "port_cna": "0x34",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x34",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 3
         },
         {
           "port_id": 4,
           "port_name": "400GUB1/4/5",
-          "port_cna": "0x35",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x35",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 2
         },
         {
           "port_id": 5,
           "port_name": "400GUB1/4/6",
-          "port_cna": "0x36",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x36",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 3
         },
         {
           "port_id": 6,
           "port_name": "400GUB1/4/7",
-          "port_cna": "0x37",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x37",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 2
         },
         {
           "port_id": 7,
           "port_name": "400GUB1/4/8",
-          "port_cna": "0x38",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x38",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 3
         }
@@ -160,8 +231,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x3b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -177,68 +251,102 @@
     },
     {
       "node_label": "type:npu|slot:1|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x5a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x50",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB1/6/1",
-          "port_cna": "0x51",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x51",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 4
         },
         {
           "port_id": 1,
           "port_name": "400GUB1/6/2",
-          "port_cna": "0x52",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x52",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 5
         },
         {
           "port_id": 2,
           "port_name": "400GUB1/6/3",
-          "port_cna": "0x53",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x53",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 4
         },
         {
           "port_id": 3,
           "port_name": "400GUB1/6/4",
-          "port_cna": "0x54",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x54",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 5
         },
         {
           "port_id": 4,
           "port_name": "400GUB1/6/5",
-          "port_cna": "0x55",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x55",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 4
         },
         {
           "port_id": 5,
           "port_name": "400GUB1/6/6",
-          "port_cna": "0x56",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x56",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 5
         },
         {
           "port_id": 6,
           "port_name": "400GUB1/6/7",
-          "port_cna": "0x57",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x57",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 4
         },
         {
           "port_id": 7,
           "port_name": "400GUB1/6/8",
-          "port_cna": "0x58",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x58",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 5
         }
@@ -247,8 +355,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x5b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x5b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -264,68 +375,102 @@
     },
     {
       "node_label": "type:npu|slot:1|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x7a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x70",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB1/8/1",
-          "port_cna": "0x71",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x71",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 6
         },
         {
           "port_id": 1,
           "port_name": "400GUB1/8/2",
-          "port_cna": "0x72",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x72",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 7
         },
         {
           "port_id": 2,
           "port_name": "400GUB1/8/3",
-          "port_cna": "0x73",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x73",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 6
         },
         {
           "port_id": 3,
           "port_name": "400GUB1/8/4",
-          "port_cna": "0x74",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x74",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 7
         },
         {
           "port_id": 4,
           "port_name": "400GUB1/8/5",
-          "port_cna": "0x75",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x75",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 6
         },
         {
           "port_id": 5,
           "port_name": "400GUB1/8/6",
-          "port_cna": "0x76",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x76",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 7
         },
         {
           "port_id": 6,
           "port_name": "400GUB1/8/7",
-          "port_cna": "0x77",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x77",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 6
         },
         {
           "port_id": 7,
           "port_name": "400GUB1/8/8",
-          "port_cna": "0x78",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x78",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 7
         }
@@ -334,8 +479,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x7b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x7b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -351,68 +499,102 @@
     },
     {
       "node_label": "type:npu|slot:3|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x9a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x90",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB3/2/1",
-          "port_cna": "0x91",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x91",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 8
         },
         {
           "port_id": 1,
           "port_name": "400GUB3/2/2",
-          "port_cna": "0x92",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x92",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 9
         },
         {
           "port_id": 2,
           "port_name": "400GUB3/2/3",
-          "port_cna": "0x93",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x93",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 8
         },
         {
           "port_id": 3,
           "port_name": "400GUB3/2/4",
-          "port_cna": "0x94",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x94",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 9
         },
         {
           "port_id": 4,
           "port_name": "400GUB3/2/5",
-          "port_cna": "0x95",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x95",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 8
         },
         {
           "port_id": 5,
           "port_name": "400GUB3/2/6",
-          "port_cna": "0x96",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x96",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 9
         },
         {
           "port_id": 6,
           "port_name": "400GUB3/2/7",
-          "port_cna": "0x97",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x97",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 8
         },
         {
           "port_id": 7,
           "port_name": "400GUB3/2/8",
-          "port_cna": "0x98",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x98",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 9
         }
@@ -421,8 +603,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x9b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x9b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -438,68 +623,102 @@
     },
     {
       "node_label": "type:npu|slot:3|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0xba",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0xb0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB3/4/1",
-          "port_cna": "0xb1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 10
         },
         {
           "port_id": 1,
           "port_name": "400GUB3/4/2",
-          "port_cna": "0xb2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 11
         },
         {
           "port_id": 2,
           "port_name": "400GUB3/4/3",
-          "port_cna": "0xb3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 10
         },
         {
           "port_id": 3,
           "port_name": "400GUB3/4/4",
-          "port_cna": "0xb4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 11
         },
         {
           "port_id": 4,
           "port_name": "400GUB3/4/5",
-          "port_cna": "0xb5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 10
         },
         {
           "port_id": 5,
           "port_name": "400GUB3/4/6",
-          "port_cna": "0xb6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 11
         },
         {
           "port_id": 6,
           "port_name": "400GUB3/4/7",
-          "port_cna": "0xb7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 10
         },
         {
           "port_id": 7,
           "port_name": "400GUB3/4/8",
-          "port_cna": "0xb8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xb8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 11
         }
@@ -508,8 +727,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0xbb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xbb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -525,68 +747,102 @@
     },
     {
       "node_label": "type:npu|slot:3|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0xda",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0xd0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB3/6/1",
-          "port_cna": "0xd1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 12
         },
         {
           "port_id": 1,
           "port_name": "400GUB3/6/2",
-          "port_cna": "0xd2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 13
         },
         {
           "port_id": 2,
           "port_name": "400GUB3/6/3",
-          "port_cna": "0xd3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 12
         },
         {
           "port_id": 3,
           "port_name": "400GUB3/6/4",
-          "port_cna": "0xd4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 13
         },
         {
           "port_id": 4,
           "port_name": "400GUB3/6/5",
-          "port_cna": "0xd5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 12
         },
         {
           "port_id": 5,
           "port_name": "400GUB3/6/6",
-          "port_cna": "0xd6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 13
         },
         {
           "port_id": 6,
           "port_name": "400GUB3/6/7",
-          "port_cna": "0xd7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 12
         },
         {
           "port_id": 7,
           "port_name": "400GUB3/6/8",
-          "port_cna": "0xd8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xd8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 13
         }
@@ -595,8 +851,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0xdb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xdb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -612,68 +871,102 @@
     },
     {
       "node_label": "type:npu|slot:3|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0xfa",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0xf0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB3/8/1",
-          "port_cna": "0xf1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 14
         },
         {
           "port_id": 1,
           "port_name": "400GUB3/8/2",
-          "port_cna": "0xf2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 15
         },
         {
           "port_id": 2,
           "port_name": "400GUB3/8/3",
-          "port_cna": "0xf3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 14
         },
         {
           "port_id": 3,
           "port_name": "400GUB3/8/4",
-          "port_cna": "0xf4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 15
         },
         {
           "port_id": 4,
           "port_name": "400GUB3/8/5",
-          "port_cna": "0xf5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 14
         },
         {
           "port_id": 5,
           "port_name": "400GUB3/8/6",
-          "port_cna": "0xf6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 15
         },
         {
           "port_id": 6,
           "port_name": "400GUB3/8/7",
-          "port_cna": "0xf7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 14
         },
         {
           "port_id": 7,
           "port_name": "400GUB3/8/8",
-          "port_cna": "0xf8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xf8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 15
         }
@@ -682,8 +975,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0xfb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0xfb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -699,68 +995,102 @@
     },
     {
       "node_label": "type:npu|slot:5|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x11a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x110",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB5/2/1",
-          "port_cna": "0x111",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x111",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 16
         },
         {
           "port_id": 1,
           "port_name": "400GUB5/2/2",
-          "port_cna": "0x112",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x112",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 17
         },
         {
           "port_id": 2,
           "port_name": "400GUB5/2/3",
-          "port_cna": "0x113",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x113",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 16
         },
         {
           "port_id": 3,
           "port_name": "400GUB5/2/4",
-          "port_cna": "0x114",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x114",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 17
         },
         {
           "port_id": 4,
           "port_name": "400GUB5/2/5",
-          "port_cna": "0x115",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x115",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 16
         },
         {
           "port_id": 5,
           "port_name": "400GUB5/2/6",
-          "port_cna": "0x116",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x116",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 17
         },
         {
           "port_id": 6,
           "port_name": "400GUB5/2/7",
-          "port_cna": "0x117",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x117",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 16
         },
         {
           "port_id": 7,
           "port_name": "400GUB5/2/8",
-          "port_cna": "0x118",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x118",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 17
         }
@@ -769,8 +1099,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x11b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x11b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -786,68 +1119,102 @@
     },
     {
       "node_label": "type:npu|slot:5|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x13a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x130",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB5/4/1",
-          "port_cna": "0x131",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x131",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 18
         },
         {
           "port_id": 1,
           "port_name": "400GUB5/4/2",
-          "port_cna": "0x132",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x132",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 19
         },
         {
           "port_id": 2,
           "port_name": "400GUB5/4/3",
-          "port_cna": "0x133",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x133",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 18
         },
         {
           "port_id": 3,
           "port_name": "400GUB5/4/4",
-          "port_cna": "0x134",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x134",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 19
         },
         {
           "port_id": 4,
           "port_name": "400GUB5/4/5",
-          "port_cna": "0x135",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x135",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 18
         },
         {
           "port_id": 5,
           "port_name": "400GUB5/4/6",
-          "port_cna": "0x136",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x136",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 19
         },
         {
           "port_id": 6,
           "port_name": "400GUB5/4/7",
-          "port_cna": "0x137",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x137",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 18
         },
         {
           "port_id": 7,
           "port_name": "400GUB5/4/8",
-          "port_cna": "0x138",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x138",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 19
         }
@@ -856,8 +1223,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x13b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x13b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -873,68 +1243,102 @@
     },
     {
       "node_label": "type:npu|slot:5|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x15a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x150",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB5/6/1",
-          "port_cna": "0x151",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x151",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 20
         },
         {
           "port_id": 1,
           "port_name": "400GUB5/6/2",
-          "port_cna": "0x152",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x152",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 21
         },
         {
           "port_id": 2,
           "port_name": "400GUB5/6/3",
-          "port_cna": "0x153",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x153",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 20
         },
         {
           "port_id": 3,
           "port_name": "400GUB5/6/4",
-          "port_cna": "0x154",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x154",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 21
         },
         {
           "port_id": 4,
           "port_name": "400GUB5/6/5",
-          "port_cna": "0x155",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x155",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 20
         },
         {
           "port_id": 5,
           "port_name": "400GUB5/6/6",
-          "port_cna": "0x156",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x156",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 21
         },
         {
           "port_id": 6,
           "port_name": "400GUB5/6/7",
-          "port_cna": "0x157",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x157",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 20
         },
         {
           "port_id": 7,
           "port_name": "400GUB5/6/8",
-          "port_cna": "0x158",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x158",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 21
         }
@@ -943,8 +1347,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x15b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x15b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -960,68 +1367,102 @@
     },
     {
       "node_label": "type:npu|slot:5|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x17a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x170",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB5/8/1",
-          "port_cna": "0x171",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x171",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 22
         },
         {
           "port_id": 1,
           "port_name": "400GUB5/8/2",
-          "port_cna": "0x172",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x172",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 23
         },
         {
           "port_id": 2,
           "port_name": "400GUB5/8/3",
-          "port_cna": "0x173",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x173",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 22
         },
         {
           "port_id": 3,
           "port_name": "400GUB5/8/4",
-          "port_cna": "0x174",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x174",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 23
         },
         {
           "port_id": 4,
           "port_name": "400GUB5/8/5",
-          "port_cna": "0x175",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x175",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 22
         },
         {
           "port_id": 5,
           "port_name": "400GUB5/8/6",
-          "port_cna": "0x176",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x176",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 23
         },
         {
           "port_id": 6,
           "port_name": "400GUB5/8/7",
-          "port_cna": "0x177",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x177",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 22
         },
         {
           "port_id": 7,
           "port_name": "400GUB5/8/8",
-          "port_cna": "0x178",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x178",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 23
         }
@@ -1030,8 +1471,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x17b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x17b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1047,68 +1491,102 @@
     },
     {
       "node_label": "type:npu|slot:7|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x19a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x190",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB7/2/1",
-          "port_cna": "0x191",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x191",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 24
         },
         {
           "port_id": 1,
           "port_name": "400GUB7/2/2",
-          "port_cna": "0x192",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x192",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 25
         },
         {
           "port_id": 2,
           "port_name": "400GUB7/2/3",
-          "port_cna": "0x193",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x193",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 24
         },
         {
           "port_id": 3,
           "port_name": "400GUB7/2/4",
-          "port_cna": "0x194",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x194",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 25
         },
         {
           "port_id": 4,
           "port_name": "400GUB7/2/5",
-          "port_cna": "0x195",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x195",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 24
         },
         {
           "port_id": 5,
           "port_name": "400GUB7/2/6",
-          "port_cna": "0x196",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x196",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 25
         },
         {
           "port_id": 6,
           "port_name": "400GUB7/2/7",
-          "port_cna": "0x197",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x197",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 24
         },
         {
           "port_id": 7,
           "port_name": "400GUB7/2/8",
-          "port_cna": "0x198",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x198",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 25
         }
@@ -1117,8 +1595,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x19b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x19b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1134,68 +1615,102 @@
     },
     {
       "node_label": "type:npu|slot:7|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x1ba",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x1b0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB7/4/1",
-          "port_cna": "0x1b1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 26
         },
         {
           "port_id": 1,
           "port_name": "400GUB7/4/2",
-          "port_cna": "0x1b2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 27
         },
         {
           "port_id": 2,
           "port_name": "400GUB7/4/3",
-          "port_cna": "0x1b3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 26
         },
         {
           "port_id": 3,
           "port_name": "400GUB7/4/4",
-          "port_cna": "0x1b4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 27
         },
         {
           "port_id": 4,
           "port_name": "400GUB7/4/5",
-          "port_cna": "0x1b5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 26
         },
         {
           "port_id": 5,
           "port_name": "400GUB7/4/6",
-          "port_cna": "0x1b6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 27
         },
         {
           "port_id": 6,
           "port_name": "400GUB7/4/7",
-          "port_cna": "0x1b7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 26
         },
         {
           "port_id": 7,
           "port_name": "400GUB7/4/8",
-          "port_cna": "0x1b8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1b8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 27
         }
@@ -1204,8 +1719,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x1bb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1bb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1221,68 +1739,102 @@
     },
     {
       "node_label": "type:npu|slot:7|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x1da",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x1d0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB7/6/1",
-          "port_cna": "0x1d1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 28
         },
         {
           "port_id": 1,
           "port_name": "400GUB7/6/2",
-          "port_cna": "0x1d2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 29
         },
         {
           "port_id": 2,
           "port_name": "400GUB7/6/3",
-          "port_cna": "0x1d3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 28
         },
         {
           "port_id": 3,
           "port_name": "400GUB7/6/4",
-          "port_cna": "0x1d4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 29
         },
         {
           "port_id": 4,
           "port_name": "400GUB7/6/5",
-          "port_cna": "0x1d5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 28
         },
         {
           "port_id": 5,
           "port_name": "400GUB7/6/6",
-          "port_cna": "0x1d6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 29
         },
         {
           "port_id": 6,
           "port_name": "400GUB7/6/7",
-          "port_cna": "0x1d7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 28
         },
         {
           "port_id": 7,
           "port_name": "400GUB7/6/8",
-          "port_cna": "0x1d8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1d8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 29
         }
@@ -1291,8 +1843,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x1db",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1db",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1308,68 +1863,102 @@
     },
     {
       "node_label": "type:npu|slot:7|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x1fa",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x1f0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB7/8/1",
-          "port_cna": "0x1f1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 30
         },
         {
           "port_id": 1,
           "port_name": "400GUB7/8/2",
-          "port_cna": "0x1f2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 31
         },
         {
           "port_id": 2,
           "port_name": "400GUB7/8/3",
-          "port_cna": "0x1f3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 30
         },
         {
           "port_id": 3,
           "port_name": "400GUB7/8/4",
-          "port_cna": "0x1f4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 31
         },
         {
           "port_id": 4,
           "port_name": "400GUB7/8/5",
-          "port_cna": "0x1f5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 30
         },
         {
           "port_id": 5,
           "port_name": "400GUB7/8/6",
-          "port_cna": "0x1f6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 31
         },
         {
           "port_id": 6,
           "port_name": "400GUB7/8/7",
-          "port_cna": "0x1f7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 30
         },
         {
           "port_id": 7,
           "port_name": "400GUB7/8/8",
-          "port_cna": "0x1f8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1f8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 31
         }
@@ -1378,8 +1967,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x1fb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x1fb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1395,68 +1987,102 @@
     },
     {
       "node_label": "type:npu|slot:9|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x21a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x210",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB9/2/1",
-          "port_cna": "0x211",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x211",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 32
         },
         {
           "port_id": 1,
           "port_name": "400GUB9/2/2",
-          "port_cna": "0x212",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x212",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 33
         },
         {
           "port_id": 2,
           "port_name": "400GUB9/2/3",
-          "port_cna": "0x213",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x213",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 32
         },
         {
           "port_id": 3,
           "port_name": "400GUB9/2/4",
-          "port_cna": "0x214",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x214",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 33
         },
         {
           "port_id": 4,
           "port_name": "400GUB9/2/5",
-          "port_cna": "0x215",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x215",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 32
         },
         {
           "port_id": 5,
           "port_name": "400GUB9/2/6",
-          "port_cna": "0x216",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x216",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 33
         },
         {
           "port_id": 6,
           "port_name": "400GUB9/2/7",
-          "port_cna": "0x217",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x217",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 32
         },
         {
           "port_id": 7,
           "port_name": "400GUB9/2/8",
-          "port_cna": "0x218",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x218",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 33
         }
@@ -1465,8 +2091,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x21b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x21b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1482,68 +2111,102 @@
     },
     {
       "node_label": "type:npu|slot:9|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x23a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x230",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB9/4/1",
-          "port_cna": "0x231",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x231",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 34
         },
         {
           "port_id": 1,
           "port_name": "400GUB9/4/2",
-          "port_cna": "0x232",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x232",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 35
         },
         {
           "port_id": 2,
           "port_name": "400GUB9/4/3",
-          "port_cna": "0x233",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x233",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 34
         },
         {
           "port_id": 3,
           "port_name": "400GUB9/4/4",
-          "port_cna": "0x234",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x234",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 35
         },
         {
           "port_id": 4,
           "port_name": "400GUB9/4/5",
-          "port_cna": "0x235",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x235",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 34
         },
         {
           "port_id": 5,
           "port_name": "400GUB9/4/6",
-          "port_cna": "0x236",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x236",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 35
         },
         {
           "port_id": 6,
           "port_name": "400GUB9/4/7",
-          "port_cna": "0x237",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x237",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 34
         },
         {
           "port_id": 7,
           "port_name": "400GUB9/4/8",
-          "port_cna": "0x238",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x238",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 35
         }
@@ -1552,8 +2215,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x23b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x23b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1569,68 +2235,102 @@
     },
     {
       "node_label": "type:npu|slot:9|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x25a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x250",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB9/6/1",
-          "port_cna": "0x251",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x251",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 36
         },
         {
           "port_id": 1,
           "port_name": "400GUB9/6/2",
-          "port_cna": "0x252",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x252",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 37
         },
         {
           "port_id": 2,
           "port_name": "400GUB9/6/3",
-          "port_cna": "0x253",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x253",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 36
         },
         {
           "port_id": 3,
           "port_name": "400GUB9/6/4",
-          "port_cna": "0x254",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x254",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 37
         },
         {
           "port_id": 4,
           "port_name": "400GUB9/6/5",
-          "port_cna": "0x255",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x255",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 36
         },
         {
           "port_id": 5,
           "port_name": "400GUB9/6/6",
-          "port_cna": "0x256",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x256",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 37
         },
         {
           "port_id": 6,
           "port_name": "400GUB9/6/7",
-          "port_cna": "0x257",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x257",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 36
         },
         {
           "port_id": 7,
           "port_name": "400GUB9/6/8",
-          "port_cna": "0x258",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x258",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 37
         }
@@ -1639,8 +2339,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x25b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x25b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1656,68 +2359,102 @@
     },
     {
       "node_label": "type:npu|slot:9|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x27a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x270",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB9/8/1",
-          "port_cna": "0x271",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x271",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 38
         },
         {
           "port_id": 1,
           "port_name": "400GUB9/8/2",
-          "port_cna": "0x272",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x272",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 39
         },
         {
           "port_id": 2,
           "port_name": "400GUB9/8/3",
-          "port_cna": "0x273",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x273",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 38
         },
         {
           "port_id": 3,
           "port_name": "400GUB9/8/4",
-          "port_cna": "0x274",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x274",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 39
         },
         {
           "port_id": 4,
           "port_name": "400GUB9/8/5",
-          "port_cna": "0x275",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x275",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 38
         },
         {
           "port_id": 5,
           "port_name": "400GUB9/8/6",
-          "port_cna": "0x276",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x276",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 39
         },
         {
           "port_id": 6,
           "port_name": "400GUB9/8/7",
-          "port_cna": "0x277",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x277",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 38
         },
         {
           "port_id": 7,
           "port_name": "400GUB9/8/8",
-          "port_cna": "0x278",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x278",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 39
         }
@@ -1726,8 +2463,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x27b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x27b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1743,68 +2483,102 @@
     },
     {
       "node_label": "type:npu|slot:11|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x29a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x290",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB11/2/1",
-          "port_cna": "0x291",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x291",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 40
         },
         {
           "port_id": 1,
           "port_name": "400GUB11/2/2",
-          "port_cna": "0x292",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x292",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 41
         },
         {
           "port_id": 2,
           "port_name": "400GUB11/2/3",
-          "port_cna": "0x293",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x293",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 40
         },
         {
           "port_id": 3,
           "port_name": "400GUB11/2/4",
-          "port_cna": "0x294",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x294",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 41
         },
         {
           "port_id": 4,
           "port_name": "400GUB11/2/5",
-          "port_cna": "0x295",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x295",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 40
         },
         {
           "port_id": 5,
           "port_name": "400GUB11/2/6",
-          "port_cna": "0x296",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x296",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 41
         },
         {
           "port_id": 6,
           "port_name": "400GUB11/2/7",
-          "port_cna": "0x297",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x297",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 40
         },
         {
           "port_id": 7,
           "port_name": "400GUB11/2/8",
-          "port_cna": "0x298",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x298",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 41
         }
@@ -1813,8 +2587,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x29b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x29b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1830,68 +2607,102 @@
     },
     {
       "node_label": "type:npu|slot:11|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x2ba",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x2b0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB11/4/1",
-          "port_cna": "0x2b1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 42
         },
         {
           "port_id": 1,
           "port_name": "400GUB11/4/2",
-          "port_cna": "0x2b2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 43
         },
         {
           "port_id": 2,
           "port_name": "400GUB11/4/3",
-          "port_cna": "0x2b3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 42
         },
         {
           "port_id": 3,
           "port_name": "400GUB11/4/4",
-          "port_cna": "0x2b4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 43
         },
         {
           "port_id": 4,
           "port_name": "400GUB11/4/5",
-          "port_cna": "0x2b5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 42
         },
         {
           "port_id": 5,
           "port_name": "400GUB11/4/6",
-          "port_cna": "0x2b6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 43
         },
         {
           "port_id": 6,
           "port_name": "400GUB11/4/7",
-          "port_cna": "0x2b7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 42
         },
         {
           "port_id": 7,
           "port_name": "400GUB11/4/8",
-          "port_cna": "0x2b8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2b8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 43
         }
@@ -1900,8 +2711,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x2bb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2bb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -1917,68 +2731,102 @@
     },
     {
       "node_label": "type:npu|slot:11|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x2da",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x2d0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB11/6/1",
-          "port_cna": "0x2d1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 44
         },
         {
           "port_id": 1,
           "port_name": "400GUB11/6/2",
-          "port_cna": "0x2d2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 45
         },
         {
           "port_id": 2,
           "port_name": "400GUB11/6/3",
-          "port_cna": "0x2d3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 44
         },
         {
           "port_id": 3,
           "port_name": "400GUB11/6/4",
-          "port_cna": "0x2d4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 45
         },
         {
           "port_id": 4,
           "port_name": "400GUB11/6/5",
-          "port_cna": "0x2d5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 44
         },
         {
           "port_id": 5,
           "port_name": "400GUB11/6/6",
-          "port_cna": "0x2d6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 45
         },
         {
           "port_id": 6,
           "port_name": "400GUB11/6/7",
-          "port_cna": "0x2d7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 44
         },
         {
           "port_id": 7,
           "port_name": "400GUB11/6/8",
-          "port_cna": "0x2d8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2d8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 45
         }
@@ -1987,8 +2835,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x2db",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2db",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2004,68 +2855,102 @@
     },
     {
       "node_label": "type:npu|slot:11|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x2fa",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x2f0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB11/8/1",
-          "port_cna": "0x2f1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 46
         },
         {
           "port_id": 1,
           "port_name": "400GUB11/8/2",
-          "port_cna": "0x2f2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 47
         },
         {
           "port_id": 2,
           "port_name": "400GUB11/8/3",
-          "port_cna": "0x2f3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 46
         },
         {
           "port_id": 3,
           "port_name": "400GUB11/8/4",
-          "port_cna": "0x2f4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 47
         },
         {
           "port_id": 4,
           "port_name": "400GUB11/8/5",
-          "port_cna": "0x2f5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 46
         },
         {
           "port_id": 5,
           "port_name": "400GUB11/8/6",
-          "port_cna": "0x2f6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 47
         },
         {
           "port_id": 6,
           "port_name": "400GUB11/8/7",
-          "port_cna": "0x2f7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 46
         },
         {
           "port_id": 7,
           "port_name": "400GUB11/8/8",
-          "port_cna": "0x2f8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2f8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 47
         }
@@ -2074,8 +2959,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x2fb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x2fb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2091,68 +2979,102 @@
     },
     {
       "node_label": "type:npu|slot:13|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x31a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x310",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB13/2/1",
-          "port_cna": "0x311",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x311",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 48
         },
         {
           "port_id": 1,
           "port_name": "400GUB13/2/2",
-          "port_cna": "0x312",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x312",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 49
         },
         {
           "port_id": 2,
           "port_name": "400GUB13/2/3",
-          "port_cna": "0x313",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x313",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 48
         },
         {
           "port_id": 3,
           "port_name": "400GUB13/2/4",
-          "port_cna": "0x314",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x314",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 49
         },
         {
           "port_id": 4,
           "port_name": "400GUB13/2/5",
-          "port_cna": "0x315",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x315",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 48
         },
         {
           "port_id": 5,
           "port_name": "400GUB13/2/6",
-          "port_cna": "0x316",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x316",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 49
         },
         {
           "port_id": 6,
           "port_name": "400GUB13/2/7",
-          "port_cna": "0x317",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x317",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 48
         },
         {
           "port_id": 7,
           "port_name": "400GUB13/2/8",
-          "port_cna": "0x318",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x318",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 49
         }
@@ -2161,8 +3083,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x31b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x31b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2178,68 +3103,102 @@
     },
     {
       "node_label": "type:npu|slot:13|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x33a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x330",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB13/4/1",
-          "port_cna": "0x331",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x331",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 50
         },
         {
           "port_id": 1,
           "port_name": "400GUB13/4/2",
-          "port_cna": "0x332",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x332",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 51
         },
         {
           "port_id": 2,
           "port_name": "400GUB13/4/3",
-          "port_cna": "0x333",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x333",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 50
         },
         {
           "port_id": 3,
           "port_name": "400GUB13/4/4",
-          "port_cna": "0x334",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x334",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 51
         },
         {
           "port_id": 4,
           "port_name": "400GUB13/4/5",
-          "port_cna": "0x335",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x335",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 50
         },
         {
           "port_id": 5,
           "port_name": "400GUB13/4/6",
-          "port_cna": "0x336",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x336",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 51
         },
         {
           "port_id": 6,
           "port_name": "400GUB13/4/7",
-          "port_cna": "0x337",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x337",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 50
         },
         {
           "port_id": 7,
           "port_name": "400GUB13/4/8",
-          "port_cna": "0x338",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x338",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 51
         }
@@ -2248,8 +3207,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x33b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x33b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2265,68 +3227,102 @@
     },
     {
       "node_label": "type:npu|slot:13|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x35a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x350",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB13/6/1",
-          "port_cna": "0x351",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x351",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 52
         },
         {
           "port_id": 1,
           "port_name": "400GUB13/6/2",
-          "port_cna": "0x352",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x352",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 53
         },
         {
           "port_id": 2,
           "port_name": "400GUB13/6/3",
-          "port_cna": "0x353",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x353",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 52
         },
         {
           "port_id": 3,
           "port_name": "400GUB13/6/4",
-          "port_cna": "0x354",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x354",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 53
         },
         {
           "port_id": 4,
           "port_name": "400GUB13/6/5",
-          "port_cna": "0x355",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x355",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 52
         },
         {
           "port_id": 5,
           "port_name": "400GUB13/6/6",
-          "port_cna": "0x356",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x356",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 53
         },
         {
           "port_id": 6,
           "port_name": "400GUB13/6/7",
-          "port_cna": "0x357",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x357",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 52
         },
         {
           "port_id": 7,
           "port_name": "400GUB13/6/8",
-          "port_cna": "0x358",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x358",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 53
         }
@@ -2335,8 +3331,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x35b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x35b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2352,68 +3351,102 @@
     },
     {
       "node_label": "type:npu|slot:13|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x37a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x370",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB13/8/1",
-          "port_cna": "0x371",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x371",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 54
         },
         {
           "port_id": 1,
           "port_name": "400GUB13/8/2",
-          "port_cna": "0x372",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x372",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 55
         },
         {
           "port_id": 2,
           "port_name": "400GUB13/8/3",
-          "port_cna": "0x373",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x373",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 54
         },
         {
           "port_id": 3,
           "port_name": "400GUB13/8/4",
-          "port_cna": "0x374",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x374",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 55
         },
         {
           "port_id": 4,
           "port_name": "400GUB13/8/5",
-          "port_cna": "0x375",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x375",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 54
         },
         {
           "port_id": 5,
           "port_name": "400GUB13/8/6",
-          "port_cna": "0x376",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x376",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 55
         },
         {
           "port_id": 6,
           "port_name": "400GUB13/8/7",
-          "port_cna": "0x377",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x377",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 54
         },
         {
           "port_id": 7,
           "port_name": "400GUB13/8/8",
-          "port_cna": "0x378",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x378",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 55
         }
@@ -2422,8 +3455,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x37b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x37b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2439,68 +3475,102 @@
     },
     {
       "node_label": "type:npu|slot:15|ubpu:1|die:2",
+      "node_cna": {
+        "address": "0x39a",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x390",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB15/2/1",
-          "port_cna": "0x391",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x391",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 56
         },
         {
           "port_id": 1,
           "port_name": "400GUB15/2/2",
-          "port_cna": "0x392",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x392",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 57
         },
         {
           "port_id": 2,
           "port_name": "400GUB15/2/3",
-          "port_cna": "0x393",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x393",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 56
         },
         {
           "port_id": 3,
           "port_name": "400GUB15/2/4",
-          "port_cna": "0x394",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x394",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 57
         },
         {
           "port_id": 4,
           "port_name": "400GUB15/2/5",
-          "port_cna": "0x395",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x395",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 56
         },
         {
           "port_id": 5,
           "port_name": "400GUB15/2/6",
-          "port_cna": "0x396",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x396",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 57
         },
         {
           "port_id": 6,
           "port_name": "400GUB15/2/7",
-          "port_cna": "0x397",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x397",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 56
         },
         {
           "port_id": 7,
           "port_name": "400GUB15/2/8",
-          "port_cna": "0x398",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x398",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 57
         }
@@ -2509,8 +3579,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x39b",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x39b",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2526,68 +3599,102 @@
     },
     {
       "node_label": "type:npu|slot:15|ubpu:2|die:2",
+      "node_cna": {
+        "address": "0x3ba",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x3b0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB15/4/1",
-          "port_cna": "0x3b1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 58
         },
         {
           "port_id": 1,
           "port_name": "400GUB15/4/2",
-          "port_cna": "0x3b2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 59
         },
         {
           "port_id": 2,
           "port_name": "400GUB15/4/3",
-          "port_cna": "0x3b3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 58
         },
         {
           "port_id": 3,
           "port_name": "400GUB15/4/4",
-          "port_cna": "0x3b4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 59
         },
         {
           "port_id": 4,
           "port_name": "400GUB15/4/5",
-          "port_cna": "0x3b5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 58
         },
         {
           "port_id": 5,
           "port_name": "400GUB15/4/6",
-          "port_cna": "0x3b6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 59
         },
         {
           "port_id": 6,
           "port_name": "400GUB15/4/7",
-          "port_cna": "0x3b7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 58
         },
         {
           "port_id": 7,
           "port_name": "400GUB15/4/8",
-          "port_cna": "0x3b8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3b8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 59
         }
@@ -2596,8 +3703,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x3bb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3bb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2613,68 +3723,102 @@
     },
     {
       "node_label": "type:npu|slot:15|ubpu:3|die:2",
+      "node_cna": {
+        "address": "0x3da",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x3d0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB15/6/1",
-          "port_cna": "0x3d1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 60
         },
         {
           "port_id": 1,
           "port_name": "400GUB15/6/2",
-          "port_cna": "0x3d2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 61
         },
         {
           "port_id": 2,
           "port_name": "400GUB15/6/3",
-          "port_cna": "0x3d3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 60
         },
         {
           "port_id": 3,
           "port_name": "400GUB15/6/4",
-          "port_cna": "0x3d4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 61
         },
         {
           "port_id": 4,
           "port_name": "400GUB15/6/5",
-          "port_cna": "0x3d5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 60
         },
         {
           "port_id": 5,
           "port_name": "400GUB15/6/6",
-          "port_cna": "0x3d6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 61
         },
         {
           "port_id": 6,
           "port_name": "400GUB15/6/7",
-          "port_cna": "0x3d7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 60
         },
         {
           "port_id": 7,
           "port_name": "400GUB15/6/8",
-          "port_cna": "0x3d8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3d8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 61
         }
@@ -2683,8 +3827,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x3db",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3db",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2700,68 +3847,102 @@
     },
     {
       "node_label": "type:npu|slot:15|ubpu:4|die:2",
+      "node_cna": {
+        "address": "0x3fa",
+        "mask": "0x7ff",
+        "length": 32
+      },
+      "aggregate_cna": {
+        "address": "0x3f0",
+        "mask": "0x7ff",
+        "length": 28
+      },
       "ports": [
         {
           "port_id": 0,
           "port_name": "400GUB15/8/1",
-          "port_cna": "0x3f1",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f1",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 62
         },
         {
           "port_id": 1,
           "port_name": "400GUB15/8/2",
-          "port_cna": "0x3f2",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f2",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:4",
           "peer_port_id": 63
         },
         {
           "port_id": 2,
           "port_name": "400GUB15/8/3",
-          "port_cna": "0x3f3",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f3",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 62
         },
         {
           "port_id": 3,
           "port_name": "400GUB15/8/4",
-          "port_cna": "0x3f4",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f4",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:3",
           "peer_port_id": 63
         },
         {
           "port_id": 4,
           "port_name": "400GUB15/8/5",
-          "port_cna": "0x3f5",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f5",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 62
         },
         {
           "port_id": 5,
           "port_name": "400GUB15/8/6",
-          "port_cna": "0x3f6",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f6",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:2",
           "peer_port_id": 63
         },
         {
           "port_id": 6,
           "port_name": "400GUB15/8/7",
-          "port_cna": "0x3f7",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f7",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 62
         },
         {
           "port_id": 7,
           "port_name": "400GUB15/8/8",
-          "port_cna": "0x3f8",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3f8",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "peer_node_label": "type:l1_sw|index:1",
           "peer_port_id": 63
         }
@@ -2770,8 +3951,11 @@
         {
           "port_type": "PG",
           "port_id": 0,
-          "port_cna": "0x3fb",
-          "mask": "0x7ff",
+          "port_cna": {
+            "address": "0x3fb",
+            "mask": "0x7ff",
+            "length": 32
+          },
           "members": [
             0,
             1,
@@ -2787,8 +3971,11 @@
     },
     {
       "node_label": "type:l1_sw|index:1",
-      "node_cna": "0xe",
-      "mask": "0x7ff",
+      "node_cna": {
+        "address": "0x4f",
+        "mask": "0x7ff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -3562,8 +4749,11 @@
     },
     {
       "node_label": "type:l1_sw|index:2",
-      "node_cna": "0x10e",
-      "mask": "0x7ff",
+      "node_cna": {
+        "address": "0xcf",
+        "mask": "0x7ff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -4337,8 +5527,11 @@
     },
     {
       "node_label": "type:l1_sw|index:3",
-      "node_cna": "0x20e",
-      "mask": "0x7ff",
+      "node_cna": {
+        "address": "0x14f",
+        "mask": "0x7ff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -5112,8 +6305,11 @@
     },
     {
       "node_label": "type:l1_sw|index:4",
-      "node_cna": "0x30e",
-      "mask": "0x7ff",
+      "node_cna": {
+        "address": "0x1cf",
+        "mask": "0x7ff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -5887,8 +7083,11 @@
     },
     {
       "node_label": "type:l2_sw|index:1|chip:1",
-      "node_cna": "0xdf000004",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000004",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -6086,8 +7285,11 @@
     },
     {
       "node_label": "type:l2_sw|index:1|chip:2",
-      "node_cna": "0xdf000005",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000005",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -6285,8 +7487,11 @@
     },
     {
       "node_label": "type:l2_sw|index:2|chip:1",
-      "node_cna": "0xdf000006",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000006",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -6484,8 +7689,11 @@
     },
     {
       "node_label": "type:l2_sw|index:2|chip:2",
-      "node_cna": "0xdf000007",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000007",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -6683,8 +7891,11 @@
     },
     {
       "node_label": "type:l2_sw|index:3|chip:1",
-      "node_cna": "0xdf000008",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000008",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -6882,8 +8093,11 @@
     },
     {
       "node_label": "type:l2_sw|index:3|chip:2",
-      "node_cna": "0xdf000009",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf000009",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -7081,8 +8295,11 @@
     },
     {
       "node_label": "type:l2_sw|index:4|chip:1",
-      "node_cna": "0xdf00000a",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf00000a",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -7280,8 +8497,11 @@
     },
     {
       "node_label": "type:l2_sw|index:4|chip:2",
-      "node_cna": "0xdf00000b",
-      "mask": "0xffffffff",
+      "node_cna": {
+        "address": "0xdf00000b",
+        "mask": "0xffffffff",
+        "length": 32
+      },
       "ports": [
         {
           "port_id": 0,
@@ -7490,8 +8710,7 @@
               "type:npu"
             ],
             "dst_address_types": [
-              "Port",
-              "PG"
+              "Aggregate"
             ],
             "dst_addresses": [],
             "path_types": [
@@ -7500,8 +8719,7 @@
           },
           {
             "dst_node_labels": [
-              "type:l1_sw",
-              "type:l2_sw"
+              "type:l1_sw"
             ],
             "dst_address_types": [
               "Node"
@@ -7536,7 +8754,9 @@
             ],
             "dst_address_types": [
               "Port",
-              "PG"
+              "PG",
+              "Node",
+              "Aggregate"
             ],
             "dst_addresses": [],
             "path_types": [
@@ -7569,7 +8789,21 @@
             ],
             "dst_address_types": [
               "Port",
-              "PG"
+              "PG",
+              "Node",
+              "Aggregate"
+            ],
+            "dst_addresses": [],
+            "path_types": [
+              "Shortest"
+            ]
+          },
+          {
+            "dst_node_labels": [
+              "type:l1_sw"
+            ],
+            "dst_address_types": [
+              "Node"
             ],
             "dst_addresses": [],
             "path_types": [

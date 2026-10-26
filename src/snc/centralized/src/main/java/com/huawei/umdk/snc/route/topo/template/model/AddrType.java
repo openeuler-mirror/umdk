@@ -13,15 +13,14 @@ import lombok.Getter;
 
 @Getter
 public enum AddrType {
-    PRIMARY_ADDR(0),
-    UNIC_ADDR(1),
+    NODE_ADDR(1),
     PORT_ADDR(2),
     BONDING_ADDR(3),
     PORT_GROUP_ADDR(4),
     PREFIX_ADDR(5),
     EXTERNAL_PORT_ADDR(6),
     INTERNAL_PORT_ADDR(7),
-    NODE_ADDR(8),
+    AGGREGATE_ADDR(8),
     ALL(9);
 
     private final int value;
@@ -31,7 +30,7 @@ public enum AddrType {
     }
 
     public static boolean isNodeAddress(AddrType addrTypeEnum) {
-        return addrTypeEnum == PRIMARY_ADDR || addrTypeEnum == UNIC_ADDR || addrTypeEnum == NODE_ADDR;
+        return addrTypeEnum == NODE_ADDR || addrTypeEnum == AGGREGATE_ADDR;
     }
 
     public static AddrType getAddrType(String addrDescription) {
@@ -41,11 +40,8 @@ public enum AddrType {
         }
 
         switch (addrDescription) {
-            case "Primary":
-                addrType = PRIMARY_ADDR;
-                break;
-            case "UNIC":
-                addrType = UNIC_ADDR;
+            case "Node":
+                addrType = NODE_ADDR;
                 break;
             case "Port":
                 addrType = PORT_ADDR;
@@ -65,8 +61,8 @@ public enum AddrType {
             case "InternalPort":
                 addrType = INTERNAL_PORT_ADDR;
                 break;
-            case "Node":
-                addrType = NODE_ADDR;
+            case "Aggregate":
+                addrType = AGGREGATE_ADDR;
                 break;
             case "All":
                 addrType = ALL;

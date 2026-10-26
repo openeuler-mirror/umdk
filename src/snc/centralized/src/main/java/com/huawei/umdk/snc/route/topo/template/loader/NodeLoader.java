@@ -21,10 +21,10 @@ public class NodeLoader {
     String nodeLabel;
 
     @JSONField(name = "node_cna")
-    String nodeCna;
+    CnaLoader nodeCna;
 
-    @JSONField(name = "mask")
-    String mask;
+    @JSONField(name = "aggregate_cna")
+    CnaLoader aggregateCna;
 
     @JSONField(name = "ports")
     List<PortLoader> portLoaders = new ArrayList<>();

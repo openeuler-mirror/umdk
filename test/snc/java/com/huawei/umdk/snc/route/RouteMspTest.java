@@ -14,12 +14,16 @@ import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.route.model.NextHopPort;
 import com.huawei.umdk.snc.route.model.RouteEntry;
 import com.huawei.umdk.snc.route.model.RouteTable;
+import com.huawei.umdk.snc.route.topo.template.model.AddrType;
+import com.huawei.umdk.snc.route.topo.template.model.Address;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
+import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -51,39 +55,37 @@ public class RouteMspTest {
 
     @Test
     void calculateNpuRouteTest() {
-        String templateType = "128_npu_rack";
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:npu|slot:1|ubpu:1|die:2");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
-        // 目的为31个npu：每个npu 8个 port cna和1个 pg cna
+        // 目的为31个npu：每个npu 1个 聚合地址
         // 目的为4个l1 sw：每个l1 sw 1个 node cna
-        // 目的为4个l2 sw：每个l2 sw 2个 node cna
         // 框间发布地址：1个
-        Assertions.assertEquals(31 * (8 + 1) + 4 + 4 * 2 + 1, routeTable.getRouteEntries().size());
-        // cost校验：npu直连l1_sw cost=1；npu经l1_sw到l2_sw cost=2
-        long l2SwNodeCna = topologyMap.get(templateType).getNodeMap().get("type:l2_sw|index:1|chip:1").
-            getAddrList().getFirst().getAddr();
-        assertRouteCost(routeTable, l2SwNodeCna, 2);
+        Assertions.assertEquals(31 + 4 + 1, routeTable.getRouteEntries().size());
+        // cost校验：npu直连l1_sw cost=1；npu经l1_sw到框内其他npu cost=2
         long l1SwNodeCna = topologyMap.get(templateType).getNodeMap().get("type:l1_sw|index:1").
             getAddrList().getFirst().getAddr();
         assertRouteCost(routeTable, l1SwNodeCna, 1);
-        long npuPortCna = topologyMap.get(templateType).getNodeMap().get("type:npu|slot:3|ubpu:2|die:2").
-            getPortMap().get(0).getAddrList().getFirst().getAddr();
-        assertRouteCost(routeTable, npuPortCna, 2);
+        List<Address> addrList = topologyMap.get(templateType).getNodeMap().get("type:npu|slot:3|ubpu:2|die:2").
+            getAddrList();
+        long npuAggregateCna = addrList.stream()
+            .filter(addr -> AddrType.AGGREGATE_ADDR.equals(addr.getAddrType())).toList().get(0).getAddr();
+        assertRouteCost(routeTable, npuAggregateCna, 2);
     }
 
     @Test
     void calculateL1SwRouteTest() {
-        String templateType = "128_npu_rack";
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l1_sw|index:1");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
-        // 目的为32个npu：每个npu 2个 port cna和1个 pg cna
+        // 目的为32个npu：每个npu 2个 port cna、1个 pg cna、1个node地址、1个聚合地址
         // 目的为1个l2 sw：每个l2 sw 2个 node cna
         // 框间发布地址：1个
-        Assertions.assertEquals(32 * (2 + 1) + 2 + 1, routeTable.getRouteEntries().size());
+        Assertions.assertEquals(32 * (2 + 1 + 1 + 1) + 2 + 1, routeTable.getRouteEntries().size());
         // cost校验：l1_sw直连l2_sw cost=1
         long l2SwNodeCna = topologyMap.get(templateType).getNodeMap().get("type:l2_sw|index:1|chip:1").
             getAddrList().getFirst().getAddr();
@@ -96,13 +98,14 @@ public class RouteMspTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        String templateType = "128_npu_rack";
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l2_sw|index:1|chip:1");
         TestUtils.printFormatNodeRouteInfo(topologyMap.get(templateType), routeTable);
-        // 目的为32个npu：每个npu 2个 port cna和1个 pg cna
-        Assertions.assertEquals(32 * (2 + 1), routeTable.getRouteEntries().size());
+        // 目的为32个npu：每个npu 2个 port cna、1个 pg cna、1个node地址、1个聚合地址
+        // 目的为1个l1 sw：每个l1 sw 1个 node地址
+        Assertions.assertEquals(32 * (2 + 1 + 1 + 1) + 1, routeTable.getRouteEntries().size());
         // 到npu的路由是2跳
         long npuPortCna = topologyMap.get(templateType).getNodeMap().get("type:npu|slot:3|ubpu:1|die:2").
             getPortMap().get(6).getAddrList().getFirst().getAddr();
@@ -111,7 +114,7 @@ public class RouteMspTest {
 
     @Test
     void calculateL2SwRouteInterRackTest() {
-        String templateType = "128_npu_inter_rack";
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l2_sw|index:1|chip:1");

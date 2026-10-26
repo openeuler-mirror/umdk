@@ -22,7 +22,7 @@ public class PortLoader {
     String portName;
 
     @JSONField(name = "port_cna")
-    String portCna;
+    CnaLoader portCna;
 
     /**
      * Jetty id of this physical port, in {@code [32, 1023]}.
@@ -30,9 +30,6 @@ public class PortLoader {
      */
     @JSONField(name = "jetty_id")
     Integer jettyId;
-
-    @JSONField(name = "mask")
-    String mask;
 
     @JSONField(name = "peer_node_label")
     String peerNodeLabel;
