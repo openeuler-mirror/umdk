@@ -1768,7 +1768,6 @@ int32_t umq_ub_destroy_impl(uint64_t umqh)
      * delete-jfr/jfc/jfce errors (harmless but noisy). */
     if (is_umq_ub_logic_queue(queue->create_flag) && queue->jetty_node != 0) {
         jetty_pool_node_t *node = (jetty_pool_node_t *)(uintptr_t)queue->jetty_node;
-        __atomic_store_n(&queue->jetty_node, 0, __ATOMIC_RELEASE);
         if (g_ubsocket_exiting) {
             /* Process exit ONLY. The shared poll runners are stopped, so the
              * pool round-robin will not drain/free this node; return it here to
