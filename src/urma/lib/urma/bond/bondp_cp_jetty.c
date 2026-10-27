@@ -1248,15 +1248,23 @@ static urma_status_t bondp_hint_parse_local_idx(const bondp_context_t *bdp_ctx, 
     if (hint->version != BONDP_WR_HINT_VERSION_V0 || hint->size != sizeof(bondp_wr_hint_t)) {
         return URMA_EINVAL;
     }
-    if (hint->src_id.bs.die_id != 1) {
-        URMA_LOG_ERR("JFR hint must set die_id=1, die_id=%u.\n", hint->src_id.bs.die_id);
-        return URMA_EINVAL;
-    }
     if ((hint->mask & BONDP_WR_HINT_MASK_SRC_CHIP_ID) == 0 ||
+        (hint->mask & BONDP_WR_HINT_MASK_SRC_DIE_ID) == 0 ||
         (hint->mask & BONDP_WR_HINT_MASK_SRC_PORT_ID) == 0) {
         URMA_LOG_ERR("JFR hint must specify src chip_id and port_id, mask=0x%lx.\n", hint->mask);
         return URMA_EINVAL;
     }
+    if ((hint->mask & BONDP_WR_HINT_MASK_DST_CHIP_ID) != 0 ||
+        (hint->mask & BONDP_WR_HINT_MASK_DST_DIE_ID) != 0 ||
+        (hint->mask & BONDP_WR_HINT_MASK_DST_PORT_ID) != 0) {
+        URMA_LOG_ERR("JFR hint not support dst chid_id die_id and port_id, mask=0x%lx.\n", hint->mask);
+        return URMA_EINVAL;
+    }
+    if (hint->src_id.bs.die_id != 1) {
+        URMA_LOG_ERR("JFR hint must set src die_id=1, die_id=%u.\n", hint->src_id.bs.die_id);
+        return URMA_EINVAL;
+    }
+
     bondp_port_id_t port_id = {0};
     port_id.bs.chip_id = hint->src_id.bs.chip_id;
     port_id.bs.die_id = 1;                    /* die 恒为 1，不依赖调用方填写 */
