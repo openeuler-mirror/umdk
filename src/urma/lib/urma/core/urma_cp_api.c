@@ -2660,6 +2660,11 @@ urma_status_t urma_active_jetty(urma_jetty_t *jetty)
         return URMA_EINVAL;
     }
 
+    if (cfg->shared.jfr == NULL || cfg->shared.jfc == NULL) {
+        URMA_LOG_ERR("shared.jfr or shared.jfc is NULL.\n");
+        return URMA_EINVAL;
+    }
+
     if (cfg->shared.jfr->urma_jfr_opt.is_actived == false ||
         cfg->shared.jfc->urma_jfc_opt.is_actived == false) {
         URMA_LOG_ERR("jfc or jfr has not activated.\n");
@@ -2682,11 +2687,6 @@ urma_status_t urma_active_jetty(urma_jetty_t *jetty)
 
     if (jetty->urma_jetty_opt.is_actived == true) {
         URMA_LOG_ERR("Jetty state is wrong in active_jetty.\n");
-        return URMA_EINVAL;
-    }
-
-    if (cfg->shared.jfr == NULL || cfg->shared.jfc == NULL) {
-        URMA_LOG_ERR("shared.jfr or shared.jfc is NULL.\n");
         return URMA_EINVAL;
     }
 
