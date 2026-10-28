@@ -85,9 +85,9 @@
                 - [2.3.1.5.6 urma_import_jfr](#23156-urma_import_jfr)
                 - [2.3.1.5.7 urma_import_jfr_ex](#23157-urma_import_jfr_ex)
                 - [2.3.1.5.8 urma_unimport_jfr](#23158-urma_unimport_jfr)
-                - [2.3.1.5.9 urma_advise_jfr](#23159-urma_advise_jfr)
-                - [2.3.1.5.10 urma_advise_jfr_async](#231510-urma_advise_jfr_async)
-                - [2.3.1.5.11 urma_unadvise_jfr](#231511-urma_unadvise_jfr)
+                - 2.3.1.5.9 urma_advise_jfr
+                - 2.3.1.5.10 urma_advise_jfr_async
+                - 2.3.1.5.11 urma_unadvise_jfr
             - [2.3.1.6 Jetty](#2316-jetty)
                 - [2.3.1.6.1 urma_create_jetty](#23161-urma_create_jetty)
                 - [2.3.1.6.2 urma_modify_jetty](#23162-urma_modify_jetty)
@@ -1154,7 +1154,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) **urma_get_device_list(int *num_devices);
+urma_device_t **urma_get_device_list(int *num_devices);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1174,7 +1174,7 @@ Return: pointer array of urma_device; NULL means no device returned.
 
 Note: urma_free_device_list() needs to be called to free memory.
 
-7. [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext)
+7. urma_device_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1189,7 +1189,7 @@ typedef struct urma_device {
 } urma_device_t;
 \`\`\`
 
-8. [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext)
+8. urma_transport_type_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1201,7 +1201,7 @@ typedef enum urma_transport_type {
 } urma_transport_type_t;
 \`\`\`
 
-9. [urma_provider_ops_t](#_ZH-CN_TOPIC_0000002489752726-chtext)
+9. urma_provider_ops_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1220,7 +1220,7 @@ typedef struct urma_provider_ops {
 } urma_provider_ops_t;
 \`\`\`
 
-10. [urma_match_entry_t](#_ZH-CN_TOPIC_0000002496889932-chtext)
+10. urma_match_entry_t
 
 Definition file: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
 
@@ -1231,7 +1231,7 @@ typedef struct urma_match_entry {
 } urma_match_entry_t;
 \`\`\`
 
-11. [urma_sysfs_dev_t](#_ZH-CN_TOPIC_0000002521992509-chtext)
+11. urma_sysfs_dev_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1252,7 +1252,7 @@ typedef struct urma_sysfs_dev {
 } urma_sysfs_dev_t;
 \`\`\`
 
-12. [urma_driver_t](#_ZH-CN_TOPIC_0000002496570596-chtext)
+12. urma_driver_t
 
 \`\`\`c
 typedef struct urma_driver {
@@ -1261,7 +1261,7 @@ typedef struct urma_driver {
 } urma_driver_t;
 \`\`\`
 
-13. [ub_list](#_ZH-CN_TOPIC_0000002528650589-chtext)
+13. ub_list
 
 \`\`\`c
 struct ub_list {
@@ -1277,7 +1277,7 @@ struct ub_list {
 
 2. Prototype
 
-void urma_free_device_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) **device_list);
+void urma_free_device_list(urma_device_t **device_list);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1305,7 +1305,7 @@ void
 
 2. Prototype
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *urma_get_device_by_name(char *dev_name);
+urma_device_t *urma_get_device_by_name(char *dev_name);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1329,7 +1329,7 @@ Return: urma_device; NULL means no device returned;
 
 2. Prototype
 
-[urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *urma_get_device_by_eid([urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext) eid, [urma_transport_type_t](#_ZH-CN_TOPIC_0000002489912702-chtext) type);
+urma_device_t *urma_get_device_by_eid(urma_eid_t eid, urma_transport_type_t type);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1355,7 +1355,7 @@ Return: pointer of urma_device; NULL means no device returned.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_device([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) *dev_attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_device(urma_device_t *dev, urma_device_attr_t *dev_attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1373,7 +1373,7 @@ Query device attributes dev_attr, including device ID information (EID, GUID); m
 
 Return: 0 on success, other value on error.
 
-6. [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext)
+6. urma_device_attr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1388,7 +1388,7 @@ typedef struct urma_device_attr {
 } urma_device_attr_t;
 \`\`\`
 
-7. [urma_guid_t](#_ZH-CN_TOPIC_0000002489752730-chtext)
+7. urma_guid_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1398,7 +1398,7 @@ typedef struct urma_guid {
 } urma_guid_t;
 \`\`\`
 
-8. [urma_device_cap_t](#_ZH-CN_TOPIC_0000002521992515-chtext)
+8. urma_device_cap_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1448,7 +1448,7 @@ typedef struct urma_device_cap {
 } urma_device_cap_t;
 \`\`\`
 
-9. [urma_device_feature_t](#_ZH-CN_TOPIC_0000002489912708-chtext)
+9. urma_device_feature_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1478,7 +1478,7 @@ typedef union urma_device_feature {
 } urma_device_feature_t;
 \`\`\`
 
-10. [urma_atomic_feature_t](#_ZH-CN_TOPIC_0000002489752732-chtext)
+10. urma_atomic_feature_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1498,7 +1498,7 @@ typedef union urma_atomic_feature {
 } urma_atomic_feature_t;
 \`\`\`
 
-11. [urma_sub_trans_mode_cap_t](#_ZH-CN_TOPIC_0000002528411323-chtext)
+11. urma_sub_trans_mode_cap_t
 
 \`\`\`c
 typedef enum urma_sub_trans_mode_cap {
@@ -1508,7 +1508,7 @@ typedef enum urma_sub_trans_mode_cap {
 } urma_sub_trans_mode_cap_t;
 \`\`\`
 
-12. [urma_congestion_ctrl_alg_t](#_ZH-CN_TOPIC_0000002528409915-chtext)
+12. urma_congestion_ctrl_alg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1526,7 +1526,7 @@ typedef enum urma_congestion_ctrl_alg {
 } urma_congestion_ctrl_alg_t;
 \`\`\`
 
-13. [urma_order_type_cap_t](#_ZH-CN_TOPIC_0000002491667086-chtext)
+13. urma_order_type_cap_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1543,7 +1543,7 @@ typedef union urma_order_type_cap {
 } urma_order_type_cap_t;
 \`\`\`
 
-14. [urma_tp_type_cap_t](#_ZH-CN_TOPIC_0000002491827052-chtext)
+14. urma_tp_type_cap_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1559,7 +1559,7 @@ typedef union urma_tp_type_cap {
 } urma_tp_type_cap_t;
 \`\`\`
 
-15. [urma_tp_feature_t](#_ZH-CN_TOPIC_0000002523906825-chtext)
+15. urma_tp_feature_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1574,7 +1574,7 @@ typedef union urma_tp_feature {
 } urma_tp_feature_t;
 \`\`\`
 
-16. [urma_port_attr_t](#_ZH-CN_TOPIC_0000002521872505-chtext)
+16. urma_port_attr_t
 
 A URMA physical device can contain one or more ports. The active MTU cannot exceed the max MTU value.
 
@@ -1590,7 +1590,7 @@ typedef struct urma_port_attr {
 } urma_port_attr_t;
 \`\`\`
 
-17. [urma_mtu_t](#_ZH-CN_TOPIC_0000002521872507-chtext)
+17. urma_mtu_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1605,7 +1605,7 @@ typedef enum urma_mtu {
 } urma_mtu_t;
 \`\`\`
 
-18. [urma_port_state_t](#_ZH-CN_TOPIC_0000002521992517-chtext)
+18. urma_port_state_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1620,7 +1620,7 @@ typedef enum urma_port_state {
 } urma_port_state_t;
 \`\`\`
 
-19. [urma_link_width_t](#_ZH-CN_TOPIC_0000002489752734-chtext)
+19. urma_link_width_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1635,7 +1635,7 @@ typedef enum urma_link_width {
 } urma_link_width_t;
 \`\`\`
 
-20. [urma_speed_t](#_ZH-CN_TOPIC_0000002489912710-chtext)
+20. urma_speed_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1668,7 +1668,7 @@ typedef enum urma_speed {
 
 2. Prototype
 
-[urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) * urma_get_eid_list([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, uint32_t *cnt);
+urma_eid_info_t * urma_get_eid_list(urma_device_t *dev, uint32_t *cnt);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1690,7 +1690,7 @@ The user needs to call [3.2.2.2.2](#22222-urma_free_eid_list) [urma_free_eid_lis
 
 If it succeeds, it will return the eid_info array pointer. If it fails, it will return NULL.
 
-6. [urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext)
+6. urma_eid_info_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1701,7 +1701,7 @@ typedef struct urma_eid_info {
 } urma_eid_info_t;
 \`\`\`
 
-7. [urma_eid_t](#_ZH-CN_TOPIC_0000002521872509-chtext)
+7. urma_eid_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1728,7 +1728,7 @@ typedef union urma_eid {
 
 2. Prototype
 
-void urma_free_eid_list([urma_eid_info_t](#_ZH-CN_TOPIC_0000002489912704-chtext) *eid_list);
+void urma_free_eid_list(urma_eid_info_t *eid_list);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1894,7 +1894,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *urma_create_context([urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, uint32_t eid_index)
+urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -1912,7 +1912,7 @@ Create a URMA context for the device.
 
 Return: urma context pointer on success, NULL on error.
 
-6. [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext)
+6. urma_context_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -1931,7 +1931,7 @@ typedef struct urma_context {
 } urma_context_t;
 \`\`\`
 
-7. [urma_ops_t](#_ZH-CN_TOPIC_0000002524152197-chtext)
+7. urma_ops_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2037,7 +2037,7 @@ typedef struct urma_ops {
 } urma_ops_t;
 \`\`\`
 
-8. [urma_ref_t](#_ZH-CN_TOPIC_0000002524072163-chtext)
+8. urma_ref_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2051,7 +2051,7 @@ typedef struct urma_ref {
 } urma_ref_t;
 \`\`\`
 
-9. [urma_context_aggr_mode_t](#_ZH-CN_TOPIC_0000002528412247-chtext)
+9. urma_context_aggr_mode_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2071,7 +2071,7 @@ typedef enum urma_context_aggr_mode {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_context([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_context(urma_context_t *ctx);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2099,7 +2099,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_context_opt([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext) opt_name, const void *opt_value, size_t opt_len);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_context_opt(urma_context_t *ctx, urma_opt_name_t opt_name, const void *opt_value, size_t opt_len);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2121,7 +2121,7 @@ Set context options.
 
 Return: 0 on success, other value on error.
 
-6. [urma_opt_name_t](#_ZH-CN_TOPIC_0000002492112452-chtext)
+6. urma_opt_name_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2141,7 +2141,7 @@ typedef enum urma_context_opt_name {
 
 2. Prototype
 
-[urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) *urma_get_net_addr_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t *cnt)
+urma_net_addr_info_t *urma_get_net_addr_list(urma_context_t *ctx, uint32_t *cnt)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2159,7 +2159,7 @@ Based on the URMA context, obtain the net addresses required for user connection
 
 Return: pointer of net address list; NULL on error.
 
-6. [urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext)
+6. urma_net_addr_info_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2170,7 +2170,7 @@ typedef struct urma_net_addr_info {
 } urma_net_addr_info_t;
 \`\`\`
 
-7. [urma_net_addr_t](#_ZH-CN_TOPIC_0000002489912762-chtext)
+7. urma_net_addr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2195,7 +2195,7 @@ typedef struct urma_net_addr {
 
 2. Prototype
 
-void urma_free_net_addr_list([urma_net_addr_info_t](#_ZH-CN_TOPIC_0000002489752786-chtext) *net_addr_list);
+void urma_free_net_addr_list(urma_net_addr_info_t *net_addr_list);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2225,7 +2225,7 @@ void
 
 2. Prototype
 
-[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
+[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id(urma_context_t *ctx);
 
 3. Description
 
@@ -2274,7 +2274,7 @@ typedef union urma_token_id_flag {
 
 2. Prototype
 
-[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
+[3.2.3.1.1](#22311-urma_token_id_t) [urma_token_id_t](#22311-urma_token_id_t) *urma_alloc_token_id_ex(urma_context_t *ctx, [3.2.3.1.2](#22312-urma_token_id_flag_t) [urma_token_id_flag_t](#22312-urma_token_id_flag_t) flag);
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2332,7 +2332,7 @@ Return: 0 on success, other value on error
 
 2. Prototype
 
-[urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *urma_create_jfc([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext) *jfc_cfg);
+urma_jfc_t *urma_create_jfc(urma_context_t *ctx, urma_jfc_cfg_t *jfc_cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2354,7 +2354,7 @@ Under normal circumstances, insufficient JFC queue depth configuration may affec
 
 Return: the handle of created jfc, not NULL on success; NULL on error.
 
-6. [urma_jfc_cfg_t](#_ZH-CN_TOPIC_0000002489912716-chtext)
+6. urma_jfc_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2369,7 +2369,7 @@ typedef struct urma_jfc_cfg {
 } urma_jfc_cfg_t;
 \`\`\`
 
-7. [urma_jfc_flag_t](#_ZH-CN_TOPIC_0000002489752740-chtext)
+7. urma_jfc_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2384,7 +2384,7 @@ typedef union urma_jfc_flag {
 } urma_jfc_flag_t;
 \`\`\`
 
-8. [urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext)
+8. urma_jfce_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2396,7 +2396,7 @@ typedef struct urma_jfce {
 } urma_jfce_t;
 \`\`\`
 
-9. [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext)
+9. urma_jfc_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2413,9 +2413,9 @@ typedef struct urma_jfc {
 } urma_jfc_t;
 \`\`\`
 
-10. [urma_jfc_id_t](#_ZH-CN_TOPIC_0000002521992525-chtext)
+10. urma_jfc_id_t
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_id_t;
+typedef struct urma_jetty_id_t urma_jfc_id_t;
 
 ##### 2.3.1.1.2 urma_modify_jfc
 
@@ -2425,7 +2425,7 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfc(urma_jfc_t *jfc, [3.3.1.1.2](#23112-urma_modify_jfc) [urma_modify_jfc](#23112-urma_modify_jfc) *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2474,7 +2474,7 @@ typedef enum urma_jfc_attr_mask {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc(urma_jfc_t *jfc);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2506,7 +2506,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc_batch([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) **jfc_arr, int jfc_num, urma_jfc_t **bad_jfc);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfc_batch(urma_jfc_t **jfc_arr, int jfc_num, urma_jfc_t **bad_jfc);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2704,7 +2704,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *urma_create_jfce([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
+urma_jfce_t *urma_create_jfce(urma_context_t *ctx);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2728,7 +2728,7 @@ Return: the address of created jfce, not NULL on success, NULL on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfce([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *jfce);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfce(urma_jfce_t *jfce);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2758,7 +2758,7 @@ Return: 0 on success, other value on error
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_async_event([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) *event);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_async_event(urma_context_t *ctx, urma_async_event_t *event);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2776,7 +2776,7 @@ Query device or JETTY related asynchronous events.
 
 Return: 0 on success, other value on error.
 
-6. [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext)
+6. urma_async_event_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2798,7 +2798,7 @@ typedef struct urma_async_event {
 } urma_async_event_t;
 \`\`\`
 
-7. [urma_async_event_type_t](#_ZH-CN_TOPIC_0000002521872571-chtext)
+7. urma_async_event_type_t
 
 Definition file: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -2828,7 +2828,7 @@ typedef enum urma_async_event_type {
 
 2. Prototype
 
-void urma_ack_async_event([urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext) *event);
+void urma_ack_async_event(urma_async_event_t *event);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2858,7 +2858,7 @@ Return: void
 
 2. Prototype
 
-[urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *urma_create_jfs([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) *jfs_cfg);
+urma_jfs_t *urma_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *jfs_cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -2876,7 +2876,7 @@ Create a JFS. A JFS can only be used by one process, but multiple threads within
 
 Return: the handle of created jfs, not NULL on success, NULL on error.
 
-6. [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext)
+6. urma_jfs_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2906,7 +2906,7 @@ typedef struct urma_jfs_cfg {
 
 The err_timeout range is 0~31. The actual timeout calculation method: Timeout=4.096us*(2^ err_timeout)
 
-7. [urma_jfs_flag_t](#_ZH-CN_TOPIC_0000002489912722-chtext)
+7. urma_jfs_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2955,7 +2955,7 @@ typedef enum urma_order_type {
 } urma_order_type_t;
 \`\`\`
 
-9. [urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext)
+9. urma_jfs_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -2971,9 +2971,9 @@ typedef struct urma_jfs {
 } urma_jfs_t;
 \`\`\`
 
-10. [urma_jfs_id_t](#_ZH-CN_TOPIC_0000002521872519-chtext)
+10. urma_jfs_id_t
 
-typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_id_t;
+typedef struct urma_jetty_id_t urma_jfs_id_t;
 
 ##### 2.3.1.4.2 urma_modify_jfs
 
@@ -2983,7 +2983,7 @@ typedef struct [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfs(urma_jfs_t *jfs, urma_jfs_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3001,7 +3001,7 @@ Modify JFS attributes.
 
 Return: 0 on success, other value on error.
 
-6. [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext)
+6. urma_jfs_attr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3022,7 +3022,7 @@ typedef enum urma_jfs_attr_mask {
 } urma_jfs_attr_mask_t;
 \`\`\`
 
-8. [urma_jfs_state_t](#_ZH-CN_TOPIC_0000002521872521-chtext)
+8. urma_jfs_state_t
 
 typedef urma_jetty_state_t urma_jfs_state_t;
 
@@ -3034,7 +3034,7 @@ typedef urma_jetty_state_t urma_jfs_state_t;
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_jfs_cfg_t](#_ZH-CN_TOPIC_0000002521992529-chtext) *cfg, [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfs(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg, urma_jfs_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3062,7 +3062,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs(urma_jfs_t *jfs);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3090,7 +3090,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs_batch([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) **jfs_arr, int jfs_num, urma_jfs_t **bad_jfs);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfs_batch(urma_jfs_t **jfs_arr, int jfs_num, urma_jfs_t **bad_jfs);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3126,7 +3126,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 2. Prototype
 
-int urma_flush_jfs([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
+int urma_flush_jfs(urma_jfs_t *jfs, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3320,7 +3320,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *urma_create_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) *jfr_cfg);
+urma_jfr_t *urma_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *jfr_cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3338,7 +3338,7 @@ Create a JFR. A JFR can only be used by one process, but multiple threads within
 
 Return: the handle of created jfr, not NULL on success, NULL on error.
 
-6. [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext)
+6. urma_jfr_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3394,7 +3394,7 @@ The values of min_rnr_timer correspond to the following time definitions:
 
 5'b01111 :1.92ms 5'b11111 :491.52ms
 
-7. [urma_jfr_flag_t](#_ZH-CN_TOPIC_0000002521872525-chtext)
+7. urma_jfr_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3420,7 +3420,7 @@ typedef union urma_jfr_flag {
 } urma_jfr_flag_t;
 \`\`\`
 
-8. [urma_transport_mode_t](#_ZH-CN_TOPIC_0000002521992519-chtext)
+8. urma_transport_mode_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3432,7 +3432,7 @@ typedef enum urma_transport_mode {
 } urma_transport_mode_t;
 \`\`\`
 
-9. [urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext)
+9. urma_jfr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3448,9 +3448,9 @@ typedef struct urma_jfr {
 } urma_jfr_t;
 \`\`\`
 
-10. [urma_jfr_id_t](#_ZH-CN_TOPIC_0000002489912730-chtext)
+10. urma_jfr_id_t
 
-typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
+typedef urma_jetty_id_t urma_jfr_id_t;
 
 ##### 2.3.1.5.2 urma_modify_jfr
 
@@ -3460,7 +3460,7 @@ typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3478,7 +3478,7 @@ Modify JFR attributes.
 
 Return: 0 on success, other value on error.
 
-6. [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext)
+6. urma_jfr_attr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3501,7 +3501,7 @@ typedef enum urma_jfr_attr_mask {
 } urma_jfr_attr_mask_t;
 \`\`\`
 
-8. [urma_jfr_state_t](#_ZH-CN_TOPIC_0000002489912732-chtext)
+8. urma_jfr_state_t
 
 Definition file: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -3521,7 +3521,7 @@ typedef enum urma_jfr_state {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [urma_jfr_cfg_t](#_ZH-CN_TOPIC_0000002489752752-chtext) *cfg, [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jfr(urma_jfr_t *jfr, urma_jfr_cfg_t *cfg, urma_jfr_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3549,7 +3549,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr(urma_jfr_t *jfr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3579,7 +3579,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr_batch([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jfr_batch(urma_jfr_t **jfr_arr, int jfr_num, urma_jfr_t **bad_jfr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3615,7 +3615,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 2. Prototype
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jfr([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
+urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3635,7 +3635,7 @@ Import remote JFR information, including registering its token locally.
 
 Return: the address of target jfr, not NULL on success, NULL on error.
 
-6. [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext)
+6. urma_rjfr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3648,7 +3648,7 @@ typedef struct urma_rjfr {
 } urma_rjfr_t;
 \`\`\`
 
-7. [urma_import_jetty_flag_t](#_ZH-CN_TOPIC_0000002491952470-chtext)
+7. urma_import_jetty_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3669,7 +3669,7 @@ typedef union urma_import_jetty_flag {
 } urma_import_jetty_flag_t;
 \`\`\`
 
-8. [urma_tp_type_t](#_ZH-CN_TOPIC_0000002524152199-chtext)
+8. urma_tp_type_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3681,7 +3681,7 @@ typedef enum urma_tp_type {
 } urma_tp_type_t;
 \`\`\`
 
-9. [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)
+9. urma_target_jetty_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3699,7 +3699,7 @@ typedef struct urma_target_jetty {
 } urma_target_jetty_t;
 \`\`\`
 
-10. [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext)
+10. urma_jetty_id_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3711,7 +3711,7 @@ typedef struct urma_jetty_id {
 } urma_jetty_id_t;
 \`\`\`
 
-11. [urma_tp_t](#_ZH-CN_TOPIC_0000002489912738-chtext)
+11. urma_tp_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3721,7 +3721,7 @@ typedef struct urma_tp {
 } urma_tp_t;
 \`\`\`
 
-12. [urma_target_type_t](#_ZH-CN_TOPIC_0000002489752762-chtext)
+12. urma_target_type_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3733,7 +3733,7 @@ typedef enum urma_target_type {
 } urma_target_type_t;
 \`\`\`
 
-13. [urma_jetty_grp_policy_t](#_ZH-CN_TOPIC_0000002524072165-chtext)
+13. urma_jetty_grp_policy_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3752,7 +3752,7 @@ typedef enum urma_jetty_grp_policy {
 
 2. Prototype
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jfr_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjfr_t](#_ZH-CN_TOPIC_0000002489752758-chtext) *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext) *cfg);
+urma_target_jetty_t *urma_import_jfr_ex(urma_context_t *ctx, urma_rjfr_t *rjfr, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, urma_import_jfr_ex_cfg_t *cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -3774,11 +3774,11 @@ Extended interface for [3.3.1.5.6](#23156-urma_import_jfr) [urma_import_jfr](#23
 
 Return: the address of target jfr, not NULL on success, NULL on error
 
-6. [urma_import_jfr_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872535-chtext)
+6. urma_import_jfr_ex_cfg_t
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jfr_ex_cfg_t;
+typedef struct urma_active_tp_cfg_t urma_import_jfr_ex_cfg_t;
 
-7. [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext)
+7. urma_active_tp_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3791,7 +3791,7 @@ typedef struct urma_active_tp_cfg {
 } urma_active_tp_cfg_t;
 \`\`\`
 
-8. [urma_active_tp_attr_t](#_ZH-CN_TOPIC_0000002528696683-chtext)
+8. urma_active_tp_attr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -3811,7 +3811,7 @@ typedef struct urma_active_tp_attr {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jfr([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jfr(urma_target_jetty_t *target_jfr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4001,7 +4001,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *urma_create_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) *jetty_cfg);
+urma_jetty_t *urma_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4027,7 +4027,7 @@ Create a Jetty. A Jetty can only be used by one process, but multiple threads wi
 
 Return: the handle of created jetty, not NULL on success, NULL on error.
 
-6. [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext)
+6. urma_jetty_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4050,7 +4050,7 @@ typedef struct urma_jetty_cfg {
 } urma_jetty_cfg_t;
 \`\`\`
 
-7. [urma_jetty_flag_t](#_ZH-CN_TOPIC_0000002521872541-chtext)
+7. urma_jetty_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4069,7 +4069,7 @@ typedef union urma_jetty_flag {
 
 UB devices only support share_jfr set to URMA_SHARE_JFR.
 
-8. [urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext)
+8. urma_jetty_grp_t
 
 \`\`\`c
 struct urma_jetty_grp {
@@ -4086,7 +4086,7 @@ struct urma_jetty_grp {
 };
 \`\`\`
 
-9. [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext)
+9. urma_jetty_grp_cfg_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4102,7 +4102,7 @@ typedef struct urma_jetty_grp_cfg {
 } urma_jetty_grp_cfg_t;
 \`\`\`
 
-10. [urma_jetty_grp_flag_t](#_ZH-CN_TOPIC_0000002521872565-chtext)
+10. urma_jetty_grp_flag_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4120,7 +4120,7 @@ typedef union urma_jetty_grp_flag {
 } urma_jetty_grp_flag_t;
 \`\`\`
 
-11. [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext)
+11. urma_jetty_t
 
 \`\`\`c
 struct urma_jetty_grp {
@@ -4145,7 +4145,7 @@ struct urma_jetty_grp {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) *attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_modify_jetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4167,7 +4167,7 @@ UB devices' Jetty only supports using shared JFR, and does not support modifying
 
 Return: 0 on success, other value on error.
 
-6. [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext)
+6. urma_jetty_attr_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4190,7 +4190,7 @@ typedef enum urma_jetty_attr_mask {
 } urma_jetty_attr_mask_t;
 \`\`\`
 
-8. [urma_jetty_state_t](#_ZH-CN_TOPIC_0000002489912748-chtext)
+8. urma_jetty_state_t
 
 Definition file: [urma_opcode.h](../../../src/urma/lib/urma/core/include/urma_opcode.h)
 
@@ -4211,7 +4211,7 @@ typedef enum urma_jetty_state {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_jetty_cfg_t](#_ZH-CN_TOPIC_0000002489752766-chtext) *cfg, [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext) *attr)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_query_jetty(urma_jetty_t *jetty, urma_jetty_cfg_t *cfg, urma_jetty_attr_t *attr)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4243,7 +4243,7 @@ For a jetty using a shared jfr, [3.3.1.6.3](#23163-urma_query_jetty) [urma_query
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty(urma_jetty_t *jetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4267,7 +4267,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_batch([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) **jetty_arr, int jetty_num, urma_jetty_t **bad_jetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, urma_jetty_t **bad_jetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4303,7 +4303,7 @@ Return: 0 on success, EINVAL on invalid parameter, other value on other batch de
 
 2. Prototype
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
+urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4331,7 +4331,7 @@ Return: the address of target jetty, not NULL on success, NULL on error.
 
 The maximum response time for ubcore to wait for UVS is 30s. If the import task does not receive a response from UVS within 30 seconds, an import failure will be returned to the user.
 
-6. [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext)
+6. urma_rjetty_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4354,13 +4354,13 @@ typedef struct urma_rjetty {
 
 2. Prototype
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty_ex([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) *cfg);
+urma_target_jetty_t *urma_import_jetty_ex(urma_context_t *ctx, urma_rjetty_t *rjetty, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, urma_import_jetty_ex_cfg_t *cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
 3. Description
 
-Extended interface for [3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty), adds parameter [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext) *cfg.
+Extended interface for [3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty](#23166-urma_import_jetty), adds parameter urma_import_jetty_ex_cfg_t *cfg.
 
 4. Parameters
 
@@ -4376,9 +4376,9 @@ Extended interface for [3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty]
 
 Return: the address of target jetty, not NULL on success, NULL on error.
 
-6. [urma_import_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002521872549-chtext)
+6. urma_import_jetty_ex_cfg_t
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_import_jetty_ex_cfg_t;
+typedef struct urma_active_tp_cfg_t urma_import_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.8 urma_unimport_jetty
 
@@ -4388,7 +4388,7 @@ typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urm
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty(urma_target_jetty_t *tjetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4416,7 +4416,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_advise_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_advise_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4446,7 +4446,7 @@ A local jetty can be advised with several remote jetties. A connectionless jetty
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unadvise_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unadvise_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4472,7 +4472,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4516,7 +4516,7 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_ex([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty, [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext) *cfg);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_ex(urma_jetty_t *jetty, urma_target_jetty_t *tjetty, urma_bind_jetty_ex_cfg_t *cfg);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4536,9 +4536,9 @@ Extended interface for [3.3.1.6.11](#231611-urma_bind_jetty) [urma_bind_jetty](#
 
 Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on error.
 
-6. [urma_bind_jetty_ex_cfg_t](#_ZH-CN_TOPIC_0000002524072167-chtext)
+6. urma_bind_jetty_ex_cfg_t
 
-typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urma_bind_jetty_ex_cfg_t;
+typedef struct urma_active_tp_cfg_t urma_bind_jetty_ex_cfg_t;
 
 ##### 2.3.1.6.13 urma_unbind_jetty
 
@@ -4548,7 +4548,7 @@ typedef struct [urma_active_tp_cfg_t](#_ZH-CN_TOPIC_0000002525470775-chtext) urm
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty(urma_jetty_t *jetty)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4580,7 +4580,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-int urma_flush_jetty([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
+int urma_flush_jetty(urma_jetty_t *jetty, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4612,7 +4612,7 @@ If execution is successful, the output parameter cr status will be URMA_CR_WR_FL
 
 2. Prototype
 
-[urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *urma_import_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, const [urma_rjetty_t](#_ZH-CN_TOPIC_0000002489912752-chtext) *rjetty, const [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t user_ctx, int timeout);
+urma_target_jetty_t *urma_import_jetty_async(urma_notifier_t *notifier, const urma_rjetty_t *rjetty, const [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t user_ctx, int timeout);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4636,7 +4636,7 @@ Asynchronous version of [3.3.1.6.6](#23166-urma_import_jetty) [urma_import_jetty
 
 Return: the address of target jetty, not NULL on success, NULL on error.
 
-6. [urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext)
+6. urma_notifier_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4656,7 +4656,7 @@ typedef struct urma_notifier {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty_async([urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unimport_jetty_async(urma_target_jetty_t *tjetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4680,7 +4680,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_async([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, [urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *tjetty, uint64_t user_ctx, int timeout);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_bind_jetty_async(urma_notifier_t *notifier, urma_jetty_t *jetty, urma_target_jetty_t *tjetty, uint64_t user_ctx, int timeout);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4712,7 +4712,7 @@ Return: 0 on success, URMA_EEXIST if the jetty has been binded, other value on e
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty_async([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_unbind_jetty_async(urma_jetty_t *jetty);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4748,7 +4748,7 @@ The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#2316
 
 2. Prototype
 
-[urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *urma_create_notifier([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx);
+urma_notifier_t *urma_create_notifier(urma_context_t *ctx);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4772,7 +4772,7 @@ Return: the address of urma notifier, not NULL on success, NULL on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_notifier([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_notifier(urma_notifier_t *notifier);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4800,7 +4800,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-int urma_wait_notify([urma_notifier_t](#_ZH-CN_TOPIC_0000002524152205-chtext) *notifier, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) *notify, int timeout);
+int urma_wait_notify(urma_notifier_t *notifier, uint32_t cnt, urma_notify_t *notify, int timeout);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -4822,7 +4822,7 @@ Wait for asynchronous link establishment results.
 
 Return: the number of target jetty returned, 0 means no target jetty returned, -1 on error.
 
-6. [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext)
+6. urma_notify_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4838,7 +4838,7 @@ typedef struct urma_notify {
 } urma_notify_t;
 \`\`\`
 
-7. [urma_notify_type_t](#_ZH-CN_TOPIC_0000002524072171-chtext)
+7. urma_notify_type_t
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -4857,7 +4857,7 @@ typedef enum urma_notify_type {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_ack_notify([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t cnt, [urma_notify_t](#_ZH-CN_TOPIC_0000002492112460-chtext) *notify);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_ack_notify(urma_context_t *ctx, uint32_t cnt, urma_notify_t *notify);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5055,7 +5055,7 @@ Some chips do not support Jetty group management APIs.
 
 2. Prototype
 
-[urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *urma_create_jetty_grp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [urma_jetty_grp_cfg_t](#_ZH-CN_TOPIC_0000002527065929-chtext) *cfg)；
+urma_jetty_grp_t *urma_create_jetty_grp(urma_context_t *ctx, urma_jetty_grp_cfg_t *cfg)；
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5081,7 +5081,7 @@ Return: a non-NULL urma_jetty_grp_t pointer on success; if a Jetty group with th
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_grp([urma_jetty_grp_t](#_ZH-CN_TOPIC_0000002524152201-chtext) *jetty_grp);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_delete_jetty_grp(urma_jetty_grp_t *jetty_grp);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5113,7 +5113,7 @@ Segment APIs include registering and unregistering segments, importing and unimp
 
 2. Prototype
 
-[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_register_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.2.1.1](#23211-urma_seg_cfg_t) [urma_seg_cfg_t](#23211-urma_seg_cfg_t) *seg_cfg);
+[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_register_seg(urma_context_t *ctx, [3.3.2.1.1](#23211-urma_seg_cfg_t) [urma_seg_cfg_t](#23211-urma_seg_cfg_t) *seg_cfg);
 
 3. Description
 
@@ -5314,7 +5314,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_import_seg([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t addr, [3.3.2.3.1](#23231-urma_import_seg_flag_t) [urma_import_seg_flag_t](#23231-urma_import_seg_flag_t) flag);
+[3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *urma_import_seg(urma_context_t *ctx, [3.3.2.1.4](#23214-urma_seg_t) [urma_seg_t](#23214-urma_seg_t) *seg, [3.3.2.1.7](#23217-urma_token_t) [urma_token_t](#23217-urma_token_t) *token_value, uint64_t addr, [3.3.2.3.1](#23231-urma_import_seg_flag_t) [urma_import_seg_flag_t](#23231-urma_import_seg_flag_t) flag);
 
 3. Description
 
@@ -5415,7 +5415,7 @@ TP layer transport channel resource TP Channel related interfaces.
 
 2. Prototype
 
-int urma_get_tpn([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty);
+int urma_get_tpn(urma_jetty_t *jetty);
 
 3. Description
 
@@ -5441,7 +5441,7 @@ Return: >= 0 on success, return as tpn; < 0 on error.
 
 2. Prototype
 
-int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, uint32_t tpn, [3.3.3.2.1](#23321-urma_tp_cfg_t) [urma_tp_cfg_t](#23321-urma_tp_cfg_t) *cfg, [3.3.3.2.3](#23323-urma_tp_attr_t) [urma_tp_attr_t](#23323-urma_tp_attr_t) *attr, [3.3.3.2.6](#23326-urma_tp_attr_mask_t) [urma_tp_attr_mask_t](#23326-urma_tp_attr_mask_t) mask);
+int urma_modify_tp(urma_context_t *ctx, uint32_t tpn, [3.3.3.2.1](#23321-urma_tp_cfg_t) [urma_tp_cfg_t](#23321-urma_tp_cfg_t) *cfg, [3.3.3.2.3](#23323-urma_tp_attr_t) [urma_tp_attr_t](#23323-urma_tp_attr_t) *attr, [3.3.3.2.6](#23326-urma_tp_attr_mask_t) [urma_tp_attr_mask_t](#23326-urma_tp_attr_mask_t) mask);
 
 3. Description
 
@@ -5601,7 +5601,7 @@ typedef union urma_tp_attr_mask {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_list(urma_context_t *ctx, [3.3.3.3.1](#23331-urma_get_tp_cfg_t) [urma_get_tp_cfg_t](#23331-urma_get_tp_cfg_t) *cfg, uint32_t *tp_cnt, [3.3.3.3.3](#23333-urma_tp_info_t) [urma_tp_info_t](#23333-urma_tp_info_t) *tp_list);
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -5679,7 +5679,7 @@ typedef struct urma_tp_info {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap, [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle, uint8_t *tp_attr_cnt, uint32_t *tp_attr_bitmap, [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5759,7 +5759,7 @@ typedef struct urma_tp_attr_value {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_tp_attr(const [urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap, const [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_set_tp_attr(const urma_context_t *ctx, const uint64_t tp_handle, const uint8_t tp_attr_cnt, const uint32_t tp_attr_bitmap, const [3.3.3.4.1](#23341-urma_tp_attr_value_t) [urma_tp_attr_value_t](#23341-urma_tp_attr_value_t) *tp_attr);
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -5801,7 +5801,7 @@ Return: 0 on success, other value on error.
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfs_wr([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfs_wr(urma_jfs_t *jfs, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr);
 
 3. Description
 
@@ -6028,7 +6028,7 @@ typedef struct urma_sg {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfr_wr([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) **bad_wr)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jfr_wr(urma_jfr_t *jfr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) **bad_wr)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -6080,7 +6080,7 @@ In IB scenarios, when src in urma_jfr_wr contains an sge with len 0, the corresp
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_send_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_send_wr(urma_jetty_t *jetty, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) *wr, [3.4.1.1.1](#24111-urma_jfs_wr_t) [urma_jfs_wr_t](#24111-urma_jfs_wr_t) **bad_wr)
 
 Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h)
 
@@ -6118,7 +6118,7 @@ The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#2316
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_recv_wr([urma_jetty_t](#_ZH-CN_TOPIC_0000002489912746-chtext) *jetty, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t)**bad_wr)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_post_jetty_recv_wr(urma_jetty_t *jetty, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t) *wr, [3.4.1.2.1](#24121-urma_jfr_wr_t) [urma_jfr_wr_t](#24121-urma_jfr_wr_t)**bad_wr)
 
 3. Description
 
@@ -6154,7 +6154,7 @@ The caller must ensure that the parameter jetty comes from the [3.3.1.6.1](#2316
 
 2. Prototype
 
-int urma_poll_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr)
+int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, [3.4.2.1.1](#24211-urma_cr_t) [urma_cr_t](#24211-urma_cr_t) *cr)
 
 3. Description
 
@@ -6282,7 +6282,7 @@ typedef struct urma_cr_token {
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc, bool solicited_only)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_rearm_jfc(urma_jfc_t *jfc, bool solicited_only)
 
 Definition file: [urma_types.h](../../../src/urma/lib/urma/core/include/urma_types.h)
 
@@ -6312,7 +6312,7 @@ The caller must ensure that the parameter jfc comes from the [3.3.1.1.1](#23111-
 
 2. Prototype
 
-int urma_wait_jfc([urma_jfce_t](#_ZH-CN_TOPIC_0000002489752796-chtext) *jfce, uint32_t jfc_cnt, int time_out, [urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc[])
+int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t *jfc[])
 
 3. Description
 
@@ -6356,7 +6356,7 @@ Repeatedly calling this API without calling [urma_poll_jfc] may lead to number o
 
 2. Prototype
 
-void urma_ack_jfc([urma_jfc_t](#_ZH-CN_TOPIC_0000002521872513-chtext) *jfc[], uint32_t nevents[], uint32_t jfc_cnt)
+void urma_ack_jfc(urma_jfc_t *jfc[], uint32_t nevents[], uint32_t jfc_cnt)
 
 3. Description
 
@@ -6390,7 +6390,7 @@ The caller must ensure that the number of addresses in jfc, the number of elemen
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_write([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t)*src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_write(urma_jfs_t *jfs, urma_target_jetty_t*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t)*src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3. Description
 
@@ -6436,7 +6436,7 @@ The caller must ensure that the parameter jfs comes from the [3.3.1.4.1](#23141-
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_read([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext)*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, urma_target_seg_t *src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_read(urma_jfs_t *jfs, urma_target_jetty_t*target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *dst_tseg, urma_target_seg_t *src_tseg, uint64_t dst, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3. Description
 
@@ -6484,7 +6484,7 @@ The caller must ensure that the parameter jfs comes from the [3.3.1.4.1](#23141-
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send([urma_jfs_t](#_ZH-CN_TOPIC_0000002489752746-chtext) *jfs, [urma_target_jetty_t](#_ZH-CN_TOPIC_0000002521992545-chtext) *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t)urma_send(urma_jfs_t *jfs, urma_target_jetty_t *target_jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *src_tseg, uint64_t src, uint32_t len, [3.4.1.1.7](#24117-urma_jfs_wr_flag_t) [urma_jfs_wr_flag_t](#24117-urma_jfs_wr_flag_t) flag, uint64_t user_ctx);
 
 3. Description
 
@@ -6526,7 +6526,7 @@ The caller must ensure that the parameter jfs comes from the [3.3.1.4.1](#23141-
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_recv([urma_jfr_t](#_ZH-CN_TOPIC_0000002521992537-chtext) *jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *recv_tseg, uint64_t buf, uint32_t len, uint64_t user_ctx)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_recv(urma_jfr_t *jfr, [3.3.2.1.3](#23213-urma_target_seg_t) [urma_target_seg_t](#23213-urma_target_seg_t) *recv_tseg, uint64_t buf, uint32_t len, uint64_t user_ctx)
 
 3. Description
 
@@ -6566,7 +6566,7 @@ The caller must ensure that the parameter jfr comes from the [3.3.1.5.1](#23151-
 
 2. Prototype
 
-[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_user_ctl([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx, [3.5.1.1.1](#25111-urma_user_ctl_in_t) [urma_user_ctl_in_t](#25111-urma_user_ctl_in_t) *in, [3.5.1.1.2](#25112-urma_user_ctl_out_t) [urma_user_ctl_out_t](#25112-urma_user_ctl_out_t) *out)
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_user_ctl(urma_context_t *ctx, [3.5.1.1.1](#25111-urma_user_ctl_in_t) [urma_user_ctl_in_t](#25111-urma_user_ctl_in_t) *in, [3.5.1.1.2](#25112-urma_user_ctl_out_t) [urma_user_ctl_out_t](#25112-urma_user_ctl_out_t) *out)
 
 3. Description
 
