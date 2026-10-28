@@ -202,8 +202,8 @@ typedef struct bondp_wr_hint {
     uint32_t version;         /* must be BONDP_WR_HINT_VERSION_V0 */
     uint32_t size;            /* must match the bondp_wr_hint_t size expected by the loaded liburma */
     uint64_t mask;            /* 0 means no port is pinned and the bond scheduler picks the path */
-    bondp_port_id_t src_id;   /* chip/die/port coordinates; sub-fields are selected by the SRC_* bits */
-    bondp_port_id_t dst_id;   /* chip/die/port coordinates; sub-fields are selected by the DST_* bits */
+    bondp_port_id_t local_id;   /* chip/die/port coordinates; sub-fields are selected by the SRC_* bits */
+    bondp_port_id_t remote_id;   /* chip/die/port coordinates; sub-fields are selected by the DST_* bits */
     uint64_t reserved[4];     /* reserved for future extension; not validated in this version */
 } bondp_wr_hint_t;
 
@@ -383,12 +383,12 @@ typedef struct bondp_path {
  * through a backup path.
  * @param[in] jfs: the jfs created before, which is used to put command;
  * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
- * only the remote member port can be specified (full DST_* mask with dst_id)
+ * only the remote member port can be specified (full DST_* mask with remote_id)
  * and must be reachable from the jfs; the hint takes precedence over the
  * WR's drv_ext chip affinity info;
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.
- * Return: 0 on success, URMA_EINVAL when the dst_id coordinates are out of
+ * Return: 0 on success, URMA_EINVAL when the remote_id coordinates are out of
  * range, URMA_EAGAIN when the specified port is currently unreachable and
  * the caller may retry, other value on error
  */
@@ -401,12 +401,12 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
  * through a backup path.
  * @param[in] jetty: the jetty created before, which is used to put command;
  * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
- * only the remote member port can be specified (full DST_* mask with dst_id)
+ * only the remote member port can be specified (full DST_* mask with remote_id)
  * and must be reachable from the jetty; the hint takes precedence over the
  * WR's drv_ext chip affinity info;
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.
- * Return: 0 on success, URMA_EINVAL when the dst_id coordinates are out of
+ * Return: 0 on success, URMA_EINVAL when the remote_id coordinates are out of
  * range, URMA_EAGAIN when the specified port is currently unreachable and
  * the caller may retry, other value on error
  */
@@ -416,7 +416,7 @@ urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hin
  * post a request to recv data on the bond member port.
  * @param[in] jfr: the jfr created before, which is used to put command;
  * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
- * only the local member port can be specified (full SRC_* mask with src_id)
+ * only the local member port can be specified (full SRC_* mask with local_id)
  * and must be a member of the jfr;
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.
@@ -429,7 +429,7 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
  * post a request to recv data on the bond member port.
  * @param[in] jetty: the jetty created before, which is used to put command;
  * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
- * only the local member port can be specified (full SRC_* mask with src_id)
+ * only the local member port can be specified (full SRC_* mask with local_id)
  * and must be a member of the jetty;
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.

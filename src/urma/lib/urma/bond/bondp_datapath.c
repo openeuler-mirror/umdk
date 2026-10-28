@@ -366,9 +366,9 @@ static urma_status_t schedule_send_wr(const urma_jfs_wr_t *wr, bondp_comp_t *bdp
      * against the target jetty path table by schedule_send_fixed. */
     if (hint != NULL) {
         uint32_t fixed_target_idx = 0;
-        if (convert_remote_bond_port_id_to_active_index(hint->dst_id, &fixed_target_idx) != 0) {
+        if (convert_remote_bond_port_id_to_active_index(hint->remote_id, &fixed_target_idx) != 0) {
             URMA_LOG_ERR("Invalid dst_port_id: chip=%u die=%u port=%u\n",
-                         hint->dst_id.bs.chip_id, hint->dst_id.bs.die_id, hint->dst_id.bs.port_idx);
+                         hint->remote_id.bs.chip_id, hint->remote_id.bs.die_id, hint->remote_id.bs.port_idx);
             /* Static coordinate error: retrying cannot help. */
             return URMA_EINVAL;
         }
@@ -673,7 +673,7 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
                 *bad_wr = wr;
             }
             if (hint != NULL && ret == URMA_EINVAL) {
-                /* Static dst_id coordinate error: retrying cannot help. */
+                /* Static remote_id coordinate error: retrying cannot help. */
                 return URMA_EINVAL;
             }
             return hint != NULL ? URMA_EAGAIN : URMA_FAIL;
@@ -790,7 +790,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
                 *bad_wr = wr;
             }
             if (hint != NULL && ret == URMA_EINVAL) {
-                /* Static dst_id coordinate error: retrying cannot help. */
+                /* Static remote_id coordinate error: retrying cannot help. */
                 return URMA_EINVAL;
             }
             return hint != NULL ? URMA_EAGAIN : URMA_FAIL;
@@ -1527,7 +1527,7 @@ static urma_status_t bondp_post_recv_wr_by_port(bondp_comp_t *bdp_comp, urma_jfr
     if (hint->mask == 0) {
         return bondp_post_recv_wr(bdp_comp, wr, bad_wr, -1);
     }
-    bondp_port_id_t port_id = hint->src_id;
+    bondp_port_id_t port_id = hint->local_id;
     uint32_t recv_idx = 0;
 
     if (convert_bond_port_id_to_active_index(bdp_comp->bondp_ctx, port_id, &recv_idx) != 0) {
