@@ -37,7 +37,6 @@
 #define RESULT_LAT_FMT     " bytes   iterations  t_min[us]  t_max[us]  t_median[us]  t_avg[us]  t_stdev[us]  " \
                            "99%[us]  99.9%[us]  99.99%[us]  99.999%[us]"
 #define RESULT_LAT_DUR_FMT " bytes   iterations  t_avg[us]  pps"
-#define RESULT_BW_FMT      " bytes   iterations  BW peak[MB/sec]  BW average[MB/sec]  MsgRate[Mpps]"
 #define REPORT_LAT_FMT     " %-7u %-10lu  %-7.2lf    %-7.2lf    %-7.2lf       %-7.2lf    %-7.2lf      " \
                            "%-7.2lf  %-7.2lf    %-7.2lf     %-7.2lf"
 #define REPORT_LAT_DUR_FMT " %-7u %-10lu  %-7.2f    %-7.2f"
@@ -95,33 +94,10 @@ void catch_alarm(int sig)
     }
 }
 
-static double get_bw_unit_ratio(perftest_bw_unit_t bw_unit)
-{
-    switch (bw_unit) {
-        case PERFTEST_KB:
-            return PERFTEST_BW_KB;
-        case PERFTEST_GB:
-            return PERFTEST_BW_GB;
-        case PERFTEST_MB:
-        default:
-            return PERFTEST_BW_MB;
-    }
-}
-
 static void print_bw_header(const perftest_config_t *cfg)
 {
-    switch (cfg->bw_unit) {
-        case PERFTEST_KB:
-            LOG_QUIET(RESULT_BW_UNIT_FMT, "KB", "KB");
-            break;
-        case PERFTEST_GB:
-            LOG_QUIET(RESULT_BW_UNIT_FMT, "GB", "GB");
-            break;
-        case PERFTEST_MB:
-        default:
-            LOG_QUIET(RESULT_BW_UNIT_FMT, "MB", "MB");
-            break;
-    }
+    const perftest_bw_unit_desc_t *unit = get_bw_unit_desc(cfg->bw_unit);
+    LOG_QUIET(RESULT_BW_UNIT_FMT, unit->name, unit->name);
 }
 
 static void request_exit(void)
@@ -2732,7 +2708,7 @@ static void print_bw_report(perftest_context_t *ctx, perftest_config_t *cfg,
     /* Exception iters equals last_iters, causing iters_sum to be 0 */
     uint64_t run_ctx_iters_sum = iters_sum == 0 ? 0 : iters_sum - 1;
     cycles_sum = (double)(run_ctx->tcompleted[cfg->no_peak == true ? 0 : run_ctx_iters_sum] - tposted_0);
-    unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
+    unit_ratio = get_bw_unit_desc(cfg->bw_unit)->bytes_per_unit;
     bw_avg = ((double)size * iters_sum * cycles_to_units) / (cycles_sum * unit_ratio);
     double msg_rate_avg = ((double)iters_sum * cycles_to_units * inf_bi_factor) / (cycles_sum * PERFTEST_M);
 
@@ -2785,7 +2761,7 @@ static void print_bw_report_per_jetty(perftest_context_t *ctx, perftest_config_t
                         ? (cfg->api_type == PERFTEST_SEND ? INF_BI_FACTOR_SEND : INF_BI_FACTOR_OTHER)
                         : NON_INF_BI_FACTOR;
     size = inf_bi_factor * cfg->size;
-    unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
+    unit_ratio = get_bw_unit_desc(cfg->bw_unit)->bytes_per_unit;
 
     uint64_t tot_iters = num_of_cal_iters * jettys_count;
     uint64_t tcompleted_last = run_ctx->tcompleted[cfg->no_peak == true ? 0 : tot_iters - 1];
@@ -2829,7 +2805,7 @@ static void print_bi_bw_report(const bw_report_data_t *local_bw_report,
     uint64_t iters = (local_bw_report->iters > remote_bw_report->iters)
                          ? local_bw_report->iters
                          : remote_bw_report->iters;
-    double unit_ratio = get_bw_unit_ratio(cfg->bw_unit);
+    double unit_ratio = get_bw_unit_desc(cfg->bw_unit)->bytes_per_unit;
     double bw_peak = (local_bw_report->bw_peak + remote_bw_report->bw_peak) / unit_ratio;
     double bw_avg = (local_bw_report->bw_avg + remote_bw_report->bw_avg) / unit_ratio;
     double msg_rate_avg = local_bw_report->msg_rate_avg + remote_bw_report->msg_rate_avg;

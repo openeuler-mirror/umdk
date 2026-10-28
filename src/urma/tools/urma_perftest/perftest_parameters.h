@@ -96,9 +96,6 @@
 #define PERFTEST_G         (1000000000)
 #define PERFTEST_MBS       (0x100000)
 #define PERFTEST_KPPS      (1000)
-#define PERFTEST_BW_KB     0x400      // 2^10
-#define PERFTEST_BW_MB     0x100000   // 2^20
-#define PERFTEST_BW_GB     0x40000000 // 2^30
 #define PERFTEST_BYTE_SIZE 8
 
 #define PERFTEST_WRITE_DIRTY_PERIOD         (50)
@@ -217,10 +214,19 @@ typedef enum perftest_rate_limiter_units {
 } perftest_rate_limiter_unit_t;
 
 typedef enum perftest_bw_unit {
+    PERFTEST_KIB,
+    PERFTEST_MIB,
+    PERFTEST_GIB,
     PERFTEST_KB,
     PERFTEST_MB,
     PERFTEST_GB,
+    PERFTEST_BW_UNIT_NUM
 } perftest_bw_unit_t;
+
+typedef struct perftest_bw_unit_desc {
+    const char *name;
+    uint64_t bytes_per_unit;
+} perftest_bw_unit_desc_t;
 
 typedef union perftest_net_addr {
     uint8_t raw[URMA_IP_ADDR_BYTES]; /* Network Order */
@@ -381,6 +387,7 @@ static inline bool perftest_check_rs_mode(const perftest_config_t *cfg)
     return cfg->trans_mode == URMA_TM_RC && ((cfg->order_type & URMA_OT) != 0);
 };
 
+const perftest_bw_unit_desc_t *get_bw_unit_desc(perftest_bw_unit_t bw_unit);
 void print_cfg(const perftest_config_t *cfg);
 int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg);
 void destroy_cfg(perftest_config_t *cfg);
