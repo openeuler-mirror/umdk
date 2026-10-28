@@ -81,6 +81,34 @@ static const perftest_cmd_t g_cmd[] = {
     {"atomic_bw", PERFTEST_ATOMIC_BW},
 };
 
+static const perftest_bw_unit_desc_t g_bw_units[PERFTEST_BW_UNIT_NUM] = {
+    [PERFTEST_KIB] = {"KiB", 1024},
+    [PERFTEST_MIB] = {"MiB", 1048576},
+    [PERFTEST_GIB] = {"GiB", 1073741824},
+    [PERFTEST_KB] = {"KB", 1000},
+    [PERFTEST_MB] = {"MB", 1000000},
+    [PERFTEST_GB] = {"GB", 1000000000},
+};
+
+const perftest_bw_unit_desc_t *get_bw_unit_desc(perftest_bw_unit_t bw_unit)
+{
+    if ((unsigned int)bw_unit >= PERFTEST_BW_UNIT_NUM) {
+        return &g_bw_units[PERFTEST_MIB];
+    }
+    return &g_bw_units[bw_unit];
+}
+
+static int parse_bw_unit(const char *name, perftest_bw_unit_t *bw_unit)
+{
+    for (uint32_t i = 0; i < PERFTEST_BW_UNIT_NUM; i++) {
+        if (strcmp(name, g_bw_units[i].name) == 0) {
+            *bw_unit = (perftest_bw_unit_t)i;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 static void command_usage(const char *argv0)
 {
     LOG_QUIET(
@@ -189,7 +217,8 @@ static void usage(const char *argv0)
         "  --hugepage_size <size>      Page size for allocated memory. Only support 2MB or 1GB currently.\n"
         "  --mgmt_addr <eid>           UB only: local eid string for mgmt channel (required in UB mode).\n"
         "  --enable_sync_stream        Enable synchronized multi-stream transmission. \n"
-        "  --bw_unit <unit>            Set bandwidth display unit: KB, MB, or GB (default: MB).\n"
+        "  --bw_unit <unit>            Set bandwidth display unit: KB, MB, GB, KiB, MiB, or GiB (default: MiB).\n"
+        "                              KB/MB/GB use powers of 1000; KiB/MiB/GiB use powers of 1024.\n"
         "  --va <address>              Allow user to set address for local_buf, (Both decimal and hexadecimal).\n"
         "  --share_jfs                 Create ONLY ONE jfs in multi-play-multi mode bw test.\n"
         "  --min_size                  Set min size in random io size, only for bw mode.\n"
@@ -359,7 +388,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->jettys_pre_jfr = 0;
     cfg->is_rate_limit = false;
     cfg->rate_limit = 0;
-    cfg->bw_unit = PERFTEST_MB;
+    cfg->bw_unit = PERFTEST_MIB;
     cfg->burst_size = 0;
     cfg->rate_units = PERFTEST_RATE_LIMIT_GIGA_BIT;
     cfg->enable_credit = false;
@@ -1081,14 +1110,8 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 cfg->enable_sync_stream = true;
                 break;
             case PERFTEST_OPT_SET_BW_UNIT:
-                if (strcmp("KB", optarg) == 0) {
-                    cfg->bw_unit = PERFTEST_KB;
-                } else if (strcmp("GB", optarg) == 0) {
-                    cfg->bw_unit = PERFTEST_GB;
-                } else if (strcmp("MB", optarg) == 0) {
-                    cfg->bw_unit = PERFTEST_MB;
-                } else {
-                    LOG_ERROR(" Invalid BW type. Please use KB, MB or GB\n");
+                if (parse_bw_unit(optarg, &cfg->bw_unit) != 0) {
+                    LOG_ERROR(" Invalid BW type. Please use KB, MB, GB, KiB, MiB or GiB\n");
                     return -1;
                 }
                 break;
