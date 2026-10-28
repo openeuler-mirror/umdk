@@ -342,3 +342,172 @@ TEST(UrmaBondTest, DatapathScheduleCoversAffinityAndBatchReceiveBoundaries)
     fixture.comp.active_count = 0;
     EXPECT_EQ(-1, schedule_recv_n(&fixture.comp, 1, recvCnt));
 }
+
+TEST(UrmaBondTest, DatapathScheduleSendFixedPinsAndValidatesTargetPort)
+{
+    BondPathFixture fixture;
+    int sendIdx = -1;
+
+    /* Fixture topology: local 0 -> target 0, local 1 -> target 1. */
+    EXPECT_EQ(0, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 0, &sendIdx));
+    EXPECT_EQ(0, sendIdx);
+    EXPECT_EQ(0, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 1, &sendIdx));
+    EXPECT_EQ(1, sendIdx);
+
+    /* No path reaches an out-of-range target port. */
+    EXPECT_EQ(-1, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 2, &sendIdx));
+
+    /* An invalid local port cannot serve as the egress even if the path exists. */
+    fixture.comp.valid[1] = false;
+    EXPECT_EQ(-1, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 1, &sendIdx));
+    fixture.comp.valid[1] = true;
+
+    /* An invalid remote path is skipped. */
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], false);
+    EXPECT_EQ(-1, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 0, &sendIdx));
+    SetTargetJettyPath(fixture.target, 0, 0, &fixture.phyTarget[0][0], true);
+
+    /* Multiple egresses to the fixed target: a dead path must not hide a live
+     * one. Paths are stored remote-major, so the fixed target's path on local
+     * egress 0 is scanned after a non-matching path of the same egress. */
+    SetTargetJettyPath(fixture.target, 0, 1, &fixture.phyTarget[0][1], true);
+    fixture.comp.valid[1] = false;
+    /* The fixture is a RC jetty with egress 0 bound to phyTarget[0][0]: path
+     * (0->1) fails the binding check and egress 1 is dead, so nothing serves
+     * the pinned target yet. */
+    EXPECT_EQ(-1, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 1, &sendIdx));
+    /* Rebind egress 0 to the pinned target: the live path (0->1) must win
+     * although the other egress is dead. */
+    fixture.comp.p_jetty[0]->remote_jetty = &fixture.phyTarget[0][1];
+    EXPECT_EQ(0, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 1, &sendIdx));
+    EXPECT_EQ(0, sendIdx);
+    fixture.comp.p_jetty[0]->remote_jetty = &fixture.phyTarget[0][0];
+    fixture.comp.valid[1] = true;
+}
+
+TEST(UrmaBondTest, DatapathBondPortIdConvertCoversPrimaryAndPortEids)
+{
+    BondPathFixture fixture;
+    uint32_t activeIdx = 0;
+    bondp_port_id_t portId = {};
+    portId.bs.die_id = 1;
+
+    /* convert_bond_port_id_to_active_index requires live physical contexts. */
+    fixture.ctx.p_ctxs[0] = &fixture.phyCtx;
+    fixture.ctx.p_ctxs[1] = &fixture.phyCtx;
+
+    /* Primary EIDs of chip 1/2 map to active indices 0/1. */
+    portId.bs.port_idx = UINT8_MAX;
+    portId.bs.chip_id = 1;
+    EXPECT_EQ(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    EXPECT_EQ(0U, activeIdx);
+    portId.bs.chip_id = 2;
+    EXPECT_EQ(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    EXPECT_EQ(1U, activeIdx);
+
+    /* A port EID of chip 1 maps to active index 2 when the slot is live. */
+    fixture.ctx.dev_num = 3;
+    fixture.ctx.p_ctxs[2] = &fixture.phyCtx;
+    portId.bs.chip_id = 1;
+    portId.bs.port_idx = 0;
+    EXPECT_EQ(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    EXPECT_EQ(2U, activeIdx);
+
+    /* Invalid coordinates or a dead physical slot fail the conversion. */
+    portId.bs.chip_id = 0;
+    EXPECT_NE(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    portId.bs.chip_id = 1;
+    portId.bs.die_id = 2;
+    EXPECT_NE(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    portId.bs.die_id = 1;
+    portId.bs.port_idx = PORT_NUM + 1;
+    EXPECT_NE(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+    portId.bs.port_idx = 0;
+    fixture.ctx.p_ctxs[2] = NULL;
+    EXPECT_NE(0, convert_bond_port_id_to_active_index(&fixture.ctx, portId, &activeIdx));
+}
+
+TEST(UrmaBondTest, DatapathRemotePortIdConvertIsPureCoordinateMath)
+{
+    uint32_t activeIdx = 0;
+    bondp_port_id_t portId = {};
+    portId.bs.die_id = 1;
+
+    /* Primary EIDs of chip 1/2 map to indices 0/1, port EIDs of chip 1 start
+     * at index 2. No local p_ctx is required for a remote id. */
+    portId.bs.port_idx = UINT8_MAX;
+    portId.bs.chip_id = 1;
+    EXPECT_EQ(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    EXPECT_EQ(0U, activeIdx);
+    portId.bs.chip_id = 2;
+    EXPECT_EQ(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    EXPECT_EQ(1U, activeIdx);
+    portId.bs.chip_id = 1;
+    portId.bs.port_idx = 0;
+    EXPECT_EQ(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    EXPECT_EQ(2U, activeIdx);
+
+    /* Invalid coordinates or an out-of-range mapped index fail. */
+    portId.bs.chip_id = 0;
+    EXPECT_NE(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    portId.bs.chip_id = 1;
+    portId.bs.die_id = 2;
+    EXPECT_NE(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    portId.bs.die_id = 1;
+    portId.bs.port_idx = PORT_NUM;
+    /* chip1/PORT_NUM must not alias chip2/port0 in the matrix mapping. */
+    EXPECT_NE(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+    portId.bs.chip_id = 2;
+    EXPECT_NE(0, convert_remote_bond_port_id_to_active_index(portId, &activeIdx));
+}
+
+TEST(UrmaBondTest, DatapathWrHintCheckCoversAllValidationBranches)
+{
+    bondp_wr_hint_t hint = {};
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t);
+    hint.mask = BONDP_WR_HINT_MASK_DST_CHIP_ID | BONDP_WR_HINT_MASK_DST_DIE_ID |
+                BONDP_WR_HINT_MASK_DST_PORT_ID;
+
+    /* A full dst hint passes for send and is rejected for recv. */
+    EXPECT_EQ(URMA_SUCCESS, bondp_check_wr_hint(&hint, true));
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, false));
+
+    /* A full src hint passes for recv and is rejected for send. */
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID |
+                BONDP_WR_HINT_MASK_SRC_PORT_ID;
+    EXPECT_EQ(URMA_SUCCESS, bondp_check_wr_hint(&hint, false));
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+
+    /* A zero mask keeps the bond scheduling on both sides. */
+    hint.mask = 0;
+    EXPECT_EQ(URMA_SUCCESS, bondp_check_wr_hint(&hint, true));
+    EXPECT_EQ(URMA_SUCCESS, bondp_check_wr_hint(&hint, false));
+
+    /* A NULL hint is rejected. */
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(nullptr, true));
+
+    /* Wrong version or size is rejected. */
+    hint.mask = BONDP_WR_HINT_MASK_DST_ALL;
+    hint.version = BONDP_WR_HINT_VERSION_V0 + 1;
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t) - 1;
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+    hint.size = sizeof(bondp_wr_hint_t);
+
+    /* Reserved words are not validated. */
+    hint.reserved[2] = 1;
+    EXPECT_EQ(URMA_SUCCESS, bondp_check_wr_hint(&hint, true));
+    hint.reserved[2] = 0;
+
+    /* Unknown mask bits are rejected. */
+    hint.mask = BONDP_WR_HINT_MASK_DST_ALL | (1ULL << 6);
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+
+    /* A partial or mixed mask is rejected. */
+    hint.mask = BONDP_WR_HINT_MASK_DST_CHIP_ID | BONDP_WR_HINT_MASK_DST_DIE_ID;
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_DST_ALL;
+    EXPECT_EQ(URMA_EINVAL, bondp_check_wr_hint(&hint, true));
+}

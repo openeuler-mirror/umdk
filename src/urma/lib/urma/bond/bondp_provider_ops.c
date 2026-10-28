@@ -95,10 +95,10 @@ static urma_ops_t g_bond_ops = {
     .user_ctl = bondp_user_ctl,
 
     /* Dataplane OPs */
-    .post_jfs_wr = bondp_post_jfs_wr,
-    .post_jfr_wr = bondp_post_jfr_wr,
-    .post_jetty_send_wr = bondp_post_jetty_send_wr,
-    .post_jetty_recv_wr = bondp_post_jetty_recv_wr,
+    .post_jfs_wr = bondp_post_jfs_wr_sched,
+    .post_jfr_wr = bondp_post_jfr_wr_sched,
+    .post_jetty_send_wr = bondp_post_jetty_send_wr_sched,
+    .post_jetty_recv_wr = bondp_post_jetty_recv_wr_sched,
     .poll_jfc = bondp_poll_jfc,
     .rearm_jfc = bondp_rearm_jfc,
     .wait_jfc = bondp_wait_jfc,

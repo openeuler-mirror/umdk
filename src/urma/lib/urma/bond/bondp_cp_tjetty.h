@@ -73,6 +73,12 @@ int convert_bond_port_id_to_active_index(const bondp_context_t *bdp_ctx, bondp_p
 /* Inverse of convert_bond_port_id_to_active_index. */
 bondp_port_id_t bondp_active_index_to_port_id(uint32_t active_index);
 
+/* Pure coordinate translation for a REMOTE port id: validates the chip/die/port
+ * coordinates and maps them to the matrix active index without requiring the
+ * local context to have a live p_ctx at that slot. Reachability must be checked
+ * by the caller against the target jetty path table. */
+int convert_remote_bond_port_id_to_active_index(bondp_port_id_t port_id, uint32_t *active_index);
+
 #ifdef __cplusplus
 }
 #endif

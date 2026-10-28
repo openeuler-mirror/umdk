@@ -81,6 +81,7 @@ typedef struct jfs_wr_entry {
     struct bondp_target_jetty *target_vjetty;
     uint32_t send_idx;
     uint32_t target_idx;
+    bool fixed_port; /* WR posted on a user-specified port; exempt from rerouting */
     bool rnr_retry_pending;
     uint32_t rnr_retry_cnt;
     bondp_chip_id_info_t info;
