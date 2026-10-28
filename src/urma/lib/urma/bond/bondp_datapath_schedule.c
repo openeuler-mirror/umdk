@@ -448,6 +448,48 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
     }
 }
 
+int schedule_send_fixed(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp,
+                        int fixed_target_idx, int *send_idx)
+{
+    bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(tjetty, bondp_target_jetty_t, v_tjetty);
+    if (bdp_tjetty == NULL) {
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
+        uint32_t loc_idx = bdp_comp->active_indices[i];
+        for (uint32_t j = 0; j < bdp_tjetty->p_tjetty_count; j++) {
+            const bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[j];
+            if (path->local_indice != loc_idx) {
+                continue;
+            }
+            uint32_t tar_idx = path->remote_indice;
+            if (path->p_tjetty == NULL || (int)tar_idx != fixed_target_idx) {
+                /* Keep scanning: this egress may hold other paths, and the
+                 * fixed target may be reachable from a later local egress. */
+                continue;
+            }
+            if (!atomic_load(&path->valid) || !atomic_load(&bdp_comp->valid[loc_idx])) {
+                continue;
+            }
+            if (bdp_comp->comp_type == BONDP_COMP_JETTY && bdp_comp->p_jetty[loc_idx] == NULL) {
+                continue;
+            }
+            /* Same as the normal schedule: a RC pjetty is bound to exactly one
+             * remote p_tjetty, so only a path whose physical target matches
+             * that binding may use this egress. */
+            if (get_comp_urma_trans_mode(bdp_comp) == URMA_TM_RC &&
+                bdp_comp->comp_type == BONDP_COMP_JETTY &&
+                bdp_comp->p_jetty[loc_idx]->remote_jetty != path->p_tjetty) {
+                continue;
+            }
+            *send_idx = (int)loc_idx;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx)
 {
     if (bdp_comp->active_count == 0) {
