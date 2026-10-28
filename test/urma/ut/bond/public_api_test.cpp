@@ -1584,9 +1584,10 @@ TEST(UrmaBondTest, PublicModifyJfrInternalRoutesSchedAndDirectedHint)
     EXPECT_EQ(URMA_SUCCESS, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
 
     /* a directed hint: chip 1 primary eid maps to member 0 */
-    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
-    hint.src_id.bs.chip_id = 1;
-    hint.src_id.bs.port_idx = UINT8_MAX;
+    hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
+    hint.local_id.bs.chip_id = 1;
+    hint.local_id.bs.die_id = 1;
+    hint.local_id.bs.port_idx = UINT8_MAX;
     urma_test::SetHwMockStatus(URMA_EAGAIN);
     EXPECT_EQ(URMA_EAGAIN, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
     urma_test::SetHwMockStatus(URMA_SUCCESS);
@@ -1609,7 +1610,7 @@ TEST(UrmaBondTest, PublicModifyJfrInternalRoutesSchedAndDirectedHint)
     hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
 
     /* a hint pointing at a port with no live physical ctx is rejected */
-    hint.src_id.bs.chip_id = 2;
+    hint.local_id.bs.chip_id = 2;
     EXPECT_EQ(URMA_EINVAL, bondp_modify_jfr_internal(&fixture.jfr.v_jfr, &jfrAttr, &hint));
 }
 

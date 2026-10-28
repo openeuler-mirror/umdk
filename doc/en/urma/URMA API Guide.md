@@ -6954,8 +6954,8 @@ urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hin
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
 ```
 
-- `bondp_post_jfs_wr` / `bondp_post_jetty_send_wr`: post a send WR that consumes RQEs on the given target port. `hint->dst_id` selects the remote receiving port, which must be a reachable target of this WR.
-- `bondp_post_jfr_wr` / `bondp_post_jetty_recv_wr`: post a receive WR on the given port. `hint->src_id` selects the local receiving port, which must be a member of the JFR/Jetty.
+- `bondp_post_jfs_wr` / `bondp_post_jetty_send_wr`: post a send WR that consumes RQEs on the given target port. `hint->remote_id` selects the remote receiving port, which must be a reachable target of this WR.
+- `bondp_post_jfr_wr` / `bondp_post_jetty_recv_wr`: post a receive WR on the given port. `hint->local_id` selects the local receiving port, which must be a member of the JFR/Jetty.
 
 The port is specified through the `hint` parameter of type `bondp_wr_hint_t`:
 
@@ -6964,15 +6964,15 @@ typedef struct bondp_wr_hint {
     uint32_t version;         /* must be BONDP_WR_HINT_VERSION_V0 */
     uint32_t size;            /* must match the bondp_wr_hint_t size expected by the loaded liburma */
     uint64_t mask;            /* 0 means no port is pinned; fully scheduled */
-    bondp_port_id_t src_id;   /* chip/die/port coordinates; validity of the sub-fields is decided by the SRC_* mask bits */
-    bondp_port_id_t dst_id;   /* chip/die/port coordinates; validity of the sub-fields is decided by the DST_* mask bits */
+    bondp_port_id_t local_id;   /* chip/die/port coordinates; validity of the sub-fields is decided by the SRC_* mask bits */
+    bondp_port_id_t remote_id;   /* chip/die/port coordinates; validity of the sub-fields is decided by the DST_* mask bits */
     uint64_t reserved[4];     /* must be 0, reserved for future extension */
 } bondp_wr_hint_t;
 ```
 
-`hint` must not be NULL. Initialize it by zeroing the whole structure first, then set `version` to `BONDP_WR_HINT_VERSION_V0` and `size` to `sizeof(bondp_wr_hint_t)`; the `reserved` words are reserved for future extension and are not validated. `mask` is a combination of `bondp_wr_hint_mask_t` bits. `mask == 0` means no port is pinned and the WRs follow the normal bond scheduling. Otherwise, the send interfaces require `mask` to be exactly `BONDP_WR_HINT_MASK_DST_CHIP_ID | BONDP_WR_HINT_MASK_DST_DIE_ID | BONDP_WR_HINT_MASK_DST_PORT_ID` with all three `dst_id` sub-fields filled in, and the receive interfaces require the `SRC_*` counterpart with all three `src_id` sub-fields filled in; a partial or mixed mask fails the call with `URMA_EINVAL`.
+`hint` must not be NULL. Initialize it by zeroing the whole structure first, then set `version` to `BONDP_WR_HINT_VERSION_V0` and `size` to `sizeof(bondp_wr_hint_t)`; the `reserved` words are reserved for future extension and are not validated. `mask` is a combination of `bondp_wr_hint_mask_t` bits. `mask == 0` means no port is pinned and the WRs follow the normal bond scheduling. Otherwise, the send interfaces require `mask` to be exactly `BONDP_WR_HINT_MASK_DST_CHIP_ID | BONDP_WR_HINT_MASK_DST_DIE_ID | BONDP_WR_HINT_MASK_DST_PORT_ID` with all three `remote_id` sub-fields filled in, and the receive interfaces require the `SRC_*` counterpart with all three `local_id` sub-fields filled in; a partial or mixed mask fails the call with `URMA_EINVAL`.
 
-An invalid or non-member `src_id` on the receive interfaces fails with `URMA_EINVAL`. On the send interfaces, a `dst_id` whose coordinates are out of range fails with `URMA_EINVAL`; a `dst_id` with valid coordinates whose target port is currently unreachable (no local exit reaches it, or the port path is already invalid at post time) returns `URMA_EAGAIN` and the caller decides whether to retry. The receive interfaces also return `URMA_EAGAIN` when the specified port path is already invalid.
+An invalid or non-member `local_id` on the receive interfaces fails with `URMA_EINVAL`. On the send interfaces, a `remote_id` whose coordinates are out of range fails with `URMA_EINVAL`; a `remote_id` with valid coordinates whose target port is currently unreachable (no local exit reaches it, or the port path is already invalid at post time) returns `URMA_EAGAIN` and the caller decides whether to retry. The receive interfaces also return `URMA_EAGAIN` when the specified port path is already invalid.
 
 On `URMA_EAGAIN` the whole batch is left unsubmitted. When a nonzero port hint is rejected because the specified path is unavailable, `*bad_wr` points to the first WR of the batch. A send-side segment lifetime check can also return `URMA_EAGAIN` before submission; in that case the whole batch is still unsubmitted, but `*bad_wr` identifies the WR referencing the segment being unregistered, and the WRs before it must not be treated as submitted.
 
@@ -7026,9 +7026,9 @@ urma_status_t status = bondp_modify_jfr(v_jfr, &attr, &hint);
 
 /* Scenario 2: modify only the member of chip 1 primary EID */
 hint.mask = BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | BONDP_WR_HINT_MASK_SRC_PORT_ID;
-hint.src_id.bs.chip_id = 1;
-hint.src_id.bs.die_id = 1;
-hint.src_id.bs.port_idx = UINT8_MAX; /* primary EID */
+hint.local_id.bs.chip_id = 1;
+hint.local_id.bs.die_id = 1;
+hint.local_id.bs.port_idx = UINT8_MAX; /* primary EID */
 status = bondp_modify_jfr(v_jfr, &attr, &hint);
 ```
 
