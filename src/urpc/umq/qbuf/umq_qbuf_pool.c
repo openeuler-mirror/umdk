@@ -2865,11 +2865,18 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
         while (fetch_count < needed) {
             ret = fetch_from_global(&g_qbuf_pool.block_pool[sc], local_pool, with_data, sc, batch_cnt, deadline_ns);
             if (ret <= 0) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                    "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
-                    "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
-                    ret, ret == -UMQ_ERR_ETIMEOUT ? "timeout" : strerror(-ret),
-                    with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 等待异步扩容超时属高并发下的预期性背压，报 WARN；真正故障保持 ERR */
+                    UMQ_LIMIT_VLOG_WARN(VLOG_UMQ,
+                        "fetch from global timeout, ret: %d, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                        "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, strerror(-ret), with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                }
                 return ret;
             }
             fetch_count += (uint32_t)ret;
@@ -2918,11 +2925,18 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
         }
         if (ret <= 0) {
             if (!any_escape_buf_exists()) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                    "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
-                    "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
-                    ret, ret == -UMQ_ERR_ETIMEOUT ? "timeout" : strerror(-ret),
-                    with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 等待异步扩容超时属高并发下的预期性背压，报 WARN；真正故障保持 ERR */
+                    UMQ_LIMIT_VLOG_WARN(VLOG_UMQ,
+                        "fetch from global timeout, ret: %d, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                        "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, strerror(-ret), with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                }
                 if (with_data) {
                     if (qbuf_debug_on())
                         g_dbg_stats.alloc_with_data_fetch_fail += (need_batch - fetch_count);
@@ -3782,10 +3796,25 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
                 umq_qbuf_local_pool_fetch_and_expand(num - local_pool->buf_cnt_without_data, local_pool, false, 0,
                                                      deadline_ns);
             if (ret != UMQ_SUCCESS) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                                   "umq nodata qbuf local pool fetch and expand failed, "
-                                   "suggestion: increase total_size or expansion_mem_size_max, ret: %d\n",
-                                   ret);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 超时是等待异步扩容的预期性背压（高并发常见），报 WARN；
+                     * 真正的故障（预算耗尽/系统 OOM）保持 ERR。 */
+                    UMQ_LIMIT_VLOG_WARN(
+                        VLOG_UMQ,
+                        "umq nodata qbuf local pool fetch and expand timeout, ret: %d, sc: 0, "
+                        "allocation deadline (umq_buf_alloc timeout_ms) reached while waiting for async "
+                        "expansion to complete; suggestion: increase the alloc timeout or enlarge the pool "
+                        "initial capacity so this alloc can be served without waiting on expansion\n",
+                        ret);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(
+                        VLOG_UMQ,
+                        "umq nodata qbuf local pool fetch and expand failed, ret: %d, sc: 0, "
+                        "expansion budget may be exhausted (see 'expand mem size max' log) or system "
+                        "memory is insufficient; suggestion: increase umq_buf_pool_max_size (the expansion "
+                        "budget is max_size minus the pool initial size)\n",
+                        ret);
+                }
                 return ret;
             }
             g_thread_cache.stats.tls_fetch_cnt_without_data++;
@@ -3878,10 +3907,25 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
                 }
                 return ret;
             }
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                               "umq with data qbuf local pool fetch and expand failed, "
-                               "suggestion: increase total_size or expansion_mem_size_max, ret: %d\n",
-                               ret);
+            if (ret == -UMQ_ERR_ETIMEOUT) {
+                /* 超时是等待异步扩容的预期性背压（高并发常见），报 WARN；
+                 * 真正的故障（预算耗尽/系统 OOM）保持 ERR。 */
+                UMQ_LIMIT_VLOG_WARN(
+                    VLOG_UMQ,
+                    "umq with data qbuf local pool fetch and expand timeout, ret: %d, sc: %u, "
+                    "allocation deadline (umq_buf_alloc timeout_ms) reached while waiting for async "
+                    "expansion to complete; suggestion: increase the alloc timeout or enlarge the pool "
+                    "initial capacity so this alloc can be served without waiting on expansion\n",
+                    ret, sc);
+            } else {
+                UMQ_LIMIT_VLOG_ERR(
+                    VLOG_UMQ,
+                    "umq with data qbuf local pool fetch and expand failed, ret: %d, sc: %u, "
+                    "expansion budget may be exhausted (see 'expand mem size max' log) or system "
+                    "memory is insufficient; suggestion: increase umq_buf_pool_max_size (the expansion "
+                    "budget is max_size minus the pool initial size)\n",
+                    ret, sc);
+            }
             return ret;
         }
         g_thread_cache.stats.tls_fetch_cnt_with_data++;
