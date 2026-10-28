@@ -1308,11 +1308,37 @@ static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansio
     return UMQ_SUCCESS;
 }
 
+/* Roll back shrink_pending after the trigger (return_batch_to_expansion_pool
+ * or the worker's chained re-check) set it but the task could not be queued.
+ * Without this the slot is permanently excluded from shrink: every consumer
+ * trusts "pending == task queued" and only the worker clears the flag while
+ * processing a task. The slot cannot be freed concurrently here — only the
+ * shrink worker frees slots and only for queued tasks, and this slot has
+ * none; the inited check covers pool teardown. */
+static void qbuf_exp_pool_clear_shrink_pending(qbuf_expansion_pool_t *exp_pool, uint32_t slot_id)
+{
+    (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+    if (exp_pool->inited) {
+        qbuf_expansion_pool_slot_t *slot;
+        URPC_LIST_FOR_EACH(slot, node, &exp_pool->slot_list)
+        {
+            if (slot->slot_id == slot_id) {
+                slot->shrink_pending = false;
+                break;
+            }
+        }
+    }
+    (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+}
+
 static void async_shrink_push_param(bool with_data, uint32_t sc, qbuf_expansion_pool_t *exp_pool, uint32_t slot_id)
 {
     async_shrink_pool_param_t *param = (async_shrink_pool_param_t *)calloc(1, sizeof(async_shrink_pool_param_t));
     if (param == NULL) {
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "malloc async shrink param failed\n");
+        /* Task lost — undo the trigger's pending flag so this slot is not
+         * permanently excluded from shrink. */
+        qbuf_exp_pool_clear_shrink_pending(exp_pool, slot_id);
         return;
     }
     param->slot_id = slot_id;
@@ -1622,6 +1648,33 @@ static void *async_shrink_global_pool_callback(void *arg)
     return NULL;
 }
 
+/* Ensure this pool's resident shrink thread exists, retrying creation on
+ * failure. An init-time pthread_create failure used to disable shrinking for
+ * the pool's whole lifetime (pushed tasks accumulated in shrink_task_list and
+ * never ran); retrying at trigger time restores the semantics that a
+ * transient failure only drops the triggers that arrive while it persists.
+ * The created flag is written under shrink_task_list.mutex, matching
+ * umq_qbuf_exp_pool_inner_uninit's stop+join protocol; the fast path is a
+ * single acquire load. */
+static bool qbuf_exp_pool_shrink_thread_ensure(qbuf_expansion_pool_t *exp_pool)
+{
+    if (__atomic_load_n(&exp_pool->shrink_thread_created, __ATOMIC_ACQUIRE)) {
+        return true;
+    }
+    (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
+    if (!exp_pool->shrink_thread_created && !exp_pool->shrink_task_list.stop) {
+        int rc = pthread_create(&exp_pool->shrink_thread, NULL, async_shrink_global_pool_callback, (void *)exp_pool);
+        if (rc == 0) {
+            __atomic_store_n(&exp_pool->shrink_thread_created, true, __ATOMIC_RELEASE);
+        } else {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "retry create shrink thread failed, rc: %d\n", rc);
+        }
+    }
+    bool created = exp_pool->shrink_thread_created;
+    (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+    return created;
+}
+
 static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_id)
 {
     if (g_qbuf_pool.disable_scale_cap) {
@@ -1630,6 +1683,13 @@ static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_
 
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_data;
+    /* The trigger already set slot->shrink_pending. If no worker can run the
+     * task (init-time pthread_create failure still persisting), roll the flag
+     * back — otherwise the slot is permanently excluded from shrink. */
+    if (!qbuf_exp_pool_shrink_thread_ensure(exp_pool)) {
+        qbuf_exp_pool_clear_shrink_pending(exp_pool, slot_id);
+        return;
+    }
     async_shrink_push_param(with_data, sc, exp_pool, slot_id);
 }
 
@@ -2028,24 +2088,32 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
 
     /* Signal the dedicated shrink thread to stop and wait for it to exit.
      * pthread_join guarantees the thread is fully dead before we proceed
-     * to clean up slots and destroy locks — no lock-leak timeout needed. */
-    if (exp_pool->shrink_thread_created) {
-        (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
-        exp_pool->shrink_task_list.stop = true;
-        (void)pthread_cond_signal(&exp_pool->shrink_task_list.cond);
-        (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+     * to clean up slots and destroy locks — no lock-leak timeout needed.
+     * stop and the created flag are both written under the task-list mutex
+     * (qbuf_exp_pool_shrink_thread_ensure may retry creation concurrently),
+     * so the join decision is read under the same mutex: either the lazy
+     * create serialized first (flag read true → joined below) or stop is
+     * seen first (no new thread can be created any more). */
+    (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
+    exp_pool->shrink_task_list.stop = true;
+    bool join_shrink = exp_pool->shrink_thread_created;
+    (void)pthread_cond_signal(&exp_pool->shrink_task_list.cond);
+    (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+    if (join_shrink) {
         (void)pthread_join(exp_pool->shrink_thread, NULL);
         exp_pool->shrink_thread_created = false;
     }
 
     /* Same hard stop+join for this pool's dedicated expand thread: it may be
      * mid-expand_global_pool_impl touching slots/locks. join guarantees it is
-     * dead before the slot teardown below. */
-    if (exp_pool->expand_thread_created) {
-        (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
-        exp_pool->expand_task_list.stop = true;
-        (void)pthread_cond_signal(&exp_pool->expand_task_list.cond);
-        (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+     * dead before the slot teardown below. Same mutex protocol as shrink —
+     * pairs with qbuf_exp_pool_expand_thread_ensure. */
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    exp_pool->expand_task_list.stop = true;
+    bool join_expand = exp_pool->expand_thread_created;
+    (void)pthread_cond_signal(&exp_pool->expand_task_list.cond);
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    if (join_expand) {
         (void)pthread_join(exp_pool->expand_thread, NULL);
         exp_pool->expand_thread_created = false;
     }
@@ -2161,10 +2229,11 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
     }
 
     /* Create dedicated expand thread for this pool (mirrors shrink). Failure
-     * is tolerated: async_expand_global_pool then degrades to a no-op for
-     * this pool and its alloc path rolls back with ENOMEM, same as the old
-     * per-expansion pthread_create failure path. Log the return code —
-     * pthread_create does not set errno. */
+     * is tolerated and NOT permanent: the producers retry creation lazily via
+     * qbuf_exp_pool_expand_thread_ensure / qbuf_exp_pool_shrink_thread_ensure
+     * on each trigger, so a transient failure only drops the triggers that
+     * arrive while it persists. Log the return code — pthread_create does not
+     * set errno. */
     int expand_rc = pthread_create(&exp_pool->expand_thread, NULL, async_expand_global_pool_callback, (void *)exp_pool);
     if (expand_rc != 0) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "create expand thread failed, rc: %d\n", expand_rc);
@@ -3225,6 +3294,33 @@ static void *async_expand_global_pool_callback(void *arg)
     return NULL;
 }
 
+/* Ensure this pool's resident expand thread exists, retrying creation on
+ * failure. An init-time pthread_create failure used to disable expansion for
+ * the pool's whole lifetime; retrying at trigger time restores the old
+ * pthread_create-per-expansion semantics where a transient failure only
+ * dropped the expansions attempted while it persisted. The created flag is
+ * written under expand_task_list.mutex, matching
+ * umq_qbuf_exp_pool_inner_uninit's stop+join protocol; the fast path is a
+ * single acquire load. */
+static bool qbuf_exp_pool_expand_thread_ensure(qbuf_expansion_pool_t *exp_pool)
+{
+    if (__atomic_load_n(&exp_pool->expand_thread_created, __ATOMIC_ACQUIRE)) {
+        return true;
+    }
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    if (!exp_pool->expand_thread_created && !exp_pool->expand_task_list.stop) {
+        int rc = pthread_create(&exp_pool->expand_thread, NULL, async_expand_global_pool_callback, (void *)exp_pool);
+        if (rc == 0) {
+            __atomic_store_n(&exp_pool->expand_thread_created, true, __ATOMIC_RELEASE);
+        } else {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "retry create expand thread failed, rc: %d\n", rc);
+        }
+    }
+    bool created = exp_pool->expand_thread_created;
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    return created;
+}
+
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, bool sync_wait)
 {
     if (g_qbuf_pool.disable_scale_cap) {
@@ -3244,14 +3340,6 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
 
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_data;
-    /* This pool has no resident expand thread (init-time pthread_create
-     * failure, or teardown in progress): nothing can run the task — degrade
-     * like the old spawn-failure path and let the alloc path roll back with
-     * ENOMEM. Checked before the CAS so is_expanding is never set pointlessly. */
-    if (!exp_pool->expand_thread_created) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand skipped: pool expand thread not running\n");
-        return;
-    }
     uint64_t trigger_expand = __atomic_load_n(&exp_pool->trigger_expand_block_num, __ATOMIC_RELAXED);
     uint64_t exp_free = exp_pool->exp_total_block_num;
     if (g_buf_cnt + exp_free >= trigger_expand) {
@@ -3262,6 +3350,17 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
 
     // skip queueing if last expand failed (e.g. at capacity limit)
     if (__atomic_load_n(&exp_pool->last_expand_failed, __ATOMIC_ACQUIRE) != 0) {
+        return;
+    }
+
+    /* Ensure the pool's resident expand thread exists, retrying an init-time
+     * pthread_create failure. Placed after the water-level/failure gates so
+     * the producer's hot path (called on every global-pool refill) only pays
+     * the create retry when an expansion is genuinely needed; checked before
+     * the CAS so is_expanding is never set pointlessly while creation keeps
+     * failing. */
+    if (!qbuf_exp_pool_expand_thread_ensure(exp_pool)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand skipped: pool expand thread not running\n");
         return;
     }
 
