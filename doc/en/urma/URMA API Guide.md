@@ -645,6 +645,10 @@ The URMA framework APIs do not support arbitrary concurrent calls. For example, 
 
 These objects include urma_context, jetty, segment, jfc, jfr, jfs, etc.
 
+Modify APIs do not support concurrent calls on the same object. `urma_modify_jfc`, `urma_modify_jfs`, `urma_modify_jfr`, `urma_modify_jetty`, `urma_modify_tp`, and `bondp_modify_jfr` all require the caller to serialize modifications to the same object and to avoid overlapping them with deletion, state transition, or other lifecycle operations on that object. Calls on different objects may run in parallel, although the underlying device commands may still be serialized.
+
+For the same JFC, JFS, JFR, or Jetty, concurrent modification through the current UDMA path fails because the kernel cannot grant exclusive uobject access. The kernel contention path returns `-EINVAL`, and the current user-space UDMA provider translates the ioctl failure to `URMA_FAIL`. This error is not defined as retryable, and callers must not use `URMA_FAIL` to decide whether a retry is safe. Concurrent `bondp_modify_jfr` calls on the same virtual JFR may leave some member JFRs modified before a later member fails, so no cross-member atomicity is provided; concurrent deletion follows the interface contract and may return `URMA_EAGAIN`. `urma_modify_tp` currently has no dedicated concurrency error code, and its concurrent-call result must not be relied upon.
+
 ## 1.1 Version Compatibility Constraints
 
 ---
@@ -2433,6 +2437,8 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 Modify JFC attributes.
 
+This interface does not support concurrent calls on the same JFC. If multiple threads modify the same JFC concurrently, the losing call may fail to obtain exclusive access to the JFC; the kernel returns `-EINVAL`, and the current UDMA provider translates it to `URMA_FAIL`. This error has no retry contract. The caller must serialize modifications to the same JFC and avoid overlapping them with deletion, state transition, or other operations. Different JFCs may be modified in parallel.
+
 4. Parameters
 
 @param[in] [Required] jfc: specify JFC;
@@ -2441,7 +2447,7 @@ Modify JFC attributes.
 
 5. Return Value
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFC access in the current UDMA provider, other value on error.
 
 6. urma_jfc_attr_t
 
@@ -2991,6 +2997,8 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 Modify JFS attributes.
 
+This interface does not support concurrent calls on the same JFS. If multiple threads modify the same JFS concurrently, the losing call may fail to obtain exclusive access to the JFS; the kernel returns `-EINVAL`, and the current UDMA provider translates it to `URMA_FAIL`. This error has no retry contract. The caller must serialize modifications to the same JFS and avoid overlapping them with deletion, state transition, or other operations. Different JFSs may be modified in parallel.
+
 4. Parameters
 
 @param[in] [Required] jfs: the jfs created before;
@@ -2999,7 +3007,7 @@ Modify JFS attributes.
 
 5. Return Value
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFS access in the current UDMA provider, other value on error.
 
 6. urma_jfs_attr_t
 
@@ -3468,6 +3476,8 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 Modify JFR attributes.
 
+This interface does not support concurrent calls on the same JFR. If multiple threads modify the same JFR concurrently, the losing call may fail to obtain exclusive access to the JFR; the kernel returns `-EINVAL`, and the current UDMA provider translates it to `URMA_FAIL`. This error has no retry contract. The caller must serialize modifications to the same JFR and avoid overlapping them with deletion, state transition, or other operations. Different JFRs may be modified in parallel.
+
 4. Parameters
 
 @param[in] [Required] jfr: specify JFR;
@@ -3476,7 +3486,7 @@ Modify JFR attributes.
 
 5. Return Value
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFR access in the current UDMA provider, other value on error.
 
 6. urma_jfr_attr_t
 
@@ -4153,6 +4163,8 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 Modify Jetty attributes.
 
+This interface does not support concurrent calls on the same Jetty. If multiple threads modify the same Jetty concurrently, the losing call may fail to obtain exclusive access to the Jetty; the kernel returns `-EINVAL`, and the current UDMA provider translates it to `URMA_FAIL`. This error has no retry contract. The caller must serialize modifications to the same Jetty and avoid overlapping them with deletion, state transition, or other operations. Different Jettys may be modified in parallel.
+
 ![](figures/urma_caution.png)
 
 UB devices' Jetty only supports using shared JFR, and does not support modifying the Jetty watermark.
@@ -4165,7 +4177,7 @@ UB devices' Jetty only supports using shared JFR, and does not support modifying
 
 5. Return Value
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive Jetty access in the current UDMA provider, other value on error.
 
 6. urma_jetty_attr_t
 
@@ -5447,6 +5459,8 @@ int urma_modify_tp(urma_context_t *ctx, uint32_t tpn, [3.3.3.2.1](#23321-urma_tp
 
 Modify the TP state. Called after bind jetty.
 
+This interface does not support concurrent calls on the same TP. The caller must serialize modifications that use the same `ctx` and `tpn`. No dedicated concurrency error code is currently defined; the return value of a concurrent call may come from the underlying provider and must not be interpreted as a guarantee of success or safe retry.
+
 4. Parameters
 
 @param[in] ctx: the created urma context pointer;
@@ -5461,7 +5475,7 @@ Modify the TP state. Called after bind jetty.
 
 5. Return Value
 
-Return: 0 on success; other values on error.
+Return: 0 on success; a concurrent call has no dedicated error code and may return a provider-specific error. Other values indicate failure.
 
 ##### 2.3.3.2.1 urma_tp_cfg_t
 
@@ -6676,7 +6690,7 @@ Definition file: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_uba
 
 Modifies the attributes of a bonding device's virtual JFR. Currently only `JFR_RX_THRESHOLD` (receive watermark threshold) is supported.
 
-This interface supports multi-threaded reentrant operations.
+This interface does not support concurrent calls on the same virtual JFR. The caller must serialize `bondp_modify_jfr` operations on the same virtual JFR, whether `hint->mask == 0` modifies all members or a hint targets one member. A concurrent call may contend with exclusive access to an underlying physical JFR and return `URMA_FAIL`. Because member JFRs are modified one by one, such contention may leave only some members modified; no cross-member atomicity is provided. Do not use `URMA_FAIL` as a retry indication. Different virtual JFRs may be modified in parallel; concurrent deletion of the virtual JFR may return `URMA_EAGAIN`.
 
 Hint routing rules:
 
@@ -6694,7 +6708,7 @@ Hint routing rules:
 
 5. Return Value
 
-Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, other value on error
+Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, `URMA_FAIL` when concurrent modification cannot obtain the required physical JFR access, other value on error
 
 6. Example
 
