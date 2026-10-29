@@ -654,6 +654,10 @@ urma框架的API不支持任意并发调用，如使用jetty对象与销毁jetty
 
 这些对象包括urma_context、jetty、segment、jfc、jfr、jfs等。
 
+`modify` 类接口不支持对同一对象的并发调用。`urma_modify_jfc`、`urma_modify_jfs`、`urma_modify_jfr`、`urma_modify_jetty`、`urma_modify_tp` 和 `bondp_modify_jfr` 均要求调用方对同一对象上的修改操作进行串行化，并避免与同一对象的删除、状态切换或其他生命周期操作并发调用。不同对象之间可以并行调用，但底层设备命令仍可能被串行执行。
+
+对于同一 JFC、JFS、JFR 或 Jetty，当前 UDMA 路径中的并发修改会因内核 uobject 独占访问竞争而失败。内核竞争路径返回 `-EINVAL`，当前用户态 UDMA provider 将 ioctl 失败转换为 `URMA_FAIL`。该错误没有定义为可重试码，调用方不得根据 `URMA_FAIL` 判断是否可以安全重试。`bondp_modify_jfr` 对同一虚拟 JFR 的并发修改还可能造成部分成员 JFR 已修改、后续成员修改失败，不提供跨成员原子性；与删除并发时按该接口约定返回 `URMA_EAGAIN`。`urma_modify_tp` 当前未定义专门的并发错误码，并发调用结果不可依赖。
+
 ## 1.1 版本配套约束
 
 ---
@@ -2473,6 +2477,8 @@ typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_i
 
 修改JFC属性。
 
+本接口不支持对同一JFC的并发调用。多个线程并发修改同一JFC时，竞争失败的调用可能无法获取JFC的独占访问权；内核返回`-EINVAL`，当前UDMA provider将其转换为`URMA_FAIL`。该错误不提供重试约定，调用方必须对同一JFC的修改操作自行串行化，并避免与删除、状态切换等操作并发。不同JFC可以并行调用。
+
 4.  参数
 
 @param[in] [Required] jfc: specify JFC;
@@ -2481,7 +2487,7 @@ typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfc_i
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFC access in the current UDMA provider, other value on error.
 
 6.  ?.1.urma_jfc_attr_t
 
@@ -3033,6 +3039,8 @@ typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_i
 
 修改JFS的属性。
 
+本接口不支持对同一JFS的并发调用。多个线程并发修改同一JFS时，竞争失败的调用可能无法获取JFS的独占访问权；内核返回`-EINVAL`，当前UDMA provider将其转换为`URMA_FAIL`。该错误不提供重试约定，调用方必须对同一JFS的修改操作自行串行化，并避免与删除、状态切换等操作并发。不同JFS可以并行调用。
+
 4.  参数
 
 @param[in] [Required] jfs: the jfs created before;
@@ -3041,7 +3049,7 @@ typedef struct [urma_jetty_id](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfs_i
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFS access in the current UDMA provider, other value on error.
 
 6.  [urma_jfs_attr_t](#_ZH-CN_TOPIC_0000002489912724-chtext)<a id="_ZH-CN_TOPIC_0000002489912724-chtext"></a>
 
@@ -3511,6 +3519,8 @@ typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
 修改JFR的属性。
 
+本接口不支持对同一JFR的并发调用。多个线程并发修改同一JFR时，竞争失败的调用可能无法获取JFR的独占访问权；内核返回`-EINVAL`，当前UDMA provider将其转换为`URMA_FAIL`。该错误不提供重试约定，调用方必须对同一JFR的修改操作自行串行化，并避免与删除、状态切换等操作并发。不同JFR可以并行调用。
+
 4.  参数
 
 @param[in] [Required] jfr: specify JFR;
@@ -3519,7 +3529,7 @@ typedef [urma_jetty_id_t](#_ZH-CN_TOPIC_0000002492112454-chtext) urma_jfr_id_t;
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive JFR access in the current UDMA provider, other value on error.
 
 6.  [urma_jfr_attr_t](#_ZH-CN_TOPIC_0000002521872527-chtext)<a id="_ZH-CN_TOPIC_0000002521872527-chtext"></a>
 
@@ -4299,6 +4309,8 @@ typedef struct urma_jetty {
 
 修改Jetty属性。
 
+本接口不支持对同一Jetty的并发调用。多个线程并发修改同一Jetty时，竞争失败的调用可能无法获取Jetty的独占访问权；内核返回`-EINVAL`，当前UDMA provider将其转换为`URMA_FAIL`。该错误不提供重试约定，调用方必须对同一Jetty的修改操作自行串行化，并避免与删除、状态切换等操作并发。不同Jetty可以并行调用。
+
 ![](figures/urma_caution.png)
 
 UB设备的Jetty只支持使用共享JFR，不支持修改Jetty水线。
@@ -4311,7 +4323,7 @@ UB设备的Jetty只支持使用共享JFR，不支持修改Jetty水线。
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success, `URMA_FAIL` when a concurrent modification cannot obtain exclusive Jetty access in the current UDMA provider, other value on error.
 
 6.  [urma_jetty_attr_t](#_ZH-CN_TOPIC_0000002521872543-chtext)<a id="_ZH-CN_TOPIC_0000002521872543-chtext"></a>
 
@@ -5733,6 +5745,8 @@ int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx,
 
 修改tp状态。在bind jetty后调用。
 
+本接口不支持对同一TP的并发调用。调用方必须对同一`ctx`和`tpn`组合上的修改操作自行串行化。当前接口没有定义专门的并发错误码；发生并发调用时，返回值可能来自底层provider，调用方不得将其解释为成功或可重试的保证。
+
 4.  参数
 
 @param[in] ctx: the created urma context pointer;
@@ -5747,7 +5761,7 @@ int urma_modify_tp([urma_context_t](#_ZH-CN_TOPIC_0000002489912714-chtext) *ctx,
 
 5.  返回值
 
-Return: 0 on success; other values on error.
+Return: 0 on success; a concurrent call has no dedicated error code and may return a provider-specific error. Other values indicate failure.
 
 ##### 2.3.3.2.1 urma_tp_cfg_t
 
@@ -7007,6 +7021,8 @@ typedef struct bondp_wr_hint {
 
 修改聚合（bonding）设备虚拟 JFR 的属性，当前仅支持 `JFR_RX_THRESHOLD`（接收水位阈值）。
 
+本接口不支持对同一虚拟JFR的并发调用。无论使用`hint->mask == 0`修改全部成员，还是定向修改成员，调用方都必须对同一虚拟JFR上的`bondp_modify_jfr`操作自行串行化。并发调用可能与底层物理JFR的独占访问竞争，并返回`URMA_FAIL`；由于接口逐个修改成员JFR，竞争发生时可能仅部分成员修改成功，不提供跨成员原子性。不要将`URMA_FAIL`作为重试依据。不同虚拟JFR可以并行调用；与虚拟JFR删除并发时可能返回`URMA_EAGAIN`。
+
 hint 路由规则：
 
 - `hint->mask == 0`：不指定端口，等价于修改全部成员物理 JFR；
@@ -7023,7 +7039,7 @@ hint 路由规则：
 
 5.  返回值
 
-Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, other value on error
+Return: 0 on success, `URMA_EINVAL` when args are invalid, jfr is not a bond JFR, attr mask is unsupported or the hint is malformed, `URMA_EAGAIN` when the jfr is being deleted, `URMA_FAIL` when concurrent modification cannot obtain the required physical JFR access, other value on error
 
 6.  示例
 

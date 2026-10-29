@@ -1243,6 +1243,8 @@ UMDK支持向接收端发送立即数，见urma_post_jfs_wr接口，所发送的
 | 管理面接口 | IP over URMA | 基础能力 | — | — | 呈现TCP/IP协议栈设备，对接URMA | √ | √ |
 | 管理面接口 | Verbs over URMA | 基础能力 | — | — | 呈现RDMA协议栈设备，对接URMA | √ | √ |
 
+> 说明：表中的 `modify_jfc`、`modify_jfs`、`modify_jfr`、`modify_jetty` 和 `modify_tp` 能力仅表示单次调用支持情况，不表示支持对同一对象的并发修改。调用方必须自行串行化同一对象上的修改操作。当前 UDMA 路径下，同一 JFC/JFS/JFR/Jetty 的并发修改可能返回 `URMA_FAIL`；`urma_modify_tp` 没有专门的并发错误码。
+
 #### 数据面接口
 
 | Feature L1 | Feature L2 | Feature L3 | Feature L4 | Feature L5 | Feature Description | KP950 | Ascend910D |
