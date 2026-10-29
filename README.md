@@ -85,22 +85,12 @@ It offers two types of interfaces: one is the northbound application programming
 
      ```bash
      rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
-     cp -f /usr/bin/urma_perftest /usr/local/bin/
      modprobe ubcore
      modprobe uburma
      cd /lib/modules/$(uname -r)/kernel/drivers
      insmod ub/hisi-ub/kernelspace/udma/udma.ko.xz dfx_switch=1 ipver=609 fast_destroy_tp=0 jfc_arm_mode=2
      modprobe ubagg # If multi-path support is required
      modprobe ums # If ums is required
-     ```
-
-   - Add permissions
-
-     ```bash
-     # If you do not have the required permissions, you need to add them manually.
-     chmod -R 777 /usr/lib64/urma
-     chmod 777 /dev/ummu/tid
-     chmod 755 /usr/lib64/liburma*
      ```
 
 4. Build, package, install, and remove URMA with the Bazel script (workspace root: `src/urma`)

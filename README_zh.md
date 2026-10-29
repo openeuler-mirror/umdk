@@ -85,22 +85,12 @@
 
      ```bash
      rpm -ivh /root/rpmbuild/RPMS/*/umdk*.rpm
-     cp -f /usr/bin/urma_perftest /usr/local/bin/
      modprobe ubcore
      modprobe uburma
      cd /lib/modules/$(uname -r)/kernel/drivers
      insmod ub/hisi-ub/kernelspace/udma/udma.ko.xz dfx_switch=1 ipver=609 fast_destroy_tp=0 jfc_arm_mode=2
      modprobe ubagg # 如果需要使能多路径
      modprobe ums # 如果需要使能ums
-     ```
-
-   - 添加权限
-
-     ```bash
-     # 如果没有权限，需要手动添加权限
-     chmod -R 777 /usr/lib64/urma
-     chmod 777 /dev/ummu/tid
-     chmod 755 /usr/lib64/liburma*
      ```
 
 4. 使用 Bazel 脚本编译、打包、安装和卸载 URMA（工作区根目录：`src/urma`）
