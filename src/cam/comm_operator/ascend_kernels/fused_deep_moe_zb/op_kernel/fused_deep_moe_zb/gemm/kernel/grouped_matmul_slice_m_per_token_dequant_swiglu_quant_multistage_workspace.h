@@ -1171,6 +1171,9 @@ public:
 
         for (uint32_t i = startTokenId_; i < endTokenId_; ++i) {
             int32_t expertIdx = useFullExpertIdsCopy_ ? expertIdsTensor_(i) : expertIdsTensor_(i - startTokenId_);
+            if (expertIdx < 0) {
+                continue;
+            }
             int32_t curCnt = sendCountTensor.GetValue(expertIdx) + 1;
             sendCountTensor.SetValue(expertIdx, curCnt);
         }
