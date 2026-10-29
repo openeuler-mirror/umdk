@@ -1196,6 +1196,8 @@ The following scenarios trigger the JFC to generate a completion record:
 | Management Interface | IP over URMA | Basic capability | — | — | TCP/IP stack over URMA | √ | √ |
 | Management Interface | Verbs over URMA | Basic capability | — | — | RDMA stack over URMA | √ | √ |
 
+> Note: The `modify_jfc`, `modify_jfs`, `modify_jfr`, `modify_jetty`, and `modify_tp` entries indicate single-call capability only; they do not indicate support for concurrent modification of the same object. The caller must serialize modification operations on the same object. In the current UDMA path, concurrent modification of the same JFC, JFS, JFR, or Jetty may return `URMA_FAIL`; `urma_modify_tp` has no dedicated concurrency error code.
+
 #### Data Plane Interface
 
 | Feature L1 | Feature L2 | Feature L3 | Feature L4 | Feature L5 | Feature Description | KP950 | ST910D |
