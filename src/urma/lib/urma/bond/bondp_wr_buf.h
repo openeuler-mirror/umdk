@@ -144,16 +144,25 @@ typedef struct wr_buf {
     void *entries;
     uint32_t free_head;         /* index of first free entry, UINT32_MAX = empty */
     uint32_t *next_free;        /* next_free[idx] = next free entry index, UINT32_MAX = end */
-    pthread_spinlock_t lock;    /* protects free_head and next_free */
+    uint32_t *slot_gen;         /* slot_gen[idx]: incremented on each alloc, used in wr_id */
+    pthread_spinlock_t lock;    /* protects free_head, next_free and slot_gen */
 } wr_buf_t;
+
+/*
+ * wr_id layout: high 32 bits = per-slot generation, low 32 bits = idx + 1.
+ * The generation is bumped every time a slot is re-allocated, so a stale CQE
+ * carrying an old wr_id can never match a reused entry (WR/CR mismatch fix).
+ */
+#define BONDP_WR_ID_GEN_SHIFT 32
+#define BONDP_WR_ID_IDX_MASK  0xFFFFFFFFu
 
 static inline uint32_t __wr_id_to_idx(uint64_t wr_id, uint32_t max_wr_num)
 {
-    return (wr_id - 1) % max_wr_num;
+    return ((uint32_t)(wr_id & BONDP_WR_ID_IDX_MASK) - 1) % max_wr_num;
 }
-static inline uint32_t __idx_to_wr_id(uint32_t idx)
+static inline uint64_t idx_to_wr_id(uint32_t idx, uint32_t gen)
 {
-    return (uint32_t)(idx + 1);
+    return ((uint64_t)gen << BONDP_WR_ID_GEN_SHIFT) | (uint64_t)(idx + 1);
 }
 static inline void *__wr_buf_idx(wr_buf_t *buf, uint32_t idx)
 {
@@ -185,15 +194,23 @@ void jfs_wr_put_refs(urma_jfs_wr_t *wr);
 
 static inline jfs_wr_entry_t *jfs_wr_buf_get(wr_buf_t *buf, uint64_t wr_id)
 {
+    if (wr_id == 0) {
+        return NULL;
+    }
     jfs_wr_entry_t *wr_entry;
     wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
-    return wr_entry->wr_id == wr_id && wr_id != 0 ? wr_entry : NULL;
+    /* Full 64-bit compare: generation mismatch means a stale CQE. */
+    return wr_entry->wr_id == wr_id ? wr_entry : NULL;
 }
 
 static inline jfr_wr_entry_t *jfr_wr_buf_get(wr_buf_t *buf, uint64_t wr_id)
 {
+    if (wr_id == 0) {
+        return NULL;
+    }
     jfr_wr_entry_t *wr_entry;
     wr_entry = (jfr_wr_entry_t *)__wr_buf_idx(buf, __wr_id_to_idx(wr_id, buf->max_wr_num));
+    /* Full 64-bit compare: generation mismatch means a stale CQE. */
     return wr_entry->wr_id == wr_id ? wr_entry : NULL;
 }
 

@@ -131,8 +131,13 @@ static int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t entry_size)
         goto WR_BUF_FREE_ENTRIES;
     }
 
-    if (pthread_spin_init(&buf->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+    buf->slot_gen = (uint32_t *)calloc(max_wr_num, sizeof(uint32_t));
+    if (buf->slot_gen == NULL) {
         goto WR_BUF_FREE_NEXT_FREE;
+    }
+
+    if (pthread_spin_init(&buf->lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+        goto WR_BUF_FREE_SLOT_GEN;
     }
 
     buf->max_wr_num = max_wr_num;
@@ -147,6 +152,9 @@ static int wr_buf_init(wr_buf_t *buf, uint32_t max_wr_num, uint32_t entry_size)
 
     return 0;
 
+WR_BUF_FREE_SLOT_GEN:
+    free(buf->slot_gen);
+    buf->slot_gen = NULL;
 WR_BUF_FREE_NEXT_FREE:
     free(buf->next_free);
     buf->next_free = NULL;
@@ -205,6 +213,8 @@ void wr_buf_uninit(wr_buf_t *buf)
     pthread_spin_destroy(&buf->lock);
     free(buf->next_free);
     buf->next_free = NULL;
+    free(buf->slot_gen);
+    buf->slot_gen = NULL;
     memset(buf->entries, 0, buf->max_wr_num * buf->wr_entry_size);
     free(buf->entries);
     buf->entries = NULL;
@@ -226,11 +236,12 @@ static void *wr_buf_alloc(wr_buf_t *buf, wr_buf_entry_type_t entry_type)
     }
     uint32_t idx = buf->free_head;
     buf->free_head = buf->next_free[idx];
+    uint32_t gen = ++buf->slot_gen[idx];
     pthread_spin_unlock(&buf->lock);
 
     void *e = __wr_buf_idx(buf, idx);
     wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
-    hdr->wr_id = __idx_to_wr_id(idx);
+    hdr->wr_id = idx_to_wr_id(idx, gen);
     hdr->entry_type = (uint8_t)entry_type;
     return e;
 }
@@ -257,17 +268,19 @@ static uint32_t wr_buf_alloc_batch(wr_buf_t *buf,
         return 0;
     }
     uint32_t indices[BONDP_BATCH_POST_MAX_NUM];
+    uint32_t gens[BONDP_BATCH_POST_MAX_NUM];
     uint32_t allocated = 0;
     pthread_spin_lock(&buf->lock);
     while (allocated < count && buf->free_head != UINT32_MAX) {
         indices[allocated] = buf->free_head;
         buf->free_head = buf->next_free[buf->free_head];
+        gens[allocated] = ++buf->slot_gen[indices[allocated]];
         allocated++;
     }
     for (uint32_t i = 0; i < allocated; i++) {
         char *e = (char *)__wr_buf_idx(buf, indices[i]);
         wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)e;
-        hdr->wr_id = __idx_to_wr_id(indices[i]);
+        hdr->wr_id = idx_to_wr_id(indices[i], gens[i]);
         entries[i] = e;
     }
     pthread_spin_unlock(&buf->lock);
