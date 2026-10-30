@@ -82,4 +82,5 @@ urma_status_t udma_u_active_jfr(urma_jfr_t *jfr);
 urma_status_t udma_u_get_jfr_opt(urma_jfr_t *jfr, uint64_t opt, void *buf, uint32_t len);
 urma_status_t udma_u_deactive_jfr(urma_jfr_t *jfr);
 urma_status_t udma_u_free_jfr(urma_jfr_t *jfr);
+struct udma_u_idx_ring *udma_ring_alloc(uint32_t cap);
 #endif /* __UDMA_U_JFR_H__ */

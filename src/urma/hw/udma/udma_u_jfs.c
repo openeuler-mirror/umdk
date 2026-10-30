@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include "udma_u_abi.h"
 #include "udma_u_buf.h"
 #include "udma_u_db.h"
 #include "udma_u_jfc.h"
@@ -189,11 +190,18 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 
 int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 {
+	urma_device_attr_t dev_attr_copy = {};
 	struct udma_u_context *ctx = sq->ctx;
 	uint32_t jetty_depth = cfg->depth;
 	uint32_t aligned_size;
 	uint32_t sqe_bb_cnt;
 	bool is_ccu_jetty;
+
+	if (cfg->priority >= UDMA_MAX_PRIORITY) {
+		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
+			     cfg->priority);
+		goto err_verify_para;
+	}
 
 	sq->lock_free = cfg->flag.bs.lock_free;
 
@@ -202,6 +210,12 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 		goto err_init_lock;
 
 	udma_u_init_sq_param(sq, cfg);
+
+	if (urma_query_device(ctx->urma_ctx.dev, &dev_attr_copy)) {
+		UDMA_LOG_ERR("JFS cannot query urma device attr.\n");
+		goto err_get_tp_type;
+	}
+	sq->bind_tp_type = dev_attr_copy.dev_cap.priority_info[cfg->priority].tp_type;
 
 	sqe_bb_cnt = sq_cal_wqebb_num(SQE_WRITE_NOTIFY_CTL_LEN,
 				      get_max_sge_num(cfg->max_sge, sq->max_inline_size),
@@ -233,9 +247,11 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	return 0;
 
 err_alloc_buf:
+err_get_tp_type:
 	if (!sq->lock_free)
 		(void)pthread_spin_destroy(&sq->lock);
 err_init_lock:
+err_verify_para:
 	return EINVAL;
 }
 
@@ -386,6 +402,33 @@ static void udma_write_dsqe(struct udma_u_context *udma_ctx, struct udma_u_jetty
 		mmio_memcpy_x64((uint64_t *)sq->dwqe_addr, (uint64_t *)ctrl);
 }
 
+static void udma_write_multi_bb_dsqe(struct udma_u_jetty_queue *sq,
+				     struct udma_jfs_sqe_ctl *ctrl)
+{
+	static uint64_t base_offset[] = {
+		[UDMA_WQEBB_CNT_INVALID] = ~0ULL,
+		[UDMA_WQEBB_CNT_IS_1] = UDMA_WQEBB_BASE_OFFSET_WITH_CNT_1,
+		[UDMA_WQEBB_CNT_IS_2] = UDMA_WQEBB_BASE_OFFSET_WITH_CNT_2,
+		[UDMA_WQEBB_CNT_IS_3] = UDMA_WQEBB_BASE_OFFSET_WITH_CNT_3,
+		[UDMA_WQEBB_CNT_IS_4] = UDMA_WQEBB_BASE_OFFSET_WITH_CNT_4,
+	};
+	void *base = sq->dwqe_addr + base_offset[sq->cur_wqebb_cnt];
+	struct udma_jfs_sqe_ctl *src;
+	uint8_t i;
+
+	ctrl->sqe_bb_idx = sq->pi;
+	st64b((uint64_t *)ctrl, (uint64_t *)base);
+
+	for (i = 1; i < sq->cur_wqebb_cnt; i++) {
+		src = (struct udma_jfs_sqe_ctl *)udma_inc_ptr_wrap((uint8_t *)ctrl,
+								   i << sq->baseblk_shift,
+								   (uint8_t *)sq->qbuf,
+								   (uint8_t *)sq->qbuf_end);
+		base = base + UDMA_WQEBB_OFFSET;
+		st64b((uint64_t *)src, (uint64_t *)base);
+	}
+
+}
 static bool udma_check_sge_num_and_opcode(urma_opcode_t opcode, struct udma_u_jetty_queue *sq,
 					  urma_jfs_wr_t *wr, uint8_t *udma_opcode, bool is_atomic_add_en)
 {
@@ -945,6 +988,12 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 	else
 		tjetty = wr->tjetty;
 
+	if (!(sq->bind_tp_type.value & (1U << tjetty->tp_type))) {
+		UDMA_LOG_ERR("tp_type unmatched. tp_type: %u; bind_tp_type: %u.\n",
+			     tjetty->tp_type, sq->bind_tp_type.value);
+		return URMA_EINVAL;
+	}
+
 	udma_tjetty = to_udma_u_target_jetty(tjetty);
 
 	wqe_ctl->tp_id = tjetty->tp.tpn;
@@ -995,6 +1044,7 @@ urma_status_t udma_u_post_one_wr(struct udma_u_context *udma_ctx,
 	for (i = 0; i < wqebb_cnt; i++)
 		sq->wrid[(sq->pi + i) & (sq->baseblk_cnt - 1)] = wr->user_ctx;
 	sq->pi += wqebb_cnt;
+	sq->cur_wqebb_cnt = wqebb_cnt;
 
 	return URMA_SUCCESS;
 }
@@ -1029,6 +1079,8 @@ urma_status_t udma_u_post_sq_wr(struct udma_u_context *udma_ctx,
 		} else {
 			if (wr_cnt == 1 && dwqe_enable && (sq->pi - sq->ci == 1))
 				udma_write_dsqe(udma_ctx, sq, wqe_addr);
+			else if (wr_cnt == 1 && udma_ctx->multi_wqebb_dwqe)
+				udma_write_multi_bb_dsqe(sq, wqe_addr);
 			else
 				udma_update_sq_db(sq);
 		}
@@ -1241,8 +1293,8 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 			      urma_jfs_t **jfs)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
-	struct udma_u_jfs *udma_jfs;
 	urma_cmd_udrv_priv_t udata = {};
+	struct udma_u_jfs *udma_jfs;
 	int ret;
 
 	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));

@@ -918,6 +918,7 @@ urma_status_t udma_u_set_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt
 				(void)pthread_spin_lock(&sq->lock);
 
 			sq->need_ring_db = false;
+			UDMA_TO_DEVICE_BARRIER();
 			udma_update_sq_db(sq);
 
 			if (!sq->lock_free)

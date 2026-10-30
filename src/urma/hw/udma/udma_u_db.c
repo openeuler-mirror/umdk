@@ -22,7 +22,7 @@ static void udma_u_init_bitmap(uint64_t *bitmap, uint32_t bitmap_cnt)
 		bitmap[i] = ~(0ULL);
 }
 
-uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
+static uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
 {
 	uint64_t *bitmap;
 
@@ -46,11 +46,6 @@ static void udma_bitmap_use_idx(uint64_t *bitmap, uint32_t bitmap_cnt,
 
 	for (i = 0; i < bitmap_cnt && bitmap[i] == 0; ++i)
 		;
-	if (i == bitmap_cnt) {
-		UDMA_LOG_ERR("all bitmaps have been used! bitmap count = %u\n",
-			     bitmap_cnt);
-		return;
-	}
 
 	bit_num = ffsl(bitmap[i]);
 	*idx = (i << UDMA_BITS_PER_LONG_SHIFT) + bit_num - 1;
@@ -133,8 +128,8 @@ static void udma_clear_db_page(struct udma_u_db_page *db_page)
 void *udma_u_alloc_sw_db(struct udma_u_context *ctx, enum udma_db_type type)
 {
 	struct udma_u_db_page *db_page;
-	uint32_t npos = 0;
 	void *db = NULL;
+	uint32_t npos;
 
 	(void)pthread_mutex_lock(&ctx->db_list_mutex);
 

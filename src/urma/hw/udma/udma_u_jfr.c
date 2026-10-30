@@ -111,7 +111,7 @@ static void udma_u_init_ring(struct udma_u_idx_ring *ring)
 	ring->rear = i - 1;
 }
 
-static struct udma_u_idx_ring *udma_ring_alloc(uint32_t cap)
+struct udma_u_idx_ring *udma_ring_alloc(uint32_t cap)
 {
 	struct udma_u_idx_ring *ring;
 	uint32_t *idx;
