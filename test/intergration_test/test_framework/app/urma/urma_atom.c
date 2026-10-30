@@ -672,8 +672,8 @@ static void *test_get_async_event_thread(void *ptr)
         }
 
         ret = urma_get_async_event(ctx->urma_ctx, &event);
-        if (ret != URMA_FAIL) {
-            TEST_LOG_ERROR("urma_get_async_event ret=%u event_type=%u\n", (uint32_t)ret, (uint32_t)event.event_type);
+        if (ret == URMA_SUCCESS) {
+            TEST_LOG_INFO("urma_get_async_event ret=%u event_type=%u\n", (uint32_t)ret, (uint32_t)event.event_type);
             if (ctx->ae_info.event_num < EVENT_LIST_SIZE) {
                 pthread_mutex_lock(&ctx->ae_lock);
                 ctx->ae_info.event_list[ctx->ae_info.event_num] = event;
@@ -683,6 +683,8 @@ static void *test_get_async_event_thread(void *ptr)
                 TEST_LOG_ERROR("event_list out of range, drop new event!\n");
             }
             urma_ack_async_event(&event);
+        } else if (ret != URMA_EAGAIN) {
+            TEST_LOG_ERROR("urma_get_async_event failed, ret=%d\n", ret);
         }
     }
     epoll_ctl(epollfd, EPOLL_CTL_DEL, ctx->urma_ctx->async_fd, NULL);

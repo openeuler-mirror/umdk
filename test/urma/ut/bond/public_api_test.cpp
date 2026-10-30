@@ -813,9 +813,9 @@ TEST(UrmaBondTest, PublicAsyncEventMapsPhysicalJfsAndAckReleasesPrivateEvent)
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_EID_CHANGE;
-    EXPECT_EQ(URMA_SUCCESS, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
-    EXPECT_EQ(0U, event.element.eid_idx);
-    bondp_ack_async_event(&event);
+    EXPECT_EQ(URMA_EAGAIN, bondp_get_async_event_sched(&fixture.ctx.v_ctx, &event));
+    EXPECT_EQ(nullptr, event.priv);
+    EXPECT_EQ(4, g_mockAckAsyncCount);
 
     g_mockAsyncEvent = {};
     g_mockAsyncEvent.event_type = URMA_EVENT_JFR_ERR;
@@ -1654,9 +1654,9 @@ TEST(UrmaBondTest, PublicGetAsyncEventInternalFillsPortIdOnlyForJfrLimit)
     ev.data.ptr = &fixture.phyCtx;
     ASSERT_EQ(0, epoll_ctl(epollFd, EPOLL_CTL_ADD, eventFd, &ev));
 
-    /* no pending event: FAIL is returned and the port id is untouched */
+    /* no pending event: EAGAIN is returned and the port id is untouched */
     portId.value = 0x5a5a;
-    EXPECT_EQ(URMA_FAIL, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
+    EXPECT_EQ(URMA_EAGAIN, bondp_get_async_event_internal(&fixture.ctx.v_ctx, &event, &portId));
     EXPECT_EQ(0x5a5a, portId.value);
 
     /* non-LIMIT events do not touch the port id */
