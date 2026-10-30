@@ -474,7 +474,7 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
     int expected = JETTY_POOL_NODE_IDLE;
     if (!__atomic_compare_exchange_n(&node->state, &expected, JETTY_POOL_NODE_ERR,
                                      false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-        UMQ_VLOG_ERR(VLOG_UMQ, "cannot remove sub_umq, node state %d (expected IDLE)\n", expected);
+        UMQ_VLOG_ERR(VLOG_UMQ, "cannot remove jetty node, node state %d (expected IDLE)\n", expected);
         return -UMQ_ERR_EBUSY;
     }
 
