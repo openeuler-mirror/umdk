@@ -7,6 +7,7 @@
  * History: 2026-07-21  Create file
  */
 
+#include <errno.h>
 #include <stdint.h>
 #include <sys/epoll.h>
 #include <time.h>
@@ -257,9 +258,6 @@ static int init_elment_vjetty(urma_async_event_t *v_event, urma_async_event_t *p
         case URMA_EVENT_PORT_DOWN:
         case URMA_EVENT_DEV_FATAL:
             break;
-        case URMA_EVENT_EID_CHANGE:
-            v_event->element.eid_idx = 0;
-            break;
         default:
             break;
     }
@@ -273,13 +271,16 @@ urma_status_t bondp_get_async_event_internal(urma_context_t *ctx, urma_async_eve
         URMA_LOG_ERR("Invalid parameter\n");
         return URMA_EINVAL;
     }
-    struct epoll_event event;
+    struct epoll_event event = {0};
     urma_async_event_t *p_event;
     urma_status_t status;
 
     int nfds = epoll_wait(ctx->async_fd, &event, 1, 0);
-    if (nfds == -1) {
-        URMA_LOG_ERR("epoll_wait no event or err.\n");
+    if (nfds == 0 || (nfds < 0 && errno == EINTR)) {
+        return URMA_EAGAIN;
+    }
+    if (nfds < 0) {
+        URMA_LOG_ERR("epoll_wait failed, errno=%d.\n", errno);
         return URMA_FAIL;
     }
 
@@ -298,6 +299,13 @@ urma_status_t bondp_get_async_event_internal(urma_context_t *ctx, urma_async_eve
             URMA_LOG_ERR("Failed to get async event, status=%d\n", status);
             free(p_event);
             return status;
+        }
+        /* EID changes of physical contexts are internal to bonding and must not be reported to applications. */
+        if (p_event->event_type == URMA_EVENT_EID_CHANGE) {
+            URMA_LOG_DEBUG("Ignore physical EID change async event, eid_idx=%u\n", p_event->element.eid_idx);
+            urma_ack_async_event(p_event);
+            free(p_event);
+            return URMA_EAGAIN;
         }
         v_event->urma_ctx = ctx;
         if (init_elment_vjetty(v_event, p_event, port_id) != 0) {

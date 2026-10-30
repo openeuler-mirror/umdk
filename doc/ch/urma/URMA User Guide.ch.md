@@ -775,7 +775,7 @@ urma异常场景
 
 * 参数：通常需要一个urma_context_t类型的上下文指针，这个指针是在urma_create_context时创建的，用于与内核进行通信。
 
-* 返回值：urma_get_async_event会返回urma_status_t告知用户函数的完成情况，调用成功返回0，其他值表示接口调用失败，参数中的event的指针指向获取的事件。
+* 返回值：`urma_get_async_event` 返回 `urma_status_t`。返回0表示成功且`event`有效；provider可能返回`URMA_EAGAIN`表示当前没有应用可见事件，其中bond context在物理`URMA_EVENT_EID_CHANGE`被内部消费或事件队列为空时返回该值。返回`URMA_EAGAIN`时`event`无效，调用方不得调用`urma_ack_async_event`，应等待异步事件fd可读后重试；其他值表示失败，失败时不得读取或确认`event`。
 
 2.  **urma_ack_async_event:**
 

@@ -462,14 +462,20 @@ urma_status_t bondp_modify_jfr(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
 /**
  * Get an asynchronous event from a bonding context (non-blocking, same semantics
  * as urma_get_async_event on the bond context).
+ * Physical URMA_EVENT_EID_CHANGE events are consumed internally and are not reported.
+ * URMA_EAGAIN is returned when no application-visible event is currently available,
+ * including when a physical event was filtered or the event queue is empty. The caller
+ * should wait for async_fd readiness without busy retrying.
  * @param[in] [Required] ctx: the bonding context created before;
  * @param[out] [Required] event: the asynchronous event, element is converted to
- *      the bonding virtual jetty/jfr;
+ *      the bonding virtual jetty/jfr; valid only when URMA_SUCCESS is returned;
  * @param[out] [Required] port_id: only valid when event->event_type is URMA_EVENT_JFR_LIMIT,
  *      identifies the local port of the member jfr that reported the limit event, so the
  *      caller can post RQEs to that port to avoid RNR; set to UINT16_MAX for other events;
- * Return: 0 on success, other value on error. URMA_FAIL if no event is pending or an
- *      epoll error occurs.
+ * Return: 0 on success; URMA_EAGAIN when no application-visible event is currently
+ *      available, including when an internal event was consumed or no event was pending;
+ *      URMA_EINVAL for invalid arguments, a non-bond context, or a physical event that
+ *      cannot be mapped to a bonding object; URMA_FAIL for an epoll or event-channel error.
  */
 urma_status_t bondp_get_async_event(urma_context_t *ctx, urma_async_event_t *event,
     bondp_port_id_t *port_id);
