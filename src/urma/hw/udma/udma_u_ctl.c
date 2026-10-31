@@ -131,8 +131,8 @@ static int udma_u_create_idx_que_ex(struct udma_u_jfr *jfr, struct udma_u_jfr_cf
 
 	idx_que->buf.buf = cstm_cfg->idx_que.buff;
 
-	idx_que->bitmap = udma_bitmap_alloc(jfr->wqe_cnt, &idx_que->bitmap_cnt);
-	if (!idx_que->bitmap)
+	idx_que->ring = udma_ring_alloc(jfr->wqe_cnt);
+	if (!idx_que->ring)
 		return ENOMEM;
 
 	return 0;
@@ -283,7 +283,7 @@ err_exec_cmd:
 	if (udma_jfr->rq.wrid)
 		free(udma_jfr->rq.wrid);
 err_create_rq:
-	udma_bitmap_free(udma_jfr->idx_que.bitmap);
+	udma_idx_ring_free(udma_jfr->idx_que.ring);
 err_create_idx_que:
 	if (!udma_jfr->lock_free)
 		(void)pthread_spin_destroy(&udma_jfr->lock);

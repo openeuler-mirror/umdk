@@ -133,6 +133,7 @@ struct udma_u_context {
 	pthread_rwlock_t	jfr_table_lock;
 	uint32_t		jettys_in_tbl_shift;
 	uint32_t		jettys_in_tbl;
+	bool			multi_wqebb_dwqe;
 };
 
 struct udma_u_jetty_queue {
@@ -171,6 +172,8 @@ struct udma_u_jetty_queue {
 	uint32_t aligned_size;
 	bool is_jetty;
 	bool is_wqe_lock_buf_jetty;
+	uint8_t cur_wqebb_cnt;
+	union urma_tp_type_en bind_tp_type;
 };
 
 struct udma_wqe_sge {

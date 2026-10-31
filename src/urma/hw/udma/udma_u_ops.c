@@ -163,6 +163,7 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
 	udma_ctx->st64b_en = resp->st64b_en;
+	udma_ctx->multi_wqebb_dwqe = resp->multi_wqebb_dwqe;
 }
 
 static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_create_ctx_resp *resp)
@@ -286,7 +287,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	}
 
 	if (pthread_mutex_init(&udma_ctx->hugepage_lock, NULL)) {
-		UDMA_LOG_ERR("Failed to init hugepage list mutex.\n");
+		UDMA_LOG_ERR("Failed to init hugepage mutex.\n");
 		goto err_hugepage_lock;
 	}
 	udma_ctx->hugepage_list = NULL;

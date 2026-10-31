@@ -17,7 +17,6 @@ void udma_u_free_sw_db(struct udma_u_context *ctx, uint32_t *db,
 		       enum udma_db_type type);
 int udma_u_alloc_db(struct urma_context *urma_ctx, struct udma_u_doorbell *db);
 void udma_u_free_db(struct urma_context *urma_ctx, struct udma_u_doorbell *db);
-uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt);
 
 static inline void udma_bitmap_free(uint64_t *bitmap)
 {
