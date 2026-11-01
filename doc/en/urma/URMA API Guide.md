@@ -6994,6 +6994,38 @@ On the send interfaces, when a WR carries driver-extension chip affinity info (`
 
 A send WR posted this way is pinned to the specified target port and is never rerouted to another target port: if that port fails, the error CQE is returned instead of resending through a backup path. Normally scheduled send WRs on the same failed path are still failed over to a backup path.
 
+##### 2.5.1.1.5 BONDP_USER_CTL_AUTO_SKIP_FAULTY
+
+A one-way switch for automatic faulty-port avoidance in balance mode; the opcode is defined in [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h). After enabling, RM Jetty send scheduling in the same context avoids local ports marked faulty.
+
+1. Header File
+
+#include "urma_ubagg.h"
+
+2. Invocation
+
+- `in->opcode`: `BONDP_USER_CTL_AUTO_SKIP_FAULTY`;
+- `in->addr` and `in->len`: both must be zero; this operation takes no input parameter;
+- `out`: unused, may be zero.
+
+3. Preconditions and Return Values
+
+| Condition | Return |
+| --- | --- |
+| `in->addr` or `in->len` is nonzero | nonzero (`-EINVAL`) |
+| bonding mode is not balance | nonzero (`-EINVAL`) |
+| health check not enabled on the context (`hc_ctx` unavailable) | nonzero (`-EINVAL`) |
+| already enabled (idempotent repeat call) | 0 |
+| an imported tjetty is not registered for health checking (e.g., its peer has not enabled it) | nonzero (`-EINVAL`) |
+| all checks pass | 0 |
+
+4. Behavior
+
+- The switch is one-way and irreversible: it cannot be disabled once enabled; only destroying the context resets it. Repeated calls after enabling return success.
+- After enabling, a `URMA_CR_LOC_ACCESS_ERR` send completion from a physical Jetty marks its local port BAD at context scope after passing the current-pjetty instance check. RM Jetty send scheduling in the same context (balance path selection) avoids BAD ports; per-port hint posting and failover resends do not avoid BAD ports (the caller takes the egress risk); RC Jetty, JFS, and receive paths do not use this state for scheduling. A BAD port is cleared after a successful health probe.
+- After enabling, `BONDP_USER_CTL_SET_BONDING_MODE` and context-configuration changes are rejected (`-EINVAL`); the configuration is frozen.
+- An RM Jetty imported after enabling requires the peer to enable health checking, and every local port with a physical target connection to have at least one health-check path; jettys imported before enabling are guarded by this operation's preconditions. See the URMA User Guide for details.
+
 #### 2.5.1.2 bondp_modify_jfr
 
 1. Header File

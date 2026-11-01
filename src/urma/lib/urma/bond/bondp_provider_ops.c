@@ -497,6 +497,8 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         atomic_init(&bdp_ctx->port_status_bad[i], false);
     }
+    atomic_init(&bdp_ctx->auto_skip_faulty, false);
+    atomic_init(&bdp_ctx->imported_tjetty_cnt, 0);
     bdp_ctx->enable_failover = g_bondp_env.enable_failover;
     bdp_ctx->enable_failback = g_bondp_env.enable_failback;
     bdp_ctx->enable_health_check = g_bondp_env.enable_health_check;
@@ -607,6 +609,12 @@ int bondp_set_bonding_mode(urma_context_t *ctx, bondp_bonding_mode_t bonding_mod
 
     if (bonding_level < 0 || bonding_level >= BONDP_BONDING_LEVEL_MAX) {
         URMA_LOG_ERR("Unsupported bonding level=%d\n", bonding_level);
+        (void)pthread_mutex_unlock(&ctx->mutex);
+        return -EINVAL;
+    }
+
+    if (atomic_load(&bdp_ctx->auto_skip_faulty)) {
+        URMA_LOG_ERR("AUTO_SKIP_FAULTY is enabled, bonding mode is immutable.\n");
         (void)pthread_mutex_unlock(&ctx->mutex);
         return -EINVAL;
     }
@@ -756,6 +764,12 @@ int bondp_set_ctx_cfg(urma_context_t *ctx, const bondp_set_ctx_cfg_in_t *cfg_in)
     ret = bondp_validate_ctx_cfg(&new_cfg);
     if (ret != 0) {
         URMA_LOG_ERR("Invalid context configuration.\n");
+        goto EXIT;
+    }
+
+    if (atomic_load(&bdp_ctx->auto_skip_faulty)) {
+        URMA_LOG_ERR("AUTO_SKIP_FAULTY is enabled, set context config is rejected.\n");
+        ret = -EINVAL;
         goto EXIT;
     }
 
