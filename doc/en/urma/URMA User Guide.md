@@ -508,6 +508,10 @@ urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 
 If a port subset has been configured on the context via `BONDP_USER_CTL_SET_BONDING_PORT`, Jetty and JFR import establish physical target connections only through that subset. Each configured local port and each remote target participate in at most one selected physical path (one-to-one pairing), so the number of imported physical paths does not exceed the smaller of the configured local port count and the remote target count. The configured subset must contain a port connected to the peer topology; otherwise the import fails with no buildable path.
 
+In balance mode with an available health-check context, automatic faulty-port avoidance can be enabled via `urma_user_ctl` with opcode `BONDP_USER_CTL_AUTO_SKIP_FAULTY` (both input `addr` and `len` must be zero; the switch is one-way and cannot be disabled). After enabling, a `URMA_CR_LOC_ACCESS_ERR` send completion from a physical Jetty marks its local port BAD at context scope; RM Jetty send scheduling in the same context avoids that port, while RC Jetty, JFS, and receive paths do not use this BAD state for scheduling. Bonding-mode and context-configuration changes are rejected after enabling.
+
+When automatic faulty-port avoidance is enabled, RM Jetty import additionally requires the peer to enable health checking, and every local port with an established physical target connection to have at least one valid health-check path. If either requirement is not met, the import fails and returns NULL with errno set to EOPNOTSUPP. RC Jetties are not subject to these two checks.
+
 Users should focus on the URMA API usage flow based on transport-layer-unaware connection setup.
 
 ## 5.2 Control Plane

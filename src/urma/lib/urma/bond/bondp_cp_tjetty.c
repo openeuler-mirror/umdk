@@ -635,6 +635,19 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         }
     }
 
+    /* AUTO_SKIP_FAULTY: a peer without health check can never report the
+     * recovery of a context BAD port, so an RM import under AUTO_SKIP must be
+     * rejected early, before any physical pjetty is created. */
+    if (bdp_tjetty->v_tjetty.trans_mode == URMA_TM_RM &&
+        bondp_auto_skip_active(bdp_ctx) &&
+        !rvjetty_info.is_health_check_enable) {
+        URMA_LOG_ERR("AUTO_SKIP import rejected: peer health check is not enabled, "
+                     "remote_eid=" EID_FMT ", remote_jetty_id=%u.\n",
+                     EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id);
+        errno = EOPNOTSUPP;
+        goto UNIMPORT_VJETTY;
+    }
+
     if (bondp_rebuild_connected_by_topo(&rjetty->jetty_id.eid, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to rebuild connected matrix by topo.\n");
         goto UNIMPORT_VJETTY;
@@ -664,9 +677,42 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         goto UNIMPORT_PJETTY;
     }
 
+    /* AUTO_SKIP_FAULTY: HC_REGISTERED only proves at least one probe path was
+     * registered. Every local port that owns a physical pjetty must have at
+     * least one health path (hc_va != 0), otherwise that port can never report
+     * recovery once marked BAD. RC jetties do not enter this check. */
+    if (bdp_tjetty->v_tjetty.trans_mode == URMA_TM_RM && bondp_auto_skip_active(bdp_ctx)) {
+        bool health_covered[URMA_UBAGG_DEV_MAX_NUM] = {false};
+
+        for (uint32_t i = 0; i < bdp_tjetty->p_tjetty_count; ++i) {
+            const bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[i];
+            if (path->p_tjetty != NULL && path->hc_va != 0) {
+                health_covered[path->local_indice] = true;
+            }
+        }
+
+        for (uint32_t i = 0; i < bdp_tjetty->p_tjetty_count; ++i) {
+            const bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[i];
+            if (path->p_tjetty != NULL && !health_covered[path->local_indice]) {
+                URMA_LOG_ERR("AUTO_SKIP import rejected: missing health path, "
+                             "local_idx=%u, remote_idx=%u, remote_eid=" EID_FMT
+                             ", remote_jetty_id=%u.\n",
+                             (uint32_t)path->local_indice, (uint32_t)path->remote_indice,
+                             EID_ARGS(rjetty->jetty_id.eid), rjetty->jetty_id.id);
+                errno = EOPNOTSUPP;
+                /* Full rollback: the tjetty is already health registered, so
+                 * remove it from the hc node before unimporting the pjetty. */
+                bondp_hc_unregister_tjetty(bdp_ctx, bdp_tjetty);
+                goto UNIMPORT_PJETTY;
+            }
+        }
+    }
+
     if (rjetty->trans_mode == URMA_TM_RM && rjetty->flag.bs.has_drv_ext && cfg_jetty != NULL) {
         cfg_jetty->v_jetty.remote_jetty = &bdp_tjetty->v_tjetty;
     }
+
+    atomic_fetch_add(&bdp_ctx->imported_tjetty_cnt, 1);
 
     URMA_LOG_DEBUG("Successfully imported target jetty=" URMA_JETTY_ID_FMT "\n",
                    URMA_JETTY_ID_ARGS(&rjetty->jetty_id));
@@ -690,6 +736,7 @@ static urma_status_t bondp_unimport_jetty_inner(urma_target_jetty_t *target_jett
     bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(target_jetty->urma_ctx, bondp_context_t, v_ctx);
     urma_status_t ret = URMA_SUCCESS;
 
+    atomic_fetch_sub(&bdp_ctx->imported_tjetty_cnt, 1);
     bondp_hc_unregister_tjetty(bdp_ctx, bdp_tjetty);
 
     if (bondp_unimport_pjetty(bdp_tjetty) != URMA_SUCCESS) {
