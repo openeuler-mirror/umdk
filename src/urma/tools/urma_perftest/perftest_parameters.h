@@ -334,6 +334,7 @@ typedef struct perftest_config {
     bool tp_aware;
     bool tp_reuse;
     bool use_ctp;
+    bool use_utp;
     uint32_t jetty_id;
     int32_t wait_jfc_timeout;
     urma_huge_page_size_t huge_page;

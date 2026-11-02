@@ -207,12 +207,16 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         } else if (cfg->use_ctp) {
             tp_type.bs.ctp = 1;
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
+        } else if (cfg->use_utp) {
+            tp_type.bs.utp = 1;
+            cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
         } else {
             tp_type.bs.rtp = 1;
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
         }
         LOG_ERROR("Warning: %s should set priority to %hhu.\n",
-                  (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
+                  (cfg->use_ctp == true ? "ctp" : (cfg->use_utp == true ? "utp" : "rtp")),
+                  cfg->priority);
     } else {
         if (cfg->priority > URMA_MAX_PRIORITY) {
             LOG_ERROR("The priority parameter %hhu is invalid; it should be 0-15.\n",
@@ -222,20 +226,26 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
             tp_type.bs.ctp = 1;
             if (!priority_supports_tp(&ctx->dev_attr, cfg->priority, tp_type)) {
                 LOG_ERROR("Priority %hhu does not support CTP\n", cfg->priority);
-                goto uninit;
+                goto del_ctx;
+            }
+        } else if (cfg->use_utp && ctx->urma_ctx->ops->import_jetty_ex != NULL) {
+            tp_type.bs.utp = 1;
+            if (!priority_supports_tp(&ctx->dev_attr, cfg->priority, tp_type)) {
+                LOG_ERROR("Priority %hhu does not support UTP\n", cfg->priority);
+                goto del_ctx;
             }
         } else if (ctx->urma_ctx->ops->import_jetty_ex != NULL) {
             tp_type.bs.rtp = 1;
             if (!priority_supports_tp(&ctx->dev_attr, cfg->priority, tp_type)) {
                 LOG_ERROR("Priority %hhu does not support RTP\n", cfg->priority);
-                goto uninit;
+                goto del_ctx;
             }
         }
     }
 
     if (cfg->enable_user_tp == true) {
         LOG_ERROR("The UB device does not support user_tp!\n");
-        goto uninit;
+        goto del_ctx;
     }
 
     ctx->eid = ctx->urma_ctx->eid;
@@ -1605,7 +1615,7 @@ static int create_tp_info(perftest_context_t *ctx, perftest_config_t *cfg)
     urma_get_tp_cfg_t tp_cfg = {0};
     if (cfg->use_ctp) {
         tp_cfg.flag.bs.ctp = 1;
-    } else if (cfg->trans_mode == URMA_TM_UM) {
+    } else if (cfg->use_utp) {
         tp_cfg.flag.bs.utp = 1;
     } else {
         tp_cfg.flag.bs.rtp = 1;
@@ -2071,7 +2081,7 @@ static int connect_jfr_default(perftest_context_t *ctx, const perftest_config_t 
         rjfr.trans_mode = cfg->trans_mode;
         if (cfg->use_ctp) {
             rjfr.tp_type = URMA_CTP;
-        } else if (rjfr.trans_mode == URMA_TM_UM) {
+        } else if (cfg->use_utp) {
             rjfr.tp_type = URMA_UTP;
         } else {
             rjfr.tp_type = URMA_RTP;
@@ -2118,7 +2128,7 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_import_jfr_ex_cfg_t active_cfg = {0};
-        if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
+        if (cfg->use_utp || cfg->use_ctp) {
             active_cfg.tp_handle = ctx->tp_info[i].tp_handle;
             active_cfg.tp_attr.tx_psn = (uint32_t)random();
         } else {
@@ -2133,7 +2143,7 @@ static int connect_jfr_tp_aware(perftest_context_t *ctx, const perftest_config_t
         rjfr.trans_mode = cfg->trans_mode;
         if (cfg->use_ctp) {
             rjfr.tp_type = URMA_CTP;
-        } else if (rjfr.trans_mode == URMA_TM_UM) {
+        } else if (cfg->use_utp) {
             rjfr.tp_type = URMA_UTP;
         } else {
             rjfr.tp_type = URMA_RTP;
@@ -2232,7 +2242,7 @@ static int connect_jetty_default(perftest_context_t *ctx, perftest_config_t *cfg
 
         if (cfg->use_ctp) {
             rjetty->tp_type = URMA_CTP;
-        } else if (rjetty->trans_mode == URMA_TM_UM) {
+        } else if (cfg->use_utp) {
             rjetty->tp_type = URMA_UTP;
         } else {
             rjetty->tp_type = URMA_RTP;
@@ -2285,7 +2295,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
 
     for (uint32_t i = 0; i < ctx->jetty_num; i++) {
         urma_import_jfr_ex_cfg_t active_cfg = {0};
-        if (cfg->trans_mode == URMA_TM_UM || cfg->use_ctp) {
+        if (cfg->use_utp || cfg->use_ctp) {
             active_cfg.tp_handle = ctx->tp_info[i].tp_handle;
             active_cfg.tp_attr.tx_psn = (uint32_t)random();
         } else {
@@ -2303,7 +2313,7 @@ static int connect_jetty_tp_aware(perftest_context_t *ctx, perftest_config_t *cf
         }
         if (cfg->use_ctp) {
             rjetty->tp_type = URMA_CTP;
-        } else if (rjetty->trans_mode == URMA_TM_UM) {
+        } else if (cfg->use_utp) {
             rjetty->tp_type = URMA_UTP;
         } else {
             rjetty->tp_type = URMA_RTP;
