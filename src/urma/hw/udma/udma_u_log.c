@@ -79,11 +79,11 @@ int udma_vlog(const char *function, int line, enum udma_vlog_level level, const 
 	int ret;
 
 	/* add log head info, "[UDMA_LOG_TAG][function:line] format" */
-	ret = snprintf(newformat, MAX_LOG_LEN, "[%s][%s:%d] %s", UDMA_LOG_TAG, function, line, format);
+	ret = snprintf(newformat, MAX_LOG_LEN + 1, "[%s][%s:%d] %s", UDMA_LOG_TAG, function, line, format);
 	if (ret <= 0 || ret >= (int)sizeof(newformat))
 		return ret;
 
-	ret = vsnprintf(logmsg, MAX_LOG_LEN, newformat, va);
+	ret = vsnprintf(logmsg, MAX_LOG_LEN + 1, newformat, va);
 	if (ret == -1 || ret >= (int)sizeof(newformat)) {
 		(void)printf("logmsg size exceeds MAX_LOG_LEN size :%d.\n", MAX_LOG_LEN);
 		return ret;

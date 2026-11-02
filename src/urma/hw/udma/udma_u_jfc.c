@@ -257,9 +257,8 @@ urma_status_t udma_u_active_jfc(urma_jfc_t *jfc)
 	return URMA_SUCCESS;
 
 err_create_jfc:
-    if (!ujfc->db_cstm) {
-	    udma_u_free_sw_db(ujfc->cq.ctx, ujfc->sw_db, UDMA_JFC_TYPE_DB);
-	}
+	if (!ujfc->db_cstm)
+		udma_u_free_sw_db(ujfc->cq.ctx, ujfc->sw_db, UDMA_JFC_TYPE_DB);
 err_alloc_sw_db:
 	udma_u_delete_cq(&ujfc->cq);
 
