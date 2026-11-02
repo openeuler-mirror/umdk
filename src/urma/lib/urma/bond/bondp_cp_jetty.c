@@ -1294,15 +1294,15 @@ static urma_status_t bondp_hint_parse_local_idx(const bondp_context_t *bdp_ctx, 
         URMA_LOG_ERR("JFR hint not support dst chid_id die_id and port_id, mask=0x%lx.\n", hint->mask);
         return URMA_EINVAL;
     }
-    if (hint->src_id.bs.die_id != 1) {
-        URMA_LOG_ERR("JFR hint must set src die_id=1, die_id=%u.\n", hint->src_id.bs.die_id);
+    if (hint->local_id.bs.die_id != 1) {
+        URMA_LOG_ERR("JFR hint must set src die_id=1, die_id=%u.\n", hint->local_id.bs.die_id);
         return URMA_EINVAL;
     }
 
     bondp_port_id_t port_id = {0};
-    port_id.bs.chip_id = hint->src_id.bs.chip_id;
+    port_id.bs.chip_id = hint->local_id.bs.chip_id;
     port_id.bs.die_id = 1;                    /* die 恒为 1，不依赖调用方填写 */
-    port_id.bs.port_idx = hint->src_id.bs.port_idx;
+    port_id.bs.port_idx = hint->local_id.bs.port_idx;
     if (convert_bond_port_id_to_active_index(bdp_ctx, port_id, idx) != 0) {
         URMA_LOG_ERR("Failed to convert src port_id 0x%x to local idx.\n", port_id.value);
         return URMA_EINVAL;
