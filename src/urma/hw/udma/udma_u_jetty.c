@@ -346,10 +346,7 @@ static void udma_u_free_jetty_prepare(urma_jetty_t* jetty)
 
 	udma_u_jetty_table_remove(udma_ctx, udma_jetty);
 	udma_u_free_db(jetty->urma_ctx, &udma_jetty->sq.db);
-	if (udma_jetty->jetty_type == UDMA_LOCK_BUFFER_JETTY_TYPE)
-		udma_u_lock_delete_sq(&udma_jetty->sq);
-	else
-		udma_u_delete_sq(&udma_jetty->sq);
+	udma_u_delete_sq(&udma_jetty->sq);
 	remove_jetty_from_grp(udma_jetty);
 }
 
