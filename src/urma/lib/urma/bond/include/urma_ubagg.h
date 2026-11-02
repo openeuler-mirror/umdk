@@ -53,6 +53,13 @@ typedef enum bondp_wr_hint_mask {
          BONDP_WR_HINT_MASK_SRC_PORT_ID | BONDP_WR_HINT_MASK_DST_CHIP_ID | \
          BONDP_WR_HINT_MASK_DST_DIE_ID | BONDP_WR_HINT_MASK_DST_PORT_ID)
 
+#define BONDP_WR_HINT_MASK_SRC_ALL \
+        (BONDP_WR_HINT_MASK_SRC_CHIP_ID | BONDP_WR_HINT_MASK_SRC_DIE_ID | \
+         BONDP_WR_HINT_MASK_SRC_PORT_ID)
+#define BONDP_WR_HINT_MASK_DST_ALL \
+        (BONDP_WR_HINT_MASK_DST_CHIP_ID | BONDP_WR_HINT_MASK_DST_DIE_ID | \
+         BONDP_WR_HINT_MASK_DST_PORT_ID)
+
 typedef enum bondp_user_ctl_opcode {
     BONDP_USER_CTL_SET_BONDING_MODE_LEGACY = 4,
     BONDP_USER_CTL_ENABLE_SEG_CACHE,
@@ -192,12 +199,12 @@ typedef union bondp_port_id {
 } bondp_port_id_t;
 
 typedef struct bondp_wr_hint {
-    uint32_t version;         /* 必须为BONDP_WR_HINT_VERSION_V0 */
-    uint32_t size;            /* 调用方头文件中的 sizeof(bondp_wr_hint_p) */
-    uint64_t mask;            /* 0表示不指定，完全走bondp内部调度 */
-    bondp_port_id_t src_id;   /* chip/die/port坐标; 子字段有效性由SRC_*位决定 */
-    bondp_port_id_t dst_id;   /* chip/die/port坐标; 子字段有效性由DST_*位决定 */
-    uint64_t reserved[4];     /* 必须为0，预留给后续拓展 */
+    uint32_t version;         /* must be BONDP_WR_HINT_VERSION_V0 */
+    uint32_t size;            /* must match the bondp_wr_hint_t size expected by the loaded liburma */
+    uint64_t mask;            /* 0 means no port is pinned and the bond scheduler picks the path */
+    bondp_port_id_t src_id;   /* chip/die/port coordinates; sub-fields are selected by the SRC_* bits */
+    bondp_port_id_t dst_id;   /* chip/die/port coordinates; sub-fields are selected by the DST_* bits */
+    uint64_t reserved[4];     /* reserved for future extension; not validated in this version */
 } bondp_wr_hint_t;
 
 // BONDP_USER_CTL_SET_BONDING_PORT
@@ -369,14 +376,69 @@ typedef struct bondp_path {
     uint32_t least_load;
 } bondp_path_t;
 
-urma_status_t bondp_post_jfs_wr_hint(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
+/**
+ * post a request to send data, consuming RQEs on the given target port. A WR
+ * posted with a port hint is never rerouted to another target port: if the
+ * specified port fails, the error CQE is returned instead of resending
+ * through a backup path.
+ * @param[in] jfs: the jfs created before, which is used to put command;
+ * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
+ * only the remote member port can be specified (full DST_* mask with dst_id)
+ * and must be reachable from the jfs; the hint takes precedence over the
+ * WR's drv_ext chip affinity info;
+ * @param[in] wr: the posting request all information, including sge, flag.
+ * @param[out] bad_wr: the first of failure request.
+ * Return: 0 on success, URMA_EINVAL when the dst_id coordinates are out of
+ * range, URMA_EAGAIN when the specified port is currently unreachable and
+ * the caller may retry, other value on error
+ */
+urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
     urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
-urma_status_t bondp_post_jetty_send_wr_hint(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+/**
+ * post a request to send data, consuming RQEs on the given target port. A WR
+ * posted with a port hint is never rerouted to another target port: if the
+ * specified port fails, the error CQE is returned instead of resending
+ * through a backup path.
+ * @param[in] jetty: the jetty created before, which is used to put command;
+ * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
+ * only the remote member port can be specified (full DST_* mask with dst_id)
+ * and must be reachable from the jetty; the hint takes precedence over the
+ * WR's drv_ext chip affinity info;
+ * @param[in] wr: the posting request all information, including sge, flag.
+ * @param[out] bad_wr: the first of failure request.
+ * Return: 0 on success, URMA_EINVAL when the dst_id coordinates are out of
+ * range, URMA_EAGAIN when the specified port is currently unreachable and
+ * the caller may retry, other value on error
+ */
+urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
     urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
-urma_status_t bondp_post_jfr_wr_hint(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
+/**
+ * post a request to recv data on the bond member port.
+ * @param[in] jfr: the jfr created before, which is used to put command;
+ * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
+ * only the local member port can be specified (full SRC_* mask with src_id)
+ * and must be a member of the jfr;
+ * @param[in] wr: the posting request all information, including sge, flag.
+ * @param[out] bad_wr: the first of failure request.
+ * Return: 0 on success, URMA_EAGAIN when the specified port path is already
+ * invalid, other value on error
+ */
+urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
-urma_status_t bondp_post_jetty_recv_wr_hint(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+/**
+ * post a request to recv data on the bond member port.
+ * @param[in] jetty: the jetty created before, which is used to put command;
+ * @param[in] hint: path hint; a zero mask follows the bond scheduling, and
+ * only the local member port can be specified (full SRC_* mask with src_id)
+ * and must be a member of the jetty;
+ * @param[in] wr: the posting request all information, including sge, flag.
+ * @param[out] bad_wr: the first of failure request.
+ * Return: 0 on success, URMA_EAGAIN when the specified port path is already
+ * invalid, other value on error
+ */
+urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
     urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+
 
 /**
  * Modify attributes of a bonding jfr. Only JFR_RX_THRESHOLD is supported for now.

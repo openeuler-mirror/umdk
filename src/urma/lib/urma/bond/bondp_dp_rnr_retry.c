@@ -115,6 +115,9 @@ static void resend_rnr_retry_wrs_async(bondp_worker_task_reason_t reason, void *
             }
 
             uint64_t wr_id = wr_entry->wr_id;
+            /* The retry resends on the path of the last attempt: an RNR is
+             * flow control on that path, not a routing failure, so both the
+             * local egress and the target port stay unchanged. */
             if (bondp_resend_jfs_wr(bdp_comp, wr_entry, wr_entry->send_idx, wr_entry->target_idx) != 0) {
                 URMA_LOG_ERR("Failed to resend rnr retry jfs wr asynchronously, wr_id=%lu\n", wr_id);
             }
