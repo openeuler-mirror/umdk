@@ -130,6 +130,28 @@ int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
     return 0;
 }
 
+/* Check whether a provider_ops is still registered (i.e. its driver has not
+ * been removed from g_driver_list by urma_unregister_provider_ops). After a
+ * provider is unregistered, dev->ops / ctx->ops may still point at it even
+ * though the underlying .so is being unloaded; OP calls routed into such stale
+ * ops would dereference freed code. The CP validation macros use this to
+ * reject calls whose backing provider is gone.
+ *
+ * Traversal is lockless, mirroring urma_get_uasid / urma_match_driver. */
+bool urma_is_provider_ops_registered(const urma_provider_ops_t *provider_ops)
+{
+    if (provider_ops == NULL) {
+        return false;
+    }
+    urma_driver_t *driver;
+    UB_LIST_FOR_EACH (driver, node, &g_driver_list) {
+        if (driver->ops == provider_ops) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Register the log callback with all loaded providers. No-op when g_driver_list
  * is empty (before urma_init / after urma_uninit). */
 void urma_register_log_func_to_providers(urma_log_cb_t func)
@@ -580,8 +602,10 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 
 urma_status_t urma_delete_context(urma_context_t *ctx)
 {
-    if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL || ctx->dev->ops->delete_context == NULL) {
-        URMA_LOG_ERR("Invalid parameter.\n");
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->ops == NULL ||
+        !urma_is_provider_ops_registered(ctx->dev->ops) ||
+        ctx->dev->ops->delete_context == NULL) {
+        URMA_LOG_WARN("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 

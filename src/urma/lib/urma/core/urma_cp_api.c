@@ -30,8 +30,9 @@
 
 #define URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx)                                                                 \
     do {                                                                                                               \
-        if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL)) {               \
-            URMA_LOG_ERR("Invalid parameter.\n");                                                                      \
+        if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||               \
+            (((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops))) {              \
+            URMA_LOG_WARN("Invalid parameter.\n");                                                                     \
             return URMA_EINVAL;                                                                                        \
         }                                                                                                              \
     } while (0)
@@ -39,9 +40,10 @@
 #define URMA_CHECK_OP_INVALID_RETURN_POINTER(urma_ctx, ops, op_name)                                                   \
     do {                                                                                                               \
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||               \
+            (((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops)) ||              \
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->op_name == NULL)) {                                         \
             errno = EINVAL;                                                                                            \
-            URMA_LOG_ERR("Invalid parameter.\n");                                                                      \
+            URMA_LOG_WARN("Invalid parameter.\n");                                                                     \
             return NULL;                                                                                               \
         }                                                                                                              \
     } while (0)
@@ -49,8 +51,9 @@
 #define URMA_CHECK_OP_INVALID_RETURN_STATUS(urma_ctx, ops, op_name)                                                    \
     do {                                                                                                               \
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||               \
+            (((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops)) ||              \
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->op_name == NULL)) {                                         \
-            URMA_LOG_ERR("Invalid parameter.\n");                                                                      \
+            URMA_LOG_WARN("Invalid parameter.\n");                                                                     \
             return URMA_EINVAL;                                                                                        \
         }                                                                                                              \
     } while (0)
@@ -58,8 +61,9 @@
 #define URMA_CHECK_OP_INVALID_RETURN_NEG_STATUS(urma_ctx, ops, op_name)                                                \
     do {                                                                                                               \
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||               \
+            (((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops)) ||              \
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->op_name == NULL)) {                                         \
-            URMA_LOG_ERR("Invalid parameter.\n");                                                                      \
+            URMA_LOG_WARN("Invalid parameter.\n");                                                                     \
             return -URMA_EINVAL;                                                                                       \
         }                                                                                                              \
     } while (0)

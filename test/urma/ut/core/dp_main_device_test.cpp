@@ -242,6 +242,10 @@ TEST(UrmaCoreTest, MainApisValidateProviderContextAndDeviceContracts)
     provider.name = "not_ub_agg";
     EXPECT_EQ(URMA_EINVAL, urma_set_context_opt(&fixture.ctx, URMA_OPT_AGGR_MODE, &aggrMode, sizeof(aggrMode)));
     provider.name = "ub_agg";
+    /* Register the provider so the CP validation macros accept dev->ops when
+     * urma_set_context_opt forwards to urma_user_ctl. In production dev->ops is
+     * always a registered provider_ops (set by urma_register_sysfs_dev). */
+    EXPECT_EQ(0, urma_register_provider_ops(&provider));
     fixture.dev.ops = &provider;
     EXPECT_EQ(URMA_EINVAL, urma_set_context_opt(&fixture.ctx, URMA_OPT_AGGR_MODE, nullptr, sizeof(aggrMode)));
     EXPECT_EQ(URMA_EINVAL, urma_set_context_opt(&fixture.ctx, URMA_OPT_AGGR_MODE, &aggrMode, sizeof(uint8_t)));
@@ -251,6 +255,7 @@ TEST(UrmaCoreTest, MainApisValidateProviderContextAndDeviceContracts)
     EXPECT_EQ(URMA_SUCCESS, urma_set_context_opt(&fixture.ctx, URMA_OPT_AGGR_MODE, &aggrMode, sizeof(aggrMode)));
     EXPECT_EQ(URMA_EINVAL, urma_set_context_opt(&fixture.ctx, static_cast<urma_opt_name_t>(UINT32_MAX),
                                                 &aggrMode, sizeof(aggrMode)));
+    EXPECT_EQ(0, urma_unregister_provider_ops(&provider));
 }
 
 TEST(UrmaCoreTest, MainCreateContextReadsEidAndOpensLocalCdev)
