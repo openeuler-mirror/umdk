@@ -177,25 +177,64 @@ static int seg_cache_add(bondp_context_t *bdp_ctx, const bondp_seg_cache_entry_t
     return 0;
 }
 
-/*
- * Since the actual token ID for bonding device is allocated by the kernel mode
- * during segment registration, the function only returns an empty token ID to
- * make api useable
- */
 urma_token_id_t *bondp_alloc_token_id(urma_context_t *ctx)
 {
-    urma_token_id_t *token = calloc(1, sizeof(urma_token_id_t));
-    if (token == NULL) {
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    bondp_token_id_t *bdp_token_id = calloc(1, sizeof(bondp_token_id_t));
+    if (bdp_token_id == NULL) {
         return NULL;
     }
-    token->urma_ctx = ctx;
-    return token;
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_ctx->p_ctxs[i] == NULL) {
+            continue;
+        }
+        bdp_token_id->p_token_id[i] = urma_alloc_token_id(bdp_ctx->p_ctxs[i]);
+        if (bdp_token_id->p_token_id[i] == NULL) {
+            URMA_LOG_ERR("Failed to allocate ptoken_id, idx=%d.\n", i);
+            goto FREE_PTOKEN_ID;
+        }
+    }
+
+    bdp_token_id->v_token_id.urma_ctx = ctx;
+    return &bdp_token_id->v_token_id;
+
+FREE_PTOKEN_ID:
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_token_id->p_token_id[i] != NULL) {
+            (void)urma_free_token_id(bdp_token_id->p_token_id[i]);
+        }
+    }
+    free(bdp_token_id);
+    return NULL;
 }
 
 urma_status_t bondp_free_token_id(urma_token_id_t *token_id)
 {
-    free(token_id);
-    return URMA_SUCCESS;
+    if (token_id == NULL) {
+        return URMA_SUCCESS;
+    }
+
+    bondp_token_id_t *bdp_token_id = CONTAINER_OF_FIELD(token_id, bondp_token_id_t, v_token_id);
+    urma_status_t ret = URMA_SUCCESS;
+
+    for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
+        if (bdp_token_id->p_token_id[i] == NULL) {
+            continue;
+        }
+        urma_status_t p_ret = urma_free_token_id(bdp_token_id->p_token_id[i]);
+        if (p_ret != URMA_SUCCESS) {
+            URMA_LOG_ERR("Failed to free ptoken_id, idx=%d, ret=%d.\n", i, p_ret);
+            ret = URMA_FAIL;
+            continue;
+        }
+        bdp_token_id->p_token_id[i] = NULL;
+    }
+
+    if (ret == URMA_SUCCESS) {
+        free(bdp_token_id);
+    }
+    return ret;
 }
 
 static int bondp_delete_pseg(bondp_tseg_t *bdp_seg)
@@ -226,18 +265,19 @@ static int bondp_create_pseg(bondp_context_t *bdp_ctx, bondp_tseg_t *bdp_seg, ur
         return -1;
     }
 
+    bondp_token_id_t *bdp_token_id = CONTAINER_OF_FIELD(seg_cfg->token_id, bondp_token_id_t, v_token_id);
     urma_seg_cfg_t p_cfg = *seg_cfg;
 
     for (int i = 0; i < URMA_UBAGG_DEV_MAX_NUM; ++i) {
         if (bdp_ctx->p_ctxs[i] == NULL) {
             continue;
         }
-        if (bdp_ctx->token_ids[i] == NULL) {
-            URMA_LOG_ERR("No token_id for pctx, idx=%d\n", i);
+        if (bdp_token_id->p_token_id[i] == NULL ||
+            bdp_token_id->p_token_id[i]->urma_ctx != bdp_ctx->p_ctxs[i]) {
+            URMA_LOG_ERR("Invalid token_id for pctx, idx=%d.\n", i);
             goto DELETE_PSEG;
         }
-        p_cfg.token_id = bdp_ctx->token_ids[i];
-        p_cfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
+        p_cfg.token_id = bdp_token_id->p_token_id[i];
         urma_target_seg_t *p_tseg = urma_register_seg(bdp_ctx->p_ctxs[i], &p_cfg);
         if (p_tseg == NULL) {
             URMA_LOG_ERR("Failed to register pseg %d\n", i);
@@ -326,6 +366,10 @@ urma_target_seg_t *bondp_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_c
 
     if (seg_cfg->token_id == NULL || seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID) {
         URMA_LOG_ERR("Invalid token id for register bondp seg\n");
+        return NULL;
+    }
+    if (seg_cfg->token_id->urma_ctx != ctx) {
+        URMA_LOG_ERR("Token id does not belong to the bond context\n");
         return NULL;
     }
 

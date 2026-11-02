@@ -99,19 +99,67 @@ TEST(UrmaBondTest, PublicSegmentApisCoverTokenAndRefcountPaths)
     EXPECT_EQ(1UL, remoteSeg.use_cnt.atomic_cnt.load());
 }
 
-TEST(UrmaBondTest, PublicSegmentRegisterCleansPhysicalSegWhenVirtualRegisterFails)
+TEST(UrmaBondTest, PublicSegmentTokenIdAllocatesAndFreesPhysicalTokens)
+{
+    BondPublicApiFixture fixture;
+
+    fixture.InitSinglePhysicalMember();
+    fixture.ctx.p_ctxs[1] = &fixture.phyCtx;
+
+    urma_token_id_t *allocated = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, allocated);
+
+    auto *bdpTokenId = reinterpret_cast<bondp_token_id_t *>(allocated);
+    EXPECT_NE(nullptr, bdpTokenId->p_token_id[0]);
+    EXPECT_NE(nullptr, bdpTokenId->p_token_id[1]);
+    EXPECT_NE(bdpTokenId->p_token_id[0], bdpTokenId->p_token_id[1]);
+    EXPECT_EQ(2, g_mockPhysicalTokenAllocCount);
+
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(allocated));
+    EXPECT_EQ(2, g_mockPhysicalTokenFreeCount);
+}
+
+TEST(UrmaBondTest, PublicSegmentTokenIdRollsBackPartialAllocation)
+{
+    BondPublicApiFixture fixture;
+
+    fixture.InitSinglePhysicalMember();
+    fixture.ctx.p_ctxs[1] = &fixture.phyCtx;
+    g_mockPhysicalTokenAllocFailAt = 2;
+
+    EXPECT_EQ(nullptr, bondp_alloc_token_id(&fixture.ctx.v_ctx));
+    EXPECT_EQ(2, g_mockPhysicalTokenAllocCount);
+    EXPECT_EQ(1, g_mockPhysicalTokenFreeCount);
+}
+
+TEST(UrmaBondTest, PublicSegmentTokenIdRetainsWrapperWhenPhysicalFreeFails)
+{
+    BondPublicApiFixture fixture;
+
+    fixture.InitSinglePhysicalMember();
+    fixture.ctx.p_ctxs[1] = &fixture.phyCtx;
+
+    urma_token_id_t *allocated = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, allocated);
+    auto *bdpTokenId = reinterpret_cast<bondp_token_id_t *>(allocated);
+
+    g_mockPhysicalTokenFreeFailAt = 1;
+    EXPECT_EQ(URMA_FAIL, bondp_free_token_id(allocated));
+    EXPECT_NE(nullptr, bdpTokenId->p_token_id[0]);
+    EXPECT_EQ(nullptr, bdpTokenId->p_token_id[1]);
+
+    g_mockPhysicalTokenFreeFailAt = -1;
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(allocated));
+    EXPECT_EQ(3, g_mockPhysicalTokenFreeCount);
+}
+
+TEST(UrmaBondTest, PublicSegmentRegisterRejectsTokenFromDifferentBondContext)
 {
     BondPublicApiFixture fixture;
     urma_token_id_t token = {};
     urma_seg_cfg_t segCfg = {};
 
-    /*
-     * Physical member registration is mocked in memory. The virtual segment still
-     * stops at dev_fd=-1, so this covers rollback without opening a real device.
-     */
-    fixture.InitSinglePhysicalMember();
-    fixture.ctx.v_ctx.dev_fd = -1;
-    token.urma_ctx = &fixture.ctx.v_ctx;
+    token.urma_ctx = &fixture.otherBondCtx.v_ctx;
     segCfg.token_id = &token;
     segCfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
     segCfg.va = 0x100000;
@@ -120,17 +168,74 @@ TEST(UrmaBondTest, PublicSegmentRegisterCleansPhysicalSegWhenVirtualRegisterFail
     EXPECT_EQ(nullptr, bondp_register_seg(&fixture.ctx.v_ctx, &segCfg));
 }
 
+TEST(UrmaBondTest, PublicSegmentRegisterRejectsMissingPhysicalToken)
+{
+    BondPublicApiFixture fixture;
+    urma_seg_cfg_t segCfg = {};
+
+    urma_token_id_t *tokenId = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, tokenId);
+    fixture.InitSinglePhysicalMember();
+    segCfg.token_id = tokenId;
+    segCfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
+    segCfg.va = 0x100000;
+    segCfg.len = 4096;
+
+    EXPECT_EQ(nullptr, bondp_register_seg(&fixture.ctx.v_ctx, &segCfg));
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(tokenId));
+}
+
+TEST(UrmaBondTest, PublicSegmentRegisterRejectsPhysicalTokenFromDifferentContext)
+{
+    BondPublicApiFixture fixture;
+    urma_seg_cfg_t segCfg = {};
+
+    fixture.InitSinglePhysicalMember();
+    urma_token_id_t *tokenId = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, tokenId);
+    fixture.ctx.p_ctxs[0] = &fixture.otherBondCtx.v_ctx;
+    segCfg.token_id = tokenId;
+    segCfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
+    segCfg.va = 0x100000;
+    segCfg.len = 4096;
+
+    EXPECT_EQ(nullptr, bondp_register_seg(&fixture.ctx.v_ctx, &segCfg));
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(tokenId));
+}
+
+TEST(UrmaBondTest, PublicSegmentRegisterCleansPhysicalSegWhenVirtualRegisterFails)
+{
+    BondPublicApiFixture fixture;
+    urma_seg_cfg_t segCfg = {};
+
+    /*
+     * Physical member registration is mocked in memory. The virtual segment still
+     * stops at dev_fd=-1, so this covers rollback without opening a real device.
+     */
+    fixture.InitSinglePhysicalMember();
+    fixture.ctx.v_ctx.dev_fd = -1;
+    urma_token_id_t *tokenId = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, tokenId);
+    segCfg.token_id = tokenId;
+    segCfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
+    segCfg.va = 0x100000;
+    segCfg.len = 4096;
+
+    EXPECT_EQ(nullptr, bondp_register_seg(&fixture.ctx.v_ctx, &segCfg));
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(tokenId));
+}
+
 TEST(UrmaBondTest, PublicSegmentRegisterAndUnregisterUseMockIoctlSuccessPath)
 {
     BondPublicApiFixture fixture;
-    urma_token_id_t token = {};
     urma_seg_cfg_t segCfg = {};
     urma_target_seg_t *target = nullptr;
 
     fixture.InitSinglePhysicalMember();
     fixture.ctx.v_ctx.dev_fd = 7;
-    token.urma_ctx = &fixture.ctx.v_ctx;
-    segCfg.token_id = &token;
+    urma_token_id_t *tokenId = bondp_alloc_token_id(&fixture.ctx.v_ctx);
+    ASSERT_NE(nullptr, tokenId);
+    segCfg.token_id = tokenId;
     segCfg.flag.bs.token_id_valid = URMA_TOKEN_ID_VALID;
     segCfg.va = 0x120000;
     segCfg.len = 4096;
@@ -143,6 +248,7 @@ TEST(UrmaBondTest, PublicSegmentRegisterAndUnregisterUseMockIoctlSuccessPath)
         EXPECT_EQ(&fixture.ctx.v_ctx, target->urma_ctx);
         EXPECT_EQ(URMA_SUCCESS, bondp_unregister_seg(target));
     }
+    EXPECT_EQ(URMA_SUCCESS, bondp_free_token_id(tokenId));
 }
 
 TEST(UrmaBondTest, PublicSegmentApisReleaseLastReferencesThroughStableFailures)
