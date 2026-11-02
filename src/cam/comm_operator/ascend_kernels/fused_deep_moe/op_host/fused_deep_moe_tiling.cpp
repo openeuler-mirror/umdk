@@ -67,11 +67,14 @@ constexpr uint32_t MIN_TOKEN_LENGTH = 512;
 constexpr uint32_t MAX_TOKEN_LENGTH = 7168;
 constexpr uint32_t MIN_GMM1_HIDDEN = 1024;
 constexpr uint32_t MAX_GMM1_HIDDEN = 6144;
-constexpr uint32_t GMM1_HIDDEN_ALIGN = 1024;
-constexpr uint32_t BYTE_PER_BLK = 32;
-constexpr uint32_t BLK_NUM_PER_VECTOR_FRACTAL = 8;
-constexpr uint32_t GMM1_REDUCE_ALIGN = 8;
+constexpr uint32_t GMM1_HIDDEN_ALIGN = 512;
 constexpr uint32_t GMM1_REDUCE_WIDTH_DIVISOR = 4;
+// Per-token absmax folds a quant tile of gmm1HLen/2 columns in half, so each row of the
+// folded buffer holds gmm1HLen/GMM1_REDUCE_WIDTH_DIVISOR floats, and that row is what one
+// ReduceMax consumes. The row must be a whole number of 64-float vector repeats: a trailing
+// partial repeat is silently mis-reduced and the per-token scale comes out wrong, which the
+// shape checks below are the only guard against. 4 * 64 = 256.
+constexpr uint32_t GMM1_REDUCE_ALIGN = 256;
 constexpr uint32_t TENSOR_HIDDEN_INDEX = 1;
 constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
@@ -544,12 +547,7 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
         OPS_LOG_E(nodeName, "gmm1 hidden size must be divisible by %u, but got %u.",
             GMM1_REDUCE_WIDTH_DIVISOR, gmm1HLen),
         return ge::GRAPH_FAILED);
-    uint32_t gmm1ReduceLen = gmm1HLen / GMM1_REDUCE_WIDTH_DIVISOR;
-    constexpr uint32_t gmm1ReduceLimit = BLK_NUM_PER_VECTOR_FRACTAL * BYTE_PER_BLK / sizeof(float);
-    while (gmm1ReduceLen > gmm1ReduceLimit) {
-        gmm1ReduceLen >>= 1;
-    }
-    OPS_ERR_IF(gmm1ReduceLen % GMM1_REDUCE_ALIGN != 0,
+    OPS_ERR_IF(gmm1HLen % GMM1_REDUCE_ALIGN != 0,
         OPS_LOG_E(nodeName, "gmm1 hidden size must be divisible by %u, but got %u.",
             GMM1_REDUCE_ALIGN, gmm1HLen),
         return ge::GRAPH_FAILED);
