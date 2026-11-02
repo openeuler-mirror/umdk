@@ -44,6 +44,9 @@ constexpr int32_t INT4_SIGNED_BIAS = -8;
 constexpr uint32_t MAX_QUANT_ROW_ONCE = 8;
 constexpr uint32_t QUANT_SPACE_FACTOR = 176 * 1024 / 11;  // up to 176KB for quant
 constexpr uint32_t SEND_CORE_NUM = 24;
+// AscendC::ReduceMax emits {value, index} at dst, so per-row results are spaced one
+// 32B block apart to keep every destination address aligned and non-overlapping.
+constexpr uint32_t REDUCE_MAX_DST_STRIDE = UB_ALIGN / sizeof(float);
 #define OPT_RANK_OFFSET 512
 
 #define CEIL_UP(x) ((((x) + (UB_ALIGN) - 1) / (UB_ALIGN)) * (UB_ALIGN))
@@ -131,7 +134,7 @@ public:
         ubMax = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
         ubOffset += halfTileCount * sizeof(float);
         ubReduceMax = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
-        ubOffset += CEIL_UP(tileRow * sizeof(float));
+        ubOffset += CEIL_UP(tileRow * REDUCE_MAX_DST_STRIDE * sizeof(float));
         ubQuantScale = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
         ubOffset += CEIL_UP(tileRow * sizeof(float));
 
@@ -219,33 +222,29 @@ public:
             }
 
             AscendC::PipeBarrier<PIPE_V>();
+            // ubInput is dead after this and is reused as ReduceMax's work buffer below.
             AscendC::Muls(ubInputTmp, ubInput, 127.f, tileCount);
+            AscendC::PipeBarrier<PIPE_V>();
 
-            constexpr uint32_t elementPerBlk = BYTE_PER_BLK / sizeof(float);
-            constexpr int32_t mask = 64;
-
-            AscendC::BinaryRepeatParams maxParams;
-            maxParams.dstBlkStride = halfTileColumn / elementPerBlk;
-            maxParams.src0BlkStride = halfTileColumn / elementPerBlk;
-            maxParams.src1BlkStride = halfTileColumn / elementPerBlk;
-            maxParams.dstRepStride = 1;
-            maxParams.src0RepStride = 1;
-            maxParams.src1RepStride = 1;
-            constexpr uint32_t colNumPerCompute = BYTE_PER_VECTOR_FRACTAL / sizeof(float);
-            uint32_t reduceWidth = halfTileColumn;
-            while (reduceWidth > (BLK_NUM_PER_VECTOR_FRACTAL * BYTE_PER_BLK / sizeof(float))) {
-                reduceWidth >>= 1;
-                AscendC::Max(ubMax, ubMax, ubMax[reduceWidth], mask, reduceWidth / elementPerBlk, maxParams);
-                AscendC::PipeBarrier<PIPE_V>();
+            // Rows of ubMax are halfTileColumn floats apart. The host guarantees that stride is
+            // a whole number of 64-float vector repeats, which both keeps every ReduceMax source
+            // address aligned and keeps the reduction free of a trailing partial repeat. Each row
+            // also gets its own slice of the work buffer so the calls carry no mutual dependency.
+            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+                AscendC::ReduceMax<float>(ubReduceMax[rowIdx * REDUCE_MAX_DST_STRIDE],
+                    ubMax[rowIdx * halfTileColumn], ubInput[rowIdx * halfTileColumn], halfTileColumn, false);
             }
+            AscendC::PipeBarrier<PIPE_V>();
 
-            AscendC::WholeReduceMax(ubReduceMax, ubMax, mask, tileRow, 1, 1, halfTileColumn / elementPerBlk,
+            // Gather the per-row maxima back into tileRow contiguous floats: one element per
+            // repeat, with the source advancing one 32B block (REDUCE_MAX_DST_STRIDE floats).
+            AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, tileRow, 1, 1, 1,
                 AscendC::ReduceOrder::ORDER_ONLY_VALUE);
             AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
             AscendC::PipeBarrier<PIPE_V>();
 
             AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(0);
-            AscendC::Muls(ubDequantScale, ubReduceMax, 1.0f / 127.0f, tileRow);
+            AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, tileRow);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
 
             auto dequantScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
@@ -264,7 +263,7 @@ public:
             AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
             for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
                 AscendC::Muls(ubQuantF32[rowIdx * tileColumn], ubInputTmp[rowIdx * tileColumn],
-                    1.f / ubReduceMax.GetValue(rowIdx), tileColumn);
+                    1.f / ubReduceMax.GetValue(rowIdx * REDUCE_MAX_DST_STRIDE), tileColumn);
             }
 
             AscendC::PipeBarrier<PIPE_V>();
