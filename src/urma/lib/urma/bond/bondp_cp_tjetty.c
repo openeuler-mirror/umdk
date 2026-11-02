@@ -657,8 +657,9 @@ urma_target_jetty_t *bondp_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjet
         URMA_LOG_ERR("Failed to import pjetty\n");
         goto UNIMPORT_PJETTY;
     }
-
-    if (bondp_hc_register_tjetty(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
+    /* Health check is only supported for RM transport mode. */
+    if (bdp_tjetty->v_tjetty.trans_mode == URMA_TM_RM &&
+        bondp_hc_register_tjetty(bdp_ctx, bdp_tjetty, &rvjetty_info) != 0) {
         URMA_LOG_ERR("Failed to register health check tjetty\n");
         goto UNIMPORT_PJETTY;
     }
