@@ -64,6 +64,15 @@ constexpr uint32_t ATTR_GLOBAL_BS_INDEX = 5;
 constexpr uint32_t MIN_BATCH_SIZE = 0;
 constexpr uint32_t MAX_BATCH_SIZE = 256;
 constexpr uint32_t MAX_MOE_EXERT_NUM = 1024;
+// Deep fuse stores per-expert 128B slots in the 1MB windowsExp status window. Two regions
+// bound the local expert count: GROUP_TOKEN_NUM at 932KB must fit before the 964KB
+// soft-sync region (cap 255), and the gmm2 quant-ready slots at 1011KB (right after the
+// 18.75KB, 25-row swiglu-done table at 992KB, rounded up to the 512B window granularity)
+// must fit in the remaining 13KB, i.e. (L + 1) * 128B <= 13KB.
+// The latter is tighter: L <= 103 (the +1 slot belongs to the shared expert). The gmm2
+// currentM table lives in the (dynamically sized) groupList workspace region and imposes
+// no window bound.
+constexpr uint32_t MAX_DEEP_FUSE_EXPERT_PER_RANK = 103;
 constexpr uint32_t SUPPORT_TOP_K = 12;
 constexpr uint32_t ONE_DIMS = 1;
 constexpr uint32_t TWO_DIMS = 2;
@@ -561,6 +570,14 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeTilingData &t
     uint32_t topK = tilingData.fusedDeepMoeInfo.k;
     OPS_ERR_IF(topK > SUPPORT_TOP_K, OPS_LOG_E(nodeName, "topK(k) must <= %u.", SUPPORT_TOP_K),
         return ge::GRAPH_FAILED);
+    uint32_t moeExpertNumPerRank = tilingData.fusedDeepMoeInfo.moeExpertNumPerRank;
+    if (moeExpertNumPerRank != 1) {  // deep fuse: per-expert status slots are window-budget-capped
+        OPS_ERR_IF(moeExpertNumPerRank > MAX_DEEP_FUSE_EXPERT_PER_RANK,
+            OPS_LOG_E(nodeName, "deep fuse (moeExpertNumPerRank != 1) supports at most %u experts per rank"
+                " (128B status slots in the 1MB windowsExp), but got %u.",
+                MAX_DEEP_FUSE_EXPERT_PER_RANK, moeExpertNumPerRank),
+            return ge::GRAPH_FAILED);
+    }
     OPS_ERR_IF(topK > tilingData.fusedDeepMoeInfo.moeExpertNum,
         OPS_LOG_E(nodeName, "topK(k) must <= moeExpertNum(%u).",
             tilingData.fusedDeepMoeInfo.moeExpertNum),
@@ -682,6 +699,13 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     size_t gmm2DepOutSize = CeilUp(moeExpertNumPerRank > 1 ?
         0 : maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE, GM_ALIGN_SIZE);
     size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
+    // gmm2-moving-forward currentM table appended to the groupList region (deep fuse
+    // only): one 768B row per group (24 private 32B consumer cells) - see the gmm1
+    // kernel's send-core-0 writer. The kernels derive the table base as ptrGroupList +
+    // CeilUp(localExpertNum * 8, 512) - keep in sync.
+    if (GMM2_MOVING_FORWARD && moeExpertNumPerRank != 1) {
+        groupListSize += CeilUp(moeExpertNumPerRank * 72 * 32, GM_ALIGN_SIZE);
+    }
     size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t epSendCountSize = CeilUp(epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t reservedSize = CeilUp(RESERVED_WORKSPACE_SIZE, GM_ALIGN_SIZE);
@@ -731,7 +755,17 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     tilingData.workSpaceOffset.expandIdxOffset = tilingData.workSpaceOffset.groupListOffset + groupListSize;
     tilingData.workSpaceOffset.epSendCountOffset = tilingData.workSpaceOffset.expandIdxOffset + expandIdxSize;
     tilingData.workSpaceOffset.reservedOffset = tilingData.workSpaceOffset.epSendCountOffset + epSendCountSize;
-    size_t usrSize = tilingData.workSpaceOffset.reservedOffset + reservedSize;
+    size_t reservedSizeEnd = tilingData.workSpaceOffset.reservedOffset + reservedSize;
+    // gmm2-moving-forward (deep fuse only): dedicated int32 C buffer, shared expert block at
+    // the front followed by the routed groups. The C frontier (width h) overruns the swiglu
+    // frontier (width gmm1HLen < h), so C must not stay in the swap region while the quant is
+    // still reading swiglu output there.
+    size_t gmm2CSize = 0;
+    if (GMM2_MOVING_FORWARD && moeExpertNumPerRank != 1) {
+        gmm2CSize = CeilUp((maxTokenNum + shareExpertTokenNum) * h * sizeof(int32_t), GM_ALIGN_SIZE);
+    }
+    tilingData.workSpaceOffset.gmm2COffset = gmm2CSize == 0 ? 0 : reservedSizeEnd;
+    size_t usrSize = reservedSizeEnd + gmm2CSize;
     workSpaces[0] = SYSTEM_NEED_WORKSPACE + usrSize;
     return ge::GRAPH_SUCCESS;
 }

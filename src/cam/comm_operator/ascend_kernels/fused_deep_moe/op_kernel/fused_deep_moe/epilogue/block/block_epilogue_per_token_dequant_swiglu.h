@@ -113,9 +113,10 @@ public:
     };
 
     CATLASS_DEVICE
-    BlockEpilogue(Arch::Resource<ArchTag> const &resource, Params const &params = Params{}) : params(params)
+    BlockEpilogue(Arch::Resource<ArchTag> const &resource, Params const &params = Params{},
+                  size_t *ubOffsetPtr = nullptr) : params(params)
     {
-        size_t ubOffset = 0;
+        size_t ubOffset = (ubOffsetPtr != nullptr) ? *ubOffsetPtr : 0;
         int32_t eventVMTE2 = 0;
         int32_t eventMTE2V = 0;
         int32_t eventMTE3V = 0;
@@ -153,6 +154,10 @@ public:
         ubTmpMx32B = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
         ubOffset += TileShape::ROW * BYTE_PER_BLK;
         ubDenominatorMxN = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
+        ubOffset += TileShape::COUNT * sizeof(float);
+        if (ubOffsetPtr != nullptr) {
+            *ubOffsetPtr = ubOffset;
+        }
     }
 
     CATLASS_DEVICE

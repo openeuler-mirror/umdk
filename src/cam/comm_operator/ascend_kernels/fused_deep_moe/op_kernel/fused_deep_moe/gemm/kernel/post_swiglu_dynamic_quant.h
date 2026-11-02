@@ -31,6 +31,21 @@ namespace QuantSpaceInfo {
     constexpr uint32_t REDUCE_MAX_DST_STRIDE = UB_SIZE / sizeof(float);
 }
 
+// MTE3_V event id used to drain the MTE3 pipe at the BlockEpilogue <-> BlockQuant handoff, where
+// the two objects share the same UB region (both allocated from offset 0) and BlockQuant reads the
+// GM swiglu output that BlockEpilogue has just written. MTE3_V id map while both are alive:
+// 0 = BlockEpilogue (ubStages = 1; id 1 stays reserved for a potential 2-stage epilogue),
+// 2/3 = BlockQuant, 4 = this handoff drain.
+constexpr int32_t EPILOGUE_QUANT_HANDOFF_EVENT_ID = 4;
+
+// Wait until every MTE3 copy issued so far on this core has completed, so the consumer side can
+// safely read back the GM data just written out and reuse the producer's UB region.
+__aicore__ inline void SyncEpilogueQuantHandoff()
+{
+    AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(EPILOGUE_QUANT_HANDOFF_EVENT_ID);
+    AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(EPILOGUE_QUANT_HANDOFF_EVENT_ID);
+}
+
 __aicore__ inline void CalQuantRow(const uint32_t column, uint32_t &row)
 {
     row = QuantSpaceInfo::QUANT_SPACE_FACTOR / column;
@@ -115,21 +130,34 @@ public:
         ubQuantS32 = ubAbs.ReinterpretCast<int32_t>();
         ubQuantF16 = ubAbs.ReinterpretCast<half>();
 
-        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(0);
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(1);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(3);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(3);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(2);
+    }
+
+    // Kept from the "grouped swiglu" line (the rest of its plumbing is reverted): the
+    // kernels construct BlockQuant once and update the per-group pointers through this,
+    // so the event pre-Sets above are not re-issued per group. Note the ids stay at
+    // 0/1 (the a86f6bce 3/2 allocation only matters if a BlockEpilogue is ever alive on
+    // the SAME core at the same time - i.e. the quant-on-send-core variant; the default
+    // recv-quant build has each object on its own core type).
+    CATLASS_DEVICE
+    void UpdateParams(Params const &params_)
+    {
+        params = params_;
     }
 
     CATLASS_DEVICE
     ~BlockQuant()
     {
-        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(1);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(3);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(3);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(2);
     }
 
     CATLASS_DEVICE
-    void operator()(MatrixCoord const &blockShape, MatrixCoord const &blockCoord, MatrixCoord const &actualBlockShape)
+    void operator()(MatrixCoord const &blockShape, MatrixCoord const &blockCoord, MatrixCoord const &actualBlockShape,
+                    bool singleAiv = false)
     {
         MatrixCoord blockOffset = blockCoord * blockShape;
 
@@ -145,8 +173,11 @@ public:
         auto tileShape = MakeCoord(tileRow, tileColumn);
         EpilogueTileSwizzle epilogueTileSwizzle(actualBlockShape, tileShape);
         uint32_t tileLoops = epilogueTileSwizzle.GetLoops();
-        uint32_t subblockIdx = AscendC::GetSubBlockIdx();
-        uint32_t subblockNum = AscendC::GetSubBlockNum();
+        // A single AIV (deep-fuse send core) covers all tiles of the block on its own; otherwise
+        // the tiles are split between the two subblocks of the block. Without this, a send core
+        // (GetSubBlockIdx() == 1) would skip the only tile of a quantRowOnce-row block entirely.
+        uint32_t subblockIdx = singleAiv ? 0 : AscendC::GetSubBlockIdx();
+        uint32_t subblockNum = singleAiv ? 1 : AscendC::GetSubBlockNum();
         for (uint32_t loopIdx = subblockIdx; loopIdx < tileLoops; loopIdx += subblockNum) {
             auto tileCoord = epilogueTileSwizzle.GetTileCoord(loopIdx);
             auto actualTileShape = epilogueTileSwizzle.GetActualTileShape(tileCoord);
@@ -158,14 +189,14 @@ public:
 
             layout::RowMajor layoutUbInput{actualTileShape, ubTileStride};
 
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(3);
             // continue swiglu computing here and then quant
             copyGmToUbInput(ubInput, gmTileInput, layoutUbInput, layoutGmTileInput);
             copyGmToUbInput(ubInputRightHalf, gmTileInput[params.layoutInput.shape(1) >> 1],
                             layoutUbInput, layoutGmTileInput);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
+            AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(3);
 
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(3);
             AscendC::Mul(ubInput, ubInput, ubInputRightHalf, tileCount);
             AscendC::PipeBarrier<PIPE_V>();
             AscendC::Abs(ubAbs, ubInput, tileCount);
@@ -195,12 +226,12 @@ public:
             // repeat, with the source advancing one 32B block (REDUCE_MAX_DST_STRIDE floats).
             AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, tileRow, 1, 1, 1,
                                     AscendC::ReduceOrder::ORDER_ONLY_VALUE);
-            AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(3);
             AscendC::PipeBarrier<PIPE_V>();
 
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(3);
             AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, tileRow);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(3);
 
             auto dequantScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
             auto dequantScaleTileShape = actualTileShape.template GetCoordByAxis<0>();
@@ -211,11 +242,11 @@ public:
             auto layoutUbDequantScale =
                 LayoutDequantScale::template MakeLayoutInUb<ElementDequantScale>(dequantScaleTileShape);
 
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(3);
             copyUbToGmDequantScale(gmTileDequantScale, ubDequantScale, layoutGmTileDequantScale, layoutUbDequantScale);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(0);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(3);
 
-            AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(3);
             for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
                 AscendC::Muls(ubQuantF32[rowIdx * tileColumn], ubInputTmp[rowIdx * tileColumn],
                               1.f / ubReduceMax.GetValue(rowIdx * QuantSpaceInfo::REDUCE_MAX_DST_STRIDE),
@@ -229,18 +260,18 @@ public:
             AscendC::Cast(ubQuantF16, ubQuantS32, AscendC::RoundMode::CAST_RINT, tileCount);
             AscendC::PipeBarrier<PIPE_V>();
 
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(1);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(2);
             AscendC::Cast(ubOutput, ubQuantF16, AscendC::RoundMode::CAST_RINT, tileCount);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(1);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(2);
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(3);
             auto gmTileOutput = gmOutput[params.layoutOutput.GetOffset(tileOffset)];
             auto layoutGmTileOutput = params.layoutOutput.GetTileLayout(actualTileShape);
 
             LayoutOutput layoutUbOutput{actualTileShape, ubTileStride};
 
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(1);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(2);
             copyUbToGmOutput(gmTileOutput, ubOutput, layoutGmTileOutput, layoutUbOutput);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(1);
+            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(2);
         }
     }
 

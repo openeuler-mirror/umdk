@@ -37,6 +37,14 @@ constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint16_t SEND_SYNC_EVENT_ID = 6;
 constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
+// gmm2-moving-forward epilogue-done announce array: one 32B slot per vector core at 800KB of
+// the status window - above the band-1 self-state slots (they end at 768KB + aivNum * 512B,
+// 792KB for the 48 AIVs of this 24-AI-core part) and below the 900KB state cells. The offset
+// is fixed, not dataState-shifted: both halves of the window leave [792KB, 900KB) untouched,
+// so the array survives launch-to-launch without colliding with either band. It is never
+// cleaned - the poll relies on the per-launch flag parity instead (see WaitEpiloguesDone).
+constexpr uint64_t ANNOUNCE_EPILOGUE_OFFSET = 800 * 1024;
+constexpr uint32_t ANNOUNCE_SLOT_FLOATS = 8;  // one 32B DataCopy block per slot
 
 // Combine data-as-flag.
 //
@@ -92,6 +100,9 @@ public:
     __aicore__ inline void ReducePermute();
     __aicore__ inline void ProcessCombine();
     __aicore__ inline void CombineAivBarrier();
+    // gmm2 moving forward: per-AIV epilogue-done announce / cleanup-owner poll (deep fuse)
+    __aicore__ inline void AnnounceEpilogueDone();
+    __aicore__ inline void WaitEpiloguesDone();
 
     __aicore__ inline CombineCalcInfo &GetCalcInfo()
     {
@@ -264,6 +275,12 @@ private:
     TBuf<> combinePollBuf_;
     float sumTarget_{0.0};
     int32_t epStateValue_;
+    // gmm2 moving forward: per-launch announce flag (1.0f / 2.0f, same parity source as
+    // sumTarget_) and the ABSOLUTE AIV count. The fold's aivNum_ is shrunk by one on the
+    // sentinel path (the last AIV is freed to run the gmm1 late cleanup), so the announce
+    // array - which every AIV writes into - cannot be indexed or sized from aivNum_.
+    float announceFlag_{0.0f};
+    uint32_t announceCount_{0};
 };
 
 template <TemplateMC2TypeClass>
@@ -279,7 +296,24 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     GlobalTensor<int32_t> selfDataStatusTensor;
     GM_ADDR statusDataSpaceGm = (GM_ADDR)epWinContext_->localWindowsExp;
     selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
-    dataState_ = FlushAndSpinValue<int32_t>(selfDataStatusTensor, coreIdx_ * UB_ALIGN);
+    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+        // Deep fuse: statically the window half/band OPPOSITE of the dispatch side, which
+        // hardcodes 0 in the gmm1 kernel ctor. The old read+flip here plus gmm1's own
+        // read+flip hit the SAME 900KB cell twice per launch, so dataState_ was effectively
+        // constant already; making it explicit drops two GM round trips per AIV and the
+        // dependency on the cell's leftover value. The two flips must be removed as a PAIR -
+        // keeping only one would flip the cell once per launch and alternate the window
+        // halves across layers (fast rank's layer-N+1 dispatch writes vs slow rank's
+        // still-reading layer-N combine). The 256KB self-state flip in InitStatusTargetSum
+        // stays: its cell lives in the band selected here and alternates the status flag
+        // values per launch, which is what keeps WaitDispatch from being satisfied by the
+        // previous launch's stale flags.
+        // Shallow mode keeps the read+flip: there it pairs with the dispatcher's own flip
+        // (same double-flip -> constant semantics).
+        dataState_ = 1;
+    } else {
+        dataState_ = FlushAndSpinValue<int32_t>(selfDataStatusTensor, coreIdx_ * UB_ALIGN);
+    }
     pipe_barrier(PIPE_ALL);
 
     workspaceGM_ = workspaceGM;
@@ -294,10 +328,21 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->fusedDeepMoeInfo.h;
     axisK_ = tilingData->fusedDeepMoeInfo.k;
-    // Split token work across all AIVs for non-shared combine. Shared combine is assigned to sub-block 1,
-    // so its worker count and index stay at the AIC level even when sentinel polling is enabled.
+    // Token work is split over every vector core once readiness is per-token: the sentinel poll and the
+    // fold for a token are independent of every other token, so there is no reason to keep half the
+    // cores idle waiting on a batch-wide signal. The non-sentinel paths still hand the work to one
+    // sub-block (see gmm2), so they keep the old count and index.
+    announceCount_ = tilingData->fusedDeepMoeInfo.aivNum;
     if constexpr (kUseCombineSentinel && !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
-        aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
+        // gmm2 moving forward: the LAST AIV is freed from the fold to run the gmm1 late
+        // cleanup while the others fold (see the gmm2 kernel's AIV path). The fold's token
+        // ranges are contiguous over aivNum_, so shrinking the divisor by one hands the
+        // freed core's tokens to the remaining cores with no gap and no overlap; the freed
+        // core itself never enters LocalWindowCopy, and the epilogue-done announce array
+        // still indexes all announceCount_ slots. The shared variant keeps the AIC-level
+        // count below: its fold runs on sub-block 1 only, and its cleanup owner is the last
+        // core's sub-block 0, which was never a fold worker to free.
+        aivNum_ = announceCount_ - 1;
     } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
         aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
     } else {
@@ -339,7 +384,10 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
 
     InitStatusTargetSum();
     if constexpr (kUseCombineSentinel && !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
-        // Every vector core participates, so the index is the raw AIV id (0 .. aivNum_ - 1).
+        // The non-shared fold covers aivNum_ = aivNum - 1 cores, indexed by the raw AIV id;
+        // the freed last AIV never enters the fold (the gmm2 kernel routes it to the cleanup
+        // instead). The shared fold keeps the AIC-level index below: it runs on sub-block 1
+        // of every core, one worker per core.
         coreIdx_ = AscendC::GetBlockIdx();
     } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
         coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
@@ -360,17 +408,144 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::InitStatusTargetSum()
 {
-    // ep state
+    // ep state. Probe mirrors the dispatch side's "dispatch-gmm1 aiv-init-state": this
+    // flip alternates the status flag values per launch; E carries the parity read this
+    // launch (state: 0/1) so the profile shows the per-iteration alternation directly.
+    // The old scalar pair paid a DCCI line read plus a DCCI line flush per AIV; the copy
+    // form reads the whole 32B block with ONE MTE2, flips field 0 and writes it back
+    // with ONE MTE3 - two L2 block ops, no flush. The flip is staged with Duplicate
+    // (word 0 is the only field anything reads). Both cross-pipe handoffs (MTE2->S for
+    // the scalar read, V->MTE3 for the staged write) are SetFlag/WaitFlag pairs on
+    // SOFT_SYNC_EVENT_ID (7): this runs right after the gmm1 epilogue, which pre-Sets
+    // the small ids of several directions for later consumption, so a small shared id
+    // could be falsely notified and the copy would read unflushed UB. tpipe_ is still
+    // null in both modes (TPipeSet only runs in the combine phase, and the shallow
+    // caller's dispatcher pipe is destroyed before this Init), so a small local TPipe
+    // owns the staging; the trailing same-pipe MTE3 barrier drains the copy before
+    // Destroy frees the UB.
+    AscendC::TPipe localPipe;
+    localPipe.Reset();
+    AscendC::TBuf<> stateBuf;
+    localPipe.InitBuffer(stateBuf, UB_ALIGN);
+    AscendC::LocalTensor<int32_t> stateLocal = stateBuf.Get<int32_t>();
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(epStatusSpaceGm_ + SELF_STATE_OFFSET));
-    int32_t state = FlushAndGetValue<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS);
+    // MTE block flip on this tree's 512B self-state stride (SELF_STATE_SLOT_INTS), not the
+    // gmf line's 128B UB_ALIGN: in shallow mode the cell must coincide with the dispatcher's
+    // own flip (aivId_ * SELF_STATE_SLOT_INTS, raw block idx both) so the pair keeps its
+    // double-flip -> constant semantics; a mixed stride would leave half the cells single-
+    // flipped and alternating, and the dispatcher's per-core flag values would stop agreeing.
+    // Deep fuse keeps the same stride for uniformity, where the cell is combine-private in
+    // the band-1 half anyway and flips once per launch (alternation).
+    AscendC::DataCopy(stateLocal, selfStatusTensor[coreIdx_ * SELF_STATE_SLOT_INTS], 8UL);
+    AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    int32_t state = stateLocal.GetValue(0);
     sumTarget_ = state == 0 ? 1.0f : 0.0f;
     epStateValue_ = state == 0 ? 0x3F800000 : 0;
-    if (state == 0) {
-        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS, 0x3F800000);
-    } else {
-        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS, 0);
+    // gmm2 moving forward: the epilogue-done announce flag rides the same per-launch parity.
+    // 1.0f / 2.0f (not 1.0f / 0.0f) so a slot still holding the previous launch's flag can
+    // never contribute to this launch's announce sum - see WaitEpiloguesDone.
+    announceFlag_ = state == 0 ? 1.0f : 2.0f;
+    AscendC::Duplicate<int32_t>(stateLocal, state == 0 ? 0x3F800000 : 0, 8);
+    AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::DataCopy(selfStatusTensor[coreIdx_ * SELF_STATE_SLOT_INTS], stateLocal, 8UL);
+    AscendC::PipeBarrier<PIPE_MTE3>();
+    localPipe.Destroy();
+}
+
+// gmm2 moving forward: publish the end of this AIV's whole epilogue share (routed groups and,
+// on the shared-expert sub-block 0, the shared GEMM epilogue) into its private 32B slot of the
+// announce array - one MTE3 DataCopy, the L2 path, so 48 writers never contend on a DCCI line
+// and no atomic counter line exists to serialize them. The value alternates per launch with
+// the self-state parity, which is what spares the array a per-launch clean. tpipe_ is still
+// null at every call site (TPipeSet only wraps the fold phases), so a small local TPipe owns
+// the staging; the trailing same-pipe MTE3 barrier drains the copy before Destroy frees the
+// UB, exactly like InitStatusTargetSum above.
+template <TemplateMC2TypeClass>
+__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AnnounceEpilogueDone()
+{
+    AscendC::TPipe localPipe;
+    localPipe.Reset();
+    AscendC::TBuf<> flagBuf;
+    localPipe.InitBuffer(flagBuf, UB_ALIGN);
+    AscendC::LocalTensor<float> flagLocal = flagBuf.Get<float>();
+    AscendC::Duplicate<float>(flagLocal, announceFlag_, ANNOUNCE_SLOT_FLOATS);
+    AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::GlobalTensor<float> announceTensor;
+    announceTensor.SetGlobalBuffer(
+        (__gm__ float *)((GM_ADDR)epWinContext_->localWindowsExp + ANNOUNCE_EPILOGUE_OFFSET));
+    AscendC::DataCopy(announceTensor[AscendC::GetBlockIdx() * ANNOUNCE_SLOT_FLOATS], flagLocal,
+                      ANNOUNCE_SLOT_FLOATS);
+    AscendC::PipeBarrier<PIPE_MTE3>();
+    localPipe.Destroy();
+}
+
+// The cleanup owner's half of the announce: one flat MTE2 DataCopy pulls the whole array
+// (announceCount_ 32B slots, L2 path - no DCCI), GatherMask extracts the first float of each
+// slot and Sum folds them, spinning until the sum equals announceCount_ * announceFlag_.
+// The comparison is exact and that is load-bearing: every slot holds either this launch's
+// flag F or the previous launch's (1.0f / 2.0f alternation), and any mix sums strictly off
+// both targets (n*F + (count-n)*F' == count*F only at n == count), so a stale slot can
+// neither satisfy the poll early nor mask a late one - and the array needs no clean. A
+// first-ever launch reads zeros in the unwritten slots, which likewise cannot reach either
+// target. This poll is the barrier the gmm1 late cleanup's zeroing needs: once every AIV's
+// epilogue share is done, every cube has passed every group's quant-ready wait, so the
+// notify slots (and the rest of the cleaned regions) have no reader left in this launch.
+template <TemplateMC2TypeClass>
+__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitEpiloguesDone()
+{
+    const uint32_t count = announceCount_;
+    const float target = announceFlag_ * static_cast<float>(static_cast<int32_t>(count));
+    AscendC::TPipe localPipe;
+    localPipe.Reset();
+    AscendC::TBuf<> statusBuf;
+    AscendC::TBuf<> gatherBuf;
+    AscendC::TBuf<> sumBuf;
+    AscendC::TBuf<> gatherTmpBuf;
+    AscendC::TBuf<> sumTmpBuf;
+    localPipe.InitBuffer(statusBuf, count * ANNOUNCE_SLOT_FLOATS * sizeof(float));
+    localPipe.InitBuffer(gatherBuf, count * sizeof(float));
+    localPipe.InitBuffer(sumBuf, UB_ALIGN);
+    localPipe.InitBuffer(gatherTmpBuf, UB_ALIGN);
+    localPipe.InitBuffer(sumTmpBuf, UB_ALIGN);
+    AscendC::LocalTensor<float> statusTensor = statusBuf.Get<float>();
+    AscendC::LocalTensor<float> gatherTensor = gatherBuf.Get<float>();
+    AscendC::LocalTensor<float> sumTensor = sumBuf.Get<float>();
+    AscendC::LocalTensor<uint32_t> gatherTmpTensor = gatherTmpBuf.Get<uint32_t>();
+    AscendC::LocalTensor<uint8_t> sumTmpTensor = sumTmpBuf.Get<uint8_t>();
+
+    gatherTmpTensor.SetValue(0, 1);
+    AscendC::GlobalTensor<float> announceTensor;
+    announceTensor.SetGlobalBuffer(
+        (__gm__ float *)((GM_ADDR)epWinContext_->localWindowsExp + ANNOUNCE_EPILOGUE_OFFSET));
+    // The slots are packed 32B to 32B, so the pull is one flat block-strided copy: one burst
+    // per slot, blockLen one 32B block, no source gap.
+    AscendC::DataCopyParams flatParams{static_cast<uint16_t>(count), 1, 0, 0};
+    AscendC::SumParams sumParams{1, count, count};
+    uint32_t mask = 1;
+    uint64_t rsvdCnt = 0;
+    AscendC::SetFlag<AscendC::HardEvent::S_V>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    AscendC::WaitFlag<AscendC::HardEvent::S_V>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+    while (true) {
+        AscendC::DataCopy(statusTensor, announceTensor, flatParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+        AscendC::GatherMask(gatherTensor, statusTensor, gatherTmpTensor, true, mask,
+                            {1, static_cast<uint16_t>(count), 1, 0}, rsvdCnt);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Sum(sumTensor, gatherTensor, sumTmpTensor, sumParams);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(CVSoftSync::SOFT_SYNC_EVENT_ID);
+        float sum = sumTensor.GetValue(0);
+        if (sum > target - 0.5f && sum < target + 0.5f) {
+            break;
+        }
+        SPIN_WAIT_CYCLES();
     }
+    localPipe.Destroy();
 }
 
 template <TemplateMC2TypeClass>
