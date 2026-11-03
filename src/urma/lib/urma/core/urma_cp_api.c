@@ -3278,11 +3278,19 @@ urma_target_seg_t *urma_register_seg(urma_context_t *ctx, urma_seg_cfg_t *seg_cf
 
     seg = ops->register_seg(ctx, &tmp_cfg);
     if (seg == NULL) {
+        int saved_errno = errno;
+
         if (seg_cfg->flag.bs.token_id_valid == URMA_TOKEN_ID_INVALID && ctx->dev->type == URMA_TRANSPORT_UB) {
             (void)urma_free_token_id(tmp_cfg.token_id);
         }
-        URMA_LOG_ERR("[DRV_ERR]register seg failed, dev_name=%s, eid_idx=%u.\n",
-            ctx->dev->name, ctx->eid_index);
+        if (saved_errno == ERANGE) {
+            URMA_LOG_WARN("[DRV_WARN]register seg failed, dev_name=%s, eid_idx=%u.\n",
+                ctx->dev->name, ctx->eid_index);
+        } else {
+            URMA_LOG_ERR("[DRV_ERR]register seg failed, dev_name=%s, eid_idx=%u.\n",
+                ctx->dev->name, ctx->eid_index);
+        }
+        errno = saved_errno;
         return NULL;
     }
     seg->seg.attr.bs.user_token_id = seg_cfg->flag.bs.token_id_valid;
