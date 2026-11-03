@@ -235,44 +235,72 @@ void test_umq_uninit(test_umq_ctx_t *ctx)
     ctx->ctx_flag &= ~CTX_FLAG_UMQ_INIT;
 }
 
+static const char *get_tp_type_str(umq_tp_type_t tp_type) {
+    if (tp_type == UMQ_TP_TYPE_RTP) {
+        return "  RTP";
+    } else if (tp_type == UMQ_TP_TYPE_CTP) {
+        return "  CTP";
+    } else if (tp_type == UMQ_TP_TYPE_UTP) {
+        return "  UTP";
+    }
+    return NULL;
+}
+
 uint8_t test_get_umq_normal_priority(test_umq_ctx_t *ctx)
 {
     char buf[PRIORITY_BUF_LEN];
     exec_cmd(buf, PRIORITY_BUF_LEN, "urma_admin show --whole -d %s", ctx->ctx->device_name);
 
-    const char *tp_type_start = strstr(buf, "tp_type");
-    if (tp_type_start == NULL) {
+    const char *tp_type_line = strstr(buf, "tp_type");
+    if (tp_type_line == NULL) {
         return 0;
     }
-    const char *p = NULL;
-    const char *target = NULL;
+    const char *colon = strchr(tp_type_line, ':');
+    if (colon == NULL) {
+        return 0;
+    }
 
-    if (ctx->tp_type == UMQ_TP_TYPE_RTP) {
-        p = strchr(tp_type_start, ':') + 1;
-        target = "  RTP";
-    } else if (ctx->tp_type == UMQ_TP_TYPE_CTP) {
-        const char *line_end = strchr(tp_type_start, '\n');
-        p = line_end + 12;
-        target = "  CTP";
-    } else if (ctx->tp_type == UMQ_TP_TYPE_UTP) {
-        const char *line_end = strchr(tp_type_start, '\n');
-        line_end = strchr(line_end + 1, '\n');
-        p = line_end + 12;
-        target = "  UTP";
-    } else {
+    const char *line_start = colon + 1;
+    const char *target = get_tp_type_str(ctx->tp_type);
+    if (target == NULL) {
         return 0;
     }
     
-    for (int i = 0; i < MAX_PRIORITY_NUM; i++) {
-        if (*p == '\n' || *p == '\0') {
+    bool is_first_line = true;
+
+    while (line_start != NULL && *line_start != '\0') {
+        const char *physical_devs = strstr(line_start,"physical_devs");
+        const char *line_end = strchr(line_start, '\n');
+
+        if (physical_devs != NULL && (line_end == NULL || physical_devs < line_end)) {
             break;
         }
-        if (strncmp(p, target, 5) == 0) {
-            return i;
-        }
-        p += 5;
-    }
 
+        const char *line_limit = (line_end != NULL) ? line_end : line_start + strlen(line_start);
+
+        int line_len = line_limit - line_start;
+        for (int priority = 0; priority < MAX_PRIORITY_NUM; priority++) {
+            int pos;
+            if (is_first_line) {
+                pos = priority * 5;
+            } else {
+                pos = 11 + priority * 5;
+            }
+
+            if (pos >= line_len) {
+                break;
+            }
+
+            if (strncmp(line_start + pos, target, strlen(target)) == 0) {
+                return (uint8_t)priority;
+            }
+        }
+
+        is_first_line = false;
+        if (line_end == NULL)
+            break;
+        line_start = line_end + 1;
+    }
     return 0;
 }
 
