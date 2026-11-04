@@ -940,7 +940,7 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
         if (old_ref_cnt == 0) {
             return NULL;
         }
-    } while (__atomic_compare_exchange_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
+    } while (!__atomic_compare_exchange_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
         false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
     return (ub_queue_t *)(uintptr_t)dev_ctx->umq_ctx_table[umq_id];
