@@ -883,12 +883,27 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
         return;
     }
     g_ub_ctx = NULL;
-    for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
-        if (umq_fetch_ref(context[i].io_lock_free, &context[i].ref_cnt) > 1) {
-            UMQ_VLOG_ERR(VLOG_UMQ, "device ref cnt not cleared\n");
-            g_ub_ctx = context;
-            return;
+
+    /* In-flight operations may still hold device refs (e.g. umqs being
+     * destroyed concurrently). Wait for them to drain before the teardown;
+     * force the teardown if they are still held after the grace period. */
+    bool refs_pending = true;
+    uint32_t wait_timeout = UMQ_CTX_UNINIT_WAIT_SLICE_US;
+    for (uint32_t retry = 0; retry < UMQ_CTX_UNINIT_WAIT_MAX_RETRY && refs_pending; ++retry) {
+        refs_pending = false;
+        for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
+            if (umq_fetch_ref(context[i].io_lock_free, &context[i].ref_cnt) > 1) {
+                refs_pending = true;
+                break;
+            }
         }
+        if (refs_pending) {
+            (void)usleep(wait_timeout);
+            wait_timeout = (wait_timeout << 1);
+        }
+    }
+    if (refs_pending) {
+        UMQ_VLOG_ERR(VLOG_UMQ, "device ref cnt still not cleared force uninit\n");
     }
 
     umq_ub_jetty_pool_uninit();

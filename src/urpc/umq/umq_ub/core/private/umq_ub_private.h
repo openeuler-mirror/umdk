@@ -576,6 +576,9 @@ typedef enum jetty_pool_node_state {
 #define UMQ_JETTY_NODE_REF_CNT_INC  1ULL
 #define UMQ_JETTY_NODE_UMQ_ID_SHIFT 32
 
+#define UMQ_CTX_UNINIT_WAIT_SLICE_US 1000
+#define UMQ_CTX_UNINIT_WAIT_MAX_RETRY 10
+
 typedef struct jetty_pool_node {
     urpc_list_t node;                   // For list linkage (cache / free_q / active_q / err_q)
     urma_jetty_t *jetty[UB_QUEUE_JETTY_NUM];
