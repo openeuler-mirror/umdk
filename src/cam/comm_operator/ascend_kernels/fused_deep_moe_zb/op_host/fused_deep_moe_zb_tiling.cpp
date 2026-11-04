@@ -707,6 +707,20 @@ static ge::graphStatus GetAttrAndSetTilingData(const gert::TilingContext &contex
     uint32_t moeExpertNum = static_cast<uint32_t>(*moeExpertNumPtr);
     uint32_t moeExpertNumPerRank = moeExpertNum / epRankSize;
 
+    const uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
+    // Same contract as moe_combine: 0 means every rank has this batchSize; otherwise the value is
+    // maxBs * epRankSize and must be identical on every rank. Checked on the original int64, before
+    // the narrowing cast. CheckGlobalBatchSize derives 0 in 64 bits.
+    OPS_ERR_IF(
+        (*globalBsPtr != 0) && ((*globalBsPtr < static_cast<int64_t>(epRankSize) * batchSize) ||
+            ((*globalBsPtr) % static_cast<int64_t>(epRankSize) != 0)),
+        OPS_LOG_E(nodeName,
+            "globalBs is invalid, only "
+            "support 0 or maxBs(maxBs is the largest bs on all ranks) * epRankSize, but got globalBs=%ld, "
+            "bs=%u, epRankSize=%u.",
+            *globalBsPtr, batchSize, epRankSize),
+        return ge::GRAPH_FAILED);
+
     groupEp = std::string(groupEpPtr);
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize = epRankSize;
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId = epRankId;
@@ -741,7 +755,10 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeZb
     const uint64_t gmm2InputDim = info.gmm1HLen / 2;
     const uint64_t allExpertTokenNumsSize = static_cast<uint64_t>(info.epRankSize) * info.epRankSize *
         info.moeExpertNumPerRank * sizeof(int64_t);
-    const uint64_t combineSendSize = static_cast<uint64_t>(info.bs) * info.k *
+    // Reserve from globalBs / epRankSize, the same max batch on every rank. A per-rank bs here
+    // would make the round length differ when token counts differ.
+    const uint32_t maxBatchSize = info.globalBs / info.epRankSize;
+    const uint64_t combineSendSize = static_cast<uint64_t>(maxBatchSize) * info.k *
         info.h * TOKEN_DTYPE_BYTE_SIZE;
     const uint64_t fixedWorkspaceSize = CeilUp(allExpertTokenNumsSize, GM_ALIGN_SIZE) +
         CeilUp(combineSendSize, GM_ALIGN_SIZE) +
@@ -820,14 +837,10 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
     size_t maxTokenNum;
     size_t maxHandleTokenNum;
     uint32_t epRankSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankSize;
-    uint32_t epRankId = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
     uint32_t batchSize = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.bs;
-    uint32_t globalBs = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
-    uint32_t maxBatchSize = globalBs / epRankSize;
     uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
     uint32_t moeExpertNumPerRank = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
     uint32_t h = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.h;
-    uint32_t aicNum = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.aicNum;
     uint32_t shareExpertTokenNum = calShareExpert ? batchSize : 0;
     uint64_t shareGmm1HLen = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
     uint64_t shareGmm2HLen = shareGmm1HLen / 2;

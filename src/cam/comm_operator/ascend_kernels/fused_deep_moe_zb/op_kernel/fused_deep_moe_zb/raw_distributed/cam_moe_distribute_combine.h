@@ -435,34 +435,39 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     // Count valid tokens before splitting.
     // Splitting on the full batch makes LocalShmemCopy write only part of each hidden row.
     if constexpr (EXEC_FLAG & EXEC_FLAG_X_ACTIVE_MASK) {
-        axisBsAlignSize_ = Ceil(axisBS_ * sizeof(bool), UB_ALIGN) * UB_ALIGN;
-        tpipe_->InitBuffer(xActMaskTBuf_, axisBsAlignSize_);
-        tpipe_->InitBuffer(xActMaskCastTBuf_, axisBsAlignSize_ * sizeof(half));
-        tpipe_->InitBuffer(xActMaskSumTBuf_, axisBsAlignSize_ * sizeof(half));
-        LocalTensor<bool> xActiveMaskTensor = xActMaskTBuf_.Get<bool>();
-        LocalTensor<half> tempTensor = xActMaskCastTBuf_.Get<half>();
-        LocalTensor<half> sumOutTensor = xActMaskSumTBuf_.Get<half>();
-        DataCopyExtParams xActiveMaskParams{1U, static_cast<uint32_t>(axisBS_ * sizeof(bool)), 0U, 0U, 0U};
-        DataCopyPadExtParams<bool> xActiveMaskCopyPadParams{false, 0U, 0U, 0U};
-        DataCopyPad(xActiveMaskTensor, xActiveMaskGM_, xActiveMaskParams, xActiveMaskCopyPadParams);
-        SyncFunc<AscendC::HardEvent::MTE2_V>();
-        LocalTensor<int8_t> xActiveMaskInt8Tensor = xActiveMaskTensor.ReinterpretCast<int8_t>();
-        Cast(tempTensor, xActiveMaskInt8Tensor, RoundMode::CAST_NONE, axisBS_);
-        PipeBarrier<PIPE_V>();
-        // half represents integers exactly only through 2048. Sum one chunk at a time and
-        // accumulate in an integer so a legal batch above 2048 keeps an exact count.
-        activeMaskBsCnt_ = 0;
-        for (uint32_t maskOffset = 0; maskOffset < axisBS_; maskOffset += SHMEM_COMBINE_TOKEN_CHUNK) {
-            uint32_t maskCount = MIN(axisBS_ - maskOffset, SHMEM_COMBINE_TOKEN_CHUNK);
-            uint32_t maskCountAligned = Ceil(maskCount, UB_ALIGN) * UB_ALIGN;
-            SumParams params{1, maskCountAligned, maskCount};
-            Sum(sumOutTensor, tempTensor[maskOffset], params);
-            SyncFunc<AscendC::HardEvent::V_S>();
-            activeMaskBsCnt_ += static_cast<uint64_t>(static_cast<int32_t>(sumOutTensor.GetValue(0)));
-            SyncFunc<AscendC::HardEvent::S_V>();
+        // A zero batch leaves no mask to reduce, and these buffers would be zero sized.
+        if (axisBS_ != 0) {
+            axisBsAlignSize_ = Ceil(axisBS_ * sizeof(bool), UB_ALIGN) * UB_ALIGN;
+            tpipe_->InitBuffer(xActMaskTBuf_, axisBsAlignSize_);
+            tpipe_->InitBuffer(xActMaskCastTBuf_, axisBsAlignSize_ * sizeof(half));
+            tpipe_->InitBuffer(xActMaskSumTBuf_, axisBsAlignSize_ * sizeof(half));
+            LocalTensor<bool> xActiveMaskTensor = xActMaskTBuf_.Get<bool>();
+            LocalTensor<half> tempTensor = xActMaskCastTBuf_.Get<half>();
+            LocalTensor<half> sumOutTensor = xActMaskSumTBuf_.Get<half>();
+            DataCopyExtParams xActiveMaskParams{1U, static_cast<uint32_t>(axisBS_ * sizeof(bool)), 0U, 0U, 0U};
+            DataCopyPadExtParams<bool> xActiveMaskCopyPadParams{false, 0U, 0U, 0U};
+            DataCopyPad(xActiveMaskTensor, xActiveMaskGM_, xActiveMaskParams, xActiveMaskCopyPadParams);
+            SyncFunc<AscendC::HardEvent::MTE2_V>();
+            LocalTensor<int8_t> xActiveMaskInt8Tensor = xActiveMaskTensor.ReinterpretCast<int8_t>();
+            Cast(tempTensor, xActiveMaskInt8Tensor, RoundMode::CAST_NONE, axisBS_);
+            PipeBarrier<PIPE_V>();
+            // half represents integers exactly only through 2048. Sum one chunk at a time and
+            // accumulate in an integer so a legal batch above 2048 keeps an exact count.
+            activeMaskBsCnt_ = 0;
+            for (uint32_t maskOffset = 0; maskOffset < axisBS_; maskOffset += SHMEM_COMBINE_TOKEN_CHUNK) {
+                uint32_t maskCount = MIN(axisBS_ - maskOffset, SHMEM_COMBINE_TOKEN_CHUNK);
+                uint32_t maskCountAligned = Ceil(maskCount, UB_ALIGN) * UB_ALIGN;
+                SumParams params{1, maskCountAligned, maskCount};
+                Sum(sumOutTensor, tempTensor[maskOffset], params);
+                SyncFunc<AscendC::HardEvent::V_S>();
+                activeMaskBsCnt_ += static_cast<uint64_t>(static_cast<int32_t>(sumOutTensor.GetValue(0)));
+                SyncFunc<AscendC::HardEvent::S_V>();
+            }
         }
     }
 
+    // A zero count has no token to split. Dividing by it faults the rank before SetStatus, so the
+    // other ranks combine unread slots and return all-zero tokens.
     beginIndex_ = 0;
     endIndex_ = 0;
     if (activeMaskBsCnt_ > 0U && activeMaskBsCnt_ < aivNum_) {
@@ -489,6 +494,11 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     uint32_t bufferTokenNum = MIN(localTokenNum, SHMEM_COMBINE_TOKEN_CHUNK);
     uint32_t localBsKSize = bufferTokenNum * axisK_;
     uint32_t localBsKSizeAligned = Ceil(localBsKSize * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;
+    // Idle cores, including every core on a zero-batch rank, own no tokens. InitBuffer rejects
+    // a zero length, and these buffers are not read when this core copies nothing.
+    if (localBsKSizeAligned == 0U) {
+        localBsKSizeAligned = UB_ALIGN;
+    }
 
     tpipe_->InitBuffer(readStateBuf_, UB_ALIGN);
     tpipe_->InitBuffer(statusBuf_, sendRankNum_ * UB_ALIGN);
