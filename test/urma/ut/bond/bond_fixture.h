@@ -362,6 +362,11 @@ struct BondPathFixture {
         comp.active_count = 2;
         comp.active_indices[0] = 0;
         comp.active_indices[1] = 1;
+        /* bondp_create_* copies the context enabled ports into the component; the hand-built
+         * fixture must do the same or the scheduler sees no egress port at all. */
+        comp.enabled_count = 2;
+        comp.enabled_indices[0] = 0;
+        comp.enabled_indices[1] = 1;
         comp.valid[0] = true;
         comp.valid[1] = true;
         phyJfs[0].urma_ctx = &phyCtx;
