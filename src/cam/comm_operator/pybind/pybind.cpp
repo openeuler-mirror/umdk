@@ -36,6 +36,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_send_async", &cam_combine_send_async_impl_autograd, "moe_combine_send_async");
     m.def("moe_dispatch_recv_async", &cam_dispatch_recv_async_impl_autograd, "moe_dispatch_recv_async");
     m.def("moe_dispatch_send_async", &cam_dispatch_send_async_impl_autograd, "moe_dispatch_send_async");
+    m.def("cam_deepep_combine_send", &CamDeepepCombineSendImplAutograd, "cam_deepep_combine_send");
+    m.def("cam_deepep_combine_recv", &CamDeepepCombineRecvImplAutograd, "cam_deepep_combine_recv");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -116,4 +118,23 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     int comm_id, int max_seq_len, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, int layer_index, int tp_size, int dynamic_quant, str group_name) -> Tensor");
+    // The kernel advances the caller-owned control plane in place: the send
+    // path writes control_buffer (the peer inbox when the peer is this rank),
+    // execution_state and the workspace scratch, and fills completion.
+    m.def("cam_deepep_combine_send(Tensor x, Tensor src_metadata, Tensor context, Tensor active, \
+    Tensor(a!) control_buffer, Tensor(b!) execution_state, Tensor(c!) afd_workspace, Tensor jetty_ptrs, \
+    Tensor(d!) completion, str group_ep, int num_src_ranks, int num_ranks, int num_experts, \
+    int num_topk, int num_source_lanes, int num_layers, int max_padded_tokens, \
+    int num_tokens_per_tile, int rank_idx, int timeout_cycles, int completion_bytes, \
+    int num_vec_cores) -> Tensor(d!)");
+    // The five preallocated receive buffers are both written and returned as a
+    // fixed-size aliased tuple; round_ledger, afd_workspace and the peer credit
+    // stores into control_buffer are advanced in place as well.
+    m.def("cam_deepep_combine_recv(Tensor payload, Tensor task_info, Tensor context, \
+    Tensor(a!) control_buffer, Tensor(b!) round_ledger, Tensor(c!) afd_workspace, Tensor token_mask, \
+    Tensor(d!) combined_x, Tensor(e!) combined_topk_idx, Tensor(f!) topk_weights, Tensor(g!) recv_status, \
+    Tensor(h!) return_progress, str group_ep, int num_experts, int num_ranks, int num_topk, \
+    int round_step, int start, int num_hidden, int num_token_capacity, int recv_status_words, \
+    int return_progress_bytes, int timeout_cycles, int num_vec_cores) \
+    -> (Tensor(d!), Tensor(e!), Tensor(f!), Tensor(g!), Tensor(h!))");
 }

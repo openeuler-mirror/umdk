@@ -25,10 +25,18 @@
       "swiglu_clip_quant"
     ],
     "ascend950": [
+      "cam_deepep_combine_recv",
+      "cam_deepep_combine_send",
       "fused_deep_moe_arch35"
     ]
   },
   "operator_meta": {
+    "cam_deepep_combine_recv": {
+      "requires_shmem": false
+    },
+    "cam_deepep_combine_send": {
+      "requires_shmem": false
+    },
     "cam_moe_distribute_combine_recv": {
       "requires_shmem": false
     },
