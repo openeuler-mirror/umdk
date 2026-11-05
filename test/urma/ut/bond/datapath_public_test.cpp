@@ -689,10 +689,10 @@ TEST(UrmaBondTest, PublicDatapathApisRejectInvalidWorkRequests)
     fixture.jfs.comp_type = BONDP_COMP_JFR;
     fixture.jetty.comp_type = BONDP_COMP_JFR;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &sendWr, &badSend));
-    EXPECT_EQ(nullptr, badSend);
+    EXPECT_EQ(&sendWr, badSend);
     badSend = nullptr;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr_sched(&fixture.jetty.v_jetty, &sendWr, &badSend));
-    EXPECT_EQ(nullptr, badSend);
+    EXPECT_EQ(&sendWr, badSend);
 
     fixture.jfr.comp_type = BONDP_COMP_JFS;
     fixture.jetty.comp_type = BONDP_COMP_JFS;
@@ -943,4 +943,61 @@ TEST(UrmaBondTest, PublicDatapathSendWrListReturnsFirstBadWr)
 
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.jfs.v_jfs, &firstWr, &badSend));
     EXPECT_EQ(&secondWr, badSend);
+}
+
+TEST(UrmaBondTest, PublicDatapathPostSendWithoutTjettyReportsBadWr)
+{
+    BondPathFixture fixture;
+    urma_jfs_wr_t wr = fixture.MakeRwWr(URMA_OPC_WRITE);
+    urma_jfs_wr_t *badWr = nullptr;
+
+    fixture.comp.comp_type = BONDP_COMP_JFS;
+    /* a WR without a target jetty can never be scheduled: report it instead of letting the
+     * caller resume from an unset bad_wr */
+    wr.tjetty = nullptr;
+
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(&wr, badWr);
+}
+
+TEST(UrmaBondTest, PublicDatapathPostSendOnRecvCompReportsBadWr)
+{
+    BondPathFixture fixture;
+    urma_jfs_wr_t wr = fixture.MakeRwWr(URMA_OPC_WRITE);
+    urma_jfs_wr_t *badWr = nullptr;
+
+    /* posting a send WR through a receive component is rejected before any path lookup */
+    fixture.comp.comp_type = BONDP_COMP_JFR;
+    wr.tjetty = &fixture.target.v_tjetty;
+
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &wr, &badWr));
+    EXPECT_EQ(&wr, badWr);
+}
+
+TEST(UrmaBondTest, PublicDatapathHintPostReportsBadWrOnRejectedObject)
+{
+    BondPathFixture fixture;
+    bondp_wr_hint_t hint = {};
+    urma_jfs_wr_t sendWr = fixture.MakeRwWr(URMA_OPC_WRITE);
+    urma_jfr_wr_t recvWr = {};
+    urma_jfs_wr_t *badSend = nullptr;
+    urma_jfr_wr_t *badRecv = nullptr;
+
+    hint.version = BONDP_WR_HINT_VERSION_V0;
+    hint.size = sizeof(bondp_wr_hint_t);
+
+    /* a missing local object still names the WR that could not be posted */
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(nullptr, &hint, &sendWr, &badSend));
+    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_send_wr(nullptr, &hint, &sendWr, &badSend));
+    EXPECT_EQ(&sendWr, badSend);
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr(nullptr, &hint, &recvWr, &badRecv));
+    EXPECT_EQ(&recvWr, badRecv);
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr(nullptr, &hint, &recvWr, &badRecv));
+    EXPECT_EQ(&recvWr, badRecv);
+
+    /* an object that is not a bonding object is rejected before the hint is looked at */
+    fixture.comp.v_jfs.urma_ctx = &fixture.ctx.v_ctx;
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr(&fixture.comp.v_jfs, &hint, &sendWr, &badSend));
+    EXPECT_EQ(&sendWr, badSend);
 }
