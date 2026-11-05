@@ -1861,12 +1861,9 @@ static ALWAYS_INLINE void umq_ub_poll_release_jetty_node(ub_queue_t *queue, uint
             uint64_t umq_ref = __atomic_load_n(&node->umq_ref, __ATOMIC_ACQUIRE);
             uint32_t ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
 
-            if (umq_ref != 0 && ref_cnt == 0 &&
+            if ((uint32_t)(umq_ref >> UMQ_JETTY_NODE_UMQ_ID_SHIFT) == queue->umq_id && ref_cnt == 0 &&
                 __atomic_compare_exchange_n(&node->umq_ref, &umq_ref, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
                 (__atomic_load_n(&node->tx_outstanding, __ATOMIC_ACQUIRE) == 0)) {
-                uint64_t old_node = (uint64_t)(uintptr_t)node;
-                __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
-                                            __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
                 ret = umq_ub_jetty_node_free(node, should_report_event);
             }
         }
@@ -1973,12 +1970,9 @@ void umq_ub_post_release_jetty_node(ub_queue_t *queue, uint32_t failed_cnt)
     if (tx_after == 0) {
         uint64_t umq_ref = __atomic_load_n(&node->umq_ref, __ATOMIC_ACQUIRE);
         uint32_t ref_cnt = (uint32_t)(umq_ref & UMQ_JETTY_NODE_REF_CNT_MASK);
-        if (umq_ref != 0 && ref_cnt == 0 &&
+        if ((uint32_t)(umq_ref >> UMQ_JETTY_NODE_UMQ_ID_SHIFT) == queue->umq_id && ref_cnt == 0 &&
             __atomic_compare_exchange_n(&node->umq_ref, &umq_ref, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE) &&
             (__atomic_load_n(&node->tx_outstanding, __ATOMIC_ACQUIRE) == 0)) {
-            uint64_t old_node = (uint64_t)(uintptr_t)node;
-            __atomic_compare_exchange_n(&queue->jetty_node, &old_node, 0, false,
-                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
             (void)umq_ub_jetty_node_free(node, true);
         }
     }
