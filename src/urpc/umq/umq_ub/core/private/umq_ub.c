@@ -1302,6 +1302,13 @@ int umq_ub_create_urma_ctx(urma_device_t *urma_dev, uint32_t eid_index, umq_ub_c
         }
     }
 
+    ub_ctx->token_id = umq_symbol_urma()->urma_alloc_token_id(ub_ctx->urma_ctx);
+    if (ub_ctx->token_id == NULL) {
+        UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_alloc_token_id failed, errno: %d\n", errno);
+        status = URMA_ENOMEM;
+        goto DEL_CTX;
+    }
+
     return UMQ_SUCCESS;
 
 DEL_CTX:
@@ -1355,7 +1362,16 @@ int umq_ub_delete_urma_ctx(umq_ub_ctx_t *ub_ctx)
         return -UMQ_ERR_EINVAL;
     }
 
-    urma_status_t urma_status = umq_symbol_urma()->urma_delete_context(ub_ctx->urma_ctx);
+    urma_status_t urma_status;
+    if (ub_ctx->token_id != NULL) {
+        urma_status = umq_symbol_urma()->urma_free_token_id(ub_ctx->token_id);
+        if (urma_status != URMA_SUCCESS) {
+            UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_free_token_id failed, status: %d\n", (int)urma_status);
+        }
+        ub_ctx->token_id = NULL;
+    }
+
+    urma_status = umq_symbol_urma()->urma_delete_context(ub_ctx->urma_ctx);
     if (urma_status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_delete_context failed, status: %d\n", (int)urma_status);
         return umq_status_convert(urma_status);
@@ -2180,6 +2196,7 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint
     urma_reg_seg_flag_t flag = {
         .bs.token_policy = token_policy_get(enable_token),
         .bs.cacheable = URMA_NON_CACHEABLE,
+        .bs.token_id_valid = URMA_TOKEN_ID_VALID,
         .bs.reserved = 0,
         .bs.access = URMA_ACCESS_READ | URMA_ACCESS_WRITE | URMA_ACCESS_ATOMIC
     };
@@ -2187,7 +2204,7 @@ int umq_ub_register_seg(umq_ub_ctx_t *ctx, uint16_t mempool_id, void *addr, uint
     urma_seg_cfg_t seg_cfg = {
         .va = (uint64_t)(uintptr_t)addr,
         .len = size,
-        .token_id = NULL,
+        .token_id = ctx->token_id,
         .token_value = token,
         .flag = flag,
         .user_ctx = token.token,

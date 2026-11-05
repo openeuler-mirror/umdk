@@ -380,6 +380,7 @@ typedef struct umq_ub_ctx {
     uint32_t feature;
     umq_flow_control_cfg_t flow_control;
     urma_context_t *urma_ctx;
+    urma_token_id_t *token_id;
     urma_device_attr_t dev_attr;
     umq_dev_assign_t dev_info;
     pthread_spinlock_t tseg_list_lock;
@@ -574,6 +575,9 @@ typedef enum jetty_pool_node_state {
 #define UMQ_JETTY_NODE_REF_CNT_MASK 0xFFFFFFFFULL
 #define UMQ_JETTY_NODE_REF_CNT_INC  1ULL
 #define UMQ_JETTY_NODE_UMQ_ID_SHIFT 32
+
+#define UMQ_CTX_UNINIT_WAIT_SLICE_US 1000
+#define UMQ_CTX_UNINIT_WAIT_MAX_RETRY 10
 
 typedef struct jetty_pool_node {
     urpc_list_t node;                   // For list linkage (cache / free_q / active_q / err_q)
@@ -939,7 +943,7 @@ static ALWAYS_INLINE ub_queue_t *umq_ub_get_real_queue_by_umq_id(ub_queue_t *que
         if (old_ref_cnt == 0) {
             return NULL;
         }
-    } while (__atomic_compare_exchange_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
+    } while (!__atomic_compare_exchange_n(&dev_ctx->umq_ctx_ref_cnt_table[umq_id], &old_ref_cnt, old_ref_cnt + 1,
         false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE));
 
     return (ub_queue_t *)(uintptr_t)dev_ctx->umq_ctx_table[umq_id];

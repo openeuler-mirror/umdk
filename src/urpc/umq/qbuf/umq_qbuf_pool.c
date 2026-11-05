@@ -57,13 +57,11 @@
 #define QBUF_POOL_WITH_ASYNC_EXIT_TIMEOUT_S (60)
 #define QBUF_MEMALIGN_SIZE (2ULL * 1024 * 1024)
 
-#define QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME "umq_buf_shrink"
 #define QBUF_POOL_SHRINK_DECAY_SLICE_MS (100) // decay sleep slice: bounds pthread_join wait in uninit
 #define QBUF_POOL_SHRINK_DECAY_MS_MAX (1800000) // decay window upper bound: 30min (aligns with ubsocket env)
 #define QBUF_POOL_SHRINK_DECAY_MS_DEFAULT (300000) // fallback decay: 5min (aligns with ubsocket default)
-#define QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME "umq_buf_expand"
-#define QBUF_POOL_EXPAND_WAIT_SLICE_US (1000)   // poll slice: 1ms
-#define QBUF_POOL_EXPAND_WAIT_MAX_RETRY (20000)  // 20s safety bound (20000 * 1ms)
+/* Linux pthread_setname_np caps names at 16 bytes including the NUL terminator. */
+#define QBUF_POOL_THREAD_NAME_MAX (16)
 
 // Magic-number replacements (G.CNS.02)
 #define QBUF_LAT_NS_PER_US (1000.0)          // ns -> us conversion factor
@@ -116,6 +114,10 @@ typedef struct async_shrink_pool_param_list {
     bool stop;
 } async_shrink_pool_task_list_t;
 
+/* Neutral alias: the same head+mutex+cond+stop queue type also backs the
+ * per-pool resident expand thread (expand_task_list below). */
+typedef async_shrink_pool_task_list_t qbuf_task_list_t;
+
 typedef struct expansion_qbuf_pool {
     bool inited;
     pthread_spinlock_t expansion_pool_lock;
@@ -123,6 +125,7 @@ typedef struct expansion_qbuf_pool {
     volatile uint32_t last_expand_failed;
     pthread_t shrink_thread;
     bool shrink_thread_created;
+    pthread_t expand_thread; /* dedicated resident expand worker of this pool */
     bool expand_thread_created;
     uint64_t trigger_expand_block_num;
     uint32_t expansion_block_count;
@@ -133,6 +136,7 @@ typedef struct expansion_qbuf_pool {
     uint64_t exp_total_block_num;
     uint64_t exp_total_capacity;
     async_shrink_pool_task_list_t shrink_task_list;
+    qbuf_task_list_t expand_task_list; /* same queue type, serves expand_thread */
     uint64_t total_expansion_count;
     uint64_t sync_expansion_count;   // expansion in alloc hot path (caller blocked)
     uint64_t async_expansion_count;  // expansion by background prefill
@@ -142,6 +146,25 @@ typedef struct expansion_qbuf_pool {
     uint64_t sub_slot_data_buf_size;
     umq_dfx_timing_stats_t fetch_timing;
 } qbuf_expansion_pool_t;
+
+/* Task pushed by the alloc hot path and executed by the pool's dedicated
+ * resident expand thread (mirrors the per-pool shrink thread design: one
+ * worker per expansion pool, so simultaneous expansions of different pools
+ * run in parallel with no cross-pool head-of-line blocking). Per-pool
+ * is_expanding single-flight bounds each queue to at most one task. */
+typedef struct async_expand_pool_param {
+    urpc_list_t node;
+    bool with_data;
+    uint32_t sc;
+    uint64_t g_buf_cnt;
+    bool sync_wait; // true: caller blocks in umq_qbuf_wait_expansion_done (DFX sync classification)
+} async_expand_pool_param_t;
+
+/* Entry of the per-pool resident expand thread (arg = qbuf_expansion_pool_t*).
+ * Replaces the previous pthread_create-per-expansion model: thread creation
+ * cost (clone + 8MB stack VMA churn) is off the alloc hot path; producers now
+ * just push a task and signal the pool's condvar. */
+static void *async_expand_global_pool_callback(void *arg);
 
 // FLAT qbuf_pool_t (no base substruct): the test includes this file directly and accesses
 // g_qbuf_pool.block_pool[sc], g_qbuf_pool.tls_qbuf_pool_depth, etc. without .base. indirection.
@@ -1285,11 +1308,37 @@ static int slot_without_data_init(qbuf_expansion_pool_t *exp_pool, qbuf_expansio
     return UMQ_SUCCESS;
 }
 
+/* Roll back shrink_pending after the trigger (return_batch_to_expansion_pool
+ * or the worker's chained re-check) set it but the task could not be queued.
+ * Without this the slot is permanently excluded from shrink: every consumer
+ * trusts "pending == task queued" and only the worker clears the flag while
+ * processing a task. The slot cannot be freed concurrently here — only the
+ * shrink worker frees slots and only for queued tasks, and this slot has
+ * none; the inited check covers pool teardown. */
+static void qbuf_exp_pool_clear_shrink_pending(qbuf_expansion_pool_t *exp_pool, uint32_t slot_id)
+{
+    (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
+    if (exp_pool->inited) {
+        qbuf_expansion_pool_slot_t *slot;
+        URPC_LIST_FOR_EACH(slot, node, &exp_pool->slot_list)
+        {
+            if (slot->slot_id == slot_id) {
+                slot->shrink_pending = false;
+                break;
+            }
+        }
+    }
+    (void)pthread_spin_unlock(&exp_pool->expansion_pool_lock);
+}
+
 static void async_shrink_push_param(bool with_data, uint32_t sc, qbuf_expansion_pool_t *exp_pool, uint32_t slot_id)
 {
     async_shrink_pool_param_t *param = (async_shrink_pool_param_t *)calloc(1, sizeof(async_shrink_pool_param_t));
     if (param == NULL) {
         UMQ_LIMIT_VLOG_WARN(VLOG_UMQ, "malloc async shrink param failed\n");
+        /* Task lost — undo the trigger's pending flag so this slot is not
+         * permanently excluded from shrink. */
+        qbuf_exp_pool_clear_shrink_pending(exp_pool, slot_id);
         return;
     }
     param->slot_id = slot_id;
@@ -1316,18 +1365,44 @@ static async_shrink_pool_param_t *async_shrink_pop_param(qbuf_expansion_pool_t *
     return param;
 }
 
+/* Per-pool thread names for the resident shrink/expand workers:
+ * "<role>_wd<sc>" for with_data[sc], "<role>_nd" for the without_data pool
+ * (role = umq_shrink / umq_expand; mirrors the WD/ND tags of EXPAND_ASYNC_LAUNCH
+ * logs), so a slow or stuck pool thread is attributable to its pool in top/gdb.
+ * The pool is identified by pointer comparison — no identity field is stored in
+ * the pool. size_class_count is set before umq_qbuf_expansion_pool_init, so it
+ * is already valid when any pool thread starts. */
+static void qbuf_exp_pool_thread_name(const qbuf_expansion_pool_t *exp_pool, const char *role, char *name,
+                                      size_t name_len)
+{
+    for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
+        if (exp_pool == &g_qbuf_pool.exp_pool_with_data[sc]) {
+            (void)snprintf(name, name_len, "%s_wd%u", role, sc);
+            return;
+        }
+    }
+    if (exp_pool == &g_qbuf_pool.exp_pool_without_data) {
+        (void)snprintf(name, name_len, "%s_nd", role);
+        return;
+    }
+    /* Unreachable: threads are only created by umq_qbuf_exp_pool_inner_init. */
+    (void)snprintf(name, name_len, "%s_unknown", role);
+}
+
 static void *async_shrink_global_pool_callback(void *arg)
 {
-    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME) != 0) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
-            QBUF_POOL_ASYNC_SHRINK_PTHREAD_NAME, errno);
-    }
-
     qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
     if (exp_pool == NULL) {
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
         return NULL;
     }
+
+    char thread_name[QBUF_POOL_THREAD_NAME_MAX] = {0};
+    qbuf_exp_pool_thread_name(exp_pool, "umq_shrink", thread_name, sizeof(thread_name));
+    if (pthread_setname_np(pthread_self(), thread_name) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n", thread_name, errno);
+    }
+
     char shrink_start_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
     char shrink_end_time[QBUF_WALL_TIME_BUF_SIZE] = {0};
 
@@ -1573,6 +1648,33 @@ static void *async_shrink_global_pool_callback(void *arg)
     return NULL;
 }
 
+/* Ensure this pool's resident shrink thread exists, retrying creation on
+ * failure. An init-time pthread_create failure used to disable shrinking for
+ * the pool's whole lifetime (pushed tasks accumulated in shrink_task_list and
+ * never ran); retrying at trigger time restores the semantics that a
+ * transient failure only drops the triggers that arrive while it persists.
+ * The created flag is written under shrink_task_list.mutex, matching
+ * umq_qbuf_exp_pool_inner_uninit's stop+join protocol; the fast path is a
+ * single acquire load. */
+static bool qbuf_exp_pool_shrink_thread_ensure(qbuf_expansion_pool_t *exp_pool)
+{
+    if (__atomic_load_n(&exp_pool->shrink_thread_created, __ATOMIC_ACQUIRE)) {
+        return true;
+    }
+    (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
+    if (!exp_pool->shrink_thread_created && !exp_pool->shrink_task_list.stop) {
+        int rc = pthread_create(&exp_pool->shrink_thread, NULL, async_shrink_global_pool_callback, (void *)exp_pool);
+        if (rc == 0) {
+            __atomic_store_n(&exp_pool->shrink_thread_created, true, __ATOMIC_RELEASE);
+        } else {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "retry create shrink thread failed, rc: %d\n", rc);
+        }
+    }
+    bool created = exp_pool->shrink_thread_created;
+    (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+    return created;
+}
+
 static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_id)
 {
     if (g_qbuf_pool.disable_scale_cap) {
@@ -1581,6 +1683,13 @@ static void async_shrink_global_pool(bool with_data, uint32_t sc, uint32_t slot_
 
     qbuf_expansion_pool_t *exp_pool = with_data ? &g_qbuf_pool.exp_pool_with_data[sc] :
                                                   &g_qbuf_pool.exp_pool_without_data;
+    /* The trigger already set slot->shrink_pending. If no worker can run the
+     * task (init-time pthread_create failure still persisting), roll the flag
+     * back — otherwise the slot is permanently excluded from shrink. */
+    if (!qbuf_exp_pool_shrink_thread_ensure(exp_pool)) {
+        qbuf_exp_pool_clear_shrink_pending(exp_pool, slot_id);
+        return;
+    }
     async_shrink_push_param(with_data, sc, exp_pool, slot_id);
 }
 
@@ -1979,36 +2088,38 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
 
     /* Signal the dedicated shrink thread to stop and wait for it to exit.
      * pthread_join guarantees the thread is fully dead before we proceed
-     * to clean up slots and destroy locks — no lock-leak timeout needed. */
-    if (exp_pool->shrink_thread_created) {
-        (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
-        exp_pool->shrink_task_list.stop = true;
-        (void)pthread_cond_signal(&exp_pool->shrink_task_list.cond);
-        (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+     * to clean up slots and destroy locks — no lock-leak timeout needed.
+     * stop and the created flag are both written under the task-list mutex
+     * (qbuf_exp_pool_shrink_thread_ensure may retry creation concurrently),
+     * so the join decision is read under the same mutex: either the lazy
+     * create serialized first (flag read true → joined below) or stop is
+     * seen first (no new thread can be created any more). */
+    (void)pthread_mutex_lock(&exp_pool->shrink_task_list.mutex);
+    exp_pool->shrink_task_list.stop = true;
+    bool join_shrink = exp_pool->shrink_thread_created;
+    (void)pthread_cond_signal(&exp_pool->shrink_task_list.cond);
+    (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
+    if (join_shrink) {
         (void)pthread_join(exp_pool->shrink_thread, NULL);
         exp_pool->shrink_thread_created = false;
     }
 
-    /* Wait for async expand thread to finish.
-     * The expand thread is detached (pthread_detach in callback), so
-     * pthread_join on a detached thread is undefined behavior — use
-     * is_expanding as the completion flag instead. The expand thread
-     * clears is_expanding as its last action before exit, guaranteeing
-     * it no longer touches slot_list or locks. */
-    if (exp_pool->expand_thread_created) {
-        uint32_t wait_retry = 0;
-        while (__atomic_load_n(&exp_pool->is_expanding, __ATOMIC_ACQUIRE) != 0) {
-            (void)usleep(QBUF_POOL_EXPAND_WAIT_SLICE_US);
-            if (++wait_retry >= QBUF_POOL_EXPAND_WAIT_MAX_RETRY) {
-                UMQ_VLOG_ERR(VLOG_UMQ, "expand thread wait timeout %ums, is_expanding still set, force proceed\n",
-                             QBUF_POOL_EXPAND_WAIT_MAX_RETRY * QBUF_POOL_EXPAND_WAIT_SLICE_US / US_PER_MS);
-                break;
-            }
-        }
+    /* Same hard stop+join for this pool's dedicated expand thread: it may be
+     * mid-expand_global_pool_impl touching slots/locks. join guarantees it is
+     * dead before the slot teardown below. Same mutex protocol as shrink —
+     * pairs with qbuf_exp_pool_expand_thread_ensure. */
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    exp_pool->expand_task_list.stop = true;
+    bool join_expand = exp_pool->expand_thread_created;
+    (void)pthread_cond_signal(&exp_pool->expand_task_list.cond);
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    if (join_expand) {
+        (void)pthread_join(exp_pool->expand_thread, NULL);
         exp_pool->expand_thread_created = false;
     }
 
-    /* Both threads are dead — safe to clean up slots */
+    /* Both dedicated threads (shrink + expand) are stopped and joined above —
+     * no thread can touch slots any more. */
     (void)pthread_spin_lock(&exp_pool->expansion_pool_lock);
     qbuf_expansion_pool_slot_t *slot;
     qbuf_expansion_pool_slot_t *next_slot;
@@ -2045,9 +2156,22 @@ static bool umq_qbuf_exp_pool_inner_uninit(qbuf_expansion_pool_t *exp_pool, bool
     }
     (void)pthread_mutex_unlock(&exp_pool->shrink_task_list.mutex);
 
+    /* Drain remaining expand tasks — queued but never executed; the
+     * is_expanding flag they hold is reset at the end of this function. */
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    async_expand_pool_param_t *expand_node, *expand_next;
+    URPC_LIST_FOR_EACH_SAFE(expand_node, expand_next, node, &exp_pool->expand_task_list.head)
+    {
+        urpc_list_remove(&expand_node->node);
+        free(expand_node);
+    }
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
     (void)pthread_mutex_destroy(&exp_pool->shrink_task_list.mutex);
     (void)pthread_cond_destroy(&exp_pool->shrink_task_list.cond);
+    (void)pthread_mutex_destroy(&exp_pool->expand_task_list.mutex);
+    (void)pthread_cond_destroy(&exp_pool->expand_task_list.cond);
 
     __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
     return true;
@@ -2085,9 +2209,13 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
     urpc_list_init(&exp_pool->slot_list);
     urpc_list_init(&exp_pool->shrink_task_list.head);
     exp_pool->shrink_task_list.stop = false;
+    urpc_list_init(&exp_pool->expand_task_list.head);
+    exp_pool->expand_task_list.stop = false;
     (void)pthread_spin_init(&exp_pool->expansion_pool_lock, PTHREAD_PROCESS_PRIVATE);
     (void)pthread_mutex_init(&exp_pool->shrink_task_list.mutex, NULL);
     (void)pthread_cond_init(&exp_pool->shrink_task_list.cond, NULL);
+    (void)pthread_mutex_init(&exp_pool->expand_task_list.mutex, NULL);
+    (void)pthread_cond_init(&exp_pool->expand_task_list.cond, NULL);
     exp_pool->inited = true;
     exp_pool->shrink_thread_created = false;
     exp_pool->expand_thread_created = false;
@@ -2098,6 +2226,19 @@ static int umq_qbuf_exp_pool_inner_init(qbuf_expansion_pool_t *exp_pool, const q
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "create shrink thread failed, errno: %d\n", errno);
     } else {
         exp_pool->shrink_thread_created = true;
+    }
+
+    /* Create dedicated expand thread for this pool (mirrors shrink). Failure
+     * is tolerated and NOT permanent: the producers retry creation lazily via
+     * qbuf_exp_pool_expand_thread_ensure / qbuf_exp_pool_shrink_thread_ensure
+     * on each trigger, so a transient failure only drops the triggers that
+     * arrive while it persists. Log the return code — pthread_create does not
+     * set errno. */
+    int expand_rc = pthread_create(&exp_pool->expand_thread, NULL, async_expand_global_pool_callback, (void *)exp_pool);
+    if (expand_rc != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "create expand thread failed, rc: %d\n", expand_rc);
+    } else {
+        exp_pool->expand_thread_created = true;
     }
     return UMQ_SUCCESS;
 }
@@ -2114,10 +2255,15 @@ static void umq_qbuf_exp_pool_minimal_init(qbuf_expansion_pool_t *exp_pool)
     urpc_list_init(&exp_pool->slot_list);
     urpc_list_init(&exp_pool->shrink_task_list.head);
     exp_pool->shrink_task_list.stop = false;
+    urpc_list_init(&exp_pool->expand_task_list.head);
+    exp_pool->expand_task_list.stop = false;
     (void)pthread_spin_init(&exp_pool->expansion_pool_lock, PTHREAD_PROCESS_PRIVATE);
     (void)pthread_mutex_init(&exp_pool->shrink_task_list.mutex, NULL);
     (void)pthread_cond_init(&exp_pool->shrink_task_list.cond, NULL);
+    (void)pthread_mutex_init(&exp_pool->expand_task_list.mutex, NULL);
+    (void)pthread_cond_init(&exp_pool->expand_task_list.cond, NULL);
     exp_pool->shrink_thread_created = false;
+    exp_pool->expand_thread_created = false;
     exp_pool->inited = false;
 }
 
@@ -2128,6 +2274,44 @@ static void umq_qbuf_exp_pool_minimal_uninit(qbuf_expansion_pool_t *exp_pool)
     (void)pthread_spin_destroy(&exp_pool->expansion_pool_lock);
     (void)pthread_mutex_destroy(&exp_pool->shrink_task_list.mutex);
     (void)pthread_cond_destroy(&exp_pool->shrink_task_list.cond);
+    (void)pthread_mutex_destroy(&exp_pool->expand_task_list.mutex);
+    (void)pthread_cond_destroy(&exp_pool->expand_task_list.cond);
+}
+
+/* Push an expand task to the pool's dedicated worker. Returns false (task
+ * NOT queued, caller keeps ownership) when the worker is stopping/stopped —
+ * the caller must then clear is_expanding so sync-wait callers do not block
+ * on a task that will never run. */
+static bool async_expand_push_param(qbuf_expansion_pool_t *exp_pool, async_expand_pool_param_t *param)
+{
+    bool pushed = false;
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    if (!exp_pool->expand_task_list.stop) {
+        urpc_list_push_back(&exp_pool->expand_task_list.head, &param->node);
+        (void)pthread_cond_signal(&exp_pool->expand_task_list.cond);
+        pushed = true;
+    }
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    return pushed;
+}
+
+/* Pop one expand task. Returns NULL when the queue is empty OR the pool is
+ * stopping — checking stop under the same lock makes the worker's drain loop
+ * exit promptly on teardown (queued leftovers are freed by
+ * umq_qbuf_exp_pool_inner_uninit) instead of executing every pending
+ * expansion before pthread_join can return. */
+static async_expand_pool_param_t *async_expand_pop_param(qbuf_expansion_pool_t *exp_pool)
+{
+    async_expand_pool_param_t *param = NULL;
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    if (!exp_pool->expand_task_list.stop) {
+        URPC_LIST_FIRST_NODE(param, node, &exp_pool->expand_task_list.head);
+        if (param != NULL) {
+            urpc_list_remove(&param->node);
+        }
+    }
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    return param;
 }
 
 static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
@@ -2157,6 +2341,10 @@ static int umq_qbuf_expansion_pool_init(const qbuf_pool_cfg_t *cfg)
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "init expansion pool without data failed, ret %d\n", ret);
         return ret;
     }
+    /* Each pool's dedicated expand thread was created inside its own
+     * umq_qbuf_exp_pool_inner_init, after that pool's slots/locks were ready.
+     * Tasks cannot arrive earlier: producers run only from the alloc path,
+     * which starts after umq_qbuf_pool_init completes. */
     return UMQ_SUCCESS;
 }
 
@@ -2169,6 +2357,9 @@ static bool umq_qbuf_expansion_pool_uninit(void)
         umq_qbuf_exp_pool_minimal_uninit(&g_qbuf_pool.exp_pool_without_data);
         return true;
     }
+    /* Each pool's dedicated shrink+expand threads are stopped and joined
+     * inside umq_qbuf_exp_pool_inner_uninit before its own slots are freed —
+     * per-pool teardown is self-contained, no global stop point needed. */
     bool all_ok = true;
     for (uint32_t sc = 0; sc < g_qbuf_pool.size_class_count; sc++) {
         if (!umq_qbuf_exp_pool_inner_uninit(&g_qbuf_pool.exp_pool_with_data[sc], true)) {
@@ -2560,7 +2751,14 @@ int umq_qbuf_pool_init(qbuf_pool_cfg_t *cfg)
     if (escape_registry_init() != 0) {
         UMQ_VLOG_ERR(VLOG_UMQ, "escape_registry_init failed\n");
         g_qbuf_pool.inited = false;
-        return -UMQ_ERR_ENOMEM;
+        /* Unwind via the label instead of returning early: the per-pool
+         * shrink/expand threads were already created by
+         * umq_qbuf_expansion_pool_init and must be stopped+joined here.
+         * An early return would orphan them, and a retried init would
+         * re-create threads and re-init mutexes the orphans block on. */
+        (void)pthread_spin_destroy(&g_tls_stats_lock);
+        ret = -UMQ_ERR_ENOMEM;
+        goto EXPANSION_POOL_UNINIT;
     }
 #ifdef UMQ_QBUF_DEBUG
     if (getenv("UMQ_QBUF_DEBUG") != NULL)
@@ -2639,8 +2837,10 @@ void umq_qbuf_pool_uninit(void)
     if (exp_pool_ok) {
         memset(&g_qbuf_pool, 0, sizeof(qbuf_pool_t));
     } else {
-        /* Skip memset: a detached shrink/expand thread may still be accessing
-         * exp_pool fields inside g_qbuf_pool. Zeroing it would cause UAF. */
+        /* Skip memset if teardown reported failure. Both async threads
+         * (shrink, expand worker) are join-based, so no thread can still be
+         * accessing g_qbuf_pool here; skipping only preserves the fields
+         * for post-mortem diagnosis. */
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
             "skip memset of g_qbuf_pool: expansion pool async op still running\n");
     }
@@ -2665,11 +2865,18 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
         while (fetch_count < needed) {
             ret = fetch_from_global(&g_qbuf_pool.block_pool[sc], local_pool, with_data, sc, batch_cnt, deadline_ns);
             if (ret <= 0) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                    "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
-                    "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
-                    ret, ret == -UMQ_ERR_ETIMEOUT ? "timeout" : strerror(-ret),
-                    with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 等待异步扩容超时属高并发下的预期性背压，报 WARN；真正故障保持 ERR */
+                    UMQ_LIMIT_VLOG_WARN(VLOG_UMQ,
+                        "fetch from global timeout, ret: %d, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                        "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, strerror(-ret), with_data, needed, sc, batch_cnt, (unsigned long long)deadline_ns);
+                }
                 return ret;
             }
             fetch_count += (uint32_t)ret;
@@ -2718,11 +2925,18 @@ static ALWAYS_INLINE int umq_qbuf_local_pool_fetch_and_expand(uint32_t needed, l
         }
         if (ret <= 0) {
             if (!any_escape_buf_exists()) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                    "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
-                    "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
-                    ret, ret == -UMQ_ERR_ETIMEOUT ? "timeout" : strerror(-ret),
-                    with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 等待异步扩容超时属高并发下的预期性背压，报 WARN；真正故障保持 ERR */
+                    UMQ_LIMIT_VLOG_WARN(VLOG_UMQ,
+                        "fetch from global timeout, ret: %d, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
+                        "fetch from global failed, ret: %d, reason: %s, with_data: %d,\n"
+                        "fetch count: %u, sc: %u, batch_cnt: %u, deadline_ns: %llu\n",
+                        ret, strerror(-ret), with_data, need_batch, sc, batch_cnt, (unsigned long long)deadline_ns);
+                }
                 if (with_data) {
                     if (qbuf_debug_on())
                         g_dbg_stats.alloc_with_data_fetch_fail += (need_batch - fetch_count);
@@ -3042,41 +3256,83 @@ FREE_SLOT:
     return -UMQ_ERR_ENOMEM;
 }
 
-typedef struct async_expand_pool_param {
-    qbuf_expansion_pool_t *exp_pool;
-    bool with_data;
-    uint32_t sc;
-    uint64_t g_buf_cnt;
-    bool sync_wait;  // true: caller waits for completion (sync semantics for DFX)
-} async_expand_pool_param_t;
-
+/* Per-pool resident expand worker loop (mirrors async_shrink_global_pool_callback).
+ * Each expansion pool owns one dedicated thread, so simultaneous expansions of
+ * different pools (with_data[sc] / without_data) run fully in parallel: a slow
+ * expansion in one pool can no longer add its duration to the sync_wait alloc
+ * latency of the others. Waits on the pool's condvar for tasks pushed by
+ * async_expand_global_pool; per-pool is_expanding single-flight bounds the
+ * queue to at most one pending task. On teardown the stop flag is observed
+ * both in the wait loop and inside async_expand_pop_param, so the worker
+ * exits promptly; leftovers are freed by umq_qbuf_exp_pool_inner_uninit. */
 static void *async_expand_global_pool_callback(void *arg)
 {
-    /* Detach self so the thread's 8MB stack + guard is reclaimed immediately
-     * on exit instead of lingering as a zombie VMA. uninit spin-waits on
-     * is_expanding (not pthread_join) — the expand thread clears is_expanding
-     * as its last action before exit, so once is_expanding==0 the thread is
-     * done and no longer touching slot_list. pthread_join is NOT used because
-     * the thread is detached — join on a detached thread is undefined behavior. */
-    (void)pthread_detach(pthread_self());
-
-    if (pthread_setname_np(pthread_self(), QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME) != 0) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n",
-            QBUF_POOL_ASYNC_EXPAND_PTHREAD_NAME, errno);
-    }
-
-    async_expand_pool_param_t *async_param = (async_expand_pool_param_t *)arg;
-    if (async_param == NULL) {
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async param invalid\n");
+    qbuf_expansion_pool_t *exp_pool = (qbuf_expansion_pool_t *)arg;
+    if (exp_pool == NULL) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "expansion pool invalid\n");
         return NULL;
     }
-    g_dfx_in_async_expand = !async_param->sync_wait;
-    int expand_ret = expand_global_pool_impl(async_param->with_data, async_param->sc, true, async_param->g_buf_cnt);
-    __atomic_store_n(&async_param->exp_pool->last_expand_failed, expand_ret != UMQ_SUCCESS ? 1 : 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&async_param->exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
-    g_dfx_in_async_expand = false;
-    free(arg);
+
+    char thread_name[QBUF_POOL_THREAD_NAME_MAX] = {0};
+    qbuf_exp_pool_thread_name(exp_pool, "umq_expand", thread_name, sizeof(thread_name));
+    if (pthread_setname_np(pthread_self(), thread_name) != 0) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "set thread name %s failed, errno %d\n", thread_name, errno);
+    }
+
+    while (true) {
+        /* Wait for expand tasks or stop signal. */
+        (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+        while (urpc_list_is_empty(&exp_pool->expand_task_list.head) && !exp_pool->expand_task_list.stop) {
+            (void)pthread_cond_wait(&exp_pool->expand_task_list.cond, &exp_pool->expand_task_list.mutex);
+        }
+        if (exp_pool->expand_task_list.stop) {
+            (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+            break;
+        }
+        (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+
+        async_expand_pool_param_t *param = NULL;
+        while ((param = async_expand_pop_param(exp_pool)) != NULL) {
+            g_dfx_in_async_expand = !param->sync_wait;
+            int expand_ret = expand_global_pool_impl(param->with_data, param->sc, true, param->g_buf_cnt);
+            __atomic_store_n(&exp_pool->last_expand_failed, expand_ret != UMQ_SUCCESS ? 1 : 0, __ATOMIC_RELEASE);
+            /* Clearing is_expanding releases sync-wait callers blocked in
+             * umq_qbuf_wait_expansion_done — store-release after the result
+             * store above keeps the protocol identical to the old
+             * one-shot-thread version. */
+            __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
+            g_dfx_in_async_expand = false;
+            free(param);
+        }
+    }
     return NULL;
+}
+
+/* Ensure this pool's resident expand thread exists, retrying creation on
+ * failure. An init-time pthread_create failure used to disable expansion for
+ * the pool's whole lifetime; retrying at trigger time restores the old
+ * pthread_create-per-expansion semantics where a transient failure only
+ * dropped the expansions attempted while it persisted. The created flag is
+ * written under expand_task_list.mutex, matching
+ * umq_qbuf_exp_pool_inner_uninit's stop+join protocol; the fast path is a
+ * single acquire load. */
+static bool qbuf_exp_pool_expand_thread_ensure(qbuf_expansion_pool_t *exp_pool)
+{
+    if (__atomic_load_n(&exp_pool->expand_thread_created, __ATOMIC_ACQUIRE)) {
+        return true;
+    }
+    (void)pthread_mutex_lock(&exp_pool->expand_task_list.mutex);
+    if (!exp_pool->expand_thread_created && !exp_pool->expand_task_list.stop) {
+        int rc = pthread_create(&exp_pool->expand_thread, NULL, async_expand_global_pool_callback, (void *)exp_pool);
+        if (rc == 0) {
+            __atomic_store_n(&exp_pool->expand_thread_created, true, __ATOMIC_RELEASE);
+        } else {
+            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "retry create expand thread failed, rc: %d\n", rc);
+        }
+    }
+    bool created = exp_pool->expand_thread_created;
+    (void)pthread_mutex_unlock(&exp_pool->expand_task_list.mutex);
+    return created;
 }
 
 void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, bool sync_wait)
@@ -3086,11 +3342,11 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
     }
 
     /* Hard stop at capacity: once expansion memory reaches the configured
-     * cap, never spawn another expand thread. The last_expand_failed gate
+     * cap, never queue another expand task. The last_expand_failed gate
      * below is not sufficient on its own — when free blocks recover past the
-     * trigger it gets cleared, letting the high-frequency fetch path spawn
-     * futile threads that leak their 8MB stacks even though no slot can be
-     * added. Guarding on the hard cap stops that loop permanently. */
+     * trigger it gets cleared, letting the high-frequency fetch path queue
+     * futile expansions even though no slot can be added. Guarding on the
+     * hard cap stops that loop permanently. */
     if (__atomic_load_n(&g_qbuf_pool.exp_total_mem_pool_size, __ATOMIC_RELAXED) >=
         g_qbuf_pool.expansion_mem_size_max) {
         return;
@@ -3106,8 +3362,19 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
         return;
     }
 
-    // skip spawn if last expand failed (e.g. at capacity limit)
+    // skip queueing if last expand failed (e.g. at capacity limit)
     if (__atomic_load_n(&exp_pool->last_expand_failed, __ATOMIC_ACQUIRE) != 0) {
+        return;
+    }
+
+    /* Ensure the pool's resident expand thread exists, retrying an init-time
+     * pthread_create failure. Placed after the water-level/failure gates so
+     * the producer's hot path (called on every global-pool refill) only pays
+     * the create retry when an expansion is genuinely needed; checked before
+     * the CAS so is_expanding is never set pointlessly while creation keeps
+     * failing. */
+    if (!qbuf_exp_pool_expand_thread_ensure(exp_pool)) {
+        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand skipped: pool expand thread not running\n");
         return;
     }
 
@@ -3117,33 +3384,27 @@ void async_expand_global_pool(bool with_data, uint32_t sc, uint64_t g_buf_cnt, b
         return;
     }
 
-    pthread_t tid;
-    async_expand_pool_param_t *arg = (async_expand_pool_param_t *)malloc(sizeof(async_expand_pool_param_t));
+    async_expand_pool_param_t *arg = (async_expand_pool_param_t *)calloc(1, sizeof(async_expand_pool_param_t));
     if (arg == NULL) {
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
         UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "malloc async_expand_pool_param failed\n");
         return;
     }
-    arg->exp_pool = exp_pool;
     arg->with_data = with_data;
     arg->sc = sc;
     arg->g_buf_cnt = g_buf_cnt;
     arg->sync_wait = sync_wait;
-    if (pthread_create(&tid, NULL, async_expand_global_pool_callback, arg) != 0) {
+    /* Per-pool is_expanding single-flight (CAS above) bounds this pool's
+     * queue to at most one outstanding task. Rejection here means teardown
+     * raced us — restore the pre-CAS state and fail the alloc. */
+    if (!async_expand_push_param(exp_pool, arg)) {
         free(arg);
         __atomic_store_n(&exp_pool->is_expanding, 0, __ATOMIC_RELEASE);
-        UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "async expand global pool failed, errno: %d\n", errno);
-    } else {
-        /* Mark that an async expand thread is in-flight. uninit spin-waits
-         * on is_expanding (not pthread_join) because the thread is detached.
-         * is_expanding single-flight guarantees at most one async expand
-         * thread is alive at any time. */
-        exp_pool->expand_thread_created = true;
-        UMQ_VLOG_DEBUG(VLOG_UMQ,
-                       "%s_EXPAND_ASYNC_LAUNCH sc=%u free=%llu(g_free=%llu+e_free=%llu) expand_threshold=%llu\n",
-                       with_data ? "WD" : "ND", sc, (unsigned long long)(g_buf_cnt + exp_free),
-                       (unsigned long long)g_buf_cnt, (unsigned long long)exp_free, (unsigned long long)trigger_expand);
+        return;
     }
+    UMQ_VLOG_DEBUG(VLOG_UMQ, "%s_EXPAND_ASYNC_LAUNCH sc=%u free=%llu(g_free=%llu+e_free=%llu) expand_threshold=%llu\n",
+                   with_data ? "WD" : "ND", sc, (unsigned long long)(g_buf_cnt + exp_free),
+                   (unsigned long long)g_buf_cnt, (unsigned long long)exp_free, (unsigned long long)trigger_expand);
 }
 
 uint32_t fetch_from_expansion_pools(bool with_data, uint32_t sc, uint32_t need, umq_buf_list_t *local_head,
@@ -3535,10 +3796,25 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
                 umq_qbuf_local_pool_fetch_and_expand(num - local_pool->buf_cnt_without_data, local_pool, false, 0,
                                                      deadline_ns);
             if (ret != UMQ_SUCCESS) {
-                UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                                   "umq nodata qbuf local pool fetch and expand failed, "
-                                   "suggestion: increase total_size or expansion_mem_size_max, ret: %d\n",
-                                   ret);
+                if (ret == -UMQ_ERR_ETIMEOUT) {
+                    /* 超时是等待异步扩容的预期性背压（高并发常见），报 WARN；
+                     * 真正的故障（预算耗尽/系统 OOM）保持 ERR。 */
+                    UMQ_LIMIT_VLOG_WARN(
+                        VLOG_UMQ,
+                        "umq nodata qbuf local pool fetch and expand timeout, ret: %d, sc: 0, "
+                        "allocation deadline (umq_buf_alloc timeout_ms) reached while waiting for async "
+                        "expansion to complete; suggestion: increase the alloc timeout or enlarge the pool "
+                        "initial capacity so this alloc can be served without waiting on expansion\n",
+                        ret);
+                } else {
+                    UMQ_LIMIT_VLOG_ERR(
+                        VLOG_UMQ,
+                        "umq nodata qbuf local pool fetch and expand failed, ret: %d, sc: 0, "
+                        "expansion budget may be exhausted (see 'expand mem size max' log) or system "
+                        "memory is insufficient; suggestion: increase umq_buf_pool_max_size (the expansion "
+                        "budget is max_size minus the pool initial size)\n",
+                        ret);
+                }
                 return ret;
             }
             g_thread_cache.stats.tls_fetch_cnt_without_data++;
@@ -3631,10 +3907,25 @@ int umq_normal_qbuf_alloc(uint32_t request_size, uint32_t num, umq_alloc_option_
                 }
                 return ret;
             }
-            UMQ_LIMIT_VLOG_ERR(VLOG_UMQ,
-                               "umq with data qbuf local pool fetch and expand failed, "
-                               "suggestion: increase total_size or expansion_mem_size_max, ret: %d\n",
-                               ret);
+            if (ret == -UMQ_ERR_ETIMEOUT) {
+                /* 超时是等待异步扩容的预期性背压（高并发常见），报 WARN；
+                 * 真正的故障（预算耗尽/系统 OOM）保持 ERR。 */
+                UMQ_LIMIT_VLOG_WARN(
+                    VLOG_UMQ,
+                    "umq with data qbuf local pool fetch and expand timeout, ret: %d, sc: %u, "
+                    "allocation deadline (umq_buf_alloc timeout_ms) reached while waiting for async "
+                    "expansion to complete; suggestion: increase the alloc timeout or enlarge the pool "
+                    "initial capacity so this alloc can be served without waiting on expansion\n",
+                    ret, sc);
+            } else {
+                UMQ_LIMIT_VLOG_ERR(
+                    VLOG_UMQ,
+                    "umq with data qbuf local pool fetch and expand failed, ret: %d, sc: %u, "
+                    "expansion budget may be exhausted (see 'expand mem size max' log) or system "
+                    "memory is insufficient; suggestion: increase umq_buf_pool_max_size (the expansion "
+                    "budget is max_size minus the pool initial size)\n",
+                    ret, sc);
+            }
             return ret;
         }
         g_thread_cache.stats.tls_fetch_cnt_with_data++;

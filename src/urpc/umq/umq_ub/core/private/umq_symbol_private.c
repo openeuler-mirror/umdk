@@ -114,6 +114,8 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_put_rjetty_t, urma_put_rjetty);
 
     // Segment functions
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_alloc_token_id_t, urma_alloc_token_id);
+    LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_free_token_id_t, urma_free_token_id);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_register_seg_t, urma_register_seg);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_unregister_seg_t, urma_unregister_seg);
     LOAD_SYMBOL(sym, g_umq_urma_dlhandler, urma_import_seg_t, urma_import_seg);
@@ -204,6 +206,8 @@ static umq_symbol_urma_t g_umq_symbol_urma = {
     .bondp_jetty_is_available = bondp_jetty_is_available,
 
     // Segment
+    .urma_alloc_token_id = urma_alloc_token_id,
+    .urma_free_token_id = urma_free_token_id,
     .urma_register_seg = urma_register_seg,
     .urma_unregister_seg = urma_unregister_seg,
     .urma_import_seg = urma_import_seg,
