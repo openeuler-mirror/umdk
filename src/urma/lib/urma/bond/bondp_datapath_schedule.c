@@ -421,6 +421,40 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
     return 0;
 }
 
+/*
+ * The enabled port set of a component and the imported path table of a target jetty are both
+ * filled once, when the component/target jetty is created: failover and failback only flip the
+ * per-port and per-path validity flags, they never add or remove coordinates. A pinned remote
+ * port that no imported path of this component names can therefore never become reachable,
+ * while a path that exists but is currently invalid may recover.
+ */
+static bool local_port_enabled(const bondp_comp_t *bdp_comp, uint32_t local_idx)
+{
+    for (uint32_t i = 0; i < bdp_comp->enabled_count; i++) {
+        if (bdp_comp->enabled_indices[i] == local_idx) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool fixed_edge_exists(const bondp_comp_t *bdp_comp, const bondp_target_jetty_t *bdp_tjetty,
+                              int fixed_target_idx)
+{
+    for (uint32_t i = 0; i < bdp_tjetty->p_tjetty_count; i++) {
+        const bondp_p_target_jetty_t *path = &bdp_tjetty->p_tjettys[i];
+        if ((int)path->remote_indice != fixed_target_idx) {
+            continue;
+        }
+        /* The path table covers every connected pair of the context; only the ports this
+         * component was created on can actually carry its WRs. */
+        if (local_port_enabled(bdp_comp, path->local_indice)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send_idx, int *target_idx,
                   bondp_chip_id_info_t *info)
 {
@@ -430,9 +464,14 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
         return URMA_EINVAL;
     }
 
-    if (bdp_comp->active_count == 0 || bdp_tjetty->active_count == 0) {
+    if (bdp_comp->active_count == 0) {
         URMA_LOG_ERR_RL("No active port\n");
         return -1;
+    }
+    if (bdp_tjetty->active_count == 0) {
+        /* The target jetty was imported without a single usable port: no failover can fix it. */
+        URMA_LOG_ERR_RL("Target jetty has no active port\n");
+        return URMA_EINVAL;
     }
 
     switch (bdp_comp->bondp_ctx->bonding_mode) {
@@ -443,7 +482,8 @@ int schedule_send(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp, int *send
         case BONDP_BONDING_MODE_BALANCE:
             return schedule_send_balance(bdp_comp, bdp_tjetty, send_idx, target_idx, info);
         default:
-            return -1;
+            URMA_LOG_ERR_RL("Unsupported bonding mode=%d.\n", bdp_comp->bondp_ctx->bonding_mode);
+            return URMA_EINVAL;
     }
 }
 
@@ -486,7 +526,10 @@ int schedule_send_fixed(urma_target_jetty_t *tjetty, bondp_comp_t *bdp_comp,
             return 0;
         }
     }
-    return -1;
+    /* Nothing could serve the pinned target: report a permanent mismatch only when the port is
+     * not part of this connection at all, and keep the retryable error when every candidate path
+     * merely happens to be down right now. */
+    return fixed_edge_exists(bdp_comp, bdp_tjetty, fixed_target_idx) ? -1 : URMA_EINVAL;
 }
 
 int schedule_recv(bondp_comp_t *bdp_comp, int *recv_idx)
