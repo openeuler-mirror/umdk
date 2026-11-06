@@ -704,7 +704,7 @@ void rx_buf_ctx_list_uninit(rx_buf_ctx_list_t *rx_buf_ctx_list);
 umq_buf_t *umq_get_buf_by_user_ctx(ub_queue_t *queue, uint64_t user_ctx, ub_queue_jetty_index_t jetty_index);
 
 // for control plane on umq ub api
-int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf);
+int umq_ub_post_rx_inner_impl(ub_queue_t *queue, umq_buf_t *qbuf, umq_buf_t **bad_qbuf, umq_io_option_t *option);
 int umq_ub_data_plan_import_mem(uint64_t umqh_tp, umq_buf_t *rx_buf, uint32_t ref_seg_num,
     umq_ub_ack_import_type_t ack_type);
 rx_buf_ctx_t *queue_rx_buf_ctx_flush(rx_buf_ctx_list_t *rx_buf_ctx_list);
@@ -1014,6 +1014,22 @@ static ALWAYS_INLINE void umq_bondp_port_id_from_umq(const umq_port_id_t *src, b
     dst->bs.chip_id = src->bs.chip_id;
     dst->bs.die_id = src->bs.die_id;
     dst->bs.port_idx = src->bs.port_idx;
+}
+
+static ALWAYS_INLINE void umq_set_src_bondp_wr_hint(const umq_port_id_t *src, bondp_wr_hint_t *bond_hint)
+{
+    bond_hint->version = BONDP_WR_HINT_VERSION_V0;
+    bond_hint->size = sizeof(bondp_wr_hint_t);
+    bond_hint->mask = BONDP_WR_HINT_MASK_SRC_ALL;
+    umq_bondp_port_id_from_umq(src, &bond_hint->local_id);
+}
+
+static ALWAYS_INLINE void umq_set_dst_bondp_wr_hint(const umq_port_id_t *dst, bondp_wr_hint_t *bond_hint)
+{
+    bond_hint->version = BONDP_WR_HINT_VERSION_V0;
+    bond_hint->size = sizeof(bondp_wr_hint_t);
+    bond_hint->mask = BONDP_WR_HINT_MASK_DST_ALL;
+    umq_bondp_port_id_from_umq(dst, &bond_hint->remote_id);
 }
 
 #ifdef __cplusplus
