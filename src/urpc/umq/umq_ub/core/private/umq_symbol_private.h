@@ -67,6 +67,12 @@ typedef urma_status_t (*bondp_modify_jfr_t)(urma_jfr_t *jfr, urma_jfr_attr_t *at
     bondp_wr_hint_t *hint);
 typedef urma_status_t (*bondp_get_async_event_t)(urma_context_t *ctx, urma_async_event_t *event,
     bondp_port_id_t *port_id);
+typedef urma_status_t (*bondp_post_jetty_send_wr_t)(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+    urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
+typedef urma_status_t (*bondp_post_jetty_recv_wr_t)(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
+    urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
+typedef urma_status_t (*bondp_post_jfr_wr_t)(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
+    urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr);
 
 // === URMA function pointer types - Segment ===
 typedef urma_token_id_t *(*urma_alloc_token_id_t)(urma_context_t *ctx);
@@ -155,6 +161,9 @@ typedef struct umq_symbol_urma {
     bondp_jetty_is_available_t bondp_jetty_is_available;
     bondp_modify_jfr_t bondp_modify_jfr;
     bondp_get_async_event_t bondp_get_async_event;
+    bondp_post_jetty_send_wr_t bondp_post_jetty_send_wr;
+    bondp_post_jetty_recv_wr_t bondp_post_jetty_recv_wr;
+    bondp_post_jfr_wr_t bondp_post_jfr_wr;
 
     // Segment
     urma_alloc_token_id_t urma_alloc_token_id;
