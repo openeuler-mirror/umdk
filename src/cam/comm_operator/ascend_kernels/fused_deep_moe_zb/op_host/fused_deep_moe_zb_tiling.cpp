@@ -86,6 +86,14 @@ constexpr uint32_t MIN_TOKEN_LENGTH = 512;
 constexpr uint32_t MAX_TOKEN_LENGTH = 7168;
 constexpr uint32_t MIN_GMM1_HIDDEN = 1024;
 constexpr uint32_t MAX_GMM1_HIDDEN = 6144;
+constexpr uint32_t GMM1_REDUCE_WIDTH_DIVISOR = 4;
+// Per-token absmax folds a quant tile of gmm1HLen/2 columns in half, so each row of the
+// folded buffer holds gmm1HLen/GMM1_REDUCE_WIDTH_DIVISOR floats, and that row is what one
+// ReduceMax consumes. The row must be a whole number of 64-float vector repeats: a trailing
+// partial repeat is silently mis-reduced and the per-token scale comes out wrong, which the
+// shape checks below are the only guard against. 4 * 64 = 256. The routed and share paths
+// run the same reduction, so the same alignment applies to both.
+constexpr uint32_t GMM1_REDUCE_ALIGN = 256;
 constexpr uint32_t TENSOR_HIDDEN_INDEX = 1;
 constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
@@ -246,6 +254,15 @@ static ge::graphStatus CheckShareExpertShapes(gert::TilingContext &context, Fuse
         shareGmm1HLen = static_cast<uint64_t>(shareGmm1OriginShape.GetDim(SINGLE_HIDDEN_INDEX)) * weightScale;
     }
     tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen = shareGmm1HLen;
+    OPS_ERR_IF(
+        shareGmm1HLen < MIN_GMM1_HIDDEN || shareGmm1HLen > MAX_GMM1_HIDDEN,
+        OPS_LOG_E(nodeName, "shareGmm1 hidden size is invalid. Only support [%u, %u].",
+            MIN_GMM1_HIDDEN, MAX_GMM1_HIDDEN),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(shareGmm1HLen % GMM1_REDUCE_ALIGN != 0,
+        OPS_LOG_E(nodeName, "shareGmm1 hidden size must be divisible by %u, but got %lu.",
+            GMM1_REDUCE_ALIGN, shareGmm1HLen),
+        return ge::GRAPH_FAILED);
 
     // Check share_gmm1_weight_scale: [shareGmm1HLen] (1D) or [1, shareGmm1HLen] (2D)
     const gert::StorageShape* shareGmm1ScaleStorageShape =
@@ -634,6 +651,14 @@ static ge::graphStatus CheckData(const char *nodeName, FusedDeepMoeZbTilingData 
     OPS_ERR_IF(
         gmm1HLen < MIN_GMM1_HIDDEN || gmm1HLen > MAX_GMM1_HIDDEN,
         OPS_LOG_E(nodeName, "gmm1 hidden size is invalid. Only support [%u, %u].", MIN_GMM1_HIDDEN, MAX_GMM1_HIDDEN),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(gmm1HLen % GMM1_REDUCE_WIDTH_DIVISOR != 0,
+        OPS_LOG_E(nodeName, "gmm1 hidden size must be divisible by %u, but got %u.",
+            GMM1_REDUCE_WIDTH_DIVISOR, gmm1HLen),
+        return ge::GRAPH_FAILED);
+    OPS_ERR_IF(gmm1HLen % GMM1_REDUCE_ALIGN != 0,
+        OPS_LOG_E(nodeName, "gmm1 hidden size must be divisible by %u, but got %u.",
+            GMM1_REDUCE_ALIGN, gmm1HLen),
         return ge::GRAPH_FAILED);
     uint32_t topK = tilingData.disGmmDeqSwigluQuantGmmDeqComInfo.k;
     OPS_ERR_IF(topK > SUPPORT_TOP_K, OPS_LOG_E(nodeName, "topK(k) must <= %u.", SUPPORT_TOP_K),

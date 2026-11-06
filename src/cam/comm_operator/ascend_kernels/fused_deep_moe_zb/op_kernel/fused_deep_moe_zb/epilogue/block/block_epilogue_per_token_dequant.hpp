@@ -152,8 +152,15 @@ public:
         AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
 
-        AscendC::LocalTensor<int32_t> recvTokenLt = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset +
-            calcInfo.moeExpertNum_ * calcInfo.epWorldSize_ * sizeof(int32_t));
+        // DataCopyPad requires its UB side to be 32B aligned and recvTokenLt is the source of the
+        // copy below. allExpertTokenNumsTensor ahead of it holds moeExpertNum * epWorldSize int32,
+        // which fills a whole number of 32B blocks only when that product is a multiple of 8, so
+        // round the gap up the way AlignUbOffset rounds every other buffer here.
+        constexpr size_t ubAlign = MoeDistributeCombineImpl::UB_ALIGN;
+        size_t recvTokenLtOffset = calcInfo.moeExpertNum_ * calcInfo.epWorldSize_ * sizeof(int32_t);
+        recvTokenLtOffset = (recvTokenLtOffset + ubAlign - 1) / ubAlign * ubAlign;
+        AscendC::LocalTensor<int32_t> recvTokenLt = resource.ubBuf.template GetBufferByByte<int32_t>(
+            ubOffset + recvTokenLtOffset);
         AscendC::GlobalTensor<int32_t> recvCountsGlobalTensor;
         recvCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)gmAllEpRecvCount);
 
