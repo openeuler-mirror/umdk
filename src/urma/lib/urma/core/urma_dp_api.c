@@ -242,7 +242,7 @@ urma_status_t urma_recv(urma_jfr_t *jfr, urma_target_seg_t *recv_tseg, //
     wr.next = NULL;
     if (check_valid_jfr_wr(jfr, &wr) != 0) {
         URMA_LOG_ERR("There are invalid parameters.\n");
-        return URMA_FAIL;
+        return URMA_EINVAL;
     }
     return dp_ops->post_jfr_wr(jfr, &wr, &bad_wr);
 }
@@ -254,7 +254,7 @@ int urma_poll_jfc(urma_jfc_t *jfc, int cr_cnt, urma_cr_t *cr)
     if (dp_ops == NULL || dp_ops->poll_jfc == NULL || cr == NULL || cr_cnt < 0 ||
         urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
-        return -1;
+        return -URMA_EINVAL;
     }
 
     int ret;
@@ -290,7 +290,7 @@ int urma_wait_jfc(urma_jfce_t *jfce, uint32_t jfc_cnt, int time_out, urma_jfc_t 
     if (dp_ops == NULL || dp_ops->wait_jfc == NULL || jfc_cnt == 0 || jfc == NULL ||
         urma_dev == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
-        return -1;
+        return -URMA_EINVAL;
     }
 
     int ret;

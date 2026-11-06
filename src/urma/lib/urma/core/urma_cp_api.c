@@ -1290,6 +1290,7 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, import_jfr_ex);
 
     if (rjfr->flag.bs.share_tp != 0) {
+        errno = EINVAL;
         URMA_LOG_ERR("Share TP is not supported.\n");
         return NULL;
     }
@@ -2038,6 +2039,7 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
     URMA_CHECK_OP_INVALID_RETURN_POINTER(ctx, ops, import_jetty_ex);
 
     if (rjetty->flag.bs.share_tp != 0) {
+        errno = EINVAL;
         URMA_LOG_ERR("Share TP is not supported.\n");
         return NULL;
     }
@@ -3513,7 +3515,10 @@ urma_net_addr_info_t *urma_get_net_addr_list(urma_context_t *ctx, uint32_t *cnt)
         return NULL;
     }
     int ret = urma_cmd_get_net_addr_list(ctx, max_netaddr_cnt, net_addr_info, cnt);
-    if (ret < 0) {
+    if (ret != 0) {
+        if (ret != URMA_FAIL) {
+            errno = ret;
+        }
         URMA_LOG_ERR("Failed to get netaddr list, ret=%d, max_netaddr_cnt=%u.\n", ret, max_netaddr_cnt);
         free(net_addr_info);
         return NULL;

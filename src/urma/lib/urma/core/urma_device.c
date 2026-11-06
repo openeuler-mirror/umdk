@@ -179,13 +179,13 @@ int urma_query_device_attr(urma_sysfs_dev_t *sysfs_dev)
 
     if (snprintf(cdev_path, URMA_MAX_PATH, "%s/%s", URMA_DEV_PATH, sysfs_dev->dev_name) <= 0) {
         URMA_LOG_ERR("Failed to get cdev_path, dev_name=%s.\n", sysfs_dev->dev_name);
-        return -1;
+        return URMA_FAIL;
     }
 
     int dev_fd = urma_open_cdev(cdev_path);
     if (dev_fd < 0) {
         URMA_LOG_ERR("Failed to open urma cdev, path %s.\n", cdev_path);
-        return -1;
+        return urma_errno_to_status(errno);
     }
 
     int ret = urma_cmd_query_device_attr(dev_fd, sysfs_dev);
