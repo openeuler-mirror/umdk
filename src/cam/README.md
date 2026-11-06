@@ -56,9 +56,9 @@ UMDK/
 |Requirements|Type|Version|Description|
 |---|---|---|---|
 |Ascend Chip|Required|A3|You can run CAM now only in an Ascend A3 SuperPod.|
-|CANN|Required|8.5/9.0|Before using CAM, you need to install CANN 8.5 or 9.0 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
-|Torch|Required|2.8.0|To compile Pybind whl packet in CAM, you need to install Torch first.|
-|Torch-Npu|Required|2.8.0 post1~post4|Torch-Npu version depends on CANN version. See `docker/cam/Dockerfile` for the matched wheel of each CANN preset.|
+|CANN|Required|8.5/9.0/9.2.1|Before using CAM, you need to install CANN 8.5, 9.0 or 9.2.1 to offer basic toolkit functions. Please refer to “[Huawei Ascend-CANN](https://www.hiascend.com/cann)” and install CANN first.|
+|Torch|Required|2.8.0 / 2.14.0|To compile Pybind whl packet in CAM, you need to install Torch first. The CANN 8.5/9.0 presets use Torch 2.8.0, and the CANN 9.2.1 presets use Torch 2.14.0.|
+|Torch-Npu|Required|2.8.0 post1~post4 / 2.14.0|Torch-Npu version depends on CANN version. See `docker/cam/Dockerfile` for the matched wheel of each CANN preset.|
 |gtest|Required|1.16.0|gtest is used for UT.|
 |OpenMPI|Required|5.0.7|MPI interfaces are used for multi-thread tests.|
 
@@ -67,7 +67,7 @@ For quickly start, we support a docker compose file sample in "umdk/docker/cam" 
 cd umdk
 docker build --build-arg BUILD_ARG=a3_9.0_open -t cam-dev:a3_9.0_open -f docker/cam/Dockerfile .
 ```
-Supported `BUILD_ARG` values: `a3_8.5_open`, `a3_9.0_open`. The `BUILD_ARG` must match `IMAGE_NAME` in `.env`.
+Supported `BUILD_ARG` values: `a3_8.5_open`, `a3_9.0_open`, `a5_9.2.1_open`, `a3_9.2.1_open`. The `BUILD_ARG` must match `IMAGE_NAME` in `.env`.
 
 Then change `COMPOSE_PROJECT_NAME`, `IMAGE_NAME` and `CONTAINER_NAME` in `docker/cam/.env` if needed, and run:
 ```bash

@@ -1,0 +1,4 @@
+# local editor / tool state
+.claude/
+.vscode/
+.DS_Store
