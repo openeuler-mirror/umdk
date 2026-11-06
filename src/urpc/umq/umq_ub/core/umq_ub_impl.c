@@ -2723,7 +2723,14 @@ int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *even
     }
 
     event->port.value = 0;
-    urma_status_t status = umq_symbol_urma()->urma_get_async_event(urma_ctx, urma_event);
+
+    bondp_port_id_t bond_port_id = {0};
+    urma_status_t status;
+    if (is_umq_ub_bonding_dev(dev_ctx->urma_ctx->dev->name)) {
+        status = umq_symbol_urma()->bondp_get_async_event(urma_ctx, urma_event, &bond_port_id);
+    } else {
+        status = umq_symbol_urma()->urma_get_async_event(urma_ctx, urma_event);
+    }
     if (status != URMA_SUCCESS) {
         UMQ_VLOG_ERR(VLOG_UMQ_URMA_API, "urma_get_async_event failed, status: %d\n", status);
         free(urma_event);
@@ -2745,6 +2752,9 @@ int umq_ub_async_event_get(umq_trans_info_t *trans_info, umq_async_event_t *even
             break;
         case URMA_EVENT_JFR_LIMIT:
             handle_async_event_jfr_limit(urma_event, event);
+            event->port.bs.chip_id = bond_port_id.bs.chip_id;
+            event->port.bs.die_id = bond_port_id.bs.die_id;
+            event->port.bs.port_idx = bond_port_id.bs.port_idx;
             break;
         case URMA_EVENT_JETTY_LIMIT:
             handle_async_event_jetty_limit(urma_event, event);
@@ -3724,6 +3734,20 @@ int umq_ub_modify_impl(uint64_t umqh_tp, umq_modify_option_t *option)
     urma_jfr_attr_t attr = {0};
     attr.mask = JFR_RX_THRESHOLD;
     attr.rx_threshold = option->rx_threshold;
+    if (is_umq_ub_bonding_dev(qcfg->dev_ctx->urma_ctx->dev->name)) {
+        bondp_wr_hint_t bond_hint = {
+            .version = BONDP_WR_HINT_VERSION_V0,
+            .size = sizeof(bondp_wr_hint_t),
+            .mask = BONDP_WR_HINT_MASK_SRC_ALL,
+            .local_id.bs.chip_id = option->port.bs.chip_id,
+            .local_id.bs.die_id = option->port.bs.die_id,
+            .local_id.bs.port_idx = option->port.bs.port_idx,
+        };
+        urma_status_t status = umq_symbol_urma()->bondp_modify_jfr(
+            qcfg->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, &attr, &bond_hint);
+        return umq_status_convert(status);
+    }
+
     return umq_status_convert(
         umq_symbol_urma()->urma_modify_jfr(qcfg->jfr_ctx[UB_QUEUE_JETTY_IO]->jfr, &attr));
 }

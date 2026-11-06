@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "urma_types.h"
+#include "urma_ubagg.h"
 #include "uvs_api.h"
 
 // === URMA function pointer types - Device/Init ===
@@ -62,6 +63,10 @@ typedef void (*urma_put_rjetty_t)(urma_rjetty_t *rjetty);
 
 // === URMA function pointer types - Bondp ===
 typedef bool (*bondp_jetty_is_available_t)(const urma_jetty_t *jetty);
+typedef urma_status_t (*bondp_modify_jfr_t)(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
+    bondp_wr_hint_t *hint);
+typedef urma_status_t (*bondp_get_async_event_t)(urma_context_t *ctx, urma_async_event_t *event,
+    bondp_port_id_t *port_id);
 
 // === URMA function pointer types - Segment ===
 typedef urma_token_id_t *(*urma_alloc_token_id_t)(urma_context_t *ctx);
@@ -148,6 +153,8 @@ typedef struct umq_symbol_urma {
 
     // Bondp
     bondp_jetty_is_available_t bondp_jetty_is_available;
+    bondp_modify_jfr_t bondp_modify_jfr;
+    bondp_get_async_event_t bondp_get_async_event;
 
     // Segment
     urma_alloc_token_id_t urma_alloc_token_id;
