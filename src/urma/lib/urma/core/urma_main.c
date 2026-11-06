@@ -466,7 +466,7 @@ urma_status_t urma_query_device(urma_device_t *dev, urma_device_attr_t *dev_attr
     int ret = urma_query_device_attr(dev->sysfs_dev);
     if (ret != 0) {
         URMA_LOG_ERR("Failed to query device attr, ret=%d.\n", ret);
-        return URMA_FAIL;
+        return ret;
     }
 
     (void)memcpy(dev_attr, &dev->sysfs_dev->dev_attr, sizeof(urma_device_attr_t));

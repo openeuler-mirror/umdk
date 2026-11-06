@@ -133,7 +133,39 @@ typedef int urma_status_t;
 #define URMA_EINVAL      EINVAL    // Invalid argument
 #define URMA_EEXIST      EEXIST    // Exist
 #define URMA_EINPROGRESS EINPROGRESS
+#define URMA_ENOSPC      ENOSPC
+#define URMA_ENOSR       ENOSR
+#define URMA_EBUSY       EBUSY
 #define URMA_FAIL        0x1000 /* 0x1000 */
+
+/* Map errno to URMA_* of the same value, unmapped falls back to URMA_FAIL. */
+static inline urma_status_t urma_errno_to_status(int err)
+{
+    switch (err) {
+        case EAGAIN:
+            return URMA_EAGAIN;
+        case ENOMEM:
+            return URMA_ENOMEM;
+        case EPERM:
+            return URMA_ENOPERM;
+        case ETIMEDOUT:
+            return URMA_ETIMEOUT;
+        case EINVAL:
+            return URMA_EINVAL;
+        case EEXIST:
+            return URMA_EEXIST;
+        case EINPROGRESS:
+            return URMA_EINPROGRESS;
+        case ENOSPC:
+            return URMA_ENOSPC;
+        case ENOSR:
+            return URMA_ENOSR;
+        case EBUSY:
+            return URMA_EBUSY;
+        default:
+            return URMA_FAIL;
+    }
+}
 
 /* completion information */
 typedef enum urma_cr_status { // completion record status
