@@ -917,7 +917,7 @@ void umq_ub_ctx_uninit_impl(uint8_t *ctx)
     for (uint32_t i = 0; i < g_ub_ctx_count; ++i) {
         umq_ub_ctx_imported_info_destroy(&context[i]);
         umq_dec_ref(context[i].io_lock_free, &context[i].ref_cnt, 1);
-        umq_symbol_urma()->urma_delete_context(context[i].urma_ctx);
+        (void)umq_ub_delete_urma_ctx(&context[i]);
         if (context[i].umq_ctx_table != NULL) {
             free((void *)context[i].umq_ctx_table);
             context[i].umq_ctx_table = NULL;
