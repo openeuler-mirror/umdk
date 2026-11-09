@@ -36,6 +36,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     m.def("moe_combine_send_async", &cam_combine_send_async_impl_autograd, "moe_combine_send_async");
     m.def("moe_dispatch_recv_async", &cam_dispatch_recv_async_impl_autograd, "moe_dispatch_recv_async");
     m.def("moe_dispatch_send_async", &cam_dispatch_send_async_impl_autograd, "moe_dispatch_send_async");
+    m.def("cam_deepep_dispatch_send", &CamDeepepDispatchSendImplAutograd, "cam_deepep_dispatch_send");
+    m.def("cam_deepep_dispatch_recv", &CamDeepepDispatchRecvImplAutograd, "cam_deepep_dispatch_recv");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -116,4 +118,26 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     int comm_id, int max_seq_len, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, int layer_index, int tp_size, int dynamic_quant, str group_name) -> Tensor");
+    // The kernel writes caller-owned control buffers in place: round_ledger,
+    // afd_workspace (send state and scratch) and send_status are mutable. The
+    // jetty inbox writes target the peer control_base, which is the local
+    // control_buffer when the peer is this rank, so it is marked mutable too.
+    m.def("cam_deepep_dispatch_send(Tensor x, Tensor sf, Tensor topk_idx, Tensor topk_weights, \
+    Tensor token_mask, Tensor task_info, Tensor context, Tensor(a!) control_buffer, \
+    Tensor(b!) round_ledger, Tensor(c!) afd_workspace, Tensor jetty_ptrs, Tensor(d!) send_status, \
+    str group_ep, int num_ranks, int num_experts, int num_topk, int num_tokens_per_tile, \
+    int sf_token_stride, int sf_hidden_stride, int num_sf_packs, int timeout_cycles, \
+    int send_status_words, int num_vec_cores) -> Tensor(d!)");
+    // The three receive buffers are returned as a fixed-size aliased tuple: the
+    // kernel writes them in place and returns the same storage. execution_state
+    // and afd_workspace (scratch) are also advanced in place by the kernel.
+    m.def("cam_deepep_dispatch_recv(Tensor payload, Tensor context, Tensor active, \
+    Tensor(d!) execution_state, Tensor(e!) afd_workspace, Tensor control_buffer, \
+    Tensor(a!) recv_x, Tensor(b!) recv_sf, Tensor(c!) recv_src_metadata, str group_ep, \
+    int num_ranks, int num_experts, \
+    int num_topk, int num_source_lanes, int num_layers, int max_expanded_tokens, \
+    int max_padded_tokens, int expert_alignment, int num_tokens_per_stage, int rank_idx, \
+    int recv_sf_token_stride, int recv_sf_hidden_stride, int payload_bytes, \
+    int control_bytes, int context_bytes, int num_hidden, int num_sf_packs, \
+    int num_vec_cores) -> (Tensor(a!), Tensor(b!), Tensor(c!))");
 }
