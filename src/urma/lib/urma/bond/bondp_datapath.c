@@ -316,6 +316,10 @@ static urma_status_t check_wr_tseg_not_deleting(const urma_jfs_wr_t *wr)
 
 static urma_status_t post_send_check_valid(bondp_comp_t *bdp_send_comp, const urma_jfs_wr_t *wr)
 {
+    if (wr->tjetty == NULL) {
+        URMA_LOG_ERR_RL("Invalid wr->tjetty: NULL\n");
+        return URMA_EINVAL;
+    }
     urma_status_t ret = post_send_check_jfs_wr_valid(bdp_send_comp, wr);
     if (ret != URMA_SUCCESS) {
         return ret;
@@ -340,6 +344,7 @@ static urma_status_t post_send_check_wr_list_valid(bondp_comp_t *bdp_send_comp, 
 
     if (bdp_send_comp->comp_type != BONDP_COMP_JFS && bdp_send_comp->comp_type != BONDP_COMP_JETTY) {
         URMA_LOG_ERR_RL("Try to call post_send api by invalid comp_type=%d\n", bdp_send_comp->comp_type);
+        *bad_wr = (urma_jfs_wr_t *)wr;
         return URMA_EINVAL;
     }
 
@@ -632,7 +637,10 @@ static urma_status_t bondp_post_send_wr_no_store(bondp_comp_t *bdp_comp,
 
     bondp_target_jetty_t *bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
-        URMA_LOG_ERR_RL("WR->tjetty is NULL\n");
+        URMA_LOG_ERR_RL("Invalid wr->tjetty: NULL\n");
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     /* Reject an overlong WR list before the MSN batch is consumed. */
@@ -770,12 +778,18 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
     bondp_target_jetty_t *bdp_tjetty = NULL;
     bdp_tjetty = CONTAINER_OF_FIELD(wr->tjetty, bondp_target_jetty_t, v_tjetty);
     if (bdp_tjetty == NULL) {
-        URMA_LOG_ERR_RL("WR->tjetty is NULL\n");
+        URMA_LOG_ERR_RL("Invalid wr->tjetty: NULL\n");
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     try_failback(bdp_comp);
     if (wr_total > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
@@ -799,6 +813,9 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         if (allocated != (uint32_t)wr_total) {
             jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
             if (atomic_load(&bdp_comp->valid[send_idx])) {
+                if (bad_wr != NULL) {
+                    *bad_wr = wr;
+                }
                 return URMA_ENOMEM;
             }
             if (hint != NULL) {
@@ -1085,7 +1102,10 @@ static urma_status_t bondp_post_send_wr_by_hint(bondp_comp_t *bdp_comp, urma_jfs
                                                 const bondp_wr_hint_t *hint, urma_jfs_wr_t **bad_wr)
 {
     if (wr->tjetty == NULL) {
-        URMA_LOG_ERR("WR->tjetty is NULL\n");
+        URMA_LOG_ERR_RL("Invalid wr->tjetty: NULL\n");
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     const bondp_wr_hint_t *pin = (hint != NULL && hint->mask != 0) ? hint : NULL;
@@ -1095,22 +1115,32 @@ static urma_status_t bondp_post_send_wr_by_hint(bondp_comp_t *bdp_comp, urma_jfs
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
                                      urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
-    if (jfs == NULL || jfs->urma_ctx == NULL || hint == NULL || wr == NULL || bad_wr == NULL) {
+    if (wr == NULL || bad_wr == NULL) {
+        return URMA_EINVAL;
+    }
+    /* Every rejection below names the WR that could not be posted: callers resume
+     * from bad_wr, and a NULL object or a malformed hint must not leave it unset. */
+    if (jfs == NULL || jfs->urma_ctx == NULL || hint == NULL) {
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     /* Must verify the object belongs to bond before CONTAINER_OF_FIELD. */
     if (!bondp_is_bond_ctx(jfs->urma_ctx)) {
         URMA_LOG_ERR("bondp_post_jfs_wr is only supported on bond JFS.\n");
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     bondp_comp_t *bdp_jfs = CONTAINER_OF_FIELD(jfs, bondp_comp_t, v_jfs);
     if (bdp_jfs->comp_type != BONDP_COMP_JFS) {
+        URMA_LOG_ERR_RL("Invalid comp_type=%d for bondp_post_jfs_wr.\n", bdp_jfs->comp_type);
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     urma_status_t ret = bondp_check_wr_hint(hint, true);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Invalid send wr hint: version=%u, size=%u, mask=0x%llx\n",
                      hint->version, hint->size, (unsigned long long)hint->mask);
+        *bad_wr = wr;
         return ret;
     }
     return bondp_post_send_wr_by_hint(bdp_jfs, wr, hint, bad_wr);
@@ -1119,21 +1149,29 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
 urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
                                             urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr)
 {
-    if (jetty == NULL || jetty->urma_ctx == NULL || hint == NULL || wr == NULL || bad_wr == NULL) {
+    if (wr == NULL || bad_wr == NULL) {
+        return URMA_EINVAL;
+    }
+    if (jetty == NULL || jetty->urma_ctx == NULL || hint == NULL) {
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     if (!bondp_is_bond_ctx(jetty->urma_ctx)) {
         URMA_LOG_ERR("bondp_post_jetty_send_wr is only supported on bond JETTY.\n");
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     if (bdp_jetty->comp_type != BONDP_COMP_JETTY) {
+        URMA_LOG_ERR_RL("Invalid comp_type=%d for bondp_post_jetty_send_wr.\n", bdp_jetty->comp_type);
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     urma_status_t ret = bondp_check_wr_hint(hint, true);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Invalid send wr hint: version=%u, size=%u, mask=0x%llx\n",
                      hint->version, hint->size, (unsigned long long)hint->mask);
+        *bad_wr = wr;
         return ret;
     }
     return bondp_post_send_wr_by_hint(bdp_jetty, wr, hint, bad_wr);
@@ -1197,11 +1235,17 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
     while (vwr != NULL) {
         if (index >= BONDP_MAX_WR_LIST_NUM) {
             URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM);
+            if (bad_wr != NULL) {
+                *bad_wr = wr;
+            }
             return URMA_EINVAL;
         }
         urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
         ret = copy_jfr_wr(vwr, pwr, prealloc_src_sge[index], BONDP_MAX_SGE_NUM);
         if (ret != 0) {
+            if (bad_wr != NULL) {
+                *bad_wr = vwr;
+            }
             return ret;
         }
         convert_jfr_vwr_to_pwr(pwr, recv_idx);
@@ -1245,6 +1289,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
     }
     if (cur != NULL) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
 
@@ -1265,6 +1312,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
         uint32_t recv_idx_u = post_indices[i];
         if (recv_idx_u >= URMA_UBAGG_DEV_MAX_NUM) {
             URMA_LOG_ERR_RL("Invalid recv_idx=%u when post recv wr.\n", recv_idx_u);
+            if (bad_wr != NULL) {
+                *bad_wr = cur;
+            }
             return URMA_EINVAL;
         }
         int recv_idx = (int)recv_idx_u;
@@ -1286,6 +1336,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
             urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
             ret = copy_jfr_wr(cur, pwr, prealloc_src_sge[index], BONDP_MAX_SGE_NUM);
             if (ret != 0) {
+                if (bad_wr != NULL) {
+                    *bad_wr = cur;
+                }
                 return ret;
             }
             convert_jfr_vwr_to_pwr(pwr, recv_idx);
@@ -1344,6 +1397,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
     }
     if (cur != NULL) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     uint32_t allocated = jfr_wr_buf_alloc_batch(recv_wr_buf, wr_entries, (uint32_t)wr_count);
@@ -1351,6 +1407,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
         URMA_LOG_ERR_RL("Bondp WR buffer is not enough, reqeusted %u, available %u.\n",
                         wr_count, allocated);
         jfr_wr_buf_release_batch(recv_wr_buf, wr_entries, allocated);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_ENOMEM;
     }
     if (fixed_recv_idx >= 0) {
@@ -1379,6 +1438,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
                               bondp_get_max_recv_sge(bdp_comp));
             if (ret != 0) {
                 URMA_LOG_ERR_RL("Failed to copy jfr wr at index %u\n", process_node);
+                if (bad_wr != NULL) {
+                    *bad_wr = cur;
+                }
                 goto CLEANUP;
             }
             convert_jfr_vwr_to_pwr(pwr, recv_idx);
@@ -1533,10 +1595,16 @@ static urma_status_t bondp_post_recv_wr_by_port(bondp_comp_t *bdp_comp, urma_jfr
     if (convert_bond_port_id_to_active_index(bdp_comp->bondp_ctx, port_id, &recv_idx) != 0) {
         URMA_LOG_ERR("Invalid port_id: chip=%u die=%u port=%u\n",
                      port_id.bs.chip_id, port_id.bs.die_id, port_id.bs.port_idx);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     if (recv_idx >= URMA_UBAGG_DEV_MAX_NUM || bdp_comp->members[recv_idx] == NULL) {
         URMA_LOG_ERR("Port is not a member of this comp, recv_idx=%u\n", recv_idx);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     /* Accept a rebuilt path that already passed health checking (hc_valid):
@@ -1556,22 +1624,32 @@ static urma_status_t bondp_post_recv_wr_by_port(bondp_comp_t *bdp_comp, urma_jfr
 urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
                                      urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
 {
-    if (jfr == NULL || jfr->urma_ctx == NULL || hint == NULL || wr == NULL || bad_wr == NULL) {
+    if (wr == NULL || bad_wr == NULL) {
+        return URMA_EINVAL;
+    }
+    /* Every rejection below names the WR that could not be posted: callers resume
+     * from bad_wr, and a NULL object or a malformed hint must not leave it unset. */
+    if (jfr == NULL || jfr->urma_ctx == NULL || hint == NULL) {
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     /* Must verify the object belongs to bond before CONTAINER_OF_FIELD. */
     if (!bondp_is_bond_ctx(jfr->urma_ctx)) {
         URMA_LOG_ERR("bondp_post_jfr_wr is only supported on bond JFR.\n");
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     bondp_comp_t *bdp_jfr = CONTAINER_OF_FIELD(jfr, bondp_comp_t, v_jfr);
     if (bdp_jfr->comp_type != BONDP_COMP_JFR) {
+        URMA_LOG_ERR_RL("Invalid comp_type=%d for bondp_post_jfr_wr.\n", bdp_jfr->comp_type);
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     urma_status_t ret = bondp_check_wr_hint(hint, false);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Invalid recv wr hint: version=%u, size=%u, mask=0x%llx\n",
                      hint->version, hint->size, (unsigned long long)hint->mask);
+        *bad_wr = wr;
         return ret;
     }
     return bondp_post_recv_wr_by_port(bdp_jfr, wr, hint, bad_wr);
@@ -1580,21 +1658,29 @@ urma_status_t bondp_post_jfr_wr(urma_jfr_t *jfr, bondp_wr_hint_t *hint,
 urma_status_t bondp_post_jetty_recv_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
                                             urma_jfr_wr_t *wr, urma_jfr_wr_t **bad_wr)
 {
-    if (jetty == NULL || jetty->urma_ctx == NULL || hint == NULL || wr == NULL || bad_wr == NULL) {
+    if (wr == NULL || bad_wr == NULL) {
+        return URMA_EINVAL;
+    }
+    if (jetty == NULL || jetty->urma_ctx == NULL || hint == NULL) {
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     if (!bondp_is_bond_ctx(jetty->urma_ctx)) {
         URMA_LOG_ERR("bondp_post_jetty_recv_wr is only supported on bond JETTY.\n");
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     bondp_comp_t *bdp_jetty = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
     if (bdp_jetty->comp_type != BONDP_COMP_JETTY) {
+        URMA_LOG_ERR_RL("Invalid comp_type=%d for bondp_post_jetty_recv_wr.\n", bdp_jetty->comp_type);
+        *bad_wr = wr;
         return URMA_EINVAL;
     }
     urma_status_t ret = bondp_check_wr_hint(hint, false);
     if (ret != URMA_SUCCESS) {
         URMA_LOG_ERR("Invalid recv wr hint: version=%u, size=%u, mask=0x%llx\n",
                      hint->version, hint->size, (unsigned long long)hint->mask);
+        *bad_wr = wr;
         return ret;
     }
     return bondp_post_recv_wr_by_port(bdp_jetty, wr, hint, bad_wr);
