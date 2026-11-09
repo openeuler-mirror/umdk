@@ -1279,9 +1279,6 @@ urma_status_t bondp_delete_jfr(urma_jfr_t *jfr)
 static urma_status_t bondp_hint_parse_local_idx(const bondp_context_t *bdp_ctx, const bondp_wr_hint_t *hint,
     uint32_t *idx)
 {
-    if (hint->version != BONDP_WR_HINT_VERSION_V0 || hint->size != sizeof(bondp_wr_hint_t)) {
-        return URMA_EINVAL;
-    }
     if ((hint->mask & BONDP_WR_HINT_MASK_SRC_CHIP_ID) == 0 ||
         (hint->mask & BONDP_WR_HINT_MASK_SRC_DIE_ID) == 0 ||
         (hint->mask & BONDP_WR_HINT_MASK_SRC_PORT_ID) == 0) {
@@ -1327,6 +1324,11 @@ urma_status_t bondp_modify_jfr_internal(urma_jfr_t *jfr, urma_jfr_attr_t *attr,
     urma_status_t result = URMA_SUCCESS;
     if (attr->mask != JFR_RX_THRESHOLD) {
         URMA_LOG_ERR("Only JFR_RX_THRESHOLD is supported by bondp_modify_jfr.\n");
+        result = URMA_EINVAL;
+        goto OUT;
+    }
+
+    if (hint->version != BONDP_WR_HINT_VERSION_V0 || hint->size != sizeof(bondp_wr_hint_t)) {
         result = URMA_EINVAL;
         goto OUT;
     }
