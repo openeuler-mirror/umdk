@@ -148,7 +148,7 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupRejectsOversizedList)
     fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
 
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &wrs[0], &badWr));
-    EXPECT_EQ(nullptr, badWr);
+    EXPECT_EQ(&wrs[0], badWr);
     EXPECT_EQ(0, urma_test::GetHwMockState().postJfrCount);
 }
 
@@ -840,6 +840,7 @@ TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsOversizedWrList)
     fixture.InitActiveComp(&fixture.jfr, 0);
     ASSERT_EQ(0, jfr_wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr[0], &badRecv));
+    EXPECT_EQ(&recvWr[0], badRecv);
     wr_buf_uninit(&fixture.jfr.recv_wr_buf);
 }
 
@@ -926,6 +927,7 @@ TEST(UrmaBondTest, DatapathSendStoreRejectsOversizedList)
     }
     oversizedWr[BONDP_BATCH_POST_MAX_NUM] = fixture.MakeSendWr(URMA_OPC_SEND);
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &oversizedWr[0], &badSend));
+    EXPECT_EQ(&oversizedWr[0], badSend);
 }
 
 TEST(UrmaBondTest, PublicDatapathSendWrListReturnsFirstBadWr)

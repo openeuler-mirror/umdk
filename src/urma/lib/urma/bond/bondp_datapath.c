@@ -787,6 +787,9 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
     try_failback(bdp_comp);
     if (wr_total > BONDP_BATCH_POST_MAX_NUM) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
@@ -810,6 +813,9 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         if (allocated != (uint32_t)wr_total) {
             jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
             if (atomic_load(&bdp_comp->valid[send_idx])) {
+                if (bad_wr != NULL) {
+                    *bad_wr = wr;
+                }
                 return URMA_ENOMEM;
             }
             if (hint != NULL) {
@@ -1229,11 +1235,17 @@ static urma_status_t bondp_post_recv_wr_no_store(bondp_comp_t *bdp_comp,
     while (vwr != NULL) {
         if (index >= BONDP_MAX_WR_LIST_NUM) {
             URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_MAX_WR_LIST_NUM);
+            if (bad_wr != NULL) {
+                *bad_wr = wr;
+            }
             return URMA_EINVAL;
         }
         urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
         ret = copy_jfr_wr(vwr, pwr, prealloc_src_sge[index], BONDP_MAX_SGE_NUM);
         if (ret != 0) {
+            if (bad_wr != NULL) {
+                *bad_wr = vwr;
+            }
             return ret;
         }
         convert_jfr_vwr_to_pwr(pwr, recv_idx);
@@ -1277,6 +1289,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
     }
     if (cur != NULL) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
 
@@ -1297,6 +1312,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
         uint32_t recv_idx_u = post_indices[i];
         if (recv_idx_u >= URMA_UBAGG_DEV_MAX_NUM) {
             URMA_LOG_ERR_RL("Invalid recv_idx=%u when post recv wr.\n", recv_idx_u);
+            if (bad_wr != NULL) {
+                *bad_wr = cur;
+            }
             return URMA_EINVAL;
         }
         int recv_idx = (int)recv_idx_u;
@@ -1318,6 +1336,9 @@ static urma_status_t bondp_post_recv_wr_list_without_backup(bondp_comp_t *bdp_co
             urma_jfr_wr_t *pwr = &prealloc_wr_list[index];
             ret = copy_jfr_wr(cur, pwr, prealloc_src_sge[index], BONDP_MAX_SGE_NUM);
             if (ret != 0) {
+                if (bad_wr != NULL) {
+                    *bad_wr = cur;
+                }
                 return ret;
             }
             convert_jfr_vwr_to_pwr(pwr, recv_idx);
@@ -1376,6 +1397,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
     }
     if (cur != NULL) {
         URMA_LOG_ERR_RL("Bondp supports at most %d wr_list.\n", BONDP_BATCH_POST_MAX_NUM);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     uint32_t allocated = jfr_wr_buf_alloc_batch(recv_wr_buf, wr_entries, (uint32_t)wr_count);
@@ -1383,6 +1407,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
         URMA_LOG_ERR_RL("Bondp WR buffer is not enough, reqeusted %u, available %u.\n",
                         wr_count, allocated);
         jfr_wr_buf_release_batch(recv_wr_buf, wr_entries, allocated);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_ENOMEM;
     }
     if (fixed_recv_idx >= 0) {
@@ -1411,6 +1438,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
                               bondp_get_max_recv_sge(bdp_comp));
             if (ret != 0) {
                 URMA_LOG_ERR_RL("Failed to copy jfr wr at index %u\n", process_node);
+                if (bad_wr != NULL) {
+                    *bad_wr = cur;
+                }
                 goto CLEANUP;
             }
             convert_jfr_vwr_to_pwr(pwr, recv_idx);
