@@ -1707,6 +1707,35 @@ static void resend_matched_jfs_wrs(bondp_comp_t *bdp_comp, uint64_t base_wr_id,
 }
 
 /*
+ * Failover disabled: reclaim send wr entries stranded on the invalidated path
+ * before the rebuild deletes the old pjetty and drops their unpolled CQEs.
+ * No synthetic CR. RNR-pending entries are excluded: they have no in-flight
+ * copy for the rebuild to drop, and their deferred retry task resubmits them
+ * later. @exclude_wr (the triggering entry) is released by the caller via its
+ * own CR. Called with send_lock held.
+ */
+static uint32_t reclaim_stranded_jfs_wrs(bondp_comp_t *bdp_comp, uint32_t send_idx,
+                                         const jfs_wr_entry_t *exclude_wr)
+{
+    uint32_t reclaimed = 0;
+    for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+        jfs_wr_entry_t *stale_wr = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, i);
+        if (stale_wr == exclude_wr ||
+            stale_wr->entry_type != WR_BUF_ENTRY_JFS ||
+            stale_wr->bdp_comp != bdp_comp ||
+            stale_wr->send_idx != send_idx ||
+            stale_wr->rnr_retry_pending) {
+            continue;
+        }
+        atomic_fetch_sub(&bdp_comp->sqe_cnt[send_idx][stale_wr->target_idx], 1);
+        jfs_wr_put_refs(&stale_wr->wr);
+        jfs_wr_buf_release(&bdp_comp->send_wr_buf, stale_wr);
+        reclaimed++;
+    }
+    return reclaimed;
+}
+
+/*
  * Thread-local 16-slot cache for get_comp_by_cr.
  */
 #define TL_COMP_CACHE_SLOTS 16
@@ -1997,6 +2026,22 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         bondp_p_target_jetty_t *skip_p_tjetty = bondp_find_p_tjetty(bdp_tjetty, send_idx, target_idx);
         if (skip_p_tjetty != NULL) {
             atomic_store(&skip_p_tjetty->valid, false);
+        }
+        /*
+         * Failover disabled: reclaim the WRs stranded on the invalidated path
+         * before the rebuild is scheduled; the triggering WR is excluded and
+         * released with its own CR at CONVERT_CR. Gated on enable_failback:
+         * without a rebuild the pjetty is never deleted, no CQE is dropped,
+         * and the stranded WRs are released naturally with their own error
+         * CRs by the valid==false path below.
+         */
+        if (!comp_ctx->enable_failover && comp_ctx->enable_failback) {
+            uint32_t reclaimed_cnt = reclaim_stranded_jfs_wrs(bdp_comp, send_idx, wr_entry);
+            if (reclaimed_cnt != 0) {
+                URMA_LOG_DEBUG("Reclaimed stranded send wrs before pjetty rebuild, "
+                               "vjetty_id=%u, pjetty_idx=%u, cnt=%u\n",
+                               bdp_comp->v_jetty.jetty_id.id, send_idx, reclaimed_cnt);
+            }
         }
         if (is_need_rebuild_jetty(cr) && comp_ctx->enable_failback) {
             int ret = bondp_fb_add_task(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, send_idx,
