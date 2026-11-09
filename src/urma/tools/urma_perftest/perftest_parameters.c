@@ -29,9 +29,9 @@
 #define PERFTEST_JFC_MUL_THRESHOLD    (4)
 #define PERFTEST_DEFAULT_DURATION     (5)
 
-#define PERFTEST_RTP_MAX_SEND_SIZE (65536)
+#define PERFTEST_TP_MAX_SEND_SIZE (65536)
 #define PERFTEST_CTP_MAX_SEND_SIZE (4096)
-#define PERFTEST_RTP_MAX_ORDER     (16)
+#define PERFTEST_TP_MAX_ORDER     (16)
 #define PERFTEST_CTP_MAX_ORDER     (12)
 
 typedef struct perftest_cmd {
@@ -417,6 +417,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->tp_aware = false;
     cfg->tp_reuse = false;
     cfg->use_ctp = false;
+    cfg->use_utp = false;
 
     cfg->wait_jfc_timeout = PERFTEST_DEF_WAIT_JFC_TIME;
     cfg->use_huge_page = false;
@@ -1618,10 +1619,15 @@ int check_local_cfg(perftest_config_t *cfg)
     if (cfg->trans_mode == URMA_TM_UM && cfg->use_ctp) {
         LOG_ERROR("UM transport mode is not recommended for ctp.\n");
     }
+    if (cfg->use_ctp) {
+        cfg->use_utp = false;
+    } else if (cfg->trans_mode == URMA_TM_UM) {
+        cfg->use_utp = true;
+    }
     if (cfg->api_type == PERFTEST_SEND) {
-        if (!cfg->use_ctp && cfg->size > PERFTEST_RTP_MAX_SEND_SIZE && !cfg->all) {
-            LOG_ERROR("Invalid size: %u with rtp for send opcode, max size: %u.\n",
-                      cfg->size, PERFTEST_RTP_MAX_SEND_SIZE);
+        if (!cfg->use_ctp && cfg->size > PERFTEST_TP_MAX_SEND_SIZE && !cfg->all) {
+            LOG_ERROR("Invalid size: %u with tp for send opcode, max size: %u.\n",
+                      cfg->size, PERFTEST_TP_MAX_SEND_SIZE);
             exit(1);
         }
         if (cfg->use_ctp && cfg->size > PERFTEST_CTP_MAX_SEND_SIZE && !cfg->all) {
@@ -1629,9 +1635,9 @@ int check_local_cfg(perftest_config_t *cfg)
                       cfg->size, PERFTEST_CTP_MAX_SEND_SIZE);
             exit(1);
         }
-        if (!cfg->use_ctp && cfg->order > PERFTEST_RTP_MAX_ORDER) {
-            LOG_ERROR("Invalid order: %u with for send opcode, max order: %u.\n",
-                      cfg->order, PERFTEST_RTP_MAX_ORDER);
+        if (!cfg->use_ctp && cfg->order > PERFTEST_TP_MAX_ORDER) {
+            LOG_ERROR("Invalid order: %u with tp for send opcode, max order: %u.\n",
+                      cfg->order, PERFTEST_TP_MAX_ORDER);
             exit(1);
         }
         if (cfg->use_ctp && cfg->order > PERFTEST_CTP_MAX_ORDER) {
