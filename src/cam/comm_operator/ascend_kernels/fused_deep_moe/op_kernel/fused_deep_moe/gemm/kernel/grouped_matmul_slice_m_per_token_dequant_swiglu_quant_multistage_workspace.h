@@ -24,6 +24,9 @@
 #include "../../fused_deep_moe_utils.h"
 
 constexpr uint32_t STATE_OFFSET = 512;
+// Physical experts that still fit a full-size state slot; past this the slot halves so the
+// whole expert roster keeps its place in the window state area.
+constexpr uint32_t MAX_EXPERTS_FULL_STATE_SLOT = 512;
 constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint64_t GROUP_TOKEN_NUM_OFFSET = 932 * 1024;
@@ -906,8 +909,8 @@ public:
         float sumOfFlag = static_cast<float>(-1.0);
         float minTarget = (sumTarget * recStatusNumPerCore) - (float)0.5;
         float maxTarget = (sumTarget * recStatusNumPerCore) + (float)0.5;
-        AscendC::DataCopyParams intriParams{static_cast<uint16_t>(recStatusNumPerCore), 1, static_cast<uint16_t>(15),
-                                            0};
+        AscendC::DataCopyParams intriParams{static_cast<uint16_t>(recStatusNumPerCore), 1,
+                                            static_cast<uint16_t>(stateOffset / UB_BLOCK_SIZE - 1), 0};
         AscendC::GlobalTensor<float> windowInstatusFp32Tensor_;
         windowInstatusFp32Tensor_.SetGlobalBuffer((__gm__ float *)GetWindStateAddrByRankId(epRankId));
         AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
@@ -1260,7 +1263,7 @@ public:
         axisK = params.topK;
         uint32_t maxAxisBs = params.globalBs / epRankSize;
 
-        stateOffset = STATE_OFFSET;
+        stateOffset = expertCntUp > MAX_EXPERTS_FULL_STATE_SLOT ? STATE_OFFSET >> 1 : STATE_OFFSET;
         expertPerSizeOnWin = maxAxisBs * tokenLength * sizeof(XType);
     }
 
