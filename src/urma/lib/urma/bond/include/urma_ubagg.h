@@ -389,8 +389,9 @@ typedef struct bondp_path {
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, URMA_EINVAL when the remote_id coordinates are out of
- * range, URMA_EAGAIN when the specified port is currently unreachable and
- * the caller may retry, other value on error
+ * range or the target jetty has no configured path to that port, URMA_EAGAIN
+ * when the specified port is currently unreachable and the caller may retry,
+ * other value on error
  */
 urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
     urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
@@ -407,8 +408,9 @@ urma_status_t bondp_post_jfs_wr(urma_jfs_t *jfs, bondp_wr_hint_t *hint,
  * @param[in] wr: the posting request all information, including sge, flag.
  * @param[out] bad_wr: the first of failure request.
  * Return: 0 on success, URMA_EINVAL when the remote_id coordinates are out of
- * range, URMA_EAGAIN when the specified port is currently unreachable and
- * the caller may retry, other value on error
+ * range or the target jetty has no configured path to that port, URMA_EAGAIN
+ * when the specified port is currently unreachable and the caller may retry,
+ * other value on error
  */
 urma_status_t bondp_post_jetty_send_wr(urma_jetty_t *jetty, bondp_wr_hint_t *hint,
     urma_jfs_wr_t *wr, urma_jfs_wr_t **bad_wr);
