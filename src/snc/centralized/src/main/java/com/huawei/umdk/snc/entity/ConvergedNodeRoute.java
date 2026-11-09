@@ -42,8 +42,6 @@ public class ConvergedNodeRoute {
      */
     public void addPrefix(String portName, RoutePrefix prefix) {
         ConvergedPrefix converged = portPrefixes.computeIfAbsent(portName, k -> new ConvergedPrefix());
-        if (!converged.getRoutePrefixList().contains(prefix)) {
-            converged.getRoutePrefixList().add(prefix);
-        }
+        converged.getRoutePrefixes().add(prefix);
     }
 }

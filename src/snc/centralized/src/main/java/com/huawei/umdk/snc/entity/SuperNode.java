@@ -46,4 +46,34 @@ public class SuperNode {
         }
         return all.isEmpty() ? Collections.emptyMap() : Collections.unmodifiableMap(all);
     }
+
+    public ForwardingChip getChipByIndex(String deviceName, int chipIndex) {
+        if (deviceName == null) {
+            return null;
+        }
+        DeviceEntity device = getAllDevices().get(deviceName);
+        if (device == null || device.getForwardingChips() == null) {
+            return null;
+        }
+        return device.getForwardingChips().get(chipIndex);
+    }
+
+    public ForwardingChip getChipByPortName(String deviceName, String portName) {
+        if (deviceName == null || portName == null) {
+            return null;
+        }
+        DeviceEntity device = getAllDevices().get(deviceName);
+        if (device == null || device.getForwardingChips() == null) {
+            return null;
+        }
+        for (ForwardingChip chip : device.getForwardingChips().values()) {
+            if (chip == null || chip.getPorts() == null) {
+                continue;
+            }
+            if (chip.getPorts().containsKey(portName)) {
+                return chip;
+            }
+        }
+        return null;
+    }
 }
