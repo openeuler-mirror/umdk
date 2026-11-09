@@ -313,7 +313,7 @@ public class RouteInstantiationService {
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
                 log.error("route not found for label %s", label);
-                continue;
+                throw new IllegalArgumentException(String.format("route not found for label %s", label));
             }
             String key = buildRouteTableKey(npuDevice.getDeviceName(), chip.getChipIndex());
             instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
@@ -343,7 +343,7 @@ public class RouteInstantiationService {
         RouteTable routeTable = routes.get(label);
         if (routeTable == null) {
             log.error("route not found for label %s", label);
-            return;
+            throw new IllegalArgumentException(String.format("route not found for label %s", label));
         }
 
         String key = buildRouteTableKey(swDevice.getDeviceName(),
@@ -365,7 +365,7 @@ public class RouteInstantiationService {
             RouteTable routeTable = routes.get(label);
             if (routeTable == null) {
                 log.error("route not found for label %s", label);
-                continue;
+                throw new IllegalArgumentException(String.format("route not found for label %s", label));
             }
             String key = buildRouteTableKey(swDevice.getDeviceName(), chip.getChipIndex());
             instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));

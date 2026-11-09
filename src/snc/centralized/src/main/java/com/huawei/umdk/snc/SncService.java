@@ -15,7 +15,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.huawei.umdk.snc.entity.ConvergedRouteResult;
+import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.DrainEvent;
+import com.huawei.umdk.snc.entity.ForwardingChip;
+import com.huawei.umdk.snc.entity.PortEntity;
 import com.huawei.umdk.snc.log.LogCallback;
 import com.huawei.umdk.snc.log.Logger;
 import com.huawei.umdk.snc.config.HashTuple;
@@ -38,6 +41,7 @@ import com.huawei.umdk.snc.route.model.RouteTable;
 import com.huawei.umdk.snc.route.service.RouteConvergeService;
 import com.huawei.umdk.snc.route.service.RouteInstantiationService;
 import com.huawei.umdk.snc.route.service.RouteMspService;
+import com.huawei.umdk.snc.route.service.ActiveDrainService;
 import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import com.huawei.umdk.snc.route.topo.template.service.TopoTemplateService;
@@ -84,6 +88,8 @@ public class SncService {
 
     private RouteConvergeService routeConvergeService;
 
+    private ActiveDrainService activeDrainService;
+
     private volatile boolean superNodeLoaded;
 
     public static void registerLogCallback(LogCallback logCallback) {
@@ -119,8 +125,9 @@ public class SncService {
             pathEngine, routeLookupEngine, coveragePlanEngine);
         this.linkEventService = new LinkEventService(superNodeStore);
         this.routeConvergeService = new RouteConvergeService();
+        this.activeDrainService = new ActiveDrainService();
         LOG.debug("init: Service instances created (SuperNodeService, PathService, "
-            + "LinkEventService, RouteConvergeService)");
+            + "LinkEventService, RouteConvergeService, ActiveDrainService)");
 
         this.superNodeLoaded = false;
         this.state = State.READY;
@@ -141,6 +148,7 @@ public class SncService {
         this.pathService = null;
         this.linkEventService = null;
         this.routeConvergeService = null;
+        this.activeDrainService = null;
         LOG.info("uninit: state=" + state);
     }
 
@@ -427,14 +435,18 @@ public class SncService {
 
     public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode, String superNodeType) {
         checkNotUninit();
+        if (superNode == null) {
+            throw new IllegalArgumentException("superNode is null");
+        }
+        if (superNodeType == null || superNodeType.isEmpty()) {
+            throw new IllegalArgumentException("super node type is null or empty");
+        }
+
         if (!routeCalculated) {
             routeCalculate();
         }
 
-        if (superNode == null) {
-            throw new IllegalArgumentException("superNode is null");
-        }
-
+        LOG.info("super node type %s", superNodeType);
         Map<String, RouteTable> routes = superNodeRoutes.get(superNodeType);
         if (routes == null) {
             throw new IllegalArgumentException("no instantiated routes for " + superNodeType);
@@ -470,6 +482,8 @@ public class SncService {
             throw new IllegalArgumentException("device info is null");
         }
 
+        LOG.info("device name %s and chip index %d", deviceName, chipIndex);
+
         String key = RouteInstantiationService.buildRouteTableKey(deviceName, chipIndex);
         Map<String, RoutingEntry> routingEntries = instantiationRouteMap.get(key);
         if (routingEntries == null) {
@@ -479,7 +493,119 @@ public class SncService {
         return routingEntries;
     }
 
+    private void checkDrainEvent(DrainEvent event) {
+        if (event == null) {
+            LOG.error("event is null");
+            throw new IllegalArgumentException("event is null");
+        }
+
+        if (!DrainEvent.ACTION_DISABLE.equals(event.getAction()) &&
+            !DrainEvent.ACTION_ENABLE.equals(event.getAction())) {
+            LOG.error("invalid action");
+            throw new IllegalArgumentException("invalid action");
+        }
+
+        if (!DrainEvent.EVENT_TYPE_DEVICE.equals(event.getEventType()) &&
+            !DrainEvent.EVENT_TYPE_LINK.equals(event.getEventType())) {
+            LOG.error("invalid event type");
+            throw new IllegalArgumentException("invalid event type");
+        }
+
+        if (event.getDeviceName() == null || event.getDeviceName().isEmpty()) {
+            LOG.error("invalid device name");
+            throw new IllegalArgumentException("invalid device name");
+        }
+    }
+
+    private void checkSuperNode(SuperNode supernode) {
+        if (supernode == null || supernode.getName() == null) {
+            LOG.error("supernode or name is null");
+            throw new IllegalArgumentException("supernode or name is null");
+        }
+        boolean noNpu = supernode.getNpuDevices() == null || supernode.getNpuDevices().isEmpty();
+        boolean noSw = supernode.getSwDevices() == null || supernode.getSwDevices().isEmpty();
+        if (noNpu || noSw) {
+            LOG.error("superNode=%s has no npu or sw device", supernode.getName());
+            throw new IllegalArgumentException("superNode has no npu or sw device");
+        }
+
+        for (Map.Entry<String, ? extends DeviceEntity> entry : supernode.getAllDevices().entrySet()) {
+            String deviceKey = entry.getKey();
+            DeviceEntity device = entry.getValue();
+            if (deviceKey == null || device == null) {
+                LOG.error("null device key or device");
+                throw new IllegalArgumentException("null device key or device");
+            }
+            if (!deviceKey.equals(device.getDeviceName())) {
+                LOG.error("device key %s not equal device name", deviceKey);
+                throw new IllegalArgumentException("device key " + deviceKey + " not equal device name");
+            }
+            if (device.getForwardingChips() == null || device.getForwardingChips().isEmpty()) {
+                LOG.error("device=%s has null or empty forwardingChips", device.getDeviceName());
+                throw new IllegalArgumentException("device has null or empty forwardingChips");
+            }
+            checkForwardingChips(device);
+        }
+    }
+
+    private void checkForwardingChips(DeviceEntity device) {
+        for (Map.Entry<Integer, ? extends ForwardingChip> chipEn : device.getForwardingChips().entrySet()) {
+            Integer chipKey = chipEn.getKey();
+            ForwardingChip chip = chipEn.getValue();
+            if (chipKey == null || chip == null) {
+                LOG.error("device %s null chip key or chip", device.getDeviceName());
+                throw new IllegalArgumentException("device " + device.getDeviceName() + " null chip key or chip");
+            }
+            if (!chipKey.equals(chip.getChipIndex())) {
+                LOG.error("device %s chip %d not equal chip index", device.getDeviceName(), chipKey);
+                throw new IllegalArgumentException(String.format("device %s chip %d not equal chip index",
+                    device.getDeviceName(), chipKey));
+            }
+            if (chip.getPorts() == null || chip.getPorts().isEmpty()) {
+                LOG.error("device %s chip %d ports is null or empty", device.getDeviceName(), chipKey);
+                throw new IllegalArgumentException(String.format("device %s chip %d ports is null or empty",
+                    device.getDeviceName(), chipKey));
+            }
+            for (Map.Entry<String, ? extends PortEntity> portEn : chip.getPorts().entrySet()) {
+                String portKey = portEn.getKey();
+                PortEntity port = portEn.getValue();
+                if (portKey == null || port == null) {
+                    LOG.error("device %s chip %d has null port key or port", device.getDeviceName(), chipKey);
+                    throw new IllegalArgumentException(String.format("device %s chip %d has null port key or port",
+                        device.getDeviceName(), chipKey));
+                }
+                if (!portKey.equals(port.getPortName())) {
+                    LOG.error("device %s chip %d port key %s not equal port name", device.getDeviceName(), chipKey,
+                        portKey);
+                    throw new IllegalArgumentException(
+                        String.format("device %s chip %d port key %s not equal port name", device.getDeviceName(),
+                            chipKey, portKey));
+                }
+                if (port.getRemoteDevice() == null || port.getRemotePort() == null) {
+                    LOG.error("device %s chip %d port %s remote info is null", device.getDeviceName(),
+                        chipKey, portKey);
+                    throw new IllegalArgumentException(
+                        String.format("device %s chip %d port %s remote info is null", device.getDeviceName(),
+                        chipKey, portKey));
+                }
+            }
+        }
+    }
+
+    /**
+     * 路由收敛切流：设备切流或链路切流
+     */
     public ConvergedRouteResult routeConvergence(SuperNode supernode, DrainEvent event) {
-        return new ConvergedRouteResult();
+        checkNotUninit();
+        checkDrainEvent(event);
+        checkSuperNode(supernode);
+
+        ConvergedRouteResult result;
+        if (DrainEvent.EVENT_TYPE_LINK.equals(event.getEventType())) {
+            result = activeDrainService.drainLinks(supernode, event);
+        } else {
+            result = activeDrainService.drainDevice(supernode, event);
+        }
+        return result;
     }
 }
