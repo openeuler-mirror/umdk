@@ -1720,7 +1720,10 @@ Options:
   --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.
   --seg_pre_jetty             Enable a segment for each Jetty, default: disable.
   --enable_imm                Enable immediate data for write or send, default: disable.
-  --enable_err_continue       Enable continue running when cr erros, default: disable.
+  --enable_err_continue       Enable continue running when CR errors occur, default: disable.
+                              Recommend also setting --error_suspend true.
+  --error_suspend <true/false> Enable error suspend for jetty or jfs, default: false.
+                              Recommend enabling with --enable_err_continue.
   --enable_notify            Enable write_with_notify for WRITE tests, default: disable.
   --enable_sync_stream       Enable synchronized multi-stream in multi-Jetty bandwidth tests, default: disable.
   --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.
@@ -1804,7 +1807,8 @@ Options:
 |               | jettys_pre_jfr      | uint32_t | 指定多少个jetty共享一个jfr                                                                                                                                                                                                                                 | 可选         | 不限定                               | jettys                         |
 |               | seg_pre_jetty       | bool     | 使能每个jetty都配置一个seg用于测试                                                                                                                                                                                                                         | 可选         |                                      | 默认关闭                       |
 |               | enable_imm          | bool     | 使能imm测试                                                                                                                                                                                                                                                | 可选         |                                      | 默认关闭                       |
-|               | enable_err_continue | bool     | 当发生cr错误时，使能继续发包                                                                                                                                                                                                                               | 可选         |                                      | 默认关闭                       |
+|               | enable_err_continue | bool     | 当发生cr错误时，使能继续发包。建议同时配置error_suspend为true                                                                                                                                                                                               | 可选         |                                      | 默认关闭                       |
+|               | error_suspend       | bool     | 配置JFS或Jetty内嵌JFS的异常处理模式，true表示异常后挂起。建议开启enable_err_continue时同步配置为true                                                                                                                                                          | 可选         | true/false                           | false                          |
 |               | enable_notify       | bool     | 在WRITE测试中使能write_with_notify，通知数据由工具固定填充                                                                                                                                                                                                 | 可选         |                                      | 默认关闭                       |
 |               | enable_sync_stream  | bool     | 在多Jetty带宽测试中使能同步多流发送                                                                                                                                                                                                                         | 可选         |                                      | 默认关闭                       |
 |               | enable_user_tp      | bool     | 使能用户态建链，当这个选项被启用时，用户 TP 可以用于数据传输，而无需使用通用虚拟交换机（UVS）                                                                                                                                                              | 可选         |                                      | 默认关闭                       |
