@@ -11,6 +11,7 @@ package com.huawei.umdk.snc.route;
 
 import com.huawei.umdk.snc.SncService;
 import com.huawei.umdk.snc.config.SNCConfig;
+import com.huawei.umdk.snc.entity.DrainEvent;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
@@ -284,7 +285,7 @@ public class RouteInstantiationTest {
     @Test
     void makeRoutesTest() {
         Map<String, Map<String, RoutingEntry>> result = sncService.makeRoutes(superNode,
-            SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+            SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         // 拼接该npu对应的路由的key
         String key = npuDevice.getDeviceName().concat("#").concat("2");
@@ -299,7 +300,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateNpuRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(npuDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
@@ -312,7 +313,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL1SwRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 1);
         printRoutingEntry(routeMap);
@@ -326,7 +327,7 @@ public class RouteInstantiationTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);

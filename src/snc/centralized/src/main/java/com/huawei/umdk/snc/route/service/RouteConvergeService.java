@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
-import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.ForwardingChip;
 import com.huawei.umdk.snc.entity.LinkEvent;
 import com.huawei.umdk.snc.entity.OutPortInfo;
@@ -100,7 +99,7 @@ public class RouteConvergeService {
 
         String startDevice = event.getDeviceName();
         String startPort = event.getPortName();
-        ForwardingChip startChip = findChipByPort(supernode, startDevice, startPort);
+        ForwardingChip startChip = supernode.getChipByPortName(startDevice, startPort);
         if (startChip == null) {
             LOG.error("converge: error=port not found, device=%s, port=%s", startDevice, startPort);
             throw new IllegalStateException(
@@ -130,7 +129,7 @@ public class RouteConvergeService {
      */
     private void propagateToPeers(ConvergeTask task, Queue<ConvergeTask> queue, Set<String> visited) {
         ConvergeContext ctx = task.ctx;
-        ForwardingChip chip = getChipByIndex(ctx.supernode, task.device, task.chipIndex);
+        ForwardingChip chip = ctx.supernode.getChipByIndex(task.device, task.chipIndex);
         if (chip == null || chip.getPorts() == null) {
             LOG.warn("converge: device=%s, chip=%d, warning=chip or ports null, skip peer lookup",
                 task.device, task.chipIndex);
@@ -167,7 +166,7 @@ public class RouteConvergeService {
     private void propagateToPeer(ConvergeTask task, String peerDevice, String peerPort,
         Queue<ConvergeTask> queue) {
         ConvergeContext ctx = task.ctx;
-        ForwardingChip peerChip = findChipByPort(ctx.supernode, peerDevice, peerPort);
+        ForwardingChip peerChip = ctx.supernode.getChipByPortName(peerDevice, peerPort);
         if (peerChip == null || peerChip.getChipIndex() == null) {
             LOG.warn("converge: peerDevice=%s, peerPort=%s, warning=peer chip not found, skip",
             peerDevice, peerPort);
@@ -266,43 +265,6 @@ public class RouteConvergeService {
         }
         routingEntry.refreshReachable();
         return routingEntry.isReachable() != oldReachable;
-    }
-
-    /**
-     * 在指定设备的所有 forwardingChip 中，找到包含 portName 的那个 chip。
-     * 返回 null 表示端口不存在。
-     */
-    private ForwardingChip findChipByPort(SuperNode supernode, String deviceName, String portName) {
-        if (supernode == null || deviceName == null || portName == null) {
-            return null;
-        }
-        DeviceEntity device = supernode.getAllDevices().get(deviceName);
-        if (device == null || device.getForwardingChips() == null) {
-            return null;
-        }
-        for (ForwardingChip chip : device.getForwardingChips().values()) {
-            if (chip == null || chip.getPorts() == null) {
-                continue;
-            }
-            if (chip.getPorts().containsKey(portName)) {
-                return chip;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * 获取指定 device 上指定 chipIndex 的 ForwardingChip，找不到返回 null。
-     */
-    private ForwardingChip getChipByIndex(SuperNode supernode, String deviceName, int chipIndex) {
-        if (supernode == null || deviceName == null) {
-            return null;
-        }
-        DeviceEntity device = supernode.getAllDevices().get(deviceName);
-        if (device == null || device.getForwardingChips() == null) {
-            return null;
-        }
-        return device.getForwardingChips().get(chipIndex);
     }
 
     private static String routeKey(String deviceName, int chipIndex) {

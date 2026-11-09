@@ -56,6 +56,8 @@ public class RouteInstantiationService {
 
     private static final long FIVE_SECTION_POSITION = 5;
 
+    private static final long SIX_IODIE_POSITION = 4;
+
     private static final long CHASSIS_COUNT = 4;
 
     private static final long SLOT_COUNT = 8;
@@ -111,7 +113,8 @@ public class RouteInstantiationService {
                         for (int ubpu = 0; ubpu < DEVICE_COUNT; ubpu++) {
                             long addr = (DEFAULT_VALUE << ONE_SECTION_POSITION) |
                                 (DEFAULT_VALUE << TWO_SECTION_POSITION) | ((long) chassis << THREE_SECTION_POSITION) |
-                                ((long) slot << FOUR_SECTION_POSITION) | ((long) ubpu << FIVE_SECTION_POSITION);
+                                ((long) slot << FOUR_SECTION_POSITION) | ((long) ubpu << FIVE_SECTION_POSITION) |
+                                (1 << SIX_IODIE_POSITION);
                             Prefix newPrefix = new Prefix(addr, PREFIX_ADDRESS_LEN, prefix.getMask());
                             RouteEntry newRouteEntry = new RouteEntry(newPrefix);
                             newRouteEntry.copyNhpSet(routeEntry);
@@ -291,7 +294,7 @@ public class RouteInstantiationService {
             routes.putAll(routeTableMap);
         }
 
-        superNodeRoutes.put(xpodType, routes);
+        superNodeRoutes.put(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue(), routes);
         log.info("instantiate xpod route success");
     }
 
