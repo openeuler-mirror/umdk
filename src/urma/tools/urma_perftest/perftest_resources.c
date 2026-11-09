@@ -478,6 +478,7 @@ static int create_jfs(perftest_context_t *ctx, const perftest_config_t *cfg)
     urma_jfs_cfg_t jfs_cfg = {
         .depth = cfg->jfs_depth,
         .flag.bs.lock_free = cfg->lock_free ? 1 : 0,
+        .flag.bs.error_suspend = cfg->error_suspend ? 1 : 0,
         .trans_mode = cfg->trans_mode,
         .priority = cfg->priority, /* Highest priority */
         .max_sge = 1,
@@ -567,6 +568,7 @@ static void fill_jfs_cfg(perftest_context_t *ctx, const perftest_config_t *cfg, 
     jfs_cfg->depth = cfg->jfs_depth;
     jfs_cfg->flag.value = 0;
     jfs_cfg->flag.bs.lock_free = cfg->lock_free ? 1 : 0;
+    jfs_cfg->flag.bs.error_suspend = cfg->error_suspend ? 1 : 0;
     jfs_cfg->trans_mode = cfg->trans_mode;
     jfs_cfg->priority = cfg->priority; /* Highest priority */
     jfs_cfg->max_sge = 1;
