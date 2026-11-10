@@ -416,7 +416,8 @@ Returns a Tuple of 3 Tensors: `output`, `share_output`, `expert_token_nums`.
 7. Other constraints need to be satisfied:
  - Required: batch_size range: `[0, 40960]` (Zero-Buffer upper bound)
  - Required: token_length range: `[512, 7168]`
- - Required: gmm1_hidden_size range: `[1024, 6144]`
+ - Required: gmm1_hidden_size range: `[1024, 6144]` and `gmm1_hidden_size % 256 == 0`
+ - When shared experts are provided, share_mm1_hidden_size range: `[1024, 6144]` and `share_mm1_hidden_size % 256 == 0`
  - Required: topk <= 12 and topk <= moe_expert_num
  - Required: moe_expert_num range: `(0, 512]`, and `moe_expert_num % ep_rank_size == 0`
  - Required: `moe_expert_num_per_rank * ep_rank_size <= 512`

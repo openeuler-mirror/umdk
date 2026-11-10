@@ -415,7 +415,8 @@ Zero-Buffer（SHMEM）路径下的通算大融合算子，融合 [Dispatch + FFN
 7. 除满足上述形状约束外，其他参数取值要求：
  - 需要满足：batch_size 取值范围 `[0, 40960]`（Zero-Buffer 模式上界）
  - 需要满足：token_length 取值范围 `[512, 7168]`
- - 需要满足：gmm1_hidden_size 取值范围 `[1024, 6144]`
+ - 需要满足：gmm1_hidden_size 取值范围 `[1024, 6144]` 且 `gmm1_hidden_size % 256 == 0`
+ - 需要满足：传入共享专家时 share_mm1_hidden_size 取值范围 `[1024, 6144]` 且 `share_mm1_hidden_size % 256 == 0`
  - 需要满足：topk <= 12 且 topk <= moe_expert_num
  - 需要满足：moe_expert_num 取值范围 `(0, 512]` 且 `moe_expert_num % ep_rank_size == 0`
  - 需要满足：`moe_expert_num_per_rank * ep_rank_size <= 512`
