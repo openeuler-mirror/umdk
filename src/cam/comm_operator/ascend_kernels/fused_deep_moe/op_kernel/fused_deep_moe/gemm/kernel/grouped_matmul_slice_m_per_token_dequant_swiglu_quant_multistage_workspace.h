@@ -28,24 +28,59 @@ constexpr uint32_t STATE_OFFSET = 512;
 // whole expert roster keeps its place in the window state area.
 constexpr uint32_t MAX_EXPERTS_FULL_STATE_SLOT = 512;
 constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
+// Do not move or widen the state region below. These words are pure flip counters and every core has to
+// read the same value: a disagreement does not slow anything down, it hangs the launch, because every
+// `expected = coreNumPerGroup * vToCFlag` wait stops matching at once.
+//
+// Widen it in place and the tail of the enlarged region lands on the tail of the old one, so it reads
+// back the previous launch's per-core parity instead of zeros. Re-base it and the whole thing moves onto
+// addresses this operator never wrote but the other MoE operators sharing this window may have. Both
+// leave some cores with a stale parity and some with a fresh one, and the launch never agrees.
 constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint64_t GROUP_TOKEN_NUM_OFFSET = 932 * 1024;
 constexpr uint64_t SOFT_SYNC_OFFSET = 964 * 1024;
 constexpr uint64_t SHARE_QUANT_SOFT_SYNC_OFFSET = 988 * 1024;
 constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;
+// One full 512B line per vector core instead of 128B. Every AIV read-modify-writes this slot -- this
+// kernel, dispatch, and the combiner each flip their own -- so at a 128B stride four consecutive cores
+// land on the same 512B line and take turns dirtying it for each other. 48 cores at 512B occupy
+// [256K, 280K); the region above is unused until STATE_WIN_OFFSET, so nothing is re-based. The stride
+// must match in all three files that own this slot.
+constexpr uint32_t SELF_STATE_SLOT_INTS = 512 / sizeof(int32_t);
 constexpr uint32_t SUM_TMP_TENSOR_SIZE = 1024;
 constexpr uint32_t UB_ALIGN = 32;
 // Scratch for moving a state word through the DMA engine in the kernel prologue, before anything
-// else has claimed UB.
+// else has claimed UB. The AIV flip moves both of its state words in one 32B block, so the load and
+// the store staging are adjacent and each is a single block wide.
 constexpr int64_t STATE_SLOT_DMA_READ_UB_OFFSET = 0;
-constexpr int64_t STATE_SLOT_DMA_WRITE_UB_OFFSET = 32;
-// A cube core has no UB, so its state word cannot travel by DMA and keeps the scalar
-// clean-and-invalidate path. It buys isolation with address space instead: one whole cache line each.
-// At the old 128B stride four cubes shared a line, so every access dragged the neighbours' words in
-// and pushed them back out. This block sits past both AIV regions, which end at index 120 (15360B),
-// and 24 x 512B still fits inside the 32KB before GROUP_TOKEN_NUM_OFFSET.
-constexpr uint32_t AIC_STATE_SLOT_INTS = 512 / sizeof(int32_t);
+constexpr int64_t STATE_SLOT_DMA_WRITE_UB_OFFSET = UB_ALIGN;
+// One 32B block per vector core, at the original 128B stride. Nothing here moves.
+//
+// Do not widen this region or re-base it. These words are pure flip counters: every core has to read the
+// same value or the launch cannot agree on vToCFlag, and a disagreement is not a slow path but a hang --
+// every `expected = coreNumPerGroup * vToCFlag` wait stops matching at once. Widening in place puts the
+// tail of the enlarged region on the tail of the old one, so it reads back the previous launch's
+// per-core parity instead of zeros. Re-basing moves the whole thing onto addresses this operator never
+// wrote, but the other MoE operators sharing this window may have. Either way some cores come up with a
+// stale parity and some with a fresh one, and the launch never agrees.
+//
+// What is safe, and all this change does, is to stop spending a second round trip on the second word.
+// AIV used to keep dataState and cvDataState in two separately addressed slots, so every launch paid
+// load A, store A, load B, store B, with each store blocking the next load through the staging buffer.
+// Both now ride word 0 and word 1 of the same 32B block. Word 1 was only ever written as part of the
+// store's eight-word zero fill and read by nobody, and it starts at 0 on the first launch exactly as the
+// old cvDataState slot did, so the flip counter keeps its original parity.
+constexpr uint32_t STATE_SLOT_BYTES = 512;
+constexpr uint32_t STATE_SLOT_INTS = STATE_SLOT_BYTES / sizeof(int32_t);
+// AIV slots are indexed by aivIdx. The stride is in int32 elements, so UB_ALIGN elements is 128B --
+// the same address every core used before.
+constexpr uint32_t AIV_STATE_BASE_INTS = 0;
+constexpr uint32_t AIV_STATE_SLOT_INTS = UB_ALIGN;
+constexpr uint32_t AIV_DATA_STATE_WORD = 0;
+constexpr uint32_t AIV_CV_STATE_WORD = 1;
+// Cubes have no UB, flip their one word with a scalar clean-and-invalidate, and keep a whole line each.
 constexpr uint32_t AIC_STATE_BASE_INTS = 15360 / sizeof(int32_t);
+constexpr uint32_t AIC_STATE_SLOT_INTS = 512 / sizeof(int32_t);
 constexpr uint32_t TOKEN_EXTRA_SPACE = 512;
 // A token travels in fixed 512B blocks, each holding 480B of payload and a 32B data-as-flag tail.
 // The tail is pre-filled once and never overwritten, so a block's flag becomes visible exactly when
@@ -98,6 +133,83 @@ constexpr uint32_t RECV_PREFIX_COPY_INTS =
 constexpr uint32_t RECV_FLAG_BLOCK_INTS = 8;           // 32B / sizeof(int32_t)
 constexpr int64_t RECV_FLAG_READ_OFFSET = 128;         // past the 128B record line in scratch
 constexpr uint32_t RECV_FLAG_STAGE_BYTES = RECV_REPLICATE_MAX_CORES * 512;  // line per core staged
+// Expert 0's arrival check. It is the one expert with nothing to hide its wait behind: no cube can do
+// anything between the last token of group 0 landing and group 0's first block starting. So its receive
+// cores skip the shared atomic-add record -- 24 read-modify-writes queued on one 32B line -- and each
+// writes a private slot instead, and AIC 0 folds the slots with one int8 matmul: the slots are the K
+// axis of A, B is a constant all-ones tile, so C[m][n] is the byte sum of A's row m.
+//
+// A slot is a whole 512B fractal filled end to end with this launch's flag word. Filling it completely
+// costs the writer nothing and buys two things: the fold needs no assumption about the fractal order
+// (every byte is the same value, exactly the argument that lets B be all-ones), and the flag reaches
+// *every* row of A, so the whole C tile carries the sum instead of only row 0. That is what makes the
+// strided publish below possible -- with a 32B slot only C[0][0] is meaningful and all 47 readers end
+// up polling that one word.
+constexpr uint32_t FIRST_EXPERT_CORE_SLOT = 24;
+constexpr uint32_t FIRST_EXPERT_C0_BYTES = 32;
+constexpr uint32_t FIRST_EXPERT_FRACTAL_BYTES = 512;
+constexpr uint32_t FIRST_EXPERT_SLOT_BYTES = FIRST_EXPERT_FRACTAL_BYTES;
+constexpr uint32_t FIRST_EXPERT_SLOT_INTS = FIRST_EXPERT_SLOT_BYTES / sizeof(int32_t);
+constexpr uint32_t FIRST_EXPERT_MMA_M = 16;
+constexpr uint32_t FIRST_EXPERT_MMA_N = 16;
+constexpr uint32_t FIRST_EXPERT_MMA_K = FIRST_EXPERT_CORE_SLOT * FIRST_EXPERT_C0_BYTES;  // 768 int8 bytes
+// Catlass hands a RowMajor layout's ldm straight to the fixpipe's dstStride, so one instruction can
+// scatter the M equal rows of C onto M separate cache lines. Three such writes cover every reader of
+// group 0 -- the 23 other cubes and the 24 vector cores that run the epilogue -- one line each, so the
+// only two parties on a line are its reader and the fixpipe that is writing it anyway.
+constexpr uint32_t FIRST_EXPERT_OUT_STRIDE_BYTES = 512;
+constexpr uint32_t FIRST_EXPERT_OUT_STRIDE_INTS = FIRST_EXPERT_OUT_STRIDE_BYTES / sizeof(int32_t);
+constexpr uint32_t FIRST_EXPERT_OUT_TILES = 3;
+constexpr uint32_t FIRST_EXPERT_SLOT_TOTAL = FIRST_EXPERT_OUT_TILES * FIRST_EXPERT_MMA_M;
+// Cubes take slots [0, 24): slot 0 is AIC 0's own poll target, which no one else reads. The vector
+// cores take the rest.
+constexpr uint32_t FIRST_EXPERT_AIV_SLOT_BASE = FIRST_EXPERT_CORE_SLOT;
+static_assert(FIRST_EXPERT_AIV_SLOT_BASE + FIRST_EXPERT_CORE_SLOT <= FIRST_EXPERT_SLOT_TOTAL,
+              "first-expert output tiles must cover one slot per cube and per vector core");
+// The region sits in the tail of the reserved workspace, past everything RecvCount publishes. The
+// fixpipe wants a 512B-aligned destination and the record load wants whole fractals, which the prefix
+// copy region's end already satisfies.
+constexpr uint64_t FIRST_EXPERT_ACK_OFFSET =
+    (RECV_PREFIX_COPY_BASE + RECV_PREFIX_COPY_INTS * sizeof(int32_t) + FIRST_EXPERT_FRACTAL_BYTES - 1) /
+    FIRST_EXPERT_FRACTAL_BYTES * FIRST_EXPERT_FRACTAL_BYTES;
+constexpr uint64_t FIRST_EXPERT_OUT_OFFSET =
+    FIRST_EXPERT_ACK_OFFSET + FIRST_EXPERT_CORE_SLOT * FIRST_EXPERT_SLOT_BYTES;
+constexpr uint64_t FIRST_EXPERT_REGION_BYTES =
+    FIRST_EXPERT_CORE_SLOT * FIRST_EXPERT_SLOT_BYTES +
+    FIRST_EXPERT_SLOT_TOTAL * FIRST_EXPERT_OUT_STRIDE_BYTES;
+// RESERVED_WORKSPACE_SIZE on the host side. Kept as a literal because the kernel does not see it.
+static_assert(FIRST_EXPERT_ACK_OFFSET + FIRST_EXPERT_REGION_BYTES <= 512 * 1024,
+              "first-expert region overflows the reserved workspace");
+// BlockMmad owns L1 [0, 384KB); the fold borrows the tail for its record tile.
+constexpr uint32_t FIRST_EXPERT_L1_OFFSET = 384 * 1024;
+// BlockMmad spends 32KB of the 64KB L0B, so its upper half is free for the constant ones tile.
+constexpr uint32_t FIRST_EXPERT_L0B_OFFSET = 2 * 128 * 128;
+// BlockMmad owns l0AEventList[0] = 0, l0BEventList[0] = 2, l0CEventList[0] = 0, MTE1_M event 0. The
+// fold borrows M_MTE1 event 0: it consumes the set BlockMmad left and re-arms it every round, so on
+// exit there is exactly one outstanding set, the same as on entry.
+constexpr int32_t FIRST_EXPERT_L0A_EVENT = 0;
+// MTE1_M and FIX_M share id 1 because they never overlap: each wait retires before the next set.
+constexpr int32_t FIRST_EXPERT_MTE1_M_EVENT = 1;
+constexpr int32_t FIRST_EXPERT_FIX_M_EVENT = 1;
+// FIX_S needs its own index: it is set in the same round as FIX_M and both are still outstanding when
+// the next set runs, and an event index is a single flag register, so sharing would pair the two waits
+// with the wrong sets and could let the scalar read pass before the fixpipe has written the sum.
+constexpr int32_t FIRST_EXPERT_FIX_S_EVENT = 7;
+constexpr int32_t FIRST_EXPERT_MTE2_MTE1_EVENT = 6;
+// GetSystemCycle ticks at 50MHz here, so one tick is 20ns and the kernel-wide SLEEP_CYCLE of 25 ticks
+// is 500ns. That is a long time to sit out when the 24 receive cores land within a few hundred
+// nanoseconds of each other, and the backoff it buys is not needed on this path: the fold reads a
+// region only the receive cores write, and every reader of the result owns its own line. So the
+// first-expert loops use their own, much shorter gap.
+constexpr int64_t FIRST_EXPERT_SPIN_TICKS = 10;  // 200ns
+__aicore__ inline void FirstExpertSpin()
+{
+    int64_t start = AscendC::GetSystemCycle();
+    int64_t elapsed = AscendC::GetSystemCycle() - start;
+    while (elapsed < FIRST_EXPERT_SPIN_TICKS) {
+        elapsed = AscendC::GetSystemCycle() - start;
+    }
+}
 // Scratch for the vector arrival check. It sits near the top of UB, above everything RecvCoreFunc and
 // RecvToken lay out, so it cannot collide with the per-stage buffers below it.
 constexpr int64_t RECV_ARRIVE_GATHER_OFFSET = 176 * 1024;
@@ -326,6 +438,51 @@ public:
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
     }
 
+    // Both of this core's state words travel in one 32B block, at words 0 and 1 of its own line.
+    // Returns word 0 (dataState) in firstWord and word 1 (cvDataState) in secondWord.
+    //
+    // Read only, on purpose. This used to be a read-modify-write, which meant every launch paid for it
+    // twice: once here at startup, and once per core on a 128B stride -- four cores to a 512B line, so
+    // they took turns invalidating each other. The flip itself has not gone away; it moved to the end of
+    // the launch, where the cores have already synchronised and nothing is waiting on it. The values
+    // written are the same, into the same slot, so the per-launch flip count is unchanged and every
+    // derived parity still lines up.
+    CATLASS_DEVICE
+    void LoadStatePairByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index,
+                            int32_t &firstWord, int32_t &secondWord)
+    {
+        auto readBuf = resource.ubBuf.template GetBufferByByte<int32_t>(STATE_SLOT_DMA_READ_UB_OFFSET);
+        AscendC::DataCopyParams oneBlock{1U, 1U, 0U, 0U};
+        AscendC::DataCopy(readBuf, stateTensor[index], oneBlock);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+        firstWord = readBuf.GetValue(0);
+        secondWord = readBuf.GetValue(1);
+    }
+
+    // Publish the next launch's parity: write back the inverse of the pair this core read at startup,
+    // word for word, and clear the rest of the block so the staging buffer cannot spill stale bytes into
+    // the line. This is the write end of LoadStatePairByDma and must be called exactly once per core.
+    CATLASS_DEVICE
+    void StoreStatePairFlippedByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index,
+                                    int32_t firstWord, int32_t secondWord)
+    {
+        auto writeBuf = resource.ubBuf.template GetBufferByByte<int32_t>(STATE_SLOT_DMA_WRITE_UB_OFFSET);
+        writeBuf.SetValue(0, (firstWord == 0) ? 1 : 0);
+        writeBuf.SetValue(1, (secondWord == 0) ? 1 : 0);
+        for (uint32_t i = 2; i < INT32_COUNT_PER_BLOCK; ++i) {
+            writeBuf.SetValue(static_cast<int64_t>(i), 0);
+        }
+        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::DataCopyParams oneBlock{1U, 1U, 0U, 0U};
+        AscendC::DataCopy(stateTensor[index], writeBuf, oneBlock);
+        // The staging buffer is rewritten later on the scalar pipe, so wait for the transfer to finish
+        // reading it before returning.
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+    }
+
     CATLASS_DEVICE
     int32_t FlipStateSlotByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index)
     {
@@ -381,10 +538,13 @@ public:
                 isShareQuantCore = isRecvCore;
                 shareQuantCoreIdx = recvCoreIdx;
             }
-            aivStateGlobalCoreIdx = aivNum + aicNum + aivIdx;
-
-            dataState = FlipStateSlotByDma(selfDataStatusTensor, aivIdx * UB_ALIGN);
-            cvDataState = FlipStateSlotByDma(selfDataStatusTensor, aivStateGlobalCoreIdx * UB_ALIGN);
+            // dataState and cvDataState share word 0 and word 1 of this core's own line. Read them, do
+            // not write them here: the flip is published at the end of the launch (see
+            // UpdateAndCleanInfo), which is the same slot, the same value and the same core count as
+            // before, just moved off the critical path. Both words still advance once per launch, so
+            // vToCFlag keeps its original cadence and stays in step with the cubes' private slots.
+            aivStateGlobalCoreIdx = AIV_STATE_BASE_INTS + aivIdx * AIV_STATE_SLOT_INTS;
+            LoadStatePairByDma(selfDataStatusTensor, aivStateGlobalCoreIdx, dataState, cvDataState);
             vToCFlag = (cvDataState == 0) ? V_TO_C_FLAG_1 : V_TO_C_FLAG_2;
         }
     }
@@ -401,6 +561,195 @@ public:
             }
             SPIN_WAIT_CYCLES();
         }
+    }
+
+    // Byte sum one launch's complete set of first-expert slots adds up to. C[m][n] is the sum of A's
+    // row m, and a slot is one 16x32B fractal, so a slot puts FIRST_EXPERT_C0_BYTES -- not its whole
+    // FIRST_EXPERT_SLOT_BYTES -- on any single row: the other 15/16 of it lands on the other 15 rows,
+    // which is the whole point of filling the slot. So the target is K bytes of the flag byte, and each
+    // core contributes one C0 of it. vToCFlag repeats that byte in all four of its bytes, so the target
+    // differs between the two launches and a slot left by the previous one can never help reach this
+    // one's. The cleared region contributes zero, so the sum only ever climbs towards the target.
+    __aicore__ inline int32_t FirstExpertTarget(uint32_t coreNumPerGroup) const
+    {
+        return static_cast<int32_t>(coreNumPerGroup * FIRST_EXPERT_C0_BYTES *
+                                    static_cast<uint32_t>(vToCFlag & 0xFF));
+    }
+
+    // B never changes and every one of its bytes is 1, so its fractal order cannot affect the sum.
+    // blockNum must be set: each repeat writes blockNum * 512B into L0B, so the default 0 writes
+    // nothing and the byte sum could never reach the target. One 512B block per repeat over
+    // FIRST_EXPERT_CORE_SLOT repeats is the whole K tile. The instruction retires on PIPE_MTE1;
+    // PIPE_ALL drains it before Mmad reads L0B. The base is 512B-aligned (L0B offset 32KB).
+    CATLASS_DEVICE
+    void FillFirstExpertOnes(AscendC::LocalTensor<int8_t> &l0Ones)
+    {
+        AscendC::InitConstValueParams<int16_t> onesParams;
+        onesParams.repeatTimes = static_cast<uint16_t>(FIRST_EXPERT_CORE_SLOT);
+        onesParams.blockNum = 1;
+        onesParams.dstGap = 0;
+        onesParams.initValue = 0x0101;
+        AscendC::InitConstValue(l0Ones.template ReinterpretCast<int16_t>(), onesParams);
+        AscendC::PipeBarrier<PIPE_ALL>();
+    }
+
+    // One fold round: load the slots, sum them, and publish one line per reader. Returns whether the
+    // byte sum has reached this launch's target. FIX_M is waited before return, so the next round's
+    // Mmad cannot overwrite L0C until this round's fixpipe has finished.
+    CATLASS_DEVICE
+    bool FirstExpertFoldRound(AscendC::LocalTensor<int8_t> &l1Records, AscendC::LocalTensor<int8_t> &l0Records,
+                              AscendC::LocalTensor<int8_t> &l0Ones, AscendC::LocalTensor<int32_t> &l0Sum,
+                              AscendC::GlobalTensor<int8_t> &gmRecords, AscendC::GlobalTensor<int32_t> &gmOut,
+                              layout::zN &layoutRecordsL1, layout::zZ &layoutRecordsL0, layout::zN &layoutCInL0,
+                              layout::RowMajor &layoutCInGm, typename BlockMmad::CopyL1ToL0A &copyL1ToL0A,
+                              typename BlockMmad::CopyL0CToGm &copyL0CToGm, AscendC::MmadParams &mmadParams,
+                              int32_t target)
+    {
+        // The slots are whole fractals laid back to back, so the record load is one flat copy. A 32B
+        // slot would need a strided descriptor to drop each record on row 0 of its fractal, and would
+        // leave the other 15 rows holding whatever was in L1.
+        constexpr uint32_t RECORD_ELEMENTS = FIRST_EXPERT_CORE_SLOT * FIRST_EXPERT_SLOT_BYTES;
+        AscendC::DataCopy(l1Records, gmRecords, RECORD_ELEMENTS);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE1>(FIRST_EXPERT_MTE2_MTE1_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE1>(FIRST_EXPERT_MTE2_MTE1_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::M_MTE1>(FIRST_EXPERT_L0A_EVENT);
+        copyL1ToL0A(l0Records, l1Records, layoutRecordsL0, layoutRecordsL1);
+        AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(FIRST_EXPERT_MTE1_M_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(FIRST_EXPERT_MTE1_M_EVENT);
+        AscendC::Mmad(l0Sum, l0Records, l0Ones, mmadParams);
+        AscendC::SetFlag<AscendC::HardEvent::M_MTE1>(FIRST_EXPERT_L0A_EVENT);
+        AscendC::SetFlag<AscendC::HardEvent::M_FIX>(FIRST_EXPERT_FIX_M_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::M_FIX>(FIRST_EXPERT_FIX_M_EVENT);
+        // One tile per group of FIRST_EXPERT_MMA_M readers. All tiles read the same L0C and the
+        // flags below order the whole FIX pipe, so they need no per-tile synchronisation.
+        for (uint32_t tile = 0; tile < FIRST_EXPERT_OUT_TILES; ++tile) {
+            copyL0CToGm(gmOut[tile * FIRST_EXPERT_MMA_M * FIRST_EXPERT_OUT_STRIDE_INTS], l0Sum,
+                        layoutCInGm, layoutCInL0, 0);
+        }
+        // Two dependencies leave the fixpipe and they need different flags. FIX_M guards L0C against
+        // the next round's Mmad; FIX_S orders the scalar read below behind this round's GM writes.
+        // A PIPE_ALL would cover both but drains MTE2/MTE1/M as well, which is most of the round.
+        AscendC::SetFlag<AscendC::HardEvent::FIX_S>(FIRST_EXPERT_FIX_S_EVENT);
+        AscendC::SetFlag<AscendC::HardEvent::FIX_M>(FIRST_EXPERT_FIX_M_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::FIX_S>(FIRST_EXPERT_FIX_S_EVENT);
+        // Slot 0 is this core's own: it is published like the rest, but nobody else polls it.
+        int32_t sum = FlushAndGetValue<int32_t>(gmOut, 0);
+        // Pick the token count up here rather than after the loop, so this cube has nothing left to
+        // read between the fold and its own first group-0 block. A nonzero sum is enough: RecvCount
+        // drains the record copies on MTE3 before it raises any prefix flag, and no core raises its
+        // group-0 flag until it has consumed that prefix -- so one flag of any core already implies
+        // the whole record region is visible. On the usual path this lands in a round that was going
+        // to spin anyway, and the read is free.
+        if (!firstExpertCountValid && sum != 0) {
+            firstExpertTokenCount = FirstExpertTokenCount(0);
+            firstExpertCountValid = true;
+        }
+        // Retire the FIX_M side before the loop head, where the next round's Mmad overwrites L0C.
+        AscendC::WaitFlag<AscendC::HardEvent::FIX_M>(FIRST_EXPERT_FIX_M_EVENT);
+        return sum == target;
+    }
+
+    // Fold the per-core first-expert slots with one int8 matmul, then publish the result into one
+    // private line per reader. A's K axis is the 24 slots (32B of K each, zN order), B is a constant
+    // all-ones tile, so C[m][n] is the byte sum of A's row m -- and because every byte of a slot is the
+    // same flag byte, every row of A holds the same bytes and all of C carries the same sum. Three
+    // strided fixpipe writes then spread that one value over FIRST_EXPERT_SLOT_TOTAL cache lines.
+    CATLASS_DEVICE
+    void FirstExpertFoldAndPublish(uint32_t coreNumPerGroup)
+    {
+        auto layoutRecordsL1 = layout::zN::MakeLayout<int8_t>(FIRST_EXPERT_MMA_M, FIRST_EXPERT_MMA_K);
+        auto layoutRecordsL0 = layout::zZ::MakeLayout<int8_t>(FIRST_EXPERT_MMA_M, FIRST_EXPERT_MMA_K);
+        auto layoutCInL0 = layout::zN::MakeLayoutInL0C(MakeCoord(FIRST_EXPERT_MMA_M, FIRST_EXPERT_MMA_N));
+        // ldm is the row stride, not the row length: catlass passes it to the fixpipe as dstStride, so
+        // the M rows land FIRST_EXPERT_OUT_STRIDE_BYTES apart. Only nSize bytes of each row are written,
+        // so this costs no extra write bandwidth over the packed layout -- it just spreads it.
+        auto layoutCInGm = layout::RowMajor(FIRST_EXPERT_MMA_M, FIRST_EXPERT_MMA_N,
+                                            static_cast<int64_t>(FIRST_EXPERT_OUT_STRIDE_INTS));
+
+        auto l1Records = resource.l1Buf.template GetBufferByByte<int8_t>(FIRST_EXPERT_L1_OFFSET);
+        auto l0Records = resource.l0ABuf.template GetBufferByByte<int8_t>(0);
+        auto l0Ones = resource.l0BBuf.template GetBufferByByte<int8_t>(FIRST_EXPERT_L0B_OFFSET);
+        auto l0Sum = resource.l0CBuf.template GetBufferByByte<int32_t>(0);
+        FillFirstExpertOnes(l0Ones);
+
+        AscendC::GlobalTensor<int8_t> gmRecords;
+        gmRecords.SetGlobalBuffer((__gm__ int8_t *)(gmReserved_ + FIRST_EXPERT_ACK_OFFSET),
+                                  FIRST_EXPERT_CORE_SLOT * FIRST_EXPERT_SLOT_BYTES);
+        AscendC::GlobalTensor<int32_t> gmOut;
+        gmOut.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + FIRST_EXPERT_OUT_OFFSET),
+                              FIRST_EXPERT_SLOT_TOTAL * FIRST_EXPERT_OUT_STRIDE_INTS);
+
+        const int32_t target = FirstExpertTarget(coreNumPerGroup);
+        typename BlockMmad::CopyL1ToL0A copyL1ToL0A;
+        typename BlockMmad::CopyL0CToGm copyL0CToGm;
+        AscendC::MmadParams mmadParams;
+        mmadParams.m = FIRST_EXPERT_MMA_M;
+        mmadParams.n = FIRST_EXPERT_MMA_N;
+        mmadParams.k = FIRST_EXPERT_MMA_K;
+        mmadParams.unitFlag = 0;
+        mmadParams.cmatrixInitVal = true;
+
+        // This Mmad carries no unit flag, so it takes no part in BlockMmad's implicit Mmad/fixpipe
+        // tracking. Event 0 belongs to BlockMmad (its destructor waits on it), so drain through event 1:
+        // the FIX pipe retires this after every earlier fixpipe instruction, which is what keeps a
+        // still-reading fixpipe from losing the L0C the first Mmad below overwrites.
+        AscendC::SetFlag<AscendC::HardEvent::FIX_M>(FIRST_EXPERT_FIX_M_EVENT);
+        AscendC::WaitFlag<AscendC::HardEvent::FIX_M>(FIRST_EXPERT_FIX_M_EVENT);
+
+        bool arrived = false;
+        while (!arrived) {
+            arrived = FirstExpertFoldRound(l1Records, l0Records, l0Ones, l0Sum, gmRecords, gmOut,
+                                           layoutRecordsL1, layoutRecordsL0, layoutCInL0, layoutCInGm,
+                                           copyL1ToL0A, copyL0CToGm, mmadParams, target);
+            if (!arrived) {
+                FirstExpertSpin();
+            }
+        }
+        // The loop only exits on a sum equal to the target, which is nonzero, so the hoist above has
+        // fired by now. Kept as a fallback so a future change to the flag encoding cannot silently
+        // leave this cube computing group 0 with a zero row count.
+        if (!firstExpertCountValid) {
+            firstExpertTokenCount = FirstExpertTokenCount(0);
+            firstExpertCountValid = true;
+        }
+    }
+
+    // Wait for the folded byte sum to appear on this core's own slot. The plain spin is enough here:
+    // every reader owns a line and the only other party touching it is the fold's fixpipe, which rewrites
+    // it once per round anyway. A shared sum would need the readers to back off instead, or they would
+    // keep taking exclusive ownership of the line away from the core that is producing it.
+    CATLASS_DEVICE
+    void WaitFirstExpertSlot(uint32_t slot, uint32_t coreNumPerGroup)
+    {
+        AscendC::GlobalTensor<int32_t> slotTensor;
+        slotTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + FIRST_EXPERT_OUT_OFFSET +
+                                                      static_cast<uint64_t>(slot) *
+                                                          FIRST_EXPERT_OUT_STRIDE_BYTES),
+                                   FIRST_EXPERT_OUT_STRIDE_INTS);
+        const int32_t target = FirstExpertTarget(coreNumPerGroup);
+        bool ready = false;
+        while (!ready) {
+            ready = FlushAndGetValue<int32_t>(slotTensor, 0) == target;
+            if (!ready) {
+                FirstExpertSpin();
+            }
+        }
+    }
+
+    // Group 0's token total. Nothing has to publish it: RecvCount's record already carries the expert
+    // total at a fixed word and is already replicated once per receive core, so each reader takes its own
+    // copy and no two share a line. The record is written before any arrival flag and the fold's sum can
+    // only reach its target after every core's flag has landed, so a reader that has seen the target has
+    // seen the record. This also means the group-0 notify no longer needs to carry a count at all, which
+    // is what lets the slot be pure flag bytes.
+    __aicore__ inline uint32_t FirstExpertTokenCount(uint32_t coreIdx)
+    {
+        AscendC::GlobalTensor<int32_t> recordTensor;
+        recordTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_COPY_BASE +
+                                                        static_cast<uint64_t>(coreIdx) *
+                                                            RECV_PREFIX_COPY_STRIDE),
+                                     RECV_PREFIX_COPY_STRIDE / sizeof(int32_t));
+        return static_cast<uint32_t>(FlushAndGetValue<int32_t>(recordTensor, RECV_PREFIX_TOTAL_INDEX));
     }
 
     __aicore__ inline GM_ADDR GetWindStateAddrByRankId(int64_t rankId)
@@ -424,7 +773,12 @@ public:
     {
         moeExpertNumPerRank = params.moeExpertNumPerRank;
         localExpertNum = moeExpertNumPerRank;
+        epRankSize = params.epRankSize;
+        gmReserved_ = params.gmReserved;
         uint32_t coreNumPerGroup = recvCoreNum;
+        // The slot array and the fold's matmul shape are both sized for exactly this many cores, and the
+        // token count is taken from the receive-prefix record, which only the split path publishes.
+        useFirstExpertPrivate = (aiCoreGroupNum == FIRST_EXPERT_CORE_SLOT) && UseSplitRecvCount();
 
         BlockScheduler blockScheduler;
         BlockMmad blockMmad(resource);
@@ -442,6 +796,22 @@ public:
         uint32_t startCoreIdx = 0;
         aicSetFunc = {statusDataSpaceGm + SOFT_SYNC_OFFSET, static_cast<uint8_t>(AscendC::GetBlockIdx())};
         int64_t gmGroupOffsetC = 0;
+        // One cube folds the slots for every reader, so the others keep a plain single-word wait and
+        // never touch the 24 slots. It runs before the shared-expert block on purpose: every cube's
+        // group 0 waits on this publish, so behind the shared block it could not go out until this cube
+        // finished its slice of the shared GEMM, which is far later than the receive pass. Ahead of it
+        // the publish lands at receive + one fold round, and only this cube's shared slice starts that
+        // much later -- which nobody waits on.
+        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+            if (useFirstExpertPrivate && localExpertNum > 0 && aicIdx == 0) {
+                // Nothing has been issued to BlockMmad yet, so this drains nothing today; it is kept so
+                // the fold can never race a preloaded tile accumulating into the L0C it overwrites.
+                if constexpr (BlockMmad::DispatchPolicy::ASYNC) {
+                    blockMmad.SynchronizeBlock();
+                }
+                FirstExpertFoldAndPublish(coreNumPerGroup);
+            }
+        }
         if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
             gmA.SetGlobalBuffer((__gm__ ElementA*)params.gmShareX1);
             gmB.SetGlobalBuffer((__gm__ ElementB*)params.ptrShareB);
@@ -510,12 +880,29 @@ public:
                         gmBlistTensorDesc.GetDataPtr<int32_t>(groupIdx)));
             }
             if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(
-                    statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
-                // wait AIV recv needed tokens
-                uint32_t expected = coreNumPerGroup * vToCFlag;
-                WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
-                currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
+                if (useFirstExpertPrivate && groupIdx == 0) {
+                    // Group 0's record has no writer on this path: the fold leaves the completion in
+                    // each reader's own output slot instead.
+                    if (aicIdx != 0) {
+                        WaitFirstExpertSlot(aicIdx, coreNumPerGroup);
+                        currentM = FirstExpertTokenCount(aicIdx);
+                    } else {
+                        // The fold already told this cube everything it needs. Leaving the poll loop is
+                        // exactly the statement that every receive core has landed group 0, and the row
+                        // count was picked up mid-spin, so there is nothing to wait on and nothing to
+                        // read -- go straight into the GEMM. Re-reading a flag here would put a GM round
+                        // trip between the fold and the first block of the expert the fold exists to
+                        // start early.
+                        currentM = firstExpertTokenCount;
+                    }
+                } else {
+                    groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)(
+                        statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) + groupIdx * GROUP_INFO_SIZE);
+                    // wait AIV recv needed tokens
+                    uint32_t expected = coreNumPerGroup * vToCFlag;
+                    WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
+                    currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
+                }
             } else {
                 currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
                                                 : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
@@ -748,7 +1135,6 @@ public:
         AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
 
         CalAndSendTokenCount();
-        AscendC::PipeBarrier<PIPE_ALL>();
     }
 
     // Spread the dense per-token payload over the wire layout: 480B of payload per 512B block, with
@@ -1662,7 +2048,6 @@ public:
     void NotifyExpertTokens(AscendC::LocalTensor<int32_t> &notifyTensor, uint32_t groupId,
                             uint32_t coreTokenCount)
     {
-        AscendC::PipeBarrier<PIPE_ALL>();
         for (uint32_t field = 0; field < INT32_COUNT_PER_BLOCK; ++field) {
             notifyTensor.SetValue(field, 0);
         }
@@ -1679,6 +2064,34 @@ public:
                           INT32_COUNT_PER_BLOCK);
         AscendC::SetAtomicNone();
         AscendC::PipeBarrier<PIPE_ALL>();
+    }
+
+    // Group 0 writes a private fractal instead of joining the shared atomic-add record. Every other
+    // expert still publishes through that record.
+    CATLASS_DEVICE
+    void NotifyExpertArrival(AscendC::LocalTensor<int32_t> &notifyTensor, uint32_t groupId,
+                             uint32_t coreTokenCount)
+    {
+        AscendC::PipeBarrier<PIPE_ALL>();
+        if (useFirstExpertPrivate && groupId == 0) {
+            // Private slot, no atomics, so the 24 cores never serialise on one word. The slot is a
+            // whole fractal filled with the flag: the cube-side fold needs the flag on every row of
+            // its A tile, and a slot whose every byte is the same value gives it that whatever
+            // fractal order the load imposes. Nothing else goes in -- no group id, no count. The
+            // count would corrupt the byte sum, and it is already published, once per core, in the
+            // receive-prefix record that RecvCount wrote before this flag.
+            AscendC::Duplicate(notifyTensor, vToCFlag, FIRST_EXPERT_SLOT_INTS);
+            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+            AscendC::GlobalTensor<int32_t> ackTensor;
+            ackTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + FIRST_EXPERT_ACK_OFFSET +
+                                                         recvCoreIdx * FIRST_EXPERT_SLOT_BYTES),
+                                      FIRST_EXPERT_SLOT_INTS);
+            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+            AscendC::DataCopy(ackTensor, notifyTensor, FIRST_EXPERT_SLOT_INTS);
+            AscendC::PipeBarrier<PIPE_ALL>();
+        } else {
+            NotifyExpertTokens(notifyTensor, groupId, coreTokenCount);
+        }
     }
 
     // Every boundary is in tokenPrefix by now, so the public table is written once instead of
@@ -1713,14 +2126,22 @@ public:
         subUbOffset += CEIL_UP(RECV_PREFIX_GROUP_STRIDE);
         const bool splitRecv = UseSplitRecvCount();
         RecvCount(ubOffset);
-        AscendC::PipeBarrier<PIPE_ALL>();
         if (!splitRecv) {
+            // The legacy path re-reads the same bucket heads RecvCount just filled, so it needs the
+            // barrier. The split path does not: RecvCount ends on an MTE3_S wait, which leaves both its
+            // MTE3 copies and its scalar stores retired, and the prefix line LoadGroupPrefix fills lives
+            // in a different UB region from the bucket heads, so nothing downstream can observe a
+            // half-finished publish.
+            AscendC::PipeBarrier<PIPE_ALL>();
             GetCumSumLegacy(tokenPrefix, ubOffset);
             AscendC::PipeBarrier<PIPE_ALL>();
         }
 
         // RecvToken now holds two ping-pong payload slots plus the flag/reduce scratch, so the notify
-        // buffer has to be reserved past all of that rather than past a single token copy.
+        // buffer has to be reserved past all of that rather than past a single token copy. It is the
+        // last claim below the high scratch at RECV_ARRIVE_GATHER_OFFSET and needs a full
+        // FIRST_EXPERT_SLOT_BYTES, not one block: the group-0 path stages a whole fractal of flag words
+        // here before copying it to this core's private slot.
         int64_t notifyUbOffset = subUbOffset + RecvTokenUbBytes();
         auto notifyTensor = resource.ubBuf.template GetBufferByByte<int32_t>(notifyUbOffset);
         uint32_t startCoreIdx = 0;
@@ -1751,7 +2172,7 @@ public:
             }
 
             // Every receive core notifies every expert, including empty assignments.
-            NotifyExpertTokens(notifyTensor, groupId, coreTokenCount);
+            NotifyExpertArrival(notifyTensor, groupId, coreTokenCount);
             startCoreIdx = (startCoreIdx + currentM) % recvCoreNum;
             expertStart = expertEnd;
         }
@@ -1824,13 +2245,21 @@ public:
             }
             for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
                 if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                    // just like AIC
-                    groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)
-                                                            (statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) +
-                                                            groupIdx * GROUP_INFO_SIZE);
-                    uint32_t expected = coreNumPerGroup * vToCFlag;
-                    WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
-                    currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
+                    if (useFirstExpertPrivate && groupIdx == 0) {
+                        // Same as the cubes, on the second half of the published slots: group 0's
+                        // completion lives in the folded sum because only the fold can decide when every
+                        // receive core has arrived.
+                        WaitFirstExpertSlot(FIRST_EXPERT_AIV_SLOT_BASE + compCoreIdx, coreNumPerGroup);
+                        currentM = FirstExpertTokenCount(compCoreIdx);
+                    } else {
+                        // just like AIC
+                        groupTokenNumStateTensor.SetGlobalBuffer((__gm__ int32_t *)
+                                                                (statusDataSpaceGm + GROUP_TOKEN_NUM_OFFSET) +
+                                                                groupIdx * GROUP_INFO_SIZE);
+                        uint32_t expected = coreNumPerGroup * vToCFlag;
+                        WaitGroupTokenNumReady(groupTokenNumStateTensor, expected);
+                        currentM = groupTokenNumStateTensor.GetValue(GROUP_TOKEN_COUNT);
+                    }
                 } else {
                     currentM = (groupIdx == 0) ? groupList.GetValue(groupIdx)
                                                 : (groupList.GetValue(groupIdx) - groupList.GetValue(groupIdx - 1));
@@ -1917,6 +2346,9 @@ public:
         stateOffset = expertCntUp > MAX_EXPERTS_FULL_STATE_SLOT ? STATE_OFFSET >> 1 : STATE_OFFSET;
         expertPerSizeOnWin = maxAxisBs * tokenLength * sizeof(XType);
         gmReserved_ = params.gmReserved;
+        // Same predicate as the cube side: the slot array and the fold's matmul shape are sized for
+        // exactly this many cores, and the token count comes from the record only the split path writes.
+        useFirstExpertPrivate = (aiCoreGroupNum == FIRST_EXPERT_CORE_SLOT) && UseSplitRecvCount();
     }
 
     CATLASS_DEVICE
@@ -1927,10 +2359,11 @@ public:
         GM_ADDR statusSpaceGm_ = GetWindStateAddrByRankId(epRankId);
         AscendC::GlobalTensor<int32_t> selfStatusTensor;
         selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusSpaceGm_ + SELF_STATE_OFFSET));
-        // Same slot, same reason as in the constructor: a scalar flush here cleans and invalidates a
-        // whole 512B line, and at a 128B stride four cores share one, so they take turns evicting each
-        // other's words. This runs before anything has claimed UB, so the prologue scratch is free.
-        state = LoadStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN);
+        // One 512B line per core. A scalar flush here cleans and invalidates a whole line, and at the
+        // old 128B stride four cores shared one, so they took turns evicting each other's words. The
+        // stride is the only thing that changes; the slot still only uses its first word, and the DMA
+        // still moves a single 32B block, so neither the value nor the flip cadence moves with it.
+        state = LoadStateSlotByDma(selfStatusTensor, aivIdx * SELF_STATE_SLOT_INTS);
         sumTarget = state == 0 ? 1.0f : 0.0f;
         tokenFlag = state == 0 ? TOKEN_FLAG_1 : TOKEN_FLAG_2;
         // The 512B-block flags alternate on the same schedule. A tail left over from the previous
@@ -1940,7 +2373,7 @@ public:
         // aicore forbids an explicit unsigned-to-float cast. Multiplying by a float constant does the
         // conversion implicitly, which is the same reason the reference implementation writes it this way.
         blockFlagSum = blockFlag * (1.0f * static_cast<int32_t>(blockCntPerToken));
-        StoreStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN, state == 0 ? 0x3F800000 : 0);
+        StoreStateSlotByDma(selfStatusTensor, aivIdx * SELF_STATE_SLOT_INTS, state == 0 ? 0x3F800000 : 0);
     }
 
     CATLASS_DEVICE
@@ -1958,6 +2391,27 @@ public:
         }
         if constexpr (!(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
             return ;
+        }
+        // Publish this launch's parity for the next one: write back the inverse of the pair this core
+        // read at startup, into the same slot, from the same core. Every AIV does it, exactly as every
+        // AIV flipped its own slot in the constructor before, so the per-launch flip count of each word
+        // is unchanged -- word 0 still ends up written once here and once again by the combiner's Init,
+        // word 1 once, which is the cadence vToCFlag has always depended on.
+        //
+        // It sits after the DEEP_FUSE early return on purpose: the constructor only touches the state in
+        // the deep-fuse path, so the shallow path must not gain a write here or its parity would drift.
+        //
+        // The only thing that moved is when. Doing it here rather than at startup takes a
+        // read-modify-write off the critical path: the slots sit at a 128B stride, so four AIVs shared a
+        // 512B line and their clean-and-invalidate of it serialised. It also leaves the startup read a
+        // plain read, so no core can observe a neighbour's update in progress. This point is after the
+        // kernel's SyncAll, so the write cannot race the reads that produced dataState/cvDataState, and
+        // it still lands before the combiner's Init flip in the caller, which is the order the old code
+        // had.
+        {
+            AscendC::GlobalTensor<int32_t> selfDataStatusTensor;
+            selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
+            StoreStatePairFlippedByDma(selfDataStatusTensor, aivStateGlobalCoreIdx, dataState, cvDataState);
         }
         if (aivIdx == aiCoreGroupNum * subBlockNum - 1) {
             // clean
@@ -1992,6 +2446,27 @@ public:
                     AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
                     AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
                 }
+                if (useFirstExpertPrivate) {
+                    // Leave the whole first-expert region zeroed, slots and published output alike. A
+                    // zero slot adds nothing to the fold's byte sum, so neither a half-written set nor
+                    // one left by the previous launch can reach this launch's target; and a zeroed
+                    // output slot means a reader can never see last launch's completion.
+                    const uint32_t firstExpertInts =
+                        static_cast<uint32_t>(FIRST_EXPERT_REGION_BYTES / sizeof(int32_t));
+                    AscendC::GlobalTensor<int32_t> firstExpertRegion;
+                    firstExpertRegion.SetGlobalBuffer(
+                        (__gm__ int32_t *)(gmReserved_ + FIRST_EXPERT_ACK_OFFSET), firstExpertInts);
+                    for (uint32_t done = 0; done < firstExpertInts; done += CLEAN_CHUNK_INTS) {
+                        uint32_t thisChunk = (firstExpertInts - done < CLEAN_CHUNK_INTS)
+                                                 ? (firstExpertInts - done) : CLEAN_CHUNK_INTS;
+                        AscendC::Duplicate(tmpZeroLocalTensor, (int32_t)0, thisChunk);
+                        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+                        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+                        AscendC::DataCopy(firstExpertRegion[done], tmpZeroLocalTensor, thisChunk);
+                        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+                        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+                    }
+                }
             }
         }
 
@@ -2021,15 +2496,18 @@ public:
         AivInitParams(params);
         if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
             AivInitState();
-            // Every core runs the expert-id copy and the count sweep: the counts it publishes are what
-            // RecvCount waits on, and SendCoreFunc reuses the same UB layout afterwards.
-            PrepareAndSendTokenCount((GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmXActiveMask);
+            // Share quant only needs the inputs from AivInitParams, so the cores that own it run it
+            // before the count sweep. That lets the cubes start the shared GEMM while the count sweep
+            // is still going. Send cores skip the quant and enter the sweep immediately; the
+            // share-quant cores join the same sweep once their quant is done. The sweep still runs on
+            // every core: RecvCount waits on the counts it publishes, and SendCoreFunc reuses the UB.
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
                 if (isShareQuantCore) {
                     shareQuantCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmShareSmoothScales,
                                         (GM_ADDR)params.gmShareX1, (GM_ADDR)params.gmShareX1Scale);
                 }
             }
+            PrepareAndSendTokenCount((GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmXActiveMask);
             if (isSendCore) {
                 SendCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmMoeSmoothScales,
                             (GM_ADDR)params.ptrA, (GM_ADDR)params.ptrPerTokenScale, (GM_ADDR)params.gmExpandIdx,
@@ -2213,6 +2691,12 @@ private:
     // expensive even on the core that had just produced the value.
     int32_t ownPublishGroup{-1};
     int32_t ownPrefixTotal{0};
+    // Group 0 skips the shared atomic-add record and goes through the private-slot fold instead.
+    bool useFirstExpertPrivate{false};
+    // Group 0's token count on the folding cube, picked up while it was already spinning so that it has
+    // nothing left to read between the fold and its own first block of group 0.
+    uint32_t firstExpertTokenCount{0};
+    bool firstExpertCountValid{false};
     // Reserved workspace, used by the receive-side prefix publish.
     GM_ADDR gmReserved_{nullptr};
 };

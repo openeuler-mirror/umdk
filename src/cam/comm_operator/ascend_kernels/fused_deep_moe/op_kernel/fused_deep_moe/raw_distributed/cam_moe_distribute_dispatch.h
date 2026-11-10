@@ -25,6 +25,11 @@ constexpr uint32_t STATE_SIZE = 1024 * 1024;  // 1M
 constexpr uint32_t UB_ALIGN = 32;
 constexpr uint64_t ALIGNED_LEN_256 = 256UL;
 constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;
+// One 512B line per vector core instead of 128B. This slot is read-modify-written by every AIV across
+// this kernel, the gmm1 kernel and the combiner, so at a 128B stride four consecutive cores land on one
+// line and invalidate each other. The region above is unused until STATE_WIN_OFFSET. The stride must
+// match the other two files exactly or they will address different words and the parity will diverge.
+constexpr uint32_t SELF_STATE_SLOT_INTS = 512 / sizeof(int32_t);
 constexpr uint8_t COMM_NUM = 2;
 constexpr uint8_t COMM_EP_IDX = 0;
 constexpr uint8_t COMM_TP_IDX = 1;
@@ -299,23 +304,23 @@ __aicore__ inline void CamMoeDistributeDispatch<TemplateDispatchTypeFunc>::Init(
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusSpaceGm_ + SELF_STATE_OFFSET));
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfStatusTensor[aivId_ * UB_ALIGN]);
-    int32_t state = selfStatusTensor(aivId_ * UB_ALIGN);
+        selfStatusTensor[aivId_ * SELF_STATE_SLOT_INTS]);
+    int32_t state = selfStatusTensor(aivId_ * SELF_STATE_SLOT_INTS);
     stateOffset_ = (recvWinBlockNum_ > 512) ? (STATE_OFFSET / 2) : STATE_OFFSET;
     tpipe_->InitBuffer(statusBuf_, recvWinBlockNum_ * UB_ALIGN);  // expertNum * 32B
     statusTensor_ = statusBuf_.Get<int32_t>();  // Record token count and flag
     Duplicate<int32_t>(statusTensor_, 0, recvWinBlockNum_ * 8);  // 8 = UB_ALIGN / sizeof(int32_t)
     if (state == 0) {
         sumTarget_ = (float)1.0;
-        selfStatusTensor(aivId_ * UB_ALIGN) = 0x3F800000;
+        selfStatusTensor(aivId_ * SELF_STATE_SLOT_INTS) = 0x3F800000;
         uint64_t mask[2] = {0x101010101010101, 0};  // set the first number of every 8 numbers as 0x3F800000(float 1.0)
         Duplicate<int32_t>(statusTensor_, 0x3F800000, mask, Ceil(recvWinBlockNum_, 8), 1, 8);
     } else {
         sumTarget_ = 0.0;
-        selfStatusTensor(aivId_ * UB_ALIGN) = 0;
+        selfStatusTensor(aivId_ * SELF_STATE_SLOT_INTS) = 0;
     }
     DataCacheCleanAndInvalid<int32_t, CacheLine::SINGLE_CACHE_LINE, DcciDst::CACHELINE_OUT>(
-        selfStatusTensor[aivId_ * UB_ALIGN]);
+        selfStatusTensor[aivId_ * SELF_STATE_SLOT_INTS]);
     tpipe_->InitBuffer(xQueue_, BUFFER_NUM, hCommuSize_);
     if (isQuant_) {
         QuantInit(scales, shareScales);
