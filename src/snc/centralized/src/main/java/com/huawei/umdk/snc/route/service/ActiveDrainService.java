@@ -414,7 +414,7 @@ public class ActiveDrainService {
         }
 
         // 2. 逐设备、逐出接口对比：路由表前缀数 == changeMap + noticeMap 记录数之和
-        //    → 该出接口全部路由已收敛，allConverged 置 true
+        //    → 该出接口全部路由已收敛，allConverged 置 true，route prefix清空
         for (Map.Entry<String, ConvergedNodeRoute> en : ctx.getChangeMap().entrySet()) {
             String deviceName = en.getKey();
             Map<String, Set<RoutePrefix>> portRoutes = totalRoutes.get(deviceName);
@@ -430,6 +430,7 @@ public class ActiveDrainService {
                     ? noticed.getPortPrefixes().get(portName).getRoutePrefixes().size() : 0;
                 if (changed + noticedCount == total) {
                     portEn.getValue().setAllConverged(true);
+                    portEn.getValue().getRoutePrefixes().clear();
                 }
             }
         }
