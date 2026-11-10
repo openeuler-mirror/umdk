@@ -32,7 +32,12 @@ constexpr uint32_t GM_ALIGN_SIZE = 512;
 constexpr uint32_t TOKEN_DTYPE_BYTE_SIZE = 2;
 constexpr uint32_t L1_TILE_BYTE_SIZE = 32 * 1024;
 constexpr uint32_t CUBE_WORKSPACE_STAGE = 4;
-constexpr uint32_t RESERVED_WORKSPACE_SIZE = 256 * 1024;
+// Tail of the user workspace, shared with the kernel-side receive bookkeeping (the per-expert
+// records, the per-expert/per-core ready flags, and one private copy of each record per receive
+// core). The kernel addresses it with compile-time offsets, so this only has to be big enough.
+// Worst case is 16 local experts x 32 receive cores: 4KB base + 16*512B records + 16*32*512B flag
+// lines + 16*32*288B copies = 412KB. Round up to leave the region some slack.
+constexpr uint32_t RESERVED_WORKSPACE_SIZE = 512 * 1024;
 
 constexpr uint32_t INPUT_X_INDEX = 0;
 constexpr uint32_t INPUT_EXPERT_IDS_INDEX = 1;
