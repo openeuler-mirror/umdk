@@ -59,8 +59,9 @@ TensorVector FusedDeepMoeImplNpu(
     int bs = xShape[0];
     int topk = expertIdsShape[1];
     
-    at::Tensor output = at::empty({bs, h}, x.options());
-    at::Tensor shareOutput = at::empty({bs, h}, x.options());
+    // ACL graph reuses these addresses. Rows the kernel does not write must not stay uninitialized.
+    at::Tensor output = at::zeros({bs, h}, x.options());
+    at::Tensor shareOutput = at::zeros({bs, h}, x.options());
 
     int64_t localExpertNum = moeExpertNum / epRankSize;
     auto opts = expertIds.options().dtype(at::kLong);
