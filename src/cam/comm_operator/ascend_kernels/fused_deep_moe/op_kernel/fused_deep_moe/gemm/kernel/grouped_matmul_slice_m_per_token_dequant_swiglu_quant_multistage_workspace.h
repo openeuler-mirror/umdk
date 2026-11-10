@@ -35,8 +35,68 @@ constexpr uint64_t SHARE_QUANT_SOFT_SYNC_OFFSET = 988 * 1024;
 constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;
 constexpr uint32_t SUM_TMP_TENSOR_SIZE = 1024;
 constexpr uint32_t UB_ALIGN = 32;
+// Scratch for moving a state word through the DMA engine in the kernel prologue, before anything
+// else has claimed UB.
+constexpr int64_t STATE_SLOT_DMA_READ_UB_OFFSET = 0;
+constexpr int64_t STATE_SLOT_DMA_WRITE_UB_OFFSET = 32;
+// A cube core has no UB, so its state word cannot travel by DMA and keeps the scalar
+// clean-and-invalidate path. It buys isolation with address space instead: one whole cache line each.
+// At the old 128B stride four cubes shared a line, so every access dragged the neighbours' words in
+// and pushed them back out. This block sits past both AIV regions, which end at index 120 (15360B),
+// and 24 x 512B still fits inside the 32KB before GROUP_TOKEN_NUM_OFFSET.
+constexpr uint32_t AIC_STATE_SLOT_INTS = 512 / sizeof(int32_t);
+constexpr uint32_t AIC_STATE_BASE_INTS = 15360 / sizeof(int32_t);
 constexpr uint32_t TOKEN_EXTRA_SPACE = 512;
 constexpr uint32_t INT32_COUNT_PER_BLOCK = 8;
+// Per-expert receive records published into the reserved workspace. Magic, the expert total and the
+// running prefix over source ranks live at fixed words inside a 512B line; the prefix run starts at
+// index 8 so a vector load of it is 32B aligned.
+constexpr uint64_t RECV_PREFIX_OFFSET = 4096;
+constexpr uint32_t RECV_PREFIX_GROUP_STRIDE = 512;
+constexpr uint32_t RECV_PREFIX_GROUP_INTS = RECV_PREFIX_GROUP_STRIDE / sizeof(int32_t);
+constexpr uint32_t RECV_PREFIX_MAX_GROUPS = 16;
+constexpr uint32_t RECV_PREFIX_MAGIC = 0x52454356;     // 'RECV'
+constexpr uint32_t RECV_PREFIX_MAGIC_INDEX = 0;
+constexpr uint32_t RECV_PREFIX_TOTAL_INDEX = 1;
+constexpr uint32_t RECV_PREFIX_DATA_INDEX = 8;
+// One ready flag per (expert, receive core) instead of one per expert. With a single shared word all
+// receive cores polled the same 32B address, and the last core to observe it paid for the whole
+// queue -- that queue is what the microsecond-long first prefix-wait was measuring. The flags keep
+// their own region (cleared every launch, so a stale value can never read as ready) and only ever
+// travel by DMA. RECV_REPLICATE_MAX_CORES bounds the receive-core count for the GM layout only; the
+// record width itself is derived from epRankSize at run time.
+constexpr uint32_t RECV_REPLICATE_MAX_CORES = 32;
+// One flag per (expert, receive core), each on its own 512B line. At a 32B stride all the waiters
+// still packed into two lines, so their polls contended in L2 even though each nominally owned a
+// word of its own.
+constexpr uint32_t RECV_PERFLAG_CORE_INTS = 512 / sizeof(int32_t);   // one full line per core
+constexpr uint32_t RECV_PERFLAG_GROUP_INTS = RECV_REPLICATE_MAX_CORES * RECV_PERFLAG_CORE_INTS;
+constexpr uint64_t RECV_PREFIX_FLAG_BASE =
+    RECV_PREFIX_OFFSET + RECV_PREFIX_MAX_GROUPS * RECV_PREFIX_GROUP_STRIDE;
+constexpr uint32_t RECV_PREFIX_FLAG_INDEX = 0;
+constexpr uint64_t RECV_PREFIX_COPY_BASE =
+    RECV_PREFIX_FLAG_BASE +
+    static_cast<uint64_t>(RECV_PREFIX_MAX_GROUPS) * RECV_PERFLAG_GROUP_INTS * sizeof(int32_t);
+// Record copies are touched only by DMA, so they no longer need a line each: the stride is just the
+// widest record rounded to a DMA block, which leaves room for the per-core flag lines.
+constexpr uint32_t RECV_PREFIX_COPY_STRIDE = 288;   // (8 header + 64 ranks) * 4B, EP64 worst case
+constexpr uint32_t RECV_PREFIX_COPY_INTS =
+    RECV_PREFIX_MAX_GROUPS * RECV_REPLICATE_MAX_CORES * (RECV_PREFIX_COPY_STRIDE / sizeof(int32_t));
+constexpr uint32_t RECV_FLAG_BLOCK_INTS = 8;           // 32B / sizeof(int32_t)
+constexpr int64_t RECV_FLAG_READ_OFFSET = 128;         // past the 128B record line in scratch
+constexpr uint32_t RECV_FLAG_STAGE_BYTES = RECV_REPLICATE_MAX_CORES * 512;  // line per core staged
+// Scratch for the vector arrival check. It sits near the top of UB, above everything RecvCoreFunc and
+// RecvToken lay out, so it cannot collide with the per-stage buffers below it.
+constexpr int64_t RECV_ARRIVE_GATHER_OFFSET = 176 * 1024;
+constexpr int64_t RECV_ARRIVE_TMP_OFFSET = RECV_ARRIVE_GATHER_OFFSET + 512;
+constexpr int64_t RECV_ARRIVE_SUM_OFFSET = RECV_ARRIVE_TMP_OFFSET + 512;
+constexpr int64_t RECV_ARRIVE_TARGET_OFFSET = RECV_ARRIVE_SUM_OFFSET + 512;
+constexpr int64_t RECV_ARRIVE_TSRC_OFFSET = RECV_ARRIVE_TARGET_OFFSET + 512;
+// Scratch for the vector prefix scan and the pattern tensor that pulls it back out of the
+// block-strided layout.
+constexpr int64_t RECV_PREFIX_SCAN_OFFSET = RECV_ARRIVE_TSRC_OFFSET + 512;   // 2KB, EP64 worst case
+constexpr int64_t RECV_PREFIX_DENSE_OFFSET = RECV_PREFIX_SCAN_OFFSET + 2048;  // 256B
+constexpr int64_t RECV_PREFIX_PATTERN_OFFSET = RECV_PREFIX_DENSE_OFFSET + 256;  // 32B
 constexpr int64_t LOOP_TMP_SIZE = 4096;
 constexpr int32_t SUB_AIV_NUM = 2;
 constexpr int32_t ODD_EVEN_BASE = 2;
@@ -215,6 +275,52 @@ public:
     };
 
     // Methods
+    // Move a core's persistent state word through the DMA engine instead of scalar load/store.
+    // The scalar path cleans and invalidates a whole 512B line per access. The slots are 128B
+    // apart, so four cores share a line and take turns invalidating each other: every access pays
+    // a full-line writeback plus a full-line refill, and the order depends on scheduling. DMA never
+    // reads or dirties the core's cache, so the cores stop interfering with each other. The word
+    // stays private to this core for the whole launch, so no other core can observe a transfer in
+    // flight.
+    CATLASS_DEVICE
+    int32_t LoadStateSlotByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index)
+    {
+        auto readBuf = resource.ubBuf.template GetBufferByByte<int32_t>(STATE_SLOT_DMA_READ_UB_OFFSET);
+        AscendC::DataCopyParams oneBlock{1U, 1U, 0U, 0U};
+        AscendC::DataCopy(readBuf, stateTensor[index], oneBlock);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+        return readBuf.GetValue(0);
+    }
+
+    CATLASS_DEVICE
+    void StoreStateSlotByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index, int32_t value)
+    {
+        auto writeBuf = resource.ubBuf.template GetBufferByByte<int32_t>(STATE_SLOT_DMA_WRITE_UB_OFFSET);
+        // The transfer is one 32B block because that is the smallest DMA granule. The slot only
+        // uses its first word, so clear the rest rather than spilling stale staging data into it.
+        for (uint32_t i = 0; i < INT32_COUNT_PER_BLOCK; ++i) {
+            writeBuf.SetValue(static_cast<int64_t>(i), 0);
+        }
+        writeBuf.SetValue(0, value);
+        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::DataCopyParams oneBlock{1U, 1U, 0U, 0U};
+        AscendC::DataCopy(stateTensor[index], writeBuf, oneBlock);
+        // The staging buffer is rewritten by the next swap on the scalar pipe, so wait for the
+        // transfer to finish reading it before returning.
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+    }
+
+    CATLASS_DEVICE
+    int32_t FlipStateSlotByDma(AscendC::GlobalTensor<int32_t> &stateTensor, uint64_t index)
+    {
+        int32_t value = LoadStateSlotByDma(stateTensor, index);
+        StoreStateSlotByDma(stateTensor, index, (value == 0) ? 1 : 0);
+        return value;
+    }
+
     CATLASS_DEVICE
     GroupedMatmulSliceMPerTokenDequantSwigluQuantMultiStageWorkspace()
     {
@@ -249,8 +355,8 @@ public:
         AscendC::GlobalTensor<int32_t> selfDataStatusTensor;
         selfDataStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusDataSpaceGm + STATE_WIN_OFFSET));
         if ASCEND_IS_AIC {
-            aicStateGlobalCoreIdx = aivNum + aicIdx;
-            cvDataState = FlushAndSpinValue<int32_t>(selfDataStatusTensor, aicStateGlobalCoreIdx * UB_ALIGN);
+            aicStateGlobalCoreIdx = AIC_STATE_BASE_INTS + aicIdx * AIC_STATE_SLOT_INTS;
+            cvDataState = FlushAndSpinValue<int32_t>(selfDataStatusTensor, aicStateGlobalCoreIdx);
             vToCFlag = (cvDataState == 0) ? V_TO_C_FLAG_1 : V_TO_C_FLAG_2;
         }
         if ASCEND_IS_AIV {
@@ -264,8 +370,8 @@ public:
             }
             aivStateGlobalCoreIdx = aivNum + aicNum + aivIdx;
 
-            dataState = FlushAndSpinValue<int32_t>(selfDataStatusTensor, aivIdx * UB_ALIGN);
-            cvDataState = FlushAndSpinValue<int32_t>(selfDataStatusTensor, aivStateGlobalCoreIdx * UB_ALIGN);
+            dataState = FlipStateSlotByDma(selfDataStatusTensor, aivIdx * UB_ALIGN);
+            cvDataState = FlipStateSlotByDma(selfDataStatusTensor, aivStateGlobalCoreIdx * UB_ALIGN);
             vToCFlag = (cvDataState == 0) ? V_TO_C_FLAG_1 : V_TO_C_FLAG_2;
         }
     }
@@ -518,60 +624,118 @@ public:
     CATLASS_DEVICE
     void CalAndSendTokenCount()
     {
+        // Split by AIV, not by send core: every AIV runs this, so all of them share the expert sweep
+        // instead of the send cores carrying all of it.
         uint32_t totalExpertNum = moeExpertNum;
-        uint32_t sendCountExpertNum = totalExpertNum / sendCoreNum;
-        uint32_t remainderRankNum = totalExpertNum % sendCoreNum;
-        uint32_t startExpertId = sendCountExpertNum * sendCoreIdx;
-        if (sendCoreIdx < remainderRankNum) {
+        uint32_t sendCountExpertNum = totalExpertNum / aivNum;
+        uint32_t remainderRankNum = totalExpertNum % aivNum;
+        uint32_t startExpertId = sendCountExpertNum * aivIdx;
+        if (aivIdx < remainderRankNum) {
             sendCountExpertNum += 1;
-            startExpertId += sendCoreIdx;
+            startExpertId += aivIdx;
         } else {
             startExpertId += remainderRankNum;
         }
         uint32_t endExpertId = startExpertId + sendCountExpertNum;
-        if (startExpertId >= totalExpertNum) {
+        if (startExpertId >= totalExpertNum || sendCountExpertNum == 0) {
             return;
         }
 
+        // The run is fully staged first and copied out afterwards, so every expert that shares a
+        // destination rank goes out in one DataCopy instead of one copy per expert.
         AscendC::LocalTensor<int32_t> statusTensor_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-        ubOffset += CEIL_UP(CEIL(expertCntUp, INT32_COUNT_PER_BLOCK) * INT32_COUNT_PER_BLOCK * UB_BLOCK_SIZE);
-        AscendC::Duplicate(statusTensor_, (int32_t)0,
-                           expertCntUp * INT32_COUNT_PER_BLOCK);
-        if (state == 0) {
-            // set the first number of every 8 numbers as 0x3F800000(float 1.0)
-            uint64_t mask[2] = {0x101010101010101, 0};
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Duplicate<int32_t>(statusTensor_, 0x3F800000, mask, CEIL(expertCntUp, INT32_COUNT_PER_BLOCK), 1,
-                                        INT32_COUNT_PER_BLOCK);
-        }
-
+        ubOffset += CEIL_UP(sendCountExpertNum * INT32_COUNT_PER_BLOCK * static_cast<int32_t>(sizeof(int32_t)));
+        AscendC::Duplicate(statusTensor_, (int32_t)0, sendCountExpertNum * INT32_COUNT_PER_BLOCK);
+        // Only word 0 of each 8-int record carries the arrival flag. The masked Duplicate writes eight
+        // words per repeat, which would run past this reservation, so the flag words go in scalar.
         AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        if (state == 0) {
+            for (uint32_t i = 0; i < sendCountExpertNum; ++i) {
+                statusTensor_(i * INT32_COUNT_PER_BLOCK) = 0x3F800000;
+            }
+        }
 
         for (uint32_t curExpertId = startExpertId; curExpertId < endExpertId; ++curExpertId) {
             int32_t curExpertCnt = 0;
             int32_t dstExpertId = curExpertId;
             CalExpandxIdx(dstExpertId, expertIdsCnt, curExpertCnt);
-            int32_t cntPosIndex = curExpertId * INT32_COUNT_PER_BLOCK + 1;
-            statusTensor_(cntPosIndex) = curExpertCnt;
+            statusTensor_((curExpertId - startExpertId) * INT32_COUNT_PER_BLOCK + 1) = curExpertCnt;
         }
-
         AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
         AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+        PublishStagedExpertCounts(statusTensor_, startExpertId, endExpertId);
+    }
 
+    // Consecutive experts of one destination rank sit epRankSize bucket slots apart; blockLen counts
+    // 32B blocks, so one record is exactly one block.
+    CATLASS_DEVICE
+    void PublishStagedExpertCounts(AscendC::LocalTensor<int32_t> &statusTensor_, uint32_t startExpertId,
+                                   uint32_t endExpertId)
+    {
+        uint32_t dstStrideBlocks = epRankSize * (stateOffset / UB_BLOCK_SIZE) - 1;
         AscendC::GlobalTensor<int32_t> rankGMTensor;
-        uint32_t offset = stateOffset * epRankId;
-        for (uint32_t rankIndex = startExpertId; rankIndex < endExpertId; ++rankIndex) {
-            uint32_t dstRankId = rankIndex;
+        for (uint32_t curExpertId = startExpertId; curExpertId < endExpertId;) {
+            uint32_t dstRankId = curExpertId;
+            uint32_t offset = stateOffset * epRankId;
+            uint32_t segNum = endExpertId - curExpertId;
             if (moeExpertNumPerRank > 1) {
-                dstRankId = ((rankIndex) / moeExpertNumPerRank);
-                offset =
-                    (epRankId + (rankIndex) % moeExpertNumPerRank * epRankSize) * stateOffset;
+                uint32_t localExpertId = curExpertId % moeExpertNumPerRank;
+                dstRankId = curExpertId / moeExpertNumPerRank;
+                offset = (epRankId + localExpertId * epRankSize) * stateOffset;
+                uint32_t leftInRank = moeExpertNumPerRank - localExpertId;
+                segNum = segNum < leftInRank ? segNum : leftInRank;
             }
             GM_ADDR rankGM = (__gm__ uint8_t *)(GetWindStateAddrByRankId(dstRankId) + offset);
             rankGMTensor.SetGlobalBuffer((__gm__ int32_t *)rankGM);
-            AscendC::DataCopy<int32_t>(rankGMTensor, statusTensor_[rankIndex * INT32_COUNT_PER_BLOCK], 8UL);
+            if (segNum == 1) {
+                AscendC::DataCopy<int32_t>(rankGMTensor,
+                                           statusTensor_[(curExpertId - startExpertId) * INT32_COUNT_PER_BLOCK],
+                                           INT32_COUNT_PER_BLOCK);
+            } else {
+                AscendC::DataCopyParams cntParams{static_cast<uint16_t>(segNum), 1U, 0,
+                                                  static_cast<uint16_t>(dstStrideBlocks)};
+                AscendC::DataCopy<int32_t>(rankGMTensor,
+                                           statusTensor_[(curExpertId - startExpertId) * INT32_COUNT_PER_BLOCK],
+                                           cntParams);
+            }
+            curExpertId += segNum;
         }
+        // One flag covers every copy above: setting an MTE3 flag orders all earlier MTE3 work.
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+    }
+
+    // Shared by every AIV core: the expert sweep behind CalAndSendTokenCount is O(expertNum * tokenNum)
+    // of vector work, so splitting it over all cores instead of only the send cores cuts the per-core
+    // cost and lets the last count land sooner, which is what unblocks RecvCount.
+    CATLASS_DEVICE
+    void PrepareAndSendTokenCount(GM_ADDR gmExpertIds, GM_ADDR gmXActiveMask)
+    {
+        ubOffset = 0;
+        if constexpr (EXEC_FLAG & EXEC_FLAG_X_ACTIVE_MASK) {
+            TokenActiveMaskCal(gmXActiveMask, ubOffset);
+        }
+        expertIdsCnt = activeMaskBsCnt * axisK;
+
+        AscendC::GlobalTensor<int32_t> expertIdsGMTensor_;
+        expertIdsGMTensor_.SetGlobalBuffer((__gm__ int32_t *)gmExpertIds);
+        expertIdsTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
+        ubOffset += CEIL_UP(expertIdsCnt * sizeof(int32_t));
+        dstExpIdTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
+        subExpIdTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
+        workLocalTensor_ = (resource.ubBuf.template GetBufferByByte<float>(ubOffset));
+        ubOffset += CEIL_UP(expertIdsCnt * sizeof(int32_t));
+
+        AscendC::DataCopyExtParams expertIdsCntParams = {1U, static_cast<uint32_t>(expertIdsCnt * sizeof(uint32_t)),
+                                                         0U, 0U, 0U};
+        AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
+        AscendC::DataCopyPad(expertIdsTensor_, expertIdsGMTensor_, expertIdsCntParams, copyPadParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
+
+        CalAndSendTokenCount();
+        AscendC::PipeBarrier<PIPE_ALL>();
     }
 
     CATLASS_DEVICE
@@ -743,30 +907,8 @@ public:
     SendCoreFunc(GM_ADDR gmX, GM_ADDR gmExpertIds, GM_ADDR gmMoeSmoothScales, GM_ADDR gmX1, GM_ADDR gmX1Scale,
                  GM_ADDR gmExpandIdx, GM_ADDR gmXActiveMask)
     {
-        ubOffset = 0;
-        if constexpr (EXEC_FLAG & EXEC_FLAG_X_ACTIVE_MASK) {
-            TokenActiveMaskCal(gmXActiveMask, ubOffset);
-        }
-        expertIdsCnt = activeMaskBsCnt * axisK;
-
-        AscendC::GlobalTensor<int32_t> expertIdsGMTensor_;
-        expertIdsGMTensor_.SetGlobalBuffer((__gm__ int32_t *)gmExpertIds);
-        expertIdsTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
-        ubOffset += CEIL_UP(expertIdsCnt * sizeof(int32_t));
-        dstExpIdTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
-        subExpIdTensor_ = (resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset));
-        workLocalTensor_ = (resource.ubBuf.template GetBufferByByte<float>(ubOffset));
-        ubOffset += CEIL_UP(expertIdsCnt * sizeof(int32_t));
-
-        AscendC::DataCopyExtParams expertIdsCntParams = {1U, static_cast<uint32_t>(expertIdsCnt * sizeof(uint32_t)),
-                                                         0U, 0U, 0U};
-        AscendC::DataCopyPadExtParams<int32_t> copyPadParams{false, 0U, 0U, 0U};
-        AscendC::DataCopyPad(expertIdsTensor_, expertIdsGMTensor_, expertIdsCntParams, copyPadParams);
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
-
-        CalAndSendTokenCount();
-        AscendC::PipeBarrier<PIPE_ALL>();
+        // The expert-id copy and the count sweep already ran for every AIV in PrepareAndSendTokenCount,
+        // so ubOffset carries on from there and SendToMoeExprt reuses the same base.
         sendToMoeAivNum = sendCoreNum;
         AscendC::SetDeqScale((half)1.000000e+00f);
         SendToMoeExprt(gmX, gmExpandIdx, gmMoeSmoothScales);
@@ -881,22 +1023,23 @@ public:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
+    // Fallback for shapes the split poll cannot cover: every receive core builds the whole table from
+    // the raw bucket heads, exactly as before this feature.
     CATLASS_DEVICE
-    void RecvCount(int64_t ubOffset)
+    void RecvCountLegacy(int64_t ubOffset)
     {
         uint32_t recStatusNumPerCore = expertCntUp;
-        uint32_t startStatusIndex = 0;  // every wait for all token counts
+        uint32_t startStatusIndex = 0;
 
         int64_t subUbOffset = ubOffset;
         AscendC::LocalTensor<int32_t> statusTensor_ = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
         subUbOffset += CEIL_UP(expertCntUp * UB_BLOCK_SIZE);
-        AscendC::LocalTensor<uint32_t> gatherTmpTensor = (resource.ubBuf.template GetBufferByByte<uint32_t>
-                                                                                                      (subUbOffset));
+        AscendC::LocalTensor<uint32_t> gatherTmpTensor =
+            (resource.ubBuf.template GetBufferByByte<uint32_t>(subUbOffset));
         subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
         AscendC::LocalTensor<float> gatherMaskOutTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         subUbOffset += CEIL_UP(expertCntUp * sizeof(float));
         AscendC::LocalTensor<float> statusFp32Tensor_ = statusTensor_.ReinterpretCast<float>();
-
         AscendC::LocalTensor<float> statusSumOutTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
         AscendC::LocalTensor<uint8_t> sumTmpTensor = resource.ubBuf.template GetBufferByByte<uint8_t>(subUbOffset);
@@ -916,7 +1059,6 @@ public:
         AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
         AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
 
-        uint32_t preRecvTokenCount = 0;
         while ((sumOfFlag < minTarget) || (sumOfFlag > maxTarget)) {
             AscendC::DataCopy(statusFp32Tensor_, windowInstatusFp32Tensor_[startStatusIndex *
                                                                            stateOffset / sizeof(float)], intriParams);
@@ -936,7 +1078,7 @@ public:
     }
 
     CATLASS_DEVICE
-    void GetCumSum(AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
+    void GetCumSumLegacy(AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
     {
         auto statusTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
         int32_t tokenCount = 0;
@@ -944,6 +1086,312 @@ public:
             tokenCount += statusTensor.GetValue(index * INT32_COUNT_PER_BLOCK + 1);
             tokenPrefix.SetValue(index, tokenCount);
         }
+    }
+
+    // The split poll needs one receive core per expert; with fewer cores than experts some expert would
+    // never be published and every core would spin forever. The published record also has to fit in one
+    // 512B line: header at word 0, prefix run starting at word 8.
+    __aicore__ inline bool UseSplitRecvCount() const
+    {
+        return localExpertNum != 0 && localExpertNum <= recvCoreNum &&
+               localExpertNum <= RECV_PREFIX_MAX_GROUPS &&
+               (RECV_PREFIX_DATA_INDEX + epRankSize) <= RECV_PREFIX_GROUP_INTS;
+    }
+
+    // Words moved per record: the header plus one int32 per source rank, rounded up to a DataCopy
+    // block so the strided publish stays 32B aligned. Derived from epRankSize, not a fixed floor, so
+    // a wider world gets a wider record instead of silently truncating at a constant width.
+    __aicore__ inline uint32_t PrefixCopyInts() const
+    {
+        return (RECV_PREFIX_DATA_INDEX + epRankSize + INT32_COUNT_PER_BLOCK - 1) /
+               INT32_COUNT_PER_BLOCK * INT32_COUNT_PER_BLOCK;
+    }
+
+    __aicore__ inline uint32_t PrefixReplicateBytes() const
+    {
+        return recvCoreNum * PrefixCopyInts() * static_cast<uint32_t>(sizeof(int32_t));
+    }
+
+    // Record sits in the unused tail of the bucket-head block when that tail is long enough. One
+    // expert per rank leaves no tail, so the record moves behind the replicate buffer instead of
+    // being overwritten by the second core's copy.
+    __aicore__ inline int64_t PrefixRecordBytes() const
+    {
+        return static_cast<int64_t>(PrefixCopyInts()) * static_cast<int64_t>(sizeof(int32_t));
+    }
+
+    __aicore__ inline int64_t PrefixExtraRecordBytes() const
+    {
+        int64_t heads = CEIL_UP(static_cast<int64_t>(expertCntUp) * UB_BLOCK_SIZE);
+        int64_t recordInGap = static_cast<int64_t>(epRankSize) * UB_BLOCK_SIZE;
+        return (recordInGap + PrefixRecordBytes() <= heads) ? 0 : PrefixRecordBytes();
+    }
+
+    __aicore__ inline int64_t ExpertPrefixRecordOffset(int64_t ubOffset) const
+    {
+        if (PrefixExtraRecordBytes() == 0) {
+            return ubOffset + static_cast<int64_t>(epRankSize) * UB_BLOCK_SIZE;
+        }
+        return ubOffset + CEIL_UP(static_cast<int64_t>(expertCntUp) * UB_BLOCK_SIZE) +
+               CEIL_UP(static_cast<int64_t>(PrefixReplicateBytes()));
+    }
+
+    // The bucket flag word is 0x3F800000 (float 1.0) on one launch and 0 on the next, so a stale
+    // value left by the previous launch can never pass for complete.
+    CATLASS_DEVICE
+    void WaitLocalExpertArrival(int64_t ubOffset)
+    {
+        const int32_t expectedFlag = (state == 0) ? 0x3F800000 : 0;
+        const uint32_t group = recvCoreIdx;
+        auto statusTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        AscendC::GlobalTensor<int32_t> windowInstatusFp32Tensor_;
+        windowInstatusFp32Tensor_.SetGlobalBuffer((__gm__ int32_t *)GetWindStateAddrByRankId(epRankId));
+        // epRankSize bucket heads, 32B each, STATE_OFFSET / UB_BLOCK_SIZE - 1 blocks apart.
+        AscendC::DataCopyParams intriParams{static_cast<uint16_t>(epRankSize), 1,
+                                            static_cast<uint16_t>(STATE_OFFSET / UB_BLOCK_SIZE - 1), 0};
+        uint32_t bucketBase = group * epRankSize * (stateOffset / sizeof(int32_t));
+        // Fold the arrival check on the vector pipe. The flags sit one per 32B block, so a gather
+        // with pattern 1 collects them contiguously, and the bucket flag is exactly 1.0f (or 0) --
+        // so a plain Sum of the gathered float view is the arrival count. That replaces epRankSize
+        // serial scalar reads inside the spin, which is where the cost actually sat at EP64.
+        auto arriveGather = resource.ubBuf.template GetBufferByByte<float>(ubOffset + RECV_ARRIVE_GATHER_OFFSET);
+        auto arriveTmp = resource.ubBuf.template GetBufferByByte<uint32_t>(ubOffset + RECV_ARRIVE_TMP_OFFSET);
+        auto arriveSum = resource.ubBuf.template GetBufferByByte<float>(ubOffset + RECV_ARRIVE_SUM_OFFSET);
+        auto arriveTargetSrc = resource.ubBuf.template GetBufferByByte<float>(ubOffset + RECV_ARRIVE_TSRC_OFFSET);
+        auto arriveTargetDst = resource.ubBuf.template GetBufferByByte<float>(ubOffset + RECV_ARRIVE_TARGET_OFFSET);
+        uint32_t innerArrive =
+            (epRankSize * static_cast<uint32_t>(sizeof(float)) + UB_ALIGN - 1) / UB_ALIGN * UB_ALIGN /
+            static_cast<uint32_t>(sizeof(float));
+        AscendC::SumParams arriveParams{1, innerArrive, epRankSize};
+        // Each flag is exactly 1.0f, so "all arrived" is epRankSize of them added up. The sum has to
+        // be built on the vector pipe: an aicore scalar cannot convert between float and unsigned.
+        AscendC::Duplicate(arriveTargetSrc, 1.0f, epRankSize);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Sum(arriveTargetDst, arriveTargetSrc, arriveParams);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        const float arriveTarget = (expectedFlag == 0) ? 0.0f : arriveTargetDst.GetValue(0);
+        arriveTmp.SetValue(0, 1);
+        AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+        uint64_t rsvdCnt = 0;
+        bool bucketsReady = false;
+        while (!bucketsReady) {
+            AscendC::DataCopy(statusTensor, windowInstatusFp32Tensor_[bucketBase], intriParams);
+            AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
+            AscendC::GatherMask(arriveGather, statusTensor.template ReinterpretCast<float>(), arriveTmp, true, 1,
+                                {1, static_cast<uint16_t>(epRankSize), 1, 0}, rsvdCnt);
+            AscendC::PipeBarrier<PIPE_V>();
+            AscendC::Sum(arriveSum, arriveGather, arriveParams);
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+            if (arriveSum.GetValue(0) == arriveTarget) {
+                bucketsReady = true;
+            } else {
+                AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+                AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+                SPIN_WAIT_CYCLES();
+            }
+        }
+    }
+
+    // Assemble this expert's prefix record in UB. The prefix run is the vector scan below.
+    CATLASS_DEVICE
+    void BuildExpertPrefixRecord(int64_t ubOffset)
+    {
+        const uint32_t group = recvCoreIdx;
+        auto statusTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        auto record = resource.ubBuf.template GetBufferByByte<int32_t>(ExpertPrefixRecordOffset(ubOffset));
+        // Prefix over the source ranks, on the vector pipe. Each count sits in its own 32B block, so
+        // shifting by d blocks is a d*32B shift -- always aligned, which is the whole reason the
+        // scalar loop existed. log2(epRankSize) block adds replace epRankSize serial reads, and at
+        // EP64 that is the difference between four adds and sixty-four scalar round trips.
+        auto scanBuf = resource.ubBuf.template GetBufferByByte<int32_t>(RECV_PREFIX_SCAN_OFFSET);
+        auto prefixDense = resource.ubBuf.template GetBufferByByte<int32_t>(RECV_PREFIX_DENSE_OFFSET);
+        auto countPattern = resource.ubBuf.template GetBufferByByte<uint32_t>(RECV_PREFIX_PATTERN_OFFSET);
+        AscendC::Adds(scanBuf, statusTensor, 0, epRankSize * INT32_COUNT_PER_BLOCK);
+        AscendC::PipeBarrier<PIPE_V>();
+        for (uint32_t step = 1; step < epRankSize; step <<= 1) {
+            uint32_t shift = step * INT32_COUNT_PER_BLOCK;
+            AscendC::Add(scanBuf[shift], scanBuf[0], scanBuf[shift],
+                         (epRankSize - step) * INT32_COUNT_PER_BLOCK);
+            AscendC::PipeBarrier<PIPE_V>();
+        }
+        // Pull word 1 of every block back into a dense run. GATHER_SECOND_NUM selects the second
+        // element of each block, which is the count.
+        countPattern.SetValue(0, static_cast<uint32_t>(GATHER_SECOND_NUM));
+        AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+        uint64_t prefixRsvd = 0;
+        AscendC::GatherMask(prefixDense, scanBuf, countPattern, true, static_cast<uint32_t>(GATHER_SECOND_NUM),
+                            {1, static_cast<uint16_t>(epRankSize), 1, 0}, prefixRsvd);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Adds(record[RECV_PREFIX_DATA_INDEX], prefixDense, 0, epRankSize);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        int32_t running = prefixDense.GetValue(epRankSize - 1);
+        record(RECV_PREFIX_MAGIC_INDEX) = static_cast<int32_t>(RECV_PREFIX_MAGIC);
+        record(RECV_PREFIX_TOTAL_INDEX) = running;
+        // This core is the publisher for `group`, so it never has to wait for its own record: the
+        // prefix run is still sitting in prefixDense. Keep the total and remember which expert it
+        // belongs to, so LoadGroupPrefix can answer without a GM round trip. Reading it back would
+        // depend on the store below having reached memory already, which it need not have.
+        ownPublishGroup = static_cast<int32_t>(group);
+        ownPrefixTotal = running;
+        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+    }
+
+    // Reproduce the record once per receive core, then let one strided copy spread the copies one
+    // stride apart, so no two cores read the same line.
+    CATLASS_DEVICE
+    void ReplicateExpertPrefix(int64_t ubOffset)
+    {
+        const uint32_t group = recvCoreIdx;
+        auto record = resource.ubBuf.template GetBufferByByte<int32_t>(ExpertPrefixRecordOffset(ubOffset));
+        auto replicate = resource.ubBuf.template GetBufferByByte<int32_t>(
+            ubOffset + CEIL_UP(expertCntUp * UB_BLOCK_SIZE));
+        AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+        uint32_t prefixCopyInts = PrefixCopyInts();
+        for (uint32_t core = 0; core < recvCoreNum; ++core) {
+            AscendC::Adds(replicate[core * prefixCopyInts], record, 0, prefixCopyInts);
+        }
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+        uint32_t prefixBlocks = prefixCopyInts / INT32_COUNT_PER_BLOCK;
+        uint32_t lineBlocks = RECV_PREFIX_COPY_STRIDE / UB_BLOCK_SIZE;
+        AscendC::DataCopyParams copyParams{static_cast<uint16_t>(recvCoreNum),
+                                           static_cast<uint16_t>(prefixBlocks), 0,
+                                           static_cast<uint16_t>(lineBlocks - prefixBlocks)};
+        AscendC::GlobalTensor<int32_t> copyTensor;
+        copyTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_COPY_BASE), RECV_PREFIX_COPY_INTS);
+        uint32_t copyInts = RECV_PREFIX_COPY_STRIDE / sizeof(int32_t);
+        AscendC::DataCopy(copyTensor[group * recvCoreNum * copyInts], replicate, copyParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+    }
+
+    // Raise one flag per receive core. Each flag owns a whole cache line, so the copy steps 512B
+    // between them rather than writing them back to back.
+    CATLASS_DEVICE
+    void PublishExpertReadyFlags(int64_t ubOffset)
+    {
+        const uint32_t group = recvCoreIdx;
+        const int32_t publishFlag = (state == 0) ? 1 : 2;
+        AscendC::GlobalTensor<int32_t> flagTensor;
+        flagTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_FLAG_BASE), RECV_FLAG_BLOCK_INTS);
+        int64_t flagUbOffset = ubOffset + CEIL_UP(static_cast<int64_t>(expertCntUp) * UB_BLOCK_SIZE) +
+                               CEIL_UP(static_cast<int64_t>(PrefixReplicateBytes())) + PrefixExtraRecordBytes();
+        auto flagBuf = resource.ubBuf.template GetBufferByByte<int32_t>(flagUbOffset);
+        // One Duplicate writes every flag: the mask selects element 0 of each 32B block, and one
+        // repeat steps a whole 512B line, so a single vector instruction replaces a store per core.
+        {
+            uint64_t flagMask[2] = {0x1ULL, 0ULL};
+            AscendC::Duplicate<int32_t>(flagBuf, publishFlag, flagMask, static_cast<uint8_t>(recvCoreNum), 1,
+                                        static_cast<uint8_t>(RECV_PERFLAG_CORE_INTS / INT32_COUNT_PER_BLOCK));
+        }
+        // The flags are written on the vector pipe now, so the hand-over to the copy below is V->MTE3.
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+        uint16_t flagStep = static_cast<uint16_t>(RECV_PERFLAG_CORE_INTS / INT32_COUNT_PER_BLOCK - 1);
+        AscendC::DataCopyParams flagParams{static_cast<uint16_t>(recvCoreNum), 1U, flagStep, flagStep};
+        AscendC::DataCopy(flagTensor[group * RECV_PERFLAG_GROUP_INTS], flagBuf, flagParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+    }
+
+    // One receive core owns one local expert: it polls only that expert's epRankSize bucket flags and
+    // publishes its running prefix, so the expertCntUp-bucket sweep runs once per expert instead of
+    // once per receive core. No barrier at the end: each expert gates its own consumers, so expert 0
+    // can be received while the rest are still being counted.
+    CATLASS_DEVICE
+    void RecvCount(int64_t ubOffset)
+    {
+        if (!UseSplitRecvCount()) {
+            RecvCountLegacy(ubOffset);
+            return;
+        }
+        if (recvCoreIdx >= localExpertNum) {
+            return;
+        }
+        WaitLocalExpertArrival(ubOffset);
+        BuildExpertPrefixRecord(ubOffset);
+        ReplicateExpertPrefix(ubOffset);
+        PublishExpertReadyFlags(ubOffset);
+    }
+
+    // Loads one expert's published prefix and turns it into absolute bucket boundaries, so the caller can
+    // start that expert's recvToken without waiting for any later expert. base is the running sum of the
+    // experts before this one; the return value is this expert's total.
+    CATLASS_DEVICE
+    int32_t LoadGroupPrefix(uint32_t group, AscendC::LocalTensor<int32_t> &tokenPrefix,
+                            int64_t ubOffset, int32_t base)
+    {
+        // Fast path for the core that published this expert. It already computed the prefix run and is
+        // holding it in UB, so it must not wait on its own flag nor read its own record back: the store
+        // it issued need not have reached memory yet, and the round trip it would take to find out is
+        // what made the first prefix-wait expensive even on the publisher.
+        if (ownPublishGroup >= 0 && static_cast<uint32_t>(ownPublishGroup) == group) {
+            auto prefixDense = resource.ubBuf.template GetBufferByByte<int32_t>(RECV_PREFIX_DENSE_OFFSET);
+            AscendC::Adds(tokenPrefix[group * epRankSize], prefixDense, base, epRankSize);
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+            int32_t selfTotal = ownPrefixTotal;
+            return selfTotal;
+        }
+        const int32_t publishFlag = (state == 0) ? 1 : 2;
+        // This core's own flag word: no two waiters share an address.
+        const int64_t flagElem = static_cast<int64_t>(sizeof(int32_t));
+        const int64_t flagByteOffset = group * RECV_PERFLAG_GROUP_INTS * flagElem +
+                                       recvCoreIdx * RECV_PERFLAG_CORE_INTS * flagElem;
+        AscendC::GlobalTensor<int32_t> flagTensor;
+        flagTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_FLAG_BASE + flagByteOffset),
+                                   RECV_FLAG_BLOCK_INTS);
+        // Back off with a plain empty loop. The old form read SYS_CNT twice per round to bound the wait,
+        // but that counter is just a MOV from the system register -- it is not precise across cores and
+        // it costs scalar work inside the spin. A fixed instruction count is enough to keep the poll
+        // rate down, which is what the backoff is for. The gap is much wider than before: at 24 cores
+        // polling, the old tens-of-cycles spacing kept the L2 port saturated and the measured wait was
+        // mostly queuing behind the other waiters.
+        constexpr uint32_t SPIN_ROUNDS = 64;
+        auto flagBuf = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset + RECV_FLAG_READ_OFFSET);
+        AscendC::DataCopyParams flagParams{1U, 1U, 0U, 0U};
+        bool flagSeen = false;
+        while (!flagSeen) {
+            AscendC::DataCopy(flagBuf, flagTensor[0], flagParams);
+            AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+            if (flagBuf(RECV_PREFIX_FLAG_INDEX) == publishFlag) {
+                flagSeen = true;
+            } else {
+                for (uint32_t spin = 0; spin < SPIN_ROUNDS; ++spin) {
+                    __asm__ __volatile__("");
+                }
+            }
+        }
+        // Each core reads its own copy of the record, so the cores never queue on one address.
+        AscendC::GlobalTensor<int32_t> publishTensor;
+        publishTensor.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_COPY_BASE +
+                                                         (group * recvCoreNum + recvCoreIdx) *
+                                                             RECV_PREFIX_COPY_STRIDE),
+                                      RECV_PREFIX_COPY_STRIDE / sizeof(int32_t));
+        auto line = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        AscendC::DataCopy(line, publishTensor, PrefixCopyInts());
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+        // One vector add folds the base in; this expert's slice of tokenPrefix is contiguous and both
+        // operands are 32B aligned.
+        AscendC::Adds(tokenPrefix[group * epRankSize], line[RECV_PREFIX_DATA_INDEX], base, epRankSize);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        int32_t expertTotal = line.GetValue(RECV_PREFIX_TOTAL_INDEX);
+        // line is reused by the next group's copy, so the vector read above must retire first.
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(0);
+        return expertTotal;
     }
 
     CATLASS_DEVICE
@@ -1067,26 +1515,41 @@ public:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
+    // Every boundary is in tokenPrefix by now, so the public table is written once instead of
+    // competing with the per-expert publishes.
+    CATLASS_DEVICE
+    void PublishEpSendCount(GM_ADDR gmEpSendCount, AscendC::LocalTensor<int32_t> &tokenPrefix)
+    {
+        AscendC::GlobalTensor<int32_t> sendCountsGlobal;
+        sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(gmEpSendCount));
+        AscendC::DataCopyExtParams copyParams = {
+            1U, static_cast<uint32_t>(expertCntUp * sizeof(int32_t)), 0U, 0U, 0U};
+        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+        AscendC::DataCopyPad(sendCountsGlobal, tokenPrefix, copyParams);
+        AscendC::PipeBarrier<PIPE_ALL>();
+    }
+
     CATLASS_DEVICE
     void RecvCoreFunc(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmEpSendCount)
     {
         ubOffset = 0;
-        RecvCount(ubOffset);
-        // RecvCount scratch can be reused once all count loads and reductions have completed.
-        AscendC::PipeBarrier<PIPE_ALL>();
-        int64_t subUbOffset = CEIL_UP(expertCntUp * UB_BLOCK_SIZE);
+        // RecvCount's bucket heads and publish staging share this first block, so tokenPrefix starts
+        // after both. The replicated staging grows with epRankSize; a record that does not fit in the
+        // head-block tail is reserved behind it, and the per-core flags occupy a full block at the end.
+        int64_t subUbOffset = CEIL_UP(static_cast<int64_t>(expertCntUp) * UB_BLOCK_SIZE) +
+                              CEIL_UP(static_cast<int64_t>(PrefixReplicateBytes())) +
+                              PrefixExtraRecordBytes() + CEIL_UP(RECV_FLAG_STAGE_BYTES);
         auto tokenPrefix = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
         subUbOffset += CEIL_UP(expertCntUp * sizeof(int32_t));
-        GetCumSum(tokenPrefix, ubOffset);
-
-        if (recvCoreIdx == 0) {
-            AscendC::GlobalTensor<int32_t> sendCountsGlobal;
-            sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(gmEpSendCount));
-            AscendC::DataCopyExtParams copyParams = {
-                1U, static_cast<uint32_t>(expertCntUp * sizeof(int32_t)), 0U, 0U, 0U};
-            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
-            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-            AscendC::DataCopyPad(sendCountsGlobal, tokenPrefix, copyParams);
+        // Scratch for one published record line, loaded per expert below.
+        int64_t recordUbOffset = subUbOffset;
+        subUbOffset += CEIL_UP(RECV_PREFIX_GROUP_STRIDE);
+        const bool splitRecv = UseSplitRecvCount();
+        RecvCount(ubOffset);
+        AscendC::PipeBarrier<PIPE_ALL>();
+        if (!splitRecv) {
+            GetCumSumLegacy(tokenPrefix, ubOffset);
             AscendC::PipeBarrier<PIPE_ALL>();
         }
 
@@ -1095,8 +1558,20 @@ public:
         auto notifyTensor = resource.ubBuf.template GetBufferByByte<int32_t>(notifyUbOffset);
         uint32_t startCoreIdx = 0;
         uint32_t expertStart = 0;
+        int32_t prefixBase = 0;
         for (uint32_t groupId = 0; groupId < localExpertNum; ++groupId) {
-            uint32_t expertEnd = tokenPrefix.GetValue((groupId + 1) * epRankSize - 1);
+            uint32_t expertEnd;
+            if (splitRecv) {
+                // Only this expert's own record is needed, so an early expert starts moving tokens while
+                // the later ones are still being counted. LoadGroupPrefix returns this expert's total and
+                // the running prefix is exactly the last bucket boundary, so the caller does not need to
+                // read that word back: a scalar read right after the vector add stalls the scalar unit
+                // behind the vector pipe, and that stall showed up as a gap before recv-token.
+                prefixBase += LoadGroupPrefix(groupId, tokenPrefix, recordUbOffset, prefixBase);
+                expertEnd = static_cast<uint32_t>(prefixBase);
+            } else {
+                expertEnd = tokenPrefix.GetValue((groupId + 1) * epRankSize - 1);
+            }
             uint32_t currentM = expertEnd - expertStart;
             uint32_t logicalCoreIdx = (recvCoreIdx + recvCoreNum - startCoreIdx) % recvCoreNum;
             uint32_t tokensPerCore = currentM / recvCoreNum;
@@ -1112,6 +1587,9 @@ public:
             NotifyExpertTokens(notifyTensor, groupId, coreTokenCount);
             startCoreIdx = (startCoreIdx + currentM) % recvCoreNum;
             expertStart = expertEnd;
+        }
+        if (recvCoreIdx == 0) {
+            PublishEpSendCount(gmEpSendCount, tokenPrefix);
         }
     }
 
@@ -1265,6 +1743,7 @@ public:
 
         stateOffset = expertCntUp > MAX_EXPERTS_FULL_STATE_SLOT ? STATE_OFFSET >> 1 : STATE_OFFSET;
         expertPerSizeOnWin = maxAxisBs * tokenLength * sizeof(XType);
+        gmReserved_ = params.gmReserved;
     }
 
     CATLASS_DEVICE
@@ -1275,14 +1754,13 @@ public:
         GM_ADDR statusSpaceGm_ = GetWindStateAddrByRankId(epRankId);
         AscendC::GlobalTensor<int32_t> selfStatusTensor;
         selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(statusSpaceGm_ + SELF_STATE_OFFSET));
-        state = FlushAndGetValue<int32_t>(selfStatusTensor, aivIdx * UB_ALIGN);
+        // Same slot, same reason as in the constructor: a scalar flush here cleans and invalidates a
+        // whole 512B line, and at a 128B stride four cores share one, so they take turns evicting each
+        // other's words. This runs before anything has claimed UB, so the prologue scratch is free.
+        state = LoadStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN);
         sumTarget = state == 0 ? 1.0f : 0.0f;
         tokenFlag = state == 0 ? TOKEN_FLAG_1 : TOKEN_FLAG_2;
-        if (state == 0) {
-            SetValueAndFlush<int32_t>(selfStatusTensor, aivIdx * UB_ALIGN, 0x3F800000);
-        } else {
-            SetValueAndFlush<int32_t>(selfStatusTensor, aivIdx * UB_ALIGN, 0);
-        }
+        StoreStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN, state == 0 ? 0x3F800000 : 0);
     }
 
     CATLASS_DEVICE
@@ -1316,6 +1794,25 @@ public:
                     (__gm__ int32_t*)(statusDataSpaceGm + SHARE_QUANT_SOFT_SYNC_OFFSET));
                 AscendC::DataCopy(shareQuantTokenStateTensor, tmpZeroLocalTensor, 8);
             }
+            {
+                // Zero the flags this rank can publish, so a stale value can never read as ready on the
+                // next launch. Only the flag lines need clearing: they are now one cache line per core,
+                // so the region is far too big for one buffer and is wiped in chunks.
+                constexpr uint32_t CLEAN_CHUNK_INTS = 8192;   // 32KB
+                const uint32_t flagInts = localExpertNum * RECV_PERFLAG_GROUP_INTS;
+                AscendC::GlobalTensor<int32_t> flagRegion;
+                flagRegion.SetGlobalBuffer((__gm__ int32_t *)(gmReserved_ + RECV_PREFIX_FLAG_BASE));
+                for (uint32_t done = 0; done < flagInts; done += CLEAN_CHUNK_INTS) {
+                    uint32_t thisChunk = (flagInts - done < CLEAN_CHUNK_INTS) ? (flagInts - done)
+                                                                              : CLEAN_CHUNK_INTS;
+                    AscendC::Duplicate(tmpZeroLocalTensor, (int32_t)0, thisChunk);
+                    AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+                    AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+                    AscendC::DataCopy(flagRegion[done], tmpZeroLocalTensor, thisChunk);
+                    AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(0);
+                    AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(0);
+                }
+            }
         }
 
         if (isRecvCore && recvCoreIdx == (recvCoreNum - 1)) {
@@ -1344,6 +1841,9 @@ public:
         AivInitParams(params);
         if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
             AivInitState();
+            // Every core runs the expert-id copy and the count sweep: the counts it publishes are what
+            // RecvCount waits on, and SendCoreFunc reuses the same UB layout afterwards.
+            PrepareAndSendTokenCount((GM_ADDR)params.gmexpertIds, (GM_ADDR)params.gmXActiveMask);
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
                 if (isShareQuantCore) {
                     shareQuantCoreFunc((GM_ADDR)params.gmX, (GM_ADDR)params.gmShareSmoothScales,
@@ -1523,6 +2023,14 @@ private:
     uint32_t aicStateGlobalCoreIdx{0};
     uint32_t sendToMoeAivNum{0};
     uint32_t sendToShareAivNum{0};
+    // The expert this core publishes, and that expert's own record. The publishing core already holds
+    // the answer in UB, so it must not round-trip through GM for it: the write it just issued is not
+    // guaranteed to be visible to its own next read yet, which is what made the first prefix-wait
+    // expensive even on the core that had just produced the value.
+    int32_t ownPublishGroup{-1};
+    int32_t ownPrefixTotal{0};
+    // Reserved workspace, used by the receive-side prefix publish.
+    GM_ADDR gmReserved_{nullptr};
 };
 
 }  // namespace Catlass::Gemm::Kernel
