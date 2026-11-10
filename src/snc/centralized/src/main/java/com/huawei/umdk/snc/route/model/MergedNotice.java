@@ -16,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 同层合并后的芯片级通告批次：同一轮从队列取出、发往同一芯片的全部NoticeTask按地址前缀合并的结果。
+ * 同芯片的通告信息合并成一个：发往同一芯片的全部NoticeTask按地址前缀合并。
  * 合并目的：把一个芯片的数据合并到一起统一处理，避免同一芯片被多个任务先后处理产生错误结果
  */
 @Data
