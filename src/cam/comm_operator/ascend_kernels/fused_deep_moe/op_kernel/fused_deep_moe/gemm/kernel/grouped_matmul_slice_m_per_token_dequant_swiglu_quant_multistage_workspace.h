@@ -47,6 +47,19 @@ constexpr int64_t STATE_SLOT_DMA_WRITE_UB_OFFSET = 32;
 constexpr uint32_t AIC_STATE_SLOT_INTS = 512 / sizeof(int32_t);
 constexpr uint32_t AIC_STATE_BASE_INTS = 15360 / sizeof(int32_t);
 constexpr uint32_t TOKEN_EXTRA_SPACE = 512;
+// A token travels in fixed 512B blocks, each holding 480B of payload and a 32B data-as-flag tail.
+// The tail is pre-filled once and never overwritten, so a block's flag becomes visible exactly when
+// that block's payload does: the flag rides in the same 512B transfer unit, it is not a separate
+// store afterwards. That is what lets the sender publish with a single DataCopy instead of a token
+// copy followed by a barrier and a scale/flag copy.
+constexpr uint32_t SPLIT_BLOCK_SIZE = 512;
+constexpr uint32_t SPLIT_BLOCK_DATA_SIZE = 480;
+constexpr uint32_t SPLIT_BLOCK_FLAG_BYTES = SPLIT_BLOCK_SIZE - SPLIT_BLOCK_DATA_SIZE;  // 32
+constexpr uint32_t SPLIT_BLOCK_DATA_INTS = SPLIT_BLOCK_DATA_SIZE / sizeof(int32_t);    // 120
+constexpr uint32_t SPLIT_BLOCK_SIZE_INTS = SPLIT_BLOCK_SIZE / sizeof(int32_t);        // 128
+// The flag vector copy handles 256B (64 int32) per repeat, so a 480B payload takes two passes.
+constexpr uint32_t SPLIT_COPY_HEAD_INTS = 64;
+constexpr uint32_t SPLIT_COPY_TAIL_INTS = SPLIT_BLOCK_DATA_INTS - SPLIT_COPY_HEAD_INTS;  // 56
 constexpr uint32_t INT32_COUNT_PER_BLOCK = 8;
 // Per-expert receive records published into the reserved workspace. Magic, the expert total and the
 // running prefix over source ranks live at fixed words inside a 512B line; the prefix run starts at
@@ -738,6 +751,27 @@ public:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
+    // Spread the dense per-token payload over the wire layout: 480B of payload per 512B block, with
+    // the 32B tail left as the flag that was filled once at buffer allocation. Two vector copies
+    // because one repeat moves at most 256B; the source advances 480B per block while the destination
+    // advances 512B, so the tails are stepped over rather than clobbered.
+    CATLASS_DEVICE
+    void SpreadTokenToBlocks(AscendC::LocalTensor<int8_t> &yBlocks, AscendC::LocalTensor<int8_t> &yDense)
+    {
+        AscendC::LocalTensor<int32_t> dstInt32 = yBlocks.template ReinterpretCast<int32_t>();
+        AscendC::LocalTensor<int32_t> srcInt32 = yDense.template ReinterpretCast<int32_t>();
+        AscendC::CopyRepeatParams spreadParams(1, 1,
+                                               static_cast<uint16_t>(SPLIT_BLOCK_SIZE_INTS /
+                                                                     INT32_COUNT_PER_BLOCK),
+                                               static_cast<uint16_t>(SPLIT_BLOCK_DATA_INTS /
+                                                                     INT32_COUNT_PER_BLOCK));
+        AscendC::Copy(dstInt32, srcInt32, static_cast<uint64_t>(SPLIT_COPY_HEAD_INTS),
+                      static_cast<uint8_t>(blockCntPerToken), spreadParams);
+        AscendC::Copy(dstInt32[SPLIT_COPY_HEAD_INTS], srcInt32[SPLIT_COPY_HEAD_INTS],
+                      static_cast<uint64_t>(SPLIT_COPY_TAIL_INTS),
+                      static_cast<uint8_t>(blockCntPerToken), spreadParams);
+    }
+
     CATLASS_DEVICE
     void QuantToken(AscendC::LocalTensor<XType> &xInTensor, AscendC::LocalTensor<float> &smoothScaleTensor,
         AscendC::LocalTensor<int8_t> &yInt8Tensor, int32_t syncFlag = 0)
@@ -745,7 +779,6 @@ public:
         AscendC::LocalTensor<int32_t> ytmpInt32Tensor = xFp32TmpTensor_.template ReinterpretCast<int32_t>();
         AscendC::LocalTensor<half> yHalfTensor = xFp32TmpTensor_.template ReinterpretCast<half>();
         AscendC::LocalTensor<float> yFp32Tensor = yInt8Tensor.template ReinterpretCast<float>();
-        AscendC::LocalTensor<int32_t> yInt32Tensor = yInt8Tensor.template ReinterpretCast<int32_t>();
 
         AscendC::Cast(xFp32TmpTensor_, xInTensor, AscendC::RoundMode::CAST_NONE, tokenLength);
         AscendC::PipeBarrier<PIPE_V>();
@@ -762,8 +795,9 @@ public:
         AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_S>(syncFlag);
         float dynamicQuantScale = float(127.0) / xRowMaxTensor_.GetValue(0);
+        // Only the dequant scale goes into the payload now. The old per-token flag word is gone: the
+        // ready signal is the per-block tail, which the sender fills once for the whole buffer.
         yFp32Tensor.SetValue(tokenLength / sizeof(float), float(1.0) / dynamicQuantScale);
-        yInt32Tensor.SetValue(tokenLength / sizeof(int32_t) + 1, tokenFlag);
         AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(syncFlag);
         AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
         AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
@@ -824,6 +858,20 @@ public:
         ubOffset += CEIL_UP(tokenLength * sizeof(float));
         xRowMaxTensor_ = resource.ubBuf.template GetBufferByByte<float>(ubOffset);
         ubOffset += CEIL_UP(UB_BLOCK_SIZE);
+        // The dense payload QuantToken writes is consumed by the spread in the same iteration, both on
+        // the vector pipe, and MTE3 only ever reads the block layout -- so one staging buffer serves
+        // every ring slot instead of one per slot. It overlays xFp32AbsTensor_, which is dead from the
+        // row-max onward and is 4 * tokenLength bytes, comfortably wider than the ~1.07 * tokenLength
+        // the dense payload needs at any realistic token length; the guard covers the degenerate short
+        // tokens where that no longer holds. Reserving per-slot staging instead costs two ring slots at
+        // h = 7168, which is in-flight depth the send pipeline cannot spare.
+        AscendC::LocalTensor<int8_t> yDenseTensor;
+        if (CEIL_UP(tokenLength * sizeof(float)) >= denseTokenBytes) {
+            yDenseTensor = xFp32AbsTensor_.template ReinterpretCast<int8_t>();
+        } else {
+            yDenseTensor = resource.ubBuf.template GetBufferByByte<int8_t>(ubOffset);
+            ubOffset += CEIL_UP(denseTokenBytes);
+        }
         int32_t outBufferNum = (UB_SIZE - ubOffset) / hCommuSize;
         if (outBufferNum > MAX_OUT_BUFFER_NUM) {
             outBufferNum = MAX_OUT_BUFFER_NUM;
@@ -835,6 +883,16 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(i);
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(i);
         }
+        // Fill the 32B tails once, up front. Nothing below ever writes them again -- the spread only
+        // touches the 480B payload of each block -- so every block carries this launch's flag value
+        // for free, and a flag becomes visible to a reader exactly when its block's payload does.
+        // The value alternates per launch, so a stale tail from the previous run can never equal this
+        // launch's target sum.
+        for (int i = 0; i < outBufferNum; ++i) {
+            AscendC::Duplicate<float>(yInt8Tensor[i].template ReinterpretCast<float>(), blockFlag,
+                                      hCommuSize / sizeof(float));
+        }
+        AscendC::PipeBarrier<PIPE_V>();
         AscendC::GlobalTensor<int8_t> dstWinGMTensor;
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(1);
@@ -874,16 +932,23 @@ public:
                 AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(eventId);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(eventId);
                 AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(outEventId);
-                QuantToken(xInTensor[index], moeSmoothScaleTensor[index], yInt8Tensor[outIndex], outEventId);
+                QuantToken(xInTensor[index], moeSmoothScaleTensor[index], yDenseTensor, outEventId);
                 AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventId);
+                // Both QuantToken and the spread run on the vector pipe, so they are already ordered
+                // against each other, and the same in-order issue is what lets the shared dense buffer
+                // be reused by the next token: the barrier at the head of QuantToken separates this
+                // spread's read from the next iteration's write. The V->MTE3 release must come after
+                // the spread, not after QuantToken: set earlier it would let the store read a
+                // half-written block buffer.
+                SpreadTokenToBlocks(yInt8Tensor[outIndex], yDenseTensor);
                 AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(outEventId);
 
                 AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(outEventId);
                 AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(outEventId);
 
-                AscendC::DataCopy(dstWinGMTensor, yInt8Tensor[outIndex], tokenLength);
-                AscendC::PipeBarrier<PIPE_MTE3>();
-                AscendC::DataCopy(dstWinGMTensor[tokenLength], yInt8Tensor[outIndex][tokenLength], scaleParamPad);
+                // One transfer publishes payload and flags together, so the barrier that used to
+                // order the token store before the scale/flag store is gone.
+                AscendC::DataCopy(dstWinGMTensor, yInt8Tensor[outIndex], axisHCommu);
                 AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(outEventId);
                 AscendC::SetFlag<AscendC::HardEvent::MTE3_S>(outEventId);
             }
@@ -1134,6 +1199,22 @@ public:
         }
         return ubOffset + CEIL_UP(static_cast<int64_t>(expertCntUp) * UB_BLOCK_SIZE) +
                CEIL_UP(static_cast<int64_t>(PrefixReplicateBytes()));
+    }
+
+    // UB that RecvToken claims below the notify buffer: the per-rank cursor, two ping-pong payload
+    // slots, the strided flag landing area, the gathered flag run, the gather pattern, the reduce
+    // workspace and the scalar sum target. Every term has to be here -- a reservation short of what
+    // RecvToken actually lays out puts the notify buffer inside one of these scratch areas.
+    __aicore__ inline int64_t RecvTokenUbBytes() const
+    {
+        int64_t cursor = CEIL_UP(static_cast<int64_t>(epRankSize) * sizeof(int32_t));
+        int64_t payload = 2 * CEIL_UP(static_cast<int64_t>(blockCntPerToken) * SPLIT_BLOCK_DATA_SIZE);
+        // The strided read lands one whole 32B block per token block, so this is sized in blocks, not
+        // in the blockCntPerToken floats the sum finally consumes.
+        int64_t flags = CEIL_UP(static_cast<int64_t>(blockCntPerToken) * UB_BLOCK_SIZE);
+        int64_t gathered = CEIL_UP(static_cast<int64_t>(blockCntPerToken) * sizeof(float));
+        return cursor + payload + flags + gathered + CEIL_UP(UB_BLOCK_SIZE) +
+               CEIL_UP(UB_BLOCK_SIZE * 8) + CEIL_UP(UB_BLOCK_SIZE);
     }
 
     // The bucket flag word is 0x3F800000 (float 1.0) on one launch and 0 on the next, so a stale
@@ -1409,86 +1490,171 @@ public:
         }
     }
 
+    // Waits until every 512B block of one token has landed, by summing that token's block tails.
+    // The tails were filled at the sender before any payload was written and are never rewritten, so
+    // a tail becomes visible exactly when its own block's payload does -- the flag and the data it
+    // guards travel in the same 512B unit. The value alternates per launch, so a stale tail left by
+    // the previous run sums to the other target and can never be mistaken for this one.
     CATLASS_DEVICE
-    bool PollRecvTokenFlag(AscendC::LocalTensor<int32_t> &tmpLocalTensor,
-                           AscendC::GlobalTensor<int32_t> &tokGlobalInt32)
+    bool TokenBlocksReady(GM_ADDR tokAddr, AscendC::LocalTensor<float> &flagBuf,
+                          AscendC::LocalTensor<float> &gatherBuf,
+                          AscendC::LocalTensor<uint32_t> &flagPattern,
+                          AscendC::LocalTensor<float> &reduceWork, AscendC::LocalTensor<float> &sumOut)
     {
-        AscendC::DataCopy(tmpLocalTensor, tokGlobalInt32, INT32_COUNT_PER_BLOCK);
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-        if (tmpLocalTensor.GetValue(1) == tokenFlag) {
-            SetValueAndFlush<int32_t>(tokGlobalInt32, 1, 0);
-            return true;
-        }
-        SPIN_WAIT_CYCLES();
-        return false;
+        AscendC::GlobalTensor<float> flagGlobal;
+        flagGlobal.SetGlobalBuffer((__gm__ float *)(tokAddr + SPLIT_BLOCK_DATA_SIZE));
+        // One 32B block per 512B unit: blockLen 1 block, then skip the 480B payload (15 blocks), so the
+        // period between flags is 16 blocks = 512B. Getting this wrong reads payload bytes as flags.
+        AscendC::DataCopyParams flagParams{static_cast<uint16_t>(blockCntPerToken), 1U,
+                                           static_cast<uint16_t>(SPLIT_BLOCK_DATA_INTS / INT32_COUNT_PER_BLOCK),
+                                           0U};
+        AscendC::DataCopy(flagBuf, flagGlobal, flagParams);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
+        // The tails land one whole 32B block each, so consecutive flags sit eight elements apart and
+        // seven of every eight elements are padding copies of the same flag. Pull word 0 of every block
+        // into a dense run before summing, the same way RecvCount reads the bucket flags: summing
+        // flagBuf directly would weigh the early blocks eight times each and reach the target while
+        // most of the token was still in flight. One repeat per block, mask bit 0 only, so the repeat
+        // stride is a single block.
+        uint64_t rsvdCnt = 0;
+        AscendC::GatherMask(gatherBuf, flagBuf, flagPattern, true, 1,
+                            {1, static_cast<uint16_t>(blockCntPerToken), 1, 0}, rsvdCnt);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::ReduceSum(sumOut, gatherBuf, reduceWork, static_cast<int32_t>(blockCntPerToken));
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+        float arrived = sumOut.GetValue(0);
+        AscendC::SetFlag<AscendC::HardEvent::S_MTE2>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_MTE2>(0);
+        return arrived == blockFlagSum;
     }
 
+    // Ping-pong so the write of one token overlaps the read of the next: the payload read is MTE2
+    // and the output write is MTE3, two different pipes.
     CATLASS_DEVICE
-    void StoreRecvToken(AscendC::LocalTensor<int8_t> &xTmpTensor, AscendC::GlobalTensor<int8_t> &tokGlobal,
-                        AscendC::GlobalTensor<int8_t> &expandXOutGlobal,
-                        AscendC::GlobalTensor<float> &scaleOutGlobal, uint32_t outputRow)
+    void LayoutRecvTokenScratch(int64_t ubOffset, AscendC::LocalTensor<int32_t> &rankCursor,
+                                AscendC::LocalTensor<int8_t> (&dataBuf)[BUFFER_NUM],
+                                AscendC::LocalTensor<float> &flagBuf, AscendC::LocalTensor<float> &gatherBuf,
+                                AscendC::LocalTensor<uint32_t> &flagPattern, AscendC::LocalTensor<float> &reduceWork,
+                                AscendC::LocalTensor<float> &sumOut)
     {
-        auto xOutFp32Tensor = xTmpTensor.template ReinterpretCast<float>();
-        AscendC::DataCopyExtParams dataCopyParamsFloat = {1U, sizeof(float), 0U, 0U, 0U};
-        AscendC::PipeBarrier<PIPE_ALL>();
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
-        AscendC::DataCopy(xTmpTensor, tokGlobal, axisHCommu);
-        AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE3>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE3>(0);
-        AscendC::DataCopyPad(scaleOutGlobal[outputRow], xOutFp32Tensor[tokenLength / sizeof(float)],
-                             dataCopyParamsFloat);
-        AscendC::DataCopy(expandXOutGlobal, xTmpTensor, tokenLength);
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        int64_t subUbOffset = ubOffset;
+        rankCursor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
+        subUbOffset += CEIL_UP(epRankSize * sizeof(int32_t));
+        for (int32_t bufIdx = 0; bufIdx < BUFFER_NUM; ++bufIdx) {
+            dataBuf[bufIdx] = resource.ubBuf.template GetBufferByByte<int8_t>(subUbOffset);
+            subUbOffset += CEIL_UP(blockCntPerToken * SPLIT_BLOCK_DATA_SIZE);
+        }
+        // Sized in 32B blocks: the strided read puts one whole block per token block here, and only
+        // word 0 of each is the flag.
+        flagBuf = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        subUbOffset += CEIL_UP(blockCntPerToken * UB_BLOCK_SIZE);
+        gatherBuf = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        subUbOffset += CEIL_UP(blockCntPerToken * sizeof(float));
+        flagPattern = resource.ubBuf.template GetBufferByByte<uint32_t>(subUbOffset);
+        subUbOffset += CEIL_UP(UB_BLOCK_SIZE);
+        reduceWork = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        subUbOffset += CEIL_UP(UB_BLOCK_SIZE * 8);
+        sumOut = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+    }
+
+    // Walk forward while this rank keeps delivering. On the first token that is not fully landed,
+    // move to the next rank instead of spinning: the ranks fill independently, so the token holding
+    // us up is rarely the one that arrives next.
+    CATLASS_DEVICE
+    bool RecvReadyRanks(GM_ADDR gmX1, uint32_t groupId, uint32_t startRankId, uint32_t endTokenIdx,
+                        uint32_t &curRecvTokenCount, AscendC::LocalTensor<int32_t> &rankCursor,
+                        AscendC::LocalTensor<int32_t> &tokenPrefix,
+                        AscendC::LocalTensor<int8_t> (&dataBuf)[BUFFER_NUM],
+                        AscendC::LocalTensor<float> &flagBuf, AscendC::LocalTensor<float> &gatherBuf,
+                        AscendC::LocalTensor<uint32_t> &flagPattern, AscendC::LocalTensor<float> &reduceWork,
+                        AscendC::LocalTensor<float> &sumOut, AscendC::GlobalTensor<int8_t> &tokGlobal,
+                        AscendC::GlobalTensor<int8_t> &expandXOutGlobal,
+                        AscendC::GlobalTensor<float> &scaleOut, AscendC::DataCopyExtParams &scaleParams,
+                        AscendC::DataCopyParams &payloadParams)
+    {
+        bool progressed = false;
+        for (uint32_t rank = 0; rank < epRankSize; ++rank) {
+            uint32_t index = startRankId + rank;
+            uint32_t bucketBegin = index == 0 ? 0 : tokenPrefix.GetValue(index - 1);
+            uint32_t bucketEnd = tokenPrefix.GetValue(index);
+            uint32_t end = endTokenIdx < bucketEnd ? endTokenIdx : bucketEnd;
+            uint32_t ordinalEnd = end > bucketBegin ? end - bucketBegin : 0;
+            uint32_t winOffset = rank * moeExpertNumPerRank + groupId;
+            GM_ADDR wAddr = (__gm__ uint8_t *)GetWindAddrByRankId(epRankId) + winOffset * expertPerSizeOnWin;
+            for (uint32_t j = static_cast<uint32_t>(rankCursor.GetValue(rank)); j < ordinalEnd; ++j) {
+                GM_ADDR tokAddr = wAddr + j * hCommuSize;
+                if (!TokenBlocksReady(tokAddr, flagBuf, gatherBuf, flagPattern, reduceWork, sumOut)) {
+                    break;
+                }
+                uint32_t outputRow = bucketBegin + j;
+                uint32_t bufIdx = curRecvTokenCount & 1U;
+                auto dense = dataBuf[bufIdx];
+                auto denseFp32 = dense.template ReinterpretCast<float>();
+                expandXOutGlobal.SetGlobalBuffer((__gm__ int8_t *)gmX1 + outputRow * tokenLength, tokenLength);
+                // Release this slot only once its previous write has drained.
+                AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(bufIdx);
+                tokGlobal.SetGlobalBuffer((__gm__ int8_t *)tokAddr);
+                AscendC::DataCopy(dense, tokGlobal, payloadParams);
+                AscendC::SetFlag<AscendC::HardEvent::MTE2_MTE3>(bufIdx);
+                AscendC::WaitFlag<AscendC::HardEvent::MTE2_MTE3>(bufIdx);
+                // The dequant scale rides at the end of the dense payload, where QuantToken put it.
+                AscendC::DataCopyPad(scaleOut[outputRow], denseFp32[tokenLength / sizeof(float)], scaleParams);
+                AscendC::DataCopy(expandXOutGlobal, dense, tokenLength);
+                AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(bufIdx);
+                rankCursor.SetValue(rank, j + 1);
+                ++curRecvTokenCount;
+                progressed = true;
+            }
+        }
+        return progressed;
     }
 
     CATLASS_DEVICE
     void RecvToken(GM_ADDR gmX1, GM_ADDR gmX1Scale, uint32_t groupId, uint32_t startTokenIdx,
                    uint32_t coreTokenCount, AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
     {
-        int64_t subUbOffset = ubOffset;
-        auto rankCursor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
-        subUbOffset += CEIL_UP(epRankSize * sizeof(int32_t));
-        auto xTmpTensor = resource.ubBuf.template GetBufferByByte<int8_t>(subUbOffset);
-        subUbOffset += CEIL_UP(axisHCommu * sizeof(int8_t));
-        auto tmpLocalTensor = resource.ubBuf.template GetBufferByByte<int32_t>(subUbOffset);
+        AscendC::LocalTensor<int32_t> rankCursor;
+        AscendC::LocalTensor<int8_t> dataBuf[BUFFER_NUM];
+        AscendC::LocalTensor<float> flagBuf;
+        AscendC::LocalTensor<float> gatherBuf;
+        AscendC::LocalTensor<uint32_t> flagPattern;
+        AscendC::LocalTensor<float> reduceWork;
+        AscendC::LocalTensor<float> sumOut;
+        LayoutRecvTokenScratch(ubOffset, rankCursor, dataBuf, flagBuf, gatherBuf, flagPattern, reduceWork, sumOut);
 
         uint32_t endTokenIdx = startTokenIdx + coreTokenCount;
         uint32_t startRankId = groupId * epRankSize;
         InitRecvRankCursor(rankCursor, tokenPrefix, startRankId, startTokenIdx, endTokenIdx);
 
+        AscendC::DataCopyExtParams scaleParams = {1U, sizeof(float), 0U, 0U, 0U};
+        // One strided read takes the 480B payload of every block: blockLen 15 blocks (480B), stride
+        // 1 block (32B), so the flag tails are stepped over and the payload lands dense.
+        AscendC::DataCopyParams payloadParams{static_cast<uint16_t>(blockCntPerToken),
+                                              static_cast<uint16_t>(SPLIT_BLOCK_DATA_INTS / INT32_COUNT_PER_BLOCK),
+                                              1U, 0U};
         AscendC::GlobalTensor<int8_t> tokGlobal;
-        AscendC::GlobalTensor<int32_t> tokGlobalInt32;
         AscendC::GlobalTensor<int8_t> expandXOutGlobal;
-        AscendC::GlobalTensor<float> dynamicScalesOutGMTensor;
-        dynamicScalesOutGMTensor.SetGlobalBuffer((__gm__ float *)gmX1Scale);
-        uint32_t curRecvTokenCount = 0;
+        AscendC::GlobalTensor<float> scaleOut;
+        scaleOut.SetGlobalBuffer((__gm__ float *)gmX1Scale);
+        // Mask bit 0 only, reused by every arrival check below, so it is written once here.
+        flagPattern.SetValue(0, 1);
+        AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+        // Seed both slots so the first two reads have a matching release.
         AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(1);
+        uint32_t curRecvTokenCount = 0;
         while (curRecvTokenCount < coreTokenCount) {
-            for (uint32_t rank = 0; rank < epRankSize; ++rank) {
-                uint32_t index = startRankId + rank;
-                uint32_t bucketBegin = index == 0 ? 0 : tokenPrefix.GetValue(index - 1);
-                uint32_t bucketEnd = tokenPrefix.GetValue(index);
-                uint32_t end = endTokenIdx < bucketEnd ? endTokenIdx : bucketEnd;
-                uint32_t ordinalEnd = end > bucketBegin ? end - bucketBegin : 0;
-                uint32_t winOffset = rank * moeExpertNumPerRank + groupId;
-                GM_ADDR wAddr = (__gm__ uint8_t *)GetWindAddrByRankId(epRankId) +
-                                winOffset * expertPerSizeOnWin;
-                for (uint32_t j = rankCursor.GetValue(rank); j < ordinalEnd; ++j) {
-                    uint32_t outputRow = bucketBegin + j;
-                    tokGlobal.SetGlobalBuffer((__gm__ int8_t *)(wAddr + j * hCommuSize));
-                    tokGlobalInt32.SetGlobalBuffer((__gm__ int32_t *)(wAddr + j * hCommuSize + hOutSize));
-                    expandXOutGlobal.SetGlobalBuffer((__gm__ int8_t *)gmX1 + outputRow * tokenLength, tokenLength);
-                    if (!PollRecvTokenFlag(tmpLocalTensor, tokGlobalInt32)) {
-                        break;
-                    }
-                    StoreRecvToken(xTmpTensor, tokGlobal, expandXOutGlobal, dynamicScalesOutGMTensor, outputRow);
-                    rankCursor.SetValue(rank, j + 1);
-                    ++curRecvTokenCount;
-                }
+            if (!RecvReadyRanks(gmX1, groupId, startRankId, endTokenIdx, curRecvTokenCount, rankCursor, tokenPrefix,
+                                dataBuf, flagBuf, gatherBuf, flagPattern, reduceWork, sumOut, tokGlobal,
+                                expandXOutGlobal, scaleOut, scaleParams, payloadParams)) {
+                SPIN_WAIT_CYCLES();
             }
         }
         AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_MTE2>(1);
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
@@ -1553,8 +1719,9 @@ public:
             AscendC::PipeBarrier<PIPE_ALL>();
         }
 
-        int64_t notifyUbOffset = subUbOffset + CEIL_UP(epRankSize * sizeof(int32_t)) +
-                                 CEIL_UP(axisHCommu * sizeof(int8_t)) + UB_BLOCK_SIZE;
+        // RecvToken now holds two ping-pong payload slots plus the flag/reduce scratch, so the notify
+        // buffer has to be reserved past all of that rather than past a single token copy.
+        int64_t notifyUbOffset = subUbOffset + RecvTokenUbBytes();
         auto notifyTensor = resource.ubBuf.template GetBufferByByte<int32_t>(notifyUbOffset);
         uint32_t startCoreIdx = 0;
         uint32_t expertStart = 0;
@@ -1733,8 +1900,14 @@ public:
         tokenLength = params.tokenLen;
 
         hOutSize = tokenLength * sizeof(int8_t);
-        scaleParamPad = TOKEN_EXTRA_SPACE;  // 512B for dynamic quant scale
-        hCommuSize = hOutSize + scaleParamPad;
+        // The payload of one token is its quantised bytes followed by the per-token dequant scale, laid
+        // out densely and then spread over 512B blocks with a 32B flag tail each. Rounding happens on
+        // the dense payload, so a token that fills its last block exactly costs no extra block.
+        uint32_t payloadBytes = hOutSize + static_cast<uint32_t>(sizeof(float));
+        blockCntPerToken = (payloadBytes + SPLIT_BLOCK_DATA_SIZE - 1) / SPLIT_BLOCK_DATA_SIZE;
+        denseTokenBytes = CEIL_UP(blockCntPerToken * SPLIT_BLOCK_DATA_SIZE);
+        scaleParamPad = 0;
+        hCommuSize = blockCntPerToken * SPLIT_BLOCK_SIZE;
         axisHCommu = hCommuSize / sizeof(int8_t);
         axisBS = params.bs;
         activeMaskBsCnt = axisBS;
@@ -1760,6 +1933,13 @@ public:
         state = LoadStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN);
         sumTarget = state == 0 ? 1.0f : 0.0f;
         tokenFlag = state == 0 ? TOKEN_FLAG_1 : TOKEN_FLAG_2;
+        // The 512B-block flags alternate on the same schedule. A tail left over from the previous
+        // launch carries the other value, so a partially filled token sums strictly between the two
+        // targets and can never be read as complete.
+        blockFlag = state == 0 ? 1.0f : 2.0f;
+        // aicore forbids an explicit unsigned-to-float cast. Multiplying by a float constant does the
+        // conversion implicitly, which is the same reason the reference implementation writes it this way.
+        blockFlagSum = blockFlag * (1.0f * static_cast<int32_t>(blockCntPerToken));
         StoreStateSlotByDma(selfStatusTensor, aivIdx * UB_ALIGN, state == 0 ? 0x3F800000 : 0);
     }
 
@@ -1975,6 +2155,8 @@ private:
     uint32_t scaleParamPad{0};
     uint32_t hCommuSize{0};
     uint32_t axisHCommu{0};
+    uint32_t blockCntPerToken{0};   // 512B blocks per token, each with a 32B flag tail
+    uint32_t denseTokenBytes{0};    // the 480B-per-block payload region, tight on both sides
     uint32_t axisBS{0};
     uint32_t activeMaskBsCnt{0};
     uint32_t axisK{0};
@@ -1984,6 +2166,8 @@ private:
 
     // state info
     int32_t tokenFlag{0};    // token flag
+    float blockFlag{0.0f};   // this launch's 512B-block flag value: 1.0f or 2.0f, alternating
+    float blockFlagSum{0.0f};  // blockCntPerToken * blockFlag: one token's fully-arrived sum
     int32_t vToCFlag{0};     // cv flag, decided by cvDataState
     int32_t dataState{0};    // data space state
     int32_t cvDataState{0};  // cv flag state
