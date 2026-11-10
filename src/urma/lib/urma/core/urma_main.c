@@ -733,6 +733,11 @@ urma_status_t urma_get_jfce_cnt_info(urma_jfce_cnt_info_t *info_arr, uint32_t *c
     return URMA_SUCCESS;
 }
 
+uint64_t urma_get_abi_version(void)
+{
+    return URMA_ABI_VERSION;
+}
+
 /* Temporarily use uasid allocated by provider */
 urma_status_t urma_get_uasid(uint32_t *uasid)
 {

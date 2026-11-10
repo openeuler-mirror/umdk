@@ -4,6 +4,39 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("//bazel:urma_deps.bzl", "LIBUMMU_RUNTIME_LINKOPTS")
 load("//bazel:urma_shared.bzl", "urma_dynamic_linkopts", "urma_linklib_inputs", "urma_shared_library", "urma_shared_library_static_dep")
 
+# Generate the note from the URMA CMake API/ABI versions.
+genrule(
+    name = "urma_version_files",
+    srcs = [
+        "lib/urma/core/CMakeLists.txt",
+        "lib/urma/core/urma_version_note.S.in",
+    ],
+    outs = ["version/urma_version_note.S"],
+    cmd = """
+encode_version() {
+    local version=$$1 major minor patch code
+    if [[ ! "$$version" =~ ^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$$ ]]; then
+        echo "Invalid URMA version in $(location lib/urma/core/CMakeLists.txt)" >&2
+        exit 1
+    fi
+    major=$${BASH_REMATCH[1]}
+    minor=$${BASH_REMATCH[2]}
+    patch=$${BASH_REMATCH[3]}
+    if (( major > 4294967295 || minor > 65535 || patch > 65535 )); then
+        echo "URMA version exceeds the 32/16/16-bit encoding" >&2
+        exit 1
+    fi
+    code=$$(( (major << 32) | (minor << 16) | patch ))
+    echo "$$code"
+}
+api_version=$$(sed -n 's/^set(URMA_API_VERSION "\\([0-9.]*\\)")$$/\\1/p' "$(location lib/urma/core/CMakeLists.txt)")
+abi_version=$$(sed -n 's/^set(URMA_ABI_VERSION "\\([0-9.]*\\)")$$/\\1/p' "$(location lib/urma/core/CMakeLists.txt)")
+api_code=$$(encode_version "$$api_version")
+abi_code=$$(encode_version "$$abi_version")
+sed -e "s/@URMA_API_VERSION_CODE@/$$api_code/g" -e "s/@URMA_ABI_VERSION_CODE@/$$abi_code/g" "$(location lib/urma/core/urma_version_note.S.in)" > "$@"
+""",
+)
+
 config_setting(
     name = "perf_cycle_enabled",
     values = {"define": "perf_cycle=true"},
@@ -149,7 +182,7 @@ cc_library(
 
 urma_shared_library(
     name = "urma",
-    srcs = glob(["lib/urma/core/*.c"]),
+    srcs = glob(["lib/urma/core/*.c"]) + ["version/urma_version_note.S"],
     hdrs = glob([
         "lib/urma/core/include/**/*.h",
         "lib/urma/core/*.h",
@@ -162,8 +195,10 @@ urma_shared_library(
     copts = URMA_COMMON_COPTS + URMA_PERF_COPTS,
     compile_deps = [":urma_common_headers"],
     dynamic_lib_names = ["urma_common"],
-    linkopts = ["-ldl", "-lrt"],
-    soname = "liburma.so",
+    linkopts = ["-ldl", "-lrt",
+                "-Wl,--version-script,$(location lib/urma/core/liburma.map)"],
+    additional_linker_inputs = ["lib/urma/core/liburma.map"],
+    soname = "liburma.so.0",
 )
 
 urma_shared_library(
