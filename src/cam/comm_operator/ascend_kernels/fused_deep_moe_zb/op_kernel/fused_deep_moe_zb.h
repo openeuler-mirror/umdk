@@ -391,9 +391,7 @@ private:
     uint32_t epRankSize_{0};
     uint32_t epRankId_{0};
     uint32_t moeExpertNumPerRank_{0};
-    uint32_t globalBs_{0};
     uint32_t bs_{0};
-    uint32_t maxBs_{0};
     uint32_t topK_{0};
     int32_t roundRecvTokenNum_{0};
     uint64_t statusDataSpaceOffset_{0};
@@ -526,13 +524,9 @@ __aicore__ inline void FusedDeepMoeZb<TemplateMC2TypeFunc>::Init(
     epRankId_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.epRankId;
     moeExpertNumPerRank_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNumPerRank;
     moeExpertNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.moeExpertNum;
-    globalBs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.globalBs;
     bs_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.bs;
     topK_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.k;
     roundRecvTokenNum_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.roundRecvTokenNum;
-    maxBs_ = globalBs_ / epRankSize_;
-
-    maxTokenNum_ = maxBs_ * epRankSize_ * (topK_ < moeExpertNumPerRank_ ? topK_ : moeExpertNumPerRank_);
     maxTokenNum_ = roundRecvTokenNum_;
     shareGmm1OutputDim_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.shareGmm1HLen;
     gmm1OutputDim_ = tilingData->disGmmDeqSwigluQuantGmmDeqComInfo.gmm1HLen;
@@ -644,6 +638,8 @@ __aicore__ inline void FusedDeepMoeZb<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmAllExpertTokenNums = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset +=
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(epRankSize_) * epRankSize_ * groupCount_ * sizeof(int64_t));
+    // Host reserves this region from globalBs / epRankSize. This walk uses the local bs_, so the
+    // region has to stay last in SHMEM; anything after it would sit at a per-rank offset.
     GM_ADDR gmCombineSend = shmemWorkspaceGM_ + shmemWorkspaceOffset;
     shmemWorkspaceOffset +=
         RoundUp<GM_ALIGN_BYTE>(static_cast<size_t>(bs_) * topK_ * tokenHiddenSize_ * sizeof(ExpandXType));
