@@ -171,6 +171,8 @@ sources = [
     "./moe_dispatch_send_async.cpp",
     "./cam_deepep_dispatch_send.cpp",
     "./cam_deepep_dispatch_recv.cpp",
+    "./cam_deepep_combine_send.cpp",
+    "./cam_deepep_combine_recv.cpp",
 ]
 
 

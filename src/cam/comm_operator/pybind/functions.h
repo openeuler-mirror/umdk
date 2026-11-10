@@ -16,6 +16,8 @@
 #include <torch/csrc/autograd/custom_function.h>
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 
+using CombineRecvOut = std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor>;
+
 std::vector<at::Tensor> FusedDeepMoeImplAutograd(
     const at::Tensor &x, \
     const at::Tensor &expertIds, \
@@ -269,6 +271,56 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> CamDeepepDispatchRecvImplAutograd
     const int64_t contextBytes,
     const int64_t numHidden,
     const int64_t numSfPacks,
+    const int64_t numVecCores);
+
+at::Tensor CamDeepepCombineSendImplAutograd(
+    const at::Tensor &x,
+    const at::Tensor &srcMetadata,
+    const at::Tensor &context,
+    const at::Tensor &active,
+    const at::Tensor &controlBuffer,
+    const at::Tensor &executionState,
+    const at::Tensor &afdWorkspace,
+    const at::Tensor &jettyPtrs,
+    at::Tensor &completion,
+    c10::string_view groupEp,
+    const int64_t numSrcRanks,
+    const int64_t numRanks,
+    const int64_t numExperts,
+    const int64_t numTopk,
+    const int64_t numSourceLanes,
+    const int64_t numLayers,
+    const int64_t maxPaddedTokens,
+    const int64_t numTokensPerTile,
+    const int64_t rankIdx,
+    const int64_t timeoutCycles,
+    const int64_t completionBytes,
+    const int64_t numVecCores);
+
+CombineRecvOut CamDeepepCombineRecvImplAutograd(
+    const at::Tensor &payload,
+    const at::Tensor &taskInfo,
+    const at::Tensor &context,
+    const at::Tensor &controlBuffer,
+    const at::Tensor &roundLedger,
+    const at::Tensor &afdWorkspace,
+    const at::Tensor &tokenMask,
+    at::Tensor &combinedX,
+    at::Tensor &combinedTopkIdx,
+    at::Tensor &topkWeights,
+    at::Tensor &recvStatus,
+    at::Tensor &returnProgress,
+    c10::string_view groupEp,
+    const int64_t numExperts,
+    const int64_t numRanks,
+    const int64_t numTopk,
+    const int64_t roundStep,
+    const int64_t start,
+    const int64_t numHidden,
+    const int64_t numTokenCapacity,
+    const int64_t recvStatusWords,
+    const int64_t returnProgressBytes,
+    const int64_t timeoutCycles,
     const int64_t numVecCores);
 
 #endif // COMMON_OPS_CSRC_FUNCTIONS_H_
