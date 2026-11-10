@@ -1981,7 +1981,9 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                         if (cfg->enable_err_continue == false) {
                             goto free_cr;
                         } else {
-                            tot_scnt = tot_scnt - (cqe_cnt - i) * cfg->cq_mod;
+                            cr_id = (int)cr[i].user_ctx;
+                            tot_scnt -= cfg->cq_mod;
+                            run_ctx->scnt[cr_id] -= cfg->cq_mod;
                             continue;
                         }
                     }
@@ -2584,11 +2586,22 @@ static int run_once_bi_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 if (cr_send[i].status != URMA_CR_SUCCESS) {
                     LOG_ERROR("Failed cr_send, status: %d, i: %d, tot_ccnt: %lu\n.",
                               (int)cr_send[i].status, i, tot_ccnt);
+                    if (is_credit_send == true) {
+                        /* The credit write failed and its credit update is
+                         * lost, the credit flow cannot recover: reclaim the
+                         * in-flight counters (otherwise clean_scq_credit would
+                         * wait forever for this consumed CQE) and abort. */
+                        scredit_pre_jetty[cr_id]--;
+                        tot_scredit--;
+                        ret = -1;
+                        goto cleaning;
+                    }
                     if (cfg->enable_err_continue == false) {
                         ret = -1;
                         goto cleaning;
                     } else {
-                        tot_scnt = tot_scnt - (send_cqe_cnt - i) * cfg->cq_mod;
+                        tot_scnt -= cfg->cq_mod;
+                        run_ctx->scnt[cr_id] -= cfg->cq_mod;
                         continue;
                     }
                 }
@@ -2996,7 +3009,9 @@ static int run_once_bw_infinite(perftest_context_t *ctx, perftest_config_t *cfg)
                         if (cfg->enable_err_continue == false) {
                             goto err_exit;
                         } else {
-                            tot_scnt = tot_scnt - (cqe_cnt - i) * cfg->cq_mod;
+                            cr_id = (int)cr[i].user_ctx;
+                            tot_scnt -= cfg->cq_mod;
+                            run_ctx->scnt[cr_id] -= cfg->cq_mod;
                             continue;
                         }
                     }
