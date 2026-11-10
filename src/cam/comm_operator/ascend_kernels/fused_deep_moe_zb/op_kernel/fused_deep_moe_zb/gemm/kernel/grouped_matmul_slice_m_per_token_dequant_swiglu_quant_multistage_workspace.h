@@ -1347,6 +1347,25 @@ public:
         }
     }
 
+    // V-only pack buffers alias the QuantToken scratch. The caller reserves xHighI4/xLowI4
+    // below scratchBase: MTE3 reads those across tokens, while this scratch is rewritten.
+    CATLASS_DEVICE
+    void BindW4A8PackScratch(int64_t scratchBase,
+        AscendC::LocalTensor<half> &xLowHalfTensor,
+        AscendC::LocalTensor<half> &xLowHalfTensor2,
+        AscendC::LocalTensor<int16_t> &xLowI16Tensor,
+        AscendC::LocalTensor<half> &xHighHalfTensor)
+    {
+        int64_t off = scratchBase;
+        xHighHalfTensor = resource.ubBuf.template GetBufferByByte<half>(off);
+        off += CEIL_UP(tokenLength * sizeof(half));
+        xLowHalfTensor = resource.ubBuf.template GetBufferByByte<half>(off);
+        off += CEIL_UP(tokenLength * sizeof(half));
+        xLowHalfTensor2 = resource.ubBuf.template GetBufferByByte<half>(off);
+        off += CEIL_UP(tokenLength * sizeof(half));
+        xLowI16Tensor = resource.ubBuf.template GetBufferByByte<int16_t>(off);
+    }
+
     CATLASS_DEVICE
     void ShmemSendToMoeExprt(GM_ADDR gmX, GM_ADDR gmExpandIdx, GM_ADDR gmMoeSmoothScales, GM_ADDR gmEpSendCount,
                              GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmSwigluOut,
@@ -1401,29 +1420,26 @@ public:
         ubOffset += CEIL_UP(INT32_COUNT_PER_BLOCK * sizeof(int32_t));
         tmpFlagTensor.SetValue(0, tokenFlag);
 
-        // W4A8: int8 -> int4 conversion buffers
+        // sendCounts is read on every token, so keep it below the reused scratch.
+        AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
+        sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)gmEpSendCount);
+        AscendC::LocalTensor<int32_t> sendCountsTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += CEIL_UP(moeExpertNum * epRankSize * sizeof(int32_t));
+
+        // Int4 stays below the scratch. MTE3 reads it while QuantToken and CalExpandxIdx*
+        // rewrite the scratch; those Casts already wait MTE3_V before reusing the int4 buffers.
         AscendC::LocalTensor<AscendC::int4b_t> xHighI4Tensor;
         AscendC::LocalTensor<AscendC::int4b_t> xLowI4Tensor;
         AscendC::LocalTensor<half> xLowHalfTensor;
         AscendC::LocalTensor<half> xLowHalfTensor2;
         AscendC::LocalTensor<int16_t> xLowI16Tensor;
-        AscendC::LocalTensor<half> yHalfTensor;
         AscendC::LocalTensor<half> xHighHalfTensor;
         if constexpr(EXEC_FLAG & EXEC_FLAG_W4A8) {
-            constexpr size_t LEN_128 = 128;
             xHighI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(ubOffset);
             ubOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
             xLowI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(ubOffset);
             ubOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
-            xLowHalfTensor = resource.ubBuf.template GetBufferByByte<half>(ubOffset);
-            ubOffset += CEIL_UP(tokenLength * sizeof(half));
-            xLowHalfTensor2 = resource.ubBuf.template GetBufferByByte<half>(ubOffset);
-            ubOffset += CEIL_UP(tokenLength * sizeof(half));
-            xLowI16Tensor = resource.ubBuf.template GetBufferByByte<int16_t>(ubOffset);
-            ubOffset += CEIL_UP(LEN_128 * sizeof(int16_t));
-            yHalfTensor = yInt8Tensor[0].template ReinterpretCast<half>();
-            xHighHalfTensor = resource.ubBuf.template GetBufferByByte<half>(ubOffset);
-            ubOffset += tokenLength * sizeof(half);
+            BindW4A8PackScratch(ubOffset, xLowHalfTensor, xLowHalfTensor2, xLowI16Tensor, xHighHalfTensor);
         }
         AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
         AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
@@ -1431,10 +1447,6 @@ public:
         AscendC::GlobalTensor<int8_t> dstWinGMTensor;
         AscendC::GlobalTensor<float> dstScaleGMTensor;
         AscendC::GlobalTensor<int32_t> dstTokenFlagGMTensor;
-        AscendC::GlobalTensor<int32_t> sendCountsGlobalTensor;
-        sendCountsGlobalTensor.SetGlobalBuffer((__gm__ int32_t *)gmEpSendCount);
-        AscendC::LocalTensor<int32_t> sendCountsTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
-        ubOffset += CEIL_UP(moeExpertNum * epRankSize * sizeof(int32_t));
         AscendC::DataCopyExtParams sendCountsCopyParams = {
             1U,
             static_cast<uint32_t>(moeExpertNum * epRankSize * sizeof(int32_t)),
@@ -2179,8 +2191,19 @@ public:
         if (tokenIndex == 0) {
             return;
         }
-        uint32_t roundSize = (UB_MAX_SIZE - ubOffset) / sizeof(int32_t) / UB_PART_SIZE;
+        // Three of the four int32 workspaces are advanced with CEIL_UP. Reserve the worst-case
+        // 31-byte pad on each so the last workspace cannot run past UB_MAX_SIZE.
+        constexpr uint32_t kWorkspaceAlignSlack = (UB_PART_SIZE - 1) * (UB_ALIGN - 1);
+        int64_t remainBytes = static_cast<int64_t>(UB_MAX_SIZE) - ubOffset;
+        uint32_t roundSize = 0;
+        if (remainBytes > static_cast<int64_t>(kWorkspaceAlignSlack)) {
+            roundSize = static_cast<uint32_t>(
+                (remainBytes - static_cast<int64_t>(kWorkspaceAlignSlack)) / (sizeof(int32_t) * UB_PART_SIZE));
+        }
         uint32_t roundBs = roundSize / axisK;
+        if (roundBs == 0) {
+            return;
+        }
         uint32_t num_rounds = (activeMaskBsCnt + roundBs - 1) / roundBs;
         if (roundBs > activeMaskBsCnt) {
             roundSize = expertIdsCnt;
@@ -2500,37 +2523,27 @@ public:
         yFp32Tensor[1] = yInt8Tensor[1].template ReinterpretCast<float>();
         subUbOffset += CEIL_UP(axisHCommu * sizeof(int8_t));
 
-        // W4A8: int8 -> int4 conversion buffers
         AscendC::LocalTensor<AscendC::int4b_t> xHighI4Tensor;
         AscendC::LocalTensor<AscendC::int4b_t> xLowI4Tensor;
         AscendC::LocalTensor<half> xLowHalfTensor;
         AscendC::LocalTensor<half> xLowHalfTensor2;
         AscendC::LocalTensor<int16_t> xLowI16Tensor;
-        AscendC::LocalTensor<half> yHalfTensor;
         AscendC::LocalTensor<half> xHighHalfTensor;
-        if constexpr(EXEC_FLAG & EXEC_FLAG_W4A8) {
-            constexpr size_t LEN_128 = 128;
-            xHighI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(subUbOffset);
-            subUbOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
-            xLowI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(subUbOffset);
-            subUbOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
-            xLowHalfTensor = resource.ubBuf.template GetBufferByByte<half>(subUbOffset);
-            subUbOffset += CEIL_UP(tokenLength * sizeof(half));
-            xLowHalfTensor2 = resource.ubBuf.template GetBufferByByte<half>(subUbOffset);
-            subUbOffset += CEIL_UP(tokenLength * sizeof(half));
-            xLowI16Tensor = resource.ubBuf.template GetBufferByByte<int16_t>(subUbOffset);
-            subUbOffset += CEIL_UP(LEN_128 * sizeof(int16_t));
-            yHalfTensor = yInt8Tensor[0].template ReinterpretCast<half>();
-            xHighHalfTensor = resource.ubBuf.template GetBufferByByte<half>(subUbOffset);
-            subUbOffset += tokenLength * sizeof(half);
-        }
 
+        // Smooth stays live through QuantToken. Int4 is reserved below the scratch too.
         AscendC::LocalTensor shareSmoothScaleTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         if constexpr(EXEC_FLAG & EXEC_FLAG_SMOOTH_QUANT) {
             subUbOffset += CEIL_UP(tokenLength * sizeof(float));
             AscendC::DataCopy(shareSmoothScaleTensor, shareSmoothScaleGMTensor, tokenLength);
             AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(EVENT_ID2);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(EVENT_ID2);
+        }
+        if constexpr(EXEC_FLAG & EXEC_FLAG_W4A8) {
+            xHighI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(subUbOffset);
+            subUbOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
+            xLowI4Tensor = resource.ubBuf.template GetBufferByByte<AscendC::int4b_t>(subUbOffset);
+            subUbOffset += CEIL_UP(tokenLength / CONSTANT_TWO);
+            BindW4A8PackScratch(subUbOffset, xLowHalfTensor, xLowHalfTensor2, xLowI16Tensor, xHighHalfTensor);
         }
         // 输入输出开double buffer
         AscendC::SetFlag<AscendC::HardEvent::MTE3_MTE2>(0); // MTE2等MTE3
