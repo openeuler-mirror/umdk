@@ -629,6 +629,15 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitDispatc
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalShmemCopy()
 {
+    // ACL graph reuses the output. Clear the rows this launch does not write.
+    if (coreIdx_ == 0U && activeMaskBsCnt_ < axisBS_) {
+        LocalTensor<ExpandXType> zeroRow = tokenBuf_.Get<ExpandXType>();
+        Duplicate(zeroRow, static_cast<ExpandXType>(0), axisH_);
+        SyncFunc<AscendC::HardEvent::V_MTE3>();
+        for (uint32_t tokenIndex = activeMaskBsCnt_; tokenIndex < axisBS_; ++tokenIndex) {
+            DataCopy(expandOutGlobal_[tokenIndex * axisH_], zeroRow, axisH_);
+        }
+    }
     if (activeMaskBsCnt_ == 0U) {
         return;
     }
