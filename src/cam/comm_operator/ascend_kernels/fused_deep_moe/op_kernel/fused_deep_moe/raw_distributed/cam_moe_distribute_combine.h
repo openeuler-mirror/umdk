@@ -26,6 +26,11 @@ constexpr uint32_t RANK_SIZE_ON_WIN_256 = 256 * 1024;
 constexpr uint32_t TP_RANK_SIZE_ON_WIN = 0;
 constexpr uint32_t UB_ALIGN = 32;
 constexpr uint32_t SELF_STATE_OFFSET = 256 * 1024;
+// One 512B line per vector core instead of 128B. This slot is read-modify-written by every AIV across
+// this kernel, the gmm1 kernel and dispatch, so at a 128B stride four consecutive cores land on one line
+// and invalidate each other. The region above is unused until STATE_WIN_OFFSET. The stride must match the
+// other two files exactly or they will address different words and the parity will diverge.
+constexpr uint32_t SELF_STATE_SLOT_INTS = 512 / sizeof(int32_t);
 constexpr uint8_t EP_DOMAIN = 0;
 constexpr uint8_t TP_DOMAIN = 1;
 constexpr uint64_t WIN_STATE_OFFSET = 512 * 1024;
@@ -324,13 +329,13 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::InitStatusT
     // ep state
     GlobalTensor<int32_t> selfStatusTensor;
     selfStatusTensor.SetGlobalBuffer((__gm__ int32_t *)(epStatusSpaceGm_ + SELF_STATE_OFFSET));
-    int32_t state = FlushAndGetValue<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN);
+    int32_t state = FlushAndGetValue<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS);
     sumTarget_ = state == 0 ? 1.0f : 0.0f;
     epStateValue_ = state == 0 ? 0x3F800000 : 0;
     if (state == 0) {
-        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN, 0x3F800000);
+        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS, 0x3F800000);
     } else {
-        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * UB_ALIGN, 0);
+        SetValueAndFlush<int32_t>(selfStatusTensor, coreIdx_ * SELF_STATE_SLOT_INTS, 0);
     }
 }
 
