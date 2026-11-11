@@ -433,11 +433,11 @@ struct umq_buf {
         } rx_port;
     };
 
-    uint32_t has_port_id : 1;     // 1 when the provider reports an available RX port
-    uint32_t io_direction : 2;            // 0: no direction; 1: tx qbuf; 2: rx qbuf
+    uint32_t has_port_id : 1;          // 1 when the provider reports an available RX port
+    uint32_t io_direction : 2;         // 0: no direction; 1: tx qbuf; 2: rx qbuf
     uint32_t has_user_tseg : 1;
-    uint32_t buf_ref_id_type : 1;         // 0: enable umq_id, invalid to user, 1: enable tphandel
-    uint32_t buf_ref_id : 18;             // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
+    uint32_t buf_ref_id_type : 1;      // 0: enable umq_id, invalid to user, 1: enable tphandel
+    uint32_t buf_ref_id : 18;          // buf_ref_id_type = 0 : umq_id, buf_ref_id_type = 1 : tp_handle_idx
     uint32_t rsvd3 : 9;
 
     uint64_t user_tseg;
