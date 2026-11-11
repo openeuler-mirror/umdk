@@ -1041,8 +1041,8 @@ public:
             return;
         }
 
-        // The run is fully staged first and copied out afterwards, so every expert that shares a
-        // destination rank goes out in one DataCopy instead of one copy per expert.
+        // Keep compact records for this AIV's expert range. Each completed destination-rank
+        // segment is published while the following segment is being counted.
         AscendC::LocalTensor<int32_t> statusTensor_ = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
         ubOffset += CEIL_UP(sendCountExpertNum * INT32_COUNT_PER_BLOCK * static_cast<int32_t>(sizeof(int32_t)));
         AscendC::Duplicate(statusTensor_, (int32_t)0, sendCountExpertNum * INT32_COUNT_PER_BLOCK);
@@ -1056,21 +1056,13 @@ public:
             }
         }
 
-        for (uint32_t curExpertId = startExpertId; curExpertId < endExpertId; ++curExpertId) {
-            int32_t curExpertCnt = 0;
-            int32_t dstExpertId = curExpertId;
-            CalExpandxIdx(dstExpertId, expertIdsCnt, curExpertCnt);
-            statusTensor_((curExpertId - startExpertId) * INT32_COUNT_PER_BLOCK + 1) = curExpertCnt;
-        }
-        AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-        PublishStagedExpertCounts(statusTensor_, startExpertId, endExpertId);
+        CalAndPublishExpertCounts(statusTensor_, startExpertId, endExpertId);
     }
 
     // Consecutive experts of one destination rank sit epRankSize bucket slots apart; blockLen counts
     // 32B blocks, so one record is exactly one block.
     CATLASS_DEVICE
-    void PublishStagedExpertCounts(AscendC::LocalTensor<int32_t> &statusTensor_, uint32_t startExpertId,
+    void CalAndPublishExpertCounts(AscendC::LocalTensor<int32_t> &statusTensor_, uint32_t startExpertId,
                                    uint32_t endExpertId)
     {
         uint32_t dstStrideBlocks = epRankSize * (stateOffset / UB_BLOCK_SIZE) - 1;
@@ -1078,14 +1070,24 @@ public:
         for (uint32_t curExpertId = startExpertId; curExpertId < endExpertId;) {
             uint32_t dstRankId = curExpertId;
             uint32_t offset = stateOffset * epRankId;
-            uint32_t segNum = endExpertId - curExpertId;
+            uint32_t segNum = 1;
             if (moeExpertNumPerRank > 1) {
                 uint32_t localExpertId = curExpertId % moeExpertNumPerRank;
                 dstRankId = curExpertId / moeExpertNumPerRank;
                 offset = (epRankId + localExpertId * epRankSize) * stateOffset;
                 uint32_t leftInRank = moeExpertNumPerRank - localExpertId;
-                segNum = segNum < leftInRank ? segNum : leftInRank;
+                uint32_t remainingExpertNum = endExpertId - curExpertId;
+                segNum = remainingExpertNum < leftInRank ? remainingExpertNum : leftInRank;
             }
+            for (uint32_t index = 0; index < segNum; ++index) {
+                int32_t curExpertCnt = 0;
+                CalExpandxIdx(curExpertId + index, expertIdsCnt, curExpertCnt);
+                statusTensor_((curExpertId + index - startExpertId) * INT32_COUNT_PER_BLOCK + 1) = curExpertCnt;
+            }
+            // Earlier sends read disjoint records that stay untouched. Only drain MTE3 after
+            // all segments, so publishing this segment can overlap the next one's counting.
+            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
             GM_ADDR rankGM = (__gm__ uint8_t *)(GetWindStateAddrByRankId(dstRankId) + offset);
             rankGMTensor.SetGlobalBuffer((__gm__ int32_t *)rankGM);
             if (segNum == 1) {
