@@ -802,18 +802,32 @@ static ge::graphStatus SetRoundRecvTokenNum(const char *nodeName, FusedDeepMoeZb
     const uint64_t x2PerTokenSize = gmm2InputDim * sizeof(int8_t) + commonPerTokenSize;
     const uint64_t x1RoundRecvTokenNum = (shmemWorkspaceSize - fixedSize) / x1PerTokenSize;
     const uint64_t x2RoundRecvTokenNum = (shmemWorkspaceSize - fixedSize) / x2PerTokenSize;
-    uint64_t roundRecvTokenNum = std::min(x1RoundRecvTokenNum, x2RoundRecvTokenNum);
-    roundRecvTokenNum = roundRecvTokenNum / ROUND_RECV_TOKEN_ALIGN * ROUND_RECV_TOKEN_ALIGN;
-    OPS_ERR_IF(roundRecvTokenNum < ROUND_RECV_TOKEN_ALIGN,
+    uint64_t shmemRoundTokens = std::min(x1RoundRecvTokenNum, x2RoundRecvTokenNum);
+    shmemRoundTokens = shmemRoundTokens / ROUND_RECV_TOKEN_ALIGN * ROUND_RECV_TOKEN_ALIGN;
+    OPS_ERR_IF(shmemRoundTokens < ROUND_RECV_TOKEN_ALIGN,
         OPS_LOG_E(nodeName, "SHMEM workspace leaves fewer than %u tokens for the round buffer.",
             ROUND_RECV_TOKEN_ALIGN),
         return ge::GRAPH_FAILED);
+
+    // GMM2 writes its output at the global receive index, into a buffer of
+    // roundRecvTokenNum rows. That index stops at globalBs * k: globalBs covers
+    // every rank's batch, and each token has k selections. A longer round is only
+    // the empty tail of the SHMEM pool, and its fp32 swiglu allocation is what
+    // exceeds HBM. Keep one round that long so the output index stays in range.
+    uint64_t recvTokens = static_cast<uint64_t>(info.globalBs) * static_cast<uint64_t>(info.k);
+    if (recvTokens < ROUND_RECV_TOKEN_ALIGN) {
+        recvTokens = ROUND_RECV_TOKEN_ALIGN;
+    }
+    const uint64_t recvRoundTokens = CeilUp(static_cast<size_t>(recvTokens), ROUND_RECV_TOKEN_ALIGN);
+    const uint64_t roundRecvTokenNum = std::min(shmemRoundTokens, recvRoundTokens);
     info.roundRecvTokenNum = static_cast<int32_t>(roundRecvTokenNum);
     const uint64_t reservedSize = fixedSize +
         roundRecvTokenNum * std::max(x1PerTokenSize, x2PerTokenSize);
     OPS_LOG_D(nodeName,
-        "SHMEM round buffer: workspaceSize=%lu, fixedSize=%lu, reservedSize=%lu, roundRecvTokenNum=%d.",
-        shmemWorkspaceSize, fixedSize, reservedSize, info.roundRecvTokenNum);
+        "SHMEM round buffer: workspaceSize=%lu, fixedSize=%lu, reservedSize=%lu, "
+        "shmemTokens=%lu, recvTokens=%lu, roundRecvTokenNum=%d.",
+        shmemWorkspaceSize, fixedSize, reservedSize, shmemRoundTokens, recvRoundTokens,
+        info.roundRecvTokenNum);
     return ge::GRAPH_SUCCESS;
 }
 
