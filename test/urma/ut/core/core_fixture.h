@@ -121,10 +121,21 @@ inline void *CorePerfWorker(void *)
     return nullptr;
 }
 
+inline urma_status_t MockProviderInit(urma_init_attr_t *)
+{
+    return URMA_SUCCESS;
+}
+
+inline urma_status_t MockProviderUninit()
+{
+    return URMA_SUCCESS;
+}
+
 struct CoreApiFixture {
     urma_device_t dev = {};
     urma_sysfs_dev_t sysfsDev = {};
     urma_ops_t ops = {};
+    urma_provider_ops_t provider = {};
     urma_context_t ctx = {};
     urma_jfce_t jfce = {};
     urma_jfc_t jfc = {};
@@ -145,6 +156,11 @@ struct CoreApiFixture {
         g_coreAsyncEventData = 0x7;
         std::snprintf(dev.name, sizeof(dev.name), "core_ut");
         dev.type = URMA_TRANSPORT_UB;
+        provider.name = "core_ut_fixture";
+        provider.init = MockProviderInit;
+        provider.uninit = MockProviderUninit;
+        (void)urma_register_provider_ops(&provider);
+        dev.ops = &provider;
         sysfsDev.dev_attr.dev_cap.max_jfc_depth = 16;
         sysfsDev.dev_attr.dev_cap.max_jfs_depth = 16;
         sysfsDev.dev_attr.dev_cap.max_jfr_depth = 16;
@@ -199,6 +215,11 @@ struct CoreApiFixture {
         tjfr.urma_ctx = &ctx;
         tjfr.trans_mode = URMA_TM_RM;
         seg.attr.bs.token_policy = URMA_TOKEN_NONE;
+    }
+
+    ~CoreApiFixture()
+    {
+        (void)urma_unregister_provider_ops(&provider);
     }
 
     void InstallMockOps();
