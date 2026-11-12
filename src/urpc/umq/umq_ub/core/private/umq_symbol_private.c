@@ -152,6 +152,9 @@ int umq_symbol_urma_load(umq_symbol_urma_t *sym)
     LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_jetty_is_available_t, bondp_jetty_is_available);
     LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_modify_jfr_t, bondp_modify_jfr);
     LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_get_async_event_t, bondp_get_async_event);
+    LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_post_jetty_send_wr_t, bondp_post_jetty_send_wr);
+    LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_post_jetty_recv_wr_t, bondp_post_jetty_recv_wr);
+    LOAD_SYMBOL(sym, g_umq_ubagg_dlhandler, bondp_post_jfr_wr_t, bondp_post_jfr_wr);
 
     UMQ_VLOG_INFO(VLOG_UMQ, "URMA, UBAGG and UVS symbols loaded successfully\n");
     return 0;
@@ -208,6 +211,9 @@ static umq_symbol_urma_t g_umq_symbol_urma = {
     .bondp_jetty_is_available = bondp_jetty_is_available,
     .bondp_modify_jfr = bondp_modify_jfr,
     .bondp_get_async_event = bondp_get_async_event,
+    .bondp_post_jetty_send_wr = bondp_post_jetty_send_wr,
+    .bondp_post_jetty_recv_wr = bondp_post_jetty_recv_wr,
+    .bondp_post_jfr_wr = bondp_post_jfr_wr,
 
     // Segment
     .urma_alloc_token_id = urma_alloc_token_id,

@@ -182,6 +182,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
 
     umq_inc_ref(qcfg->dev_ctx->io_lock_free, &queue->ref_cnt, 1);
     umq_alloc_option_t rx_option = {UMQ_ALLOC_FLAG_POOL_TYPE, 0, UMQ_ALLOC_POOL_RX};
+    umq_io_option_t option = {0};
     do {
         cur_batch_count = require_rx_count > UMQ_BATCH_SIZE ? UMQ_BATCH_SIZE : require_rx_count;
         umq_buf_t *qbuf = umq_buf_alloc(qcfg->rx_buf_size - headroom_size - factor, cur_batch_count, 0, &rx_option);
@@ -193,7 +194,7 @@ static int umq_ub_prefill_rx_buf(ub_queue_t *queue)
         }
 
         umq_buf_t *bad_buf = NULL;
-        ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf);
+        ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf, &option);
         if (ret != UMQ_SUCCESS) {
             umq_buf_free(bad_buf);
             goto DEC_REF;
@@ -1570,9 +1571,7 @@ int umq_bondp_port_id_set(umq_used_ports_t *used_ports, bondp_port_id_t *used_po
             }
         }
 
-        used_port[i].bs.chip_id = used_ports->port[i].bs.chip_id;
-        used_port[i].bs.die_id = used_ports->port[i].bs.die_id;
-        used_port[i].bs.port_idx = used_ports->port[i].bs.port_idx;
+        (void)umq_bondp_port_id_from_umq(&used_ports->port[i], &used_port[i]);
     }
     return UMQ_SUCCESS;
 }
@@ -3489,6 +3488,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
     }
     __atomic_fetch_add(&qcfg->require_rx_count, rx_cnt, __ATOMIC_ACQ_REL);
     uint32_t require_rx_count = umq_get_post_rx_num(qcfg->rx_depth, &qcfg->require_rx_count);
+    umq_io_option_t option = {0};
     if (require_rx_count > 0) {
         uint32_t cur_batch_count = 0;
         int ret = UMQ_SUCCESS;
@@ -3503,7 +3503,7 @@ void umq_ub_fill_rx_buffer(ub_queue_t *queue, int rx_cnt)
                 break;
             }
             umq_buf_t *bad_buf = NULL;
-            ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf);
+            ret = umq_ub_post_rx_inner_impl(queue, qbuf, &bad_buf, &option);
             if (ret != UMQ_SUCCESS) {
                 UMQ_LIMIT_VLOG_ERR(VLOG_UMQ, "eid: " EID_FMT ", jetty_id: %u, post rx failed, status: %d\n",
                     EID_ARGS(*eid), id, ret);
