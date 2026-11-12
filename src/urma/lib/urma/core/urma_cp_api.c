@@ -450,6 +450,7 @@ urma_status_t urma_delete_jfc_batch(urma_jfc_t **jfc_arr, int jfc_num, urma_jfc_
         urma_ctx_arr[i] = urma_ctx;
         jfce_arr[i] = jfc->jfc_cfg.jfce;
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||
+            ((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops) ||
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->delete_jfc_batch == NULL)) {
             URMA_LOG_ERR("Invalid parameter, index=%d.\n", i);
             *bad_jfc = jfc_arr[0];
@@ -844,6 +845,7 @@ urma_status_t urma_delete_jfs_batch(urma_jfs_t **jfs_arr, int jfs_num, urma_jfs_
         urma_ctx = jfs->urma_ctx;
         urma_ctx_arr[i] = urma_ctx;
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||
+            ((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops) ||
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->delete_jfs_batch == NULL)) {
             URMA_LOG_ERR("Invalid parameter, index=%d.\n", i);
             *bad_jfs = jfs_arr[0];
@@ -1246,6 +1248,7 @@ urma_status_t urma_delete_jfr_batch(urma_jfr_t **jfr_arr, int jfr_num, urma_jfr_
         urma_ctx = jfr->urma_ctx;
         urma_ctx_arr[i] = urma_ctx;
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||
+            ((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops) ||
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->delete_jfr_batch == NULL)) {
             URMA_LOG_ERR("Invalid parameter, index=%d.\n", i);
             *bad_jfr = jfr_arr[0];
@@ -1297,7 +1300,8 @@ static urma_target_jetty_t *urma_import_jfr_compat(urma_context_t *ctx, urma_rjf
 
 urma_target_jetty_t *urma_import_jfr(urma_context_t *ctx, urma_rjfr_t *rjfr, urma_token_t *token_value)
 {
-    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->ops == NULL || rjfr == NULL) {
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->dev->ops == NULL ||
+        !urma_is_provider_ops_registered(ctx->dev->ops) || ctx->ops == NULL || rjfr == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
@@ -1968,6 +1972,7 @@ urma_status_t urma_delete_jetty_batch(urma_jetty_t **jetty_arr, int jetty_num, u
         urma_ctx = jetty->urma_ctx;
         urma_ctx_arr[i] = urma_ctx;
         if (((urma_ctx) == NULL) || ((urma_ctx)->dev == NULL) || ((urma_ctx)->dev->sysfs_dev == NULL) ||
+            ((urma_ctx)->dev->ops == NULL) || !urma_is_provider_ops_registered((urma_ctx)->dev->ops) ||
             (((ops) = (urma_ctx)->ops) == NULL) || ((ops)->delete_jetty_batch == NULL)) {
             URMA_LOG_ERR("Invalid parameter, index=%d.\n", i);
             *bad_jetty = jetty_arr[0];
@@ -2043,7 +2048,8 @@ static urma_target_jetty_t *urma_import_jetty_compat(urma_context_t *ctx, urma_r
 
 urma_target_jetty_t *urma_import_jetty(urma_context_t *ctx, urma_rjetty_t *rjetty, urma_token_t *token_value)
 {
-    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->ops == NULL || rjetty == NULL) {
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->dev->ops == NULL ||
+        !urma_is_provider_ops_registered(ctx->dev->ops) || ctx->ops == NULL || rjetty == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         errno = EINVAL;
         return NULL;
@@ -2139,20 +2145,10 @@ urma_status_t urma_unimport_jetty(urma_target_jetty_t *tjetty)
 
 /* Kernel user_ctl opcodes for fetching remote jetty / seg context info. */
 
-static urma_status_t urma_validate_ctx_for_remote_query(const urma_context_t *urma_ctx)
-{
-    if (urma_ctx == NULL || urma_ctx->dev == NULL || urma_ctx->dev->sysfs_dev == NULL ||
-        urma_ctx->ops == NULL) {
-        URMA_LOG_ERR("Invalid parameter.\n");
-        return URMA_EINVAL;
-    }
-    return URMA_SUCCESS;
-}
-
 static urma_status_t urma_fetch_bond_user_info(urma_context_t *urma_ctx, uint32_t opcode,
                                                uint64_t in_addr, uint32_t in_len, uint64_t out_addr)
 {
-    if (urma_ctx->ops->user_ctl == NULL) {
+    if (urma_ctx->ops == NULL || urma_ctx->ops->user_ctl == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -2177,7 +2173,7 @@ static urma_status_t urma_fetch_bond_user_info(urma_context_t *urma_ctx, uint32_
 static urma_status_t urma_fetch_bond_user_tseg(urma_context_t *urma_ctx, urma_target_seg_t *tseg,
                                                urma_user_tseg_t *buf, uint32_t cap, uint32_t *len)
 {
-    if (urma_ctx->ops->user_ctl == NULL) {
+    if (urma_ctx->ops == NULL || urma_ctx->ops->user_ctl == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
     }
@@ -2227,16 +2223,13 @@ urma_status_t urma_get_rjetty(urma_jetty_t *jetty, urma_rjetty_t **rjetty, uint3
     }
 
     urma_context_t *urma_ctx = jetty->urma_ctx;
-    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
-    if (status != URMA_SUCCESS) {
-        return status;
-    }
+    URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx);
 
     urma_rjetty_t *new_rjetty = NULL;
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
-        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_RJETTY,
-                                           (uint64_t)(uintptr_t)jetty, sizeof(urma_jetty_t),
-                                           (uint64_t)(uintptr_t)&new_rjetty);
+        urma_status_t status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_RJETTY,
+                                                         (uint64_t)(uintptr_t)jetty, sizeof(urma_jetty_t),
+                                                         (uint64_t)(uintptr_t)&new_rjetty);
         if (status != URMA_SUCCESS) {
             return URMA_FAIL;
         }
@@ -2282,6 +2275,7 @@ static urma_status_t urma_bind_jetty_compat(urma_jetty_t *jetty, urma_target_jet
     urma_ops_t *ops = ctx->ops;
     urma_active_tp_cfg_t active_tp_cfg = {0};
 
+    URMA_CHECK_OP_INVALID_RETURN_STATUS(ctx, ops, bind_jetty_ex);
     return ops->bind_jetty_ex(jetty, tjetty, &active_tp_cfg);
 }
 
@@ -2293,8 +2287,9 @@ urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty)
     }
 
     urma_context_t *ctx = jetty->urma_ctx;
-    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->ops == NULL) {
-        URMA_LOG_ERR("Invalid parameter.\n");
+    if (ctx == NULL || ctx->dev == NULL || ctx->dev->sysfs_dev == NULL || ctx->dev->ops == NULL ||
+        !urma_is_provider_ops_registered(ctx->dev->ops) || ctx->ops == NULL) {
+        URMA_LOG_WARN("Invalid parameter.\n");
         return URMA_EINVAL;
     }
 
@@ -2984,16 +2979,13 @@ urma_status_t urma_get_seg_ctx(urma_target_seg_t *tseg, urma_seg_t **seg, uint32
     }
 
     urma_context_t *urma_ctx = tseg->urma_ctx;
-    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
-    if (status != URMA_SUCCESS) {
-        return status;
-    }
+    URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx);
 
     urma_seg_t *new_seg = NULL;
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
-        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_SEG_CTX,
-                                           (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
-                                           (uint64_t)(uintptr_t)&new_seg);
+        urma_status_t status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_SEG_CTX,
+                                                         (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
+                                                         (uint64_t)(uintptr_t)&new_seg);
         if (status != URMA_SUCCESS) {
             return URMA_FAIL;
         }
@@ -3048,16 +3040,13 @@ urma_status_t urma_get_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
     }
 
     urma_context_t *urma_ctx = tseg->urma_ctx;
-    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
-    if (status != URMA_SUCCESS) {
-        return status;
-    }
+    URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx);
 
     urma_user_tseg_t *new_ut = NULL;
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
-        status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_USER_TSEG,
-                                           (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
-                                           (uint64_t)(uintptr_t)&new_ut);
+        urma_status_t status = urma_fetch_bond_user_info(urma_ctx, BONDP_USER_CTL_GET_USER_TSEG,
+                                                         (uint64_t)(uintptr_t)tseg, sizeof(urma_target_seg_t),
+                                                         (uint64_t)(uintptr_t)&new_ut);
         if (status != URMA_SUCCESS) {
             return URMA_FAIL;
         }
@@ -3111,15 +3100,12 @@ urma_status_t urma_fill_user_tseg(urma_target_seg_t *tseg, urma_token_t *token,
     }
 
     urma_context_t *urma_ctx = tseg->urma_ctx;
-    urma_status_t status = urma_validate_ctx_for_remote_query(urma_ctx);
-    if (status != URMA_SUCCESS) {
-        return status;
-    }
+    URMA_CHECK_CTX_INVALID_RETURN_STATUS(urma_ctx);
 
     bool has_user_info = false;
     if (urma_is_bonding_dev(urma_ctx->dev->name)) {
         uint32_t len = 0;
-        status = urma_fetch_bond_user_tseg(urma_ctx, tseg, user_tseg, *size, &len);
+        urma_status_t status = urma_fetch_bond_user_tseg(urma_ctx, tseg, user_tseg, *size, &len);
         if (status == URMA_ENOMEM) {
             /* The buffer is too small; *size carries the required size so the
              * caller can retry with a bigger buffer. */

@@ -535,8 +535,9 @@ int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid)
 
 urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
 {
-    if (dev == NULL || dev->ops == NULL || dev->ops->create_context == NULL) {
-        URMA_LOG_ERR("Invalid parameter with err dev or ops.\n");
+    if (dev == NULL || dev->ops == NULL || !urma_is_provider_ops_registered(dev->ops) ||
+        dev->ops->create_context == NULL) {
+        URMA_LOG_WARN("Invalid parameter with err dev or ops.\n");
         errno = EINVAL;
         return NULL;
     }
