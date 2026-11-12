@@ -1615,9 +1615,9 @@ public:
         auto statusTensor = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
         AscendC::GlobalTensor<int32_t> windowInstatusFp32Tensor_;
         windowInstatusFp32Tensor_.SetGlobalBuffer((__gm__ int32_t *)GetWindStateAddrByRankId(epRankId));
-        // epRankSize bucket heads, 32B each, STATE_OFFSET / UB_BLOCK_SIZE - 1 blocks apart.
+        // epRankSize bucket heads, 32B each, stateOffset / UB_BLOCK_SIZE - 1 blocks apart.
         AscendC::DataCopyParams intriParams{static_cast<uint16_t>(epRankSize), 1,
-                                            static_cast<uint16_t>(STATE_OFFSET / UB_BLOCK_SIZE - 1), 0};
+                                            static_cast<uint16_t>(stateOffset / UB_BLOCK_SIZE - 1), 0};
         uint32_t bucketBase = group * epRankSize * (stateOffset / sizeof(int32_t));
         // Fold the arrival check on the vector pipe. The flags sit one per 32B block, so a gather
         // with pattern 1 collects them contiguously, and the bucket flag is exactly 1.0f (or 0) --
