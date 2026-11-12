@@ -61,6 +61,11 @@ void urma_uninit_jetty_cfg(urma_jetty_cfg_t *p);
 int urma_query_eid(urma_device_t *dev, uint32_t eid_index, urma_eid_t *eid);
 int urma_open_cdev(char *path);
 
+/* True if provider_ops is still registered in the driver list (its driver has
+ * not been removed by urma_unregister_provider_ops). Used by the CP validation
+ * macros to reject calls routed at a provider whose ops are being unloaded. */
+bool urma_is_provider_ops_registered(const urma_provider_ops_t *provider_ops);
+
 /* Register a log callback with all loaded providers. No-op when g_driver_list
  * is empty (before urma_init / after urma_uninit). */
 void urma_register_log_func_to_providers(urma_log_cb_t func);
