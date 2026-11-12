@@ -151,7 +151,6 @@ typedef struct bondp_context {
     pthread_rwlock_t seg_cache_lock;
     struct ub_hmap seg_cache_map;
     unsigned long seg_cache_insert_cnt;
-    urma_token_id_t *token_ids[URMA_UBAGG_DEV_MAX_NUM];
     bool msn_enable;
     bool seg_cache_enable;
     uint32_t enabled_indices[URMA_UBAGG_DEV_MAX_NUM];
@@ -186,6 +185,11 @@ typedef struct bondp_jfc {
 #endif
     urma_ref_t use_cnt; /* Initialize to 0 */
 } bondp_jfc_t;
+
+typedef struct bondp_token_id {
+    urma_token_id_t v_token_id;
+    urma_token_id_t *p_token_id[URMA_UBAGG_DEV_MAX_NUM];
+} bondp_token_id_t;
 
 typedef struct bondp_tseg {
     urma_target_seg_t v_tseg;

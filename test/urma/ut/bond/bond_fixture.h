@@ -68,6 +68,10 @@ extern bool g_mockDeleteContextFail;
 extern bool g_mockUserCtlFail;
 extern size_t g_mockCallocFailNmemb;
 extern size_t g_mockCallocFailSize;
+inline int g_mockPhysicalTokenAllocCount = 0;
+inline int g_mockPhysicalTokenAllocFailAt = -1;
+inline int g_mockPhysicalTokenFreeCount = 0;
+inline int g_mockPhysicalTokenFreeFailAt = -1;
 
 struct BondProviderMockGuard {
     bondp_env_t savedEnv;
@@ -328,6 +332,10 @@ struct BondPathFixture {
     BondPathFixture()
     {
         urma_test::ResetHwMockState();
+        g_mockPhysicalTokenAllocCount = 0;
+        g_mockPhysicalTokenAllocFailAt = -1;
+        g_mockPhysicalTokenFreeCount = 0;
+        g_mockPhysicalTokenFreeFailAt = -1;
         /* Build a two-path virtual topology without creating real URMA devices. */
         savedEnv = g_bondp_env;
         g_bondp_env = env;
@@ -464,6 +472,8 @@ static urma_status_t MockDeletePhysicalJfr(urma_jfr_t *jfr);
 static urma_jetty_t *MockCreatePhysicalJetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg);
 static urma_status_t MockModifyPhysicalJetty(urma_jetty_t *jetty, urma_jetty_attr_t *attr);
 static urma_status_t MockDeletePhysicalJetty(urma_jetty_t *jetty);
+static urma_token_id_t *MockAllocPhysicalTokenId(urma_context_t *ctx);
+static urma_status_t MockFreePhysicalTokenId(urma_token_id_t *token_id);
 static urma_target_seg_t *MockRegisterPhysicalSeg(urma_context_t *ctx, urma_seg_cfg_t *cfg);
 static urma_status_t MockUnregisterPhysicalSeg(urma_target_seg_t *seg);
 static urma_target_seg_t *MockImportPhysicalSeg(urma_context_t *ctx, urma_seg_t *seg, urma_token_t *token,
@@ -498,6 +508,10 @@ struct BondPublicApiFixture {
     BondPublicApiFixture()
     {
         urma_test::ResetHwMockState();
+        g_mockPhysicalTokenAllocCount = 0;
+        g_mockPhysicalTokenAllocFailAt = -1;
+        g_mockPhysicalTokenFreeCount = 0;
+        g_mockPhysicalTokenFreeFailAt = -1;
         /* Public API smoke tests exercise stable outer branches; provider/device paths stay mocked by zero members. */
         std::snprintf(dev.name, sizeof(dev.name), "bond_ut");
         std::snprintf(phyDev.name, sizeof(phyDev.name), "bond_phy_ut");
@@ -521,8 +535,6 @@ struct BondPublicApiFixture {
         phyCtx.ops = &phyOps;
         phyCtx.eid_index = 0;
         phyCtx.ref.atomic_cnt.store(1);
-        phyOps.alloc_token_id = bondp_alloc_token_id;
-        phyOps.free_token_id = bondp_free_token_id;
         pthread_rwlock_init(&ctx.p_vjetty_id_table.lock, nullptr);
 
         jfce.bondp_ctx = &ctx;
@@ -586,7 +598,6 @@ struct BondPublicApiFixture {
     {
         ctx.dev_num = 1;
         ctx.p_ctxs[0] = &phyCtx;
-        ctx.token_ids[0] = urma_alloc_token_id(&phyCtx);
         jfc.dev_num = 1;
         phyOps.create_jfc = MockCreatePhysicalJfc;
         phyOps.modify_jfc = MockModifyPhysicalJfc;
@@ -601,6 +612,8 @@ struct BondPublicApiFixture {
         phyOps.create_jetty = MockCreatePhysicalJetty;
         phyOps.modify_jetty = MockModifyPhysicalJetty;
         phyOps.delete_jetty = MockDeletePhysicalJetty;
+        phyOps.alloc_token_id = MockAllocPhysicalTokenId;
+        phyOps.free_token_id = MockFreePhysicalTokenId;
         phyOps.register_seg = MockRegisterPhysicalSeg;
         phyOps.unregister_seg = MockUnregisterPhysicalSeg;
         phyOps.import_seg = MockImportPhysicalSeg;
@@ -810,6 +823,37 @@ inline urma_status_t MockDeletePhysicalJetty(urma_jetty_t *jetty)
 {
     std::free(jetty);
     return urma_test::GetHwMockState().status;
+}
+
+inline urma_token_id_t *MockAllocPhysicalTokenId(urma_context_t *ctx)
+{
+    int allocCount = ++g_mockPhysicalTokenAllocCount;
+    if (allocCount == g_mockPhysicalTokenAllocFailAt) {
+        return nullptr;
+    }
+
+    auto *tokenId = static_cast<urma_token_id_t *>(std::calloc(1, sizeof(*tokenId)));
+    if (tokenId == nullptr) {
+        return nullptr;
+    }
+    tokenId->urma_ctx = ctx;
+    tokenId->token_id = 0x6000U + static_cast<uint32_t>(allocCount);
+    tokenId->handle = 0x60000000ULL + static_cast<uint64_t>(allocCount);
+    return tokenId;
+}
+
+inline urma_status_t MockFreePhysicalTokenId(urma_token_id_t *token_id)
+{
+    if (token_id == nullptr) {
+        return URMA_EINVAL;
+    }
+
+    int freeCount = ++g_mockPhysicalTokenFreeCount;
+    if (freeCount == g_mockPhysicalTokenFreeFailAt) {
+        return URMA_FAIL;
+    }
+    std::free(token_id);
+    return URMA_SUCCESS;
 }
 
 inline void FreeCreatedBondCompForTest(bondp_comp_t *comp)
