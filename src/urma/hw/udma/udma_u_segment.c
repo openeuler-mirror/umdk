@@ -100,7 +100,7 @@ static int udma_exec_register_seg_cmd(urma_context_t *urma_ctx,
 
 	ret = urma_cmd_register_seg(urma_ctx, urma_tseg, seg_cfg, &udata);
 	if (ret)
-		UDMA_LOG_ERR("pin segment failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("pin segment failed, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -126,7 +126,7 @@ static void udma_u_ungrant_seg(struct udma_u_segment *seg)
 	ret = ummu_ungrant(udma_tid->tid, (void *)seg->urma_tseg.seg.ubva.va,
 			   seg->urma_tseg.seg.len);
 	if (ret)
-		UDMA_LOG_ERR("ungrant segment failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("ungrant segment failed, ret = %d.\n", ret);
 }
 
 urma_target_seg_t *udma_u_register_seg(urma_context_t *urma_ctx,
@@ -141,7 +141,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *urma_ctx,
 
 	seg = (struct udma_u_segment *)calloc(1, sizeof(*seg));
 	if (!seg) {
-		UDMA_LOG_ERR("alloc segment failed.\n");
+		UDMA_LOG_ERR_RL("alloc segment failed.\n");
 		return NULL;
 	}
 
@@ -149,7 +149,7 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *urma_ctx,
 
 	ret = udma_u_grant_segment(seg);
 	if (ret) {
-		UDMA_LOG_ERR("segment grant failed, access = %d, ret = %d.\n",
+		UDMA_LOG_ERR_RL("segment grant failed, access = %d, ret = %d.\n",
 			     seg_cfg->flag.bs.access, ret);
 		goto err_ummu_grant;
 	}
@@ -178,7 +178,7 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 
 	ret = urma_cmd_unregister_seg(target_seg);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command unregister segment failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command unregister segment failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -206,7 +206,7 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 
 	tseg = (struct udma_u_segment *)calloc(1, sizeof(*tseg));
 	if (!tseg) {
-		UDMA_LOG_ERR("alloc target segment failed.\n");
+		UDMA_LOG_ERR_RL("alloc target segment failed.\n");
 		return NULL;
 	}
 

@@ -118,6 +118,8 @@ struct udma_u_context {
 	bool			atomic_add_en;
 	uint32_t		ccu_jetty_start_id;
 	uint32_t		ccu_jetty_max_cnt;
+	uint16_t		ucp_jetty_start_id;
+	uint16_t		ucp_jetty_max_cnt;
 	bool			hugepage_enable;
 	pthread_mutex_t		hugepage_lock;
 	struct udma_u_hugepage_priv *hugepage_list;

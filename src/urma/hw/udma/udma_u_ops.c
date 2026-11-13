@@ -160,6 +160,8 @@ static void udma_u_init_context(struct udma_u_context *udma_ctx,
 	udma_ctx->atomic_add_en = resp->atomic_add_en;
 	udma_ctx->ccu_jetty_start_id = resp->ccu_jetty_start_id;
 	udma_ctx->ccu_jetty_max_cnt = resp->ccu_jetty_max_cnt;
+	udma_ctx->ucp_jetty_start_id = resp->ucp_jetty_start_id;
+	udma_ctx->ucp_jetty_max_cnt = resp->ucp_jetty_max_cnt;
 	udma_ctx->hugepage_enable = resp->hugepage_enable;
 	udma_ctx->sva_sep_mode_en = resp->sva_sep_mode_en;
 	udma_ctx->st64b_en = resp->st64b_en;

@@ -18,14 +18,14 @@ void *udma_u_alloc_kernel_buf(struct udma_u_context *ctx, uint32_t buf_size)
 
 	buf = mmap(NULL, buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, ctx->urma_ctx.dev_fd, offset);
 	if (buf == MAP_FAILED) {
-		UDMA_LOG_ERR("mmap failed, buffer size=%u.\n", buf_size);
+		UDMA_LOG_ERR_RL("mmap failed, buffer size=%u.\n", buf_size);
 		return NULL;
 	}
 
 	ret = madvise(buf, buf_size, MADV_DONTFORK);
 	if (ret) {
 		(void)munmap(buf, buf_size);
-		UDMA_LOG_ERR("buffer madvise failed! ret = %d\n", ret);
+		UDMA_LOG_ERR_RL("buffer madvise failed! ret = %d\n", ret);
 		return NULL;
 	}
 
@@ -50,7 +50,7 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 		if (!q->wrid) {
 			q->wrid = (uintptr_t *)calloc(q->baseblk_cnt, sizeof(uint64_t));
 			if (!q->wrid) {
-				UDMA_LOG_ERR("failed to alloc buffer for work request id.\n");
+				UDMA_LOG_ERR_RL("failed to alloc buffer for work request id.\n");
 				return false;
 			}
 		}
@@ -66,7 +66,7 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 		if (q->hugepage) {
 			q->qbuf = q->hugepage->va_start;
 		} else {
-			UDMA_LOG_WARN("hugepage buffer unavailable, fallback to normal buffer.\n");
+			UDMA_LOG_WARN_RL("hugepage buffer unavailable, fallback to normal buffer.\n");
 			q->qbuf = udma_u_alloc_kernel_buf(q->ctx, q->qbuf_size);
 		}
 	} else {
@@ -75,7 +75,7 @@ bool udma_u_alloc_queue_buf(struct udma_u_jetty_queue *q, uint32_t max_entry_cnt
 
 alloc_queue_buf_finish:
 	if (!q->qbuf) {
-		UDMA_LOG_ERR("failed to alloc queue buffer.\n");
+		UDMA_LOG_ERR_RL("failed to alloc queue buffer.\n");
 		if (wrid_en) {
 			free(q->wrid);
 			q->wrid = NULL;
@@ -117,14 +117,14 @@ void *udma_u_alloc_buf(uint32_t buf_size)
 	buf = mmap(NULL, buf_size, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (buf == MAP_FAILED) {
-		UDMA_LOG_ERR("mmap failed, buffer size=%u.\n", buf_size);
+		UDMA_LOG_ERR_RL("mmap failed, buffer size=%u.\n", buf_size);
 		return NULL;
 	}
 
 	ret = madvise(buf, buf_size, MADV_DONTFORK);
 	if (ret) {
 		(void)munmap(buf, buf_size);
-		UDMA_LOG_ERR("buffer madvise failed! ret = %d\n", ret);
+		UDMA_LOG_ERR_RL("buffer madvise failed! ret = %d\n", ret);
 		return NULL;
 	}
 
@@ -167,7 +167,7 @@ udma_u_alloc_hugepage_priv(struct udma_u_context *ctx, uint32_t len)
 
 	priv = (struct udma_u_hugepage_priv *)calloc(1, sizeof(*priv));
 	if (!priv) {
-		UDMA_LOG_ERR("alloc hugepage private failed.\n");
+		UDMA_LOG_ERR_RL("alloc hugepage private failed.\n");
 		return NULL;
 	}
 
@@ -176,13 +176,13 @@ udma_u_alloc_hugepage_priv(struct udma_u_context *ctx, uint32_t len)
 	priv->va_base = mmap(NULL, priv->va_len, PROT_READ | PROT_WRITE,
 			    MAP_SHARED, ctx->urma_ctx.dev_fd, offset);
 	if (priv->va_base == MAP_FAILED) {
-		UDMA_LOG_ERR("mmap failed, buffer size=%u.\n", priv->va_len);
+		UDMA_LOG_ERR_RL("mmap failed, buffer size=%u.\n", priv->va_len);
 		goto err_mmap;
 	}
 
 	ret = madvise(priv->va_base, priv->va_len, MADV_DONTFORK);
 	if (ret) {
-		UDMA_LOG_ERR("buffer madvise failed! ret = %d\n", ret);
+		UDMA_LOG_ERR_RL("buffer madvise failed! ret = %d\n", ret);
 		goto err_madvise;
 	}
 	udma_u_hugepage_add(ctx, priv);
@@ -204,7 +204,7 @@ struct udma_u_hugepage *udma_u_alloc_hugepage(struct udma_u_context *ctx, uint32
 
 	hugepage = (struct udma_u_hugepage *)calloc(1, sizeof(*hugepage));
 	if (!hugepage) {
-		UDMA_LOG_ERR("alloc hugepage failed.\n");
+		UDMA_LOG_ERR_RL("alloc hugepage failed.\n");
 		return NULL;
 	}
 
