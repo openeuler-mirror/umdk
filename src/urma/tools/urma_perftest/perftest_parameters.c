@@ -159,7 +159,10 @@ static void usage(const char *argv0)
         "  --jettys_pre_jfr <num>      How many jettys share a jfr, default: jettys.\n"
         "  --seg_pre_jetty             Enable a segment for each Jetty, default: disable.\n"
         "  --enable_imm                Enable immediate data for write or send, default: disable.\n"
-        "  --enable_err_continue       Enable continue running when cr erros, default: disable.\n"
+        "  --enable_err_continue       Enable continue running when CR errors occur, default: disable.\n"
+        "                              Recommend also setting --error_suspend true.\n"
+        "  --error_suspend <true/false> Enable error suspend for jetty or jfs, default: false.\n"
+        "                              Recommend enabling with --enable_err_continue.\n"
         "  --enable_notify             Enable write_with_notify, default: disable.\n"
         "  --enable_user_tp            Enable user tp for UB device, if enable,UVS is not required. default: disable.\n"
         "  --oor_en                    Enable out of order for user_tp, default: disable.\n"
@@ -370,6 +373,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->seg_pre_jetty = false;
     cfg->enable_imm = false;
     cfg->enable_err_continue = false;
+    cfg->error_suspend = false;
     cfg->enable_notify = false;
     cfg->enable_user_tp = false;
     cfg->oor_en = false;
@@ -671,6 +675,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"enable_imm",          no_argument,       NULL, PERFTEST_OPT_ENABLE_IMM},
         {"inf_period_ms",       required_argument, NULL, PERFTEST_OPT_INF_PERIOD_MS},
         {"enable_err_continue", no_argument,       NULL, PERFTEST_OPT_ENABLE_ERR_CONTINUE},
+        {"error_suspend",       required_argument, NULL, PERFTEST_OPT_ERROR_SUSPEND},
         {"enable_notify",   no_argument,     NULL, PERFTEST_OPT_ENABLE_NOTIFY},
         {"enable_user_tp",      no_argument,       NULL, PERFTEST_OPT_ENABLE_USER_TP},
         {"oor_en",              no_argument,       NULL, PERFTEST_OPT_OOR_EN},
@@ -949,6 +954,12 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
                 break;
             case PERFTEST_OPT_ENABLE_ERR_CONTINUE:
                 cfg->enable_err_continue = true;
+                break;
+            case PERFTEST_OPT_ERROR_SUSPEND:
+                if (ub_str_to_bool(optarg, &cfg->error_suspend) != 0) {
+                    LOG_ERROR("Invalid parameter(error_suspend).\n");
+                    return -1;
+                }
                 break;
             case PERFTEST_OPT_ENABLE_NOTIFY:
                 cfg->enable_notify = true;
