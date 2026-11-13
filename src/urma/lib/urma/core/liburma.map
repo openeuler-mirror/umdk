@@ -242,6 +242,7 @@ URMA_PRIVATE_0.1 {
 		urma_cmd_user_ctl;
 		urma_cmd_wait_jfc;
 		urma_cmd_wait_notify;
+		urma_get_cached_device_attr;
 		urma_get_jfce_cnt_info;
 		urma_get_perf_timestamp;
 		urma_log;

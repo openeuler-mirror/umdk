@@ -259,6 +259,31 @@ TEST(UrmaCoreTest, MainApisValidateProviderContextAndDeviceContracts)
     EXPECT_EQ(0, urma_unregister_provider_ops(&provider));
 }
 
+TEST(UrmaCoreTest, CachedDeviceAttrValidatesInputsAndCacheState)
+{
+    CoreApiFixture fixture;
+    urma_device_t noSysfsDev = fixture.dev;
+    const urma_device_attr_t *devAttr = nullptr;
+
+    noSysfsDev.sysfs_dev = nullptr;
+    EXPECT_EQ(URMA_EINVAL, urma_get_cached_device_attr(nullptr, &devAttr));
+    EXPECT_EQ(nullptr, devAttr);
+    EXPECT_EQ(URMA_EINVAL, urma_get_cached_device_attr(&noSysfsDev, &devAttr));
+    EXPECT_EQ(nullptr, devAttr);
+    EXPECT_EQ(URMA_EINVAL, urma_get_cached_device_attr(&fixture.dev, nullptr));
+
+    fixture.sysfsDev.flag &= ~URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID;
+    EXPECT_EQ(URMA_FAIL, urma_get_cached_device_attr(&fixture.dev, &devAttr));
+    EXPECT_EQ(nullptr, devAttr);
+
+    fixture.sysfsDev.dev_attr.dev_cap.max_jfs_depth = 32;
+    fixture.sysfsDev.flag |= URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID;
+    EXPECT_EQ(URMA_SUCCESS, urma_get_cached_device_attr(&fixture.dev, &devAttr));
+    ASSERT_NE(nullptr, devAttr);
+    EXPECT_EQ(&fixture.sysfsDev.dev_attr, devAttr);
+    EXPECT_EQ(32U, devAttr->dev_cap.max_jfs_depth);
+}
+
 TEST(UrmaCoreTest, MainCreateContextReadsEidAndOpensLocalCdev)
 {
     TempSysfsTree sysfs;
@@ -336,6 +361,10 @@ TEST(UrmaCoreTest, MainProviderLoaderUsesLocalDlopenMocks)
     dev->sysfs_dev = sysfsDev;
     dev->type = URMA_TRANSPORT_UB;
     EXPECT_EQ(0, urma_register_sysfs_dev(sysfsDev));
+    EXPECT_EQ(0U, sysfsDev->flag & URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID);
+    const urma_device_attr_t *cachedAttr = nullptr;
+    EXPECT_EQ(URMA_FAIL, urma_get_cached_device_attr(dev, &cachedAttr));
+    EXPECT_EQ(nullptr, cachedAttr);
     EXPECT_EQ(-1, urma_register_sysfs_dev(sysfsDev));
     deviceList = urma_get_device_list(&deviceNum);
     ASSERT_NE(nullptr, deviceList);
