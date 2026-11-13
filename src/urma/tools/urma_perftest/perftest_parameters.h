@@ -169,6 +169,7 @@ enum perftest_opts {
     PERFTEST_OPT_ENABLE_IMM,
     PERFTEST_OPT_INF_PERIOD_MS,
     PERFTEST_OPT_ENABLE_ERR_CONTINUE,
+    PERFTEST_OPT_ERROR_SUSPEND,
     PERFTEST_OPT_ENABLE_NOTIFY,
     PERFTEST_OPT_ENABLE_USER_TP,
     PERFTEST_OPT_OOR_EN,
@@ -316,6 +317,7 @@ typedef struct perftest_config {
     bool enable_imm;
     bool enable_notify;
     bool enable_err_continue;
+    bool error_suspend;
 
     /* user tp */
     bool enable_user_tp;
