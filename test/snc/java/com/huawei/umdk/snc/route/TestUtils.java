@@ -87,8 +87,11 @@ public class TestUtils {
         Map<String, SncTopology> topologyMap = new HashMap<>();
 
         List<String> templateFiles = new ArrayList<>();
-        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue() + ".json");
+        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue() + ".json");
         templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json");
+
+        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512.getValue() + ".json");
+        templateFiles.add(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue() + ".json");
 
         for (String template : templateFiles) {
             SncTopology topology = TopoTemplateService.parseTemplateFile(template);

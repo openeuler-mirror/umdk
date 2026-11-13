@@ -127,6 +127,7 @@ public class TopoTemplateService {
 
         SncTopology topology = new SncTopology();
         topology.getLabel().refreshAllNames(templateLoader.getTemplateLabel());
+        topology.setRackNumber(templateLoader.getRackNumber());
         for (NodeLoader nodeLoader : templateLoader.getNodeLoaders()) {
             SncNode node = getNode(nodeLoader);
             topology.getNodeMap().put(node.getLabel().toString(), node);

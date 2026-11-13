@@ -46,7 +46,7 @@ import com.huawei.umdk.snc.route.service.RouteInstantiationService;
  * <p>路由表 key 遵循 {@link RouteInstantiationService#buildRouteTableKey} 规范
  * （"deviceName#chipIndex"），OutPortInfo.portName 与 SuperNode 中 PortEntity.portName
  * 一致，等价于经 RouteMspService + RouteInstantiationService 实例化后的状态。
- * 路由模板生成与实例化的端到端验证已由 {@link RouteMspTest} / {@link RouteInstantiationTest}
+ * 路由模板生成与实例化的端到端验证已由 {@link RouteMspTest}
  * 覆盖；本测试在相同的数据契约下验证收敛传播逻辑。
  *
  * <p>算法语义说明：link 事件 device=X port=P 触发的收敛，从 X 的 P 所属 chip 出发，

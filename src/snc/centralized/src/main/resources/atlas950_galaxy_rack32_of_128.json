@@ -1,5 +1,5 @@
 {
-  "template_label": "type:atlas950_galaxy_rack32",
+  "template_label": "type:atlas950_galaxy_rack32_of_128",
   "topo_nodes": [
     {
       "node_label": "type:npu|slot:1|ubpu:1|die:2",

@@ -13,8 +13,10 @@ import lombok.Getter;
 
 @Getter
 public enum SuperNodeType {
-    ATLAS950_GALAXY_RACK32("atlas950_galaxy_rack32"),
-    ATLAS950_GALAXY_RACK32_SUPERNODE_128("atlas950_galaxy_rack32_supernode_128");
+    ATLAS950_GALAXY_RACK32_OF_128("atlas950_galaxy_rack32_of_128"),
+    ATLAS950_GALAXY_RACK32_SUPERNODE_128("atlas950_galaxy_rack32_supernode_128"),
+    ATLAS950_GALAXY_RACK32_OF_512("atlas950_galaxy_rack32_of_512"),
+    ATLAS950_GALAXY_RACK32_SUPERNODE_512("atlas950_galaxy_rack32_supernode_512");
 
     private final String value;
 

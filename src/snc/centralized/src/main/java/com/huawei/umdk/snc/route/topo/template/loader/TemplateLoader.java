@@ -20,6 +20,9 @@ public class TemplateLoader {
     @JSONField(name = "template_label")
     String templateLabel;
 
+    @JSONField(name = "rack_number")
+    int rackNumber;
+
     @JSONField(name = "topo_nodes")
     List<NodeLoader> nodeLoaders = new ArrayList<>();
 

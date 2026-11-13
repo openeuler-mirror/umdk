@@ -58,8 +58,6 @@ public class RouteInstantiationService {
 
     private static final long SIX_IODIE_POSITION = 4;
 
-    private static final long CHASSIS_COUNT = 4;
-
     private static final long SLOT_COUNT = 8;
 
     private static final long DEVICE_COUNT = 4;
@@ -99,12 +97,13 @@ public class RouteInstantiationService {
         return newPrefix;
     }
 
-    private static void instantiateRouteForNpu(int chassisIndex, RouteTable routeTable, RouteTable newRouteTable) {
+    private static void instantiateRouteForNpu(int chassisIndex, int rackNumber, RouteTable routeTable,
+                                               RouteTable newRouteTable) {
         for (Map.Entry<Prefix, RouteEntry> entry : routeTable.getRouteEntries().entrySet()) {
             Prefix prefix = entry.getKey();
             RouteEntry routeEntry = entry.getValue();
             if (prefix.getAddr() == 0) {
-                for (int chassis = 0; chassis < CHASSIS_COUNT; chassis++) {
+                for (int chassis = 0; chassis < rackNumber; chassis++) {
                     if (chassis == chassisIndex) {
                         continue;
                     }
@@ -131,13 +130,14 @@ public class RouteInstantiationService {
         }
     }
 
-    private static void instantiateRouteForL1Sw(int chassisIndex, RouteTable routeTable, List<Prefix> l2RoutePrefix,
+    private static void instantiateRouteForL1Sw(int chassisIndex, int rackNumber, RouteTable routeTable,
+                                                List<Prefix> l2RoutePrefix,
                                                 RouteTable newRouteTable) {
         for (Map.Entry<Prefix, RouteEntry> entry : routeTable.getRouteEntries().entrySet()) {
             Prefix prefix = entry.getKey();
             RouteEntry routeEntry = entry.getValue();
             if (prefix.getAddr() == 0) {
-                for (int chassis = 0; chassis < CHASSIS_COUNT; chassis++) {
+                for (int chassis = 0; chassis < rackNumber; chassis++) {
                     if (chassis == chassisIndex) {
                         continue;
                     }
@@ -160,11 +160,11 @@ public class RouteInstantiationService {
     }
 
     private static void instantiateRouteForL2Sw(SncTopology interRackTopology, SncNode node,
-                                                RouteTable routeTable, RouteTable newRouteTable) {
+                                                RouteTable routeTable, RouteTable newRouteTable, int rackNumber) {
         for (Map.Entry<Prefix, RouteEntry> entry : routeTable.getRouteEntries().entrySet()) {
             Prefix prefix = entry.getKey();
             RouteEntry routeEntry = entry.getValue();
-            for (int chassisIndex = 0; chassisIndex < CHASSIS_COUNT; chassisIndex++) {
+            for (int chassisIndex = 0; chassisIndex < rackNumber; chassisIndex++) {
                 Prefix newPrefix = fillHighBitAddress(prefix, chassisIndex);
                 RouteEntry newRouteEntry = new RouteEntry(newPrefix);
                 newRouteEntry.copyNhpSet(routeEntry);
@@ -225,22 +225,24 @@ public class RouteInstantiationService {
         return new ArrayList<>(prefixes);
     }
 
-    private static Map<String, RouteTable> instantiateNodeRoute(Map<String, SncTopology> topologyMap, SncNode node,
-                                                                Map<String, RouteTable> routeTemplateMap) {
+    private static Map<String, RouteTable> instantiateGalaxyNodeRoute(
+        Map.Entry<SuperNodeType, SuperNodeType> snTypeEntry, Map<String, SncTopology> topologyMap, SncNode node,
+        Map<String, RouteTable> routeTemplateMap) {
         Map<String, RouteTable> routeTableMap = new HashMap<>();
         RouteTable routeTable = routeTemplateMap.get(node.getLabel().toString());
         if (routeTable == null) {
             throw new IllegalArgumentException(String.format("route table %s not found in rack topology",
                 node.getLabel().toString()));
         }
-        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
-        SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+        SncTopology rackTopology = topologyMap.get(snTypeEntry.getValue().getValue());
+        SncTopology interRackTopology = topologyMap.get(snTypeEntry.getKey().getValue());
         String nodeType = node.type();
+        int rackNumber = interRackTopology.getRackNumber();
         if (NodeType.NPU.getValue().equals(nodeType)) {
             // 每框实例化一份
-            for (int chassisIndex = 0; chassisIndex < CHASSIS_COUNT; chassisIndex++) {
+            for (int chassisIndex = 0; chassisIndex < rackNumber; chassisIndex++) {
                 RouteTable newRouteTable = new RouteTable();
-                instantiateRouteForNpu(chassisIndex, routeTable, newRouteTable);
+                instantiateRouteForNpu(chassisIndex, rackNumber, routeTable, newRouteTable);
                 String nodeLabel = node.getLabel().addChassis(chassisIndex + 1);
                 routeTableMap.put(nodeLabel, newRouteTable);
             }
@@ -248,15 +250,15 @@ public class RouteInstantiationService {
             // 根据框内模板，找到l1 sw连接的l2 sw，收集其路由前缀，用于发布地址的转换
             List<Prefix> l2RoutePrefix = getL2SwPrefixes(node.getLabel().toString(), rackTopology, routeTemplateMap);
             // 每框实例化一份
-            for (int chassisIndex = 0; chassisIndex < CHASSIS_COUNT; chassisIndex++) {
+            for (int chassisIndex = 0; chassisIndex < rackNumber; chassisIndex++) {
                 RouteTable newRouteTable = new RouteTable();
-                instantiateRouteForL1Sw(chassisIndex, routeTable, l2RoutePrefix, newRouteTable);
+                instantiateRouteForL1Sw(chassisIndex, rackNumber, routeTable, l2RoutePrefix, newRouteTable);
                 String nodeLabel = node.getLabel().addChassis(chassisIndex + 1);
                 routeTableMap.put(nodeLabel, newRouteTable);
             }
         } else if (NodeType.L2_SW.getValue().equals(nodeType)) {
             RouteTable newRouteTable = new RouteTable();
-            instantiateRouteForL2Sw(interRackTopology, node, routeTable, newRouteTable);
+            instantiateRouteForL2Sw(interRackTopology, node, routeTable, newRouteTable, rackNumber);
             routeTableMap.put(node.getLabel().toString(), newRouteTable);
         } else {
             throw new IllegalArgumentException("Unknown node type: " + nodeType);
@@ -266,9 +268,10 @@ public class RouteInstantiationService {
     }
 
     // 对框内模板的路由进行实例化
-    public static void instantiateXpodRoute(Map<String, SncTopology> topologyMap,
-        Map<String, Map<String, RouteTable>> routeTemplateMap, Map<String, Map<String, RouteTable>> superNodeRoutes) {
-        String xpodType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
+    public static void instantiateGalaxyXpodRoute(Map.Entry<SuperNodeType, SuperNodeType> snTypeEntry,
+        Map<String, SncTopology> topologyMap, Map<String, Map<String, RouteTable>> routeTemplateMap,
+        Map<String, Map<String, RouteTable>> superNodeRoutes) {
+        String xpodType = snTypeEntry.getValue().getValue();
         Map<String, RouteTable> routeMap = routeTemplateMap.get(xpodType);
         SncTopology topology = topologyMap.get(xpodType);
         Map<String, RouteTable> routes = new HashMap<>();
@@ -278,7 +281,8 @@ public class RouteInstantiationService {
         for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
             SncNode node = entry.getValue();
             if (NodeType.L1_SW.getValue().equals(node.type())) {
-                Map<String, RouteTable> routeTableMap = instantiateNodeRoute(topologyMap, node, routeMap);
+                Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snTypeEntry,
+                    topologyMap, node, routeMap);
                 routes.putAll(routeTableMap);
             }
         }
@@ -290,11 +294,12 @@ public class RouteInstantiationService {
                 continue;
             }
 
-            Map<String, RouteTable> routeTableMap = instantiateNodeRoute(topologyMap, node, routeMap);
+            Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snTypeEntry,
+                topologyMap, node, routeMap);
             routes.putAll(routeTableMap);
         }
 
-        superNodeRoutes.put(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue(), routes);
+        superNodeRoutes.put(snTypeEntry.getKey().getValue(), routes);
         log.info("instantiate xpod route success");
     }
 
