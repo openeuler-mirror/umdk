@@ -102,6 +102,36 @@ void udma_log(const char *function, int line, enum udma_vlog_level level, const 
 	va_end(va);
 }
 
+bool udma_ratelimit(struct udma_ratelimit_state *rs, const char *func, int line)
+{
+	struct timespec now;
+	uint64_t interval;
+	bool ret = true;
+
+	pthread_mutex_lock(&rs->lock);
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	interval = (now.tv_sec - rs->begin.tv_sec) * NS_PER_SEC + now.tv_nsec - rs->begin.tv_nsec;
+	if (interval > UDMA_RATELIMIT_INTERVAL) {
+		if (rs->missed) {
+			udma_log(func, line, UDMA_VLOG_LEVEL_WARNING,
+				 "%u callbacks suppressed.\n", rs->missed);
+			rs->missed = 0;
+		}
+		rs->begin = now;
+		rs->printed = 0;
+	}
+
+	if (rs->printed < UDMA_RATELIMIT_BURST) {
+		rs->printed++;
+	} else {
+		rs->missed++;
+		ret = false;
+	}
+	pthread_mutex_unlock(&rs->lock);
+
+	return ret;
+}
+
 static void udma_u_try_register_ummu_log_backend(void)
 {
 	ummu_log_backend_t backend = {.emit = g_udma_log_cb};

@@ -43,7 +43,7 @@ static int exec_jetty_active_cmd(struct udma_u_jetty *jetty, urma_jetty_cfg_t *c
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_active_jetty(&jetty->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("URMA active jetty failed.\n");
+		UDMA_LOG_ERR_RL("URMA active jetty failed.\n");
 		return ret;
 	}
 
@@ -85,7 +85,7 @@ int exec_jetty_create_cmd(urma_context_t *ctx, struct udma_u_jetty *jetty,
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jetty(ctx, &jetty->base, cfg, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("URMA create JETTY failed.\n");
+		UDMA_LOG_ERR_RL("URMA create JETTY failed.\n");
 		return ret;
 	}
 	ret = udma_u_set_sq_by_resp(&jetty->sq, &resp);
@@ -213,7 +213,7 @@ static int udma_u_active_jetty_prepare(urma_jetty_t *jetty, urma_jetty_cfg_t *cf
 	udma_jetty->sq.is_jetty = true;
 	ret = udma_u_create_sq(&udma_jetty->sq, &cfg->jfs_cfg);
 	if (ret) {
-		UDMA_LOG_ERR("active JETTY create SQ failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("active JETTY create SQ failed, ret = %d.\n", ret);
 		remove_jetty_from_grp(udma_jetty);
 		return ret;
 	}
@@ -231,7 +231,7 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg)
 
 	jetty = (struct udma_u_jetty *)calloc(1, sizeof(struct udma_u_jetty));
 	if (jetty == NULL) {
-		UDMA_LOG_ERR("memory allocation failed.\n");
+		UDMA_LOG_ERR_RL("memory allocation failed.\n");
 		return NULL;
 	}
 
@@ -247,13 +247,13 @@ urma_jetty_t *udma_u_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg)
 			jetty->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&jetty->sq, jetty->sq.sqe_bb_cnt * cfg->jfs_cfg.depth,
 			    UDMA_JFS_WQEBB, jetty->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc JETTY SQ after DTU failed.\n");
+				UDMA_LOG_ERR_RL("failed to alloc JETTY SQ after DTU failed.\n");
 				goto err_jetty_create_cmd;
 			}
 			if (exec_jetty_create_cmd(ctx, jetty, cfg))
 				goto err_jetty_create_cmd;
 		} else {
-			UDMA_LOG_ERR("failed to create jetty.\n");
+			UDMA_LOG_ERR_RL("failed to create jetty.\n");
 			goto err_jetty_create_cmd;
 		}
 	}
@@ -316,7 +316,7 @@ static urma_status_t udma_u_delete_jetty_prepare(urma_jetty_t *jetty)
 	if (sq->trans_mode == URMA_TM_RC && sq->tjetty) {
 		ret = udma_u_unbind_jetty(jetty);
 		if (ret) {
-			UDMA_LOG_ERR("unbind JETTY failed, JETTY id %u.\n", sq->idx);
+			UDMA_LOG_ERR_RL("unbind JETTY failed, JETTY id %u.\n", sq->idx);
 			return URMA_FAIL;
 		}
 	}
@@ -368,7 +368,7 @@ urma_status_t udma_u_delete_jetty(urma_jetty_t *jetty)
 
 	ret = urma_cmd_delete_jetty(jetty);
 	if (ret) {
-		UDMA_LOG_ERR("jetty delete failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("jetty delete failed, ret = %d.\n", ret);
 		goto delete_err;
 	}
 
@@ -409,7 +409,7 @@ urma_status_t udma_u_delete_jetty_batch(urma_jetty_t **jetty, int jetty_cnt, urm
 
 	ret = urma_cmd_delete_jetty_batch(jetty, jetty_cnt, bad_jetty);
 	if (ret) {
-		UDMA_LOG_ERR("batch JETTY delete failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("batch JETTY delete failed, ret = %d.\n", ret);
 		goto delete_err;
 	}
 
@@ -459,7 +459,7 @@ urma_status_t udma_u_unimport_jetty(urma_target_jetty_t *target_jetty)
 	}
 
 	if (urma_cmd_unimport_jetty(target_jetty)) {
-		UDMA_LOG_ERR("URMA command unimport JETTY failed.\n");
+		UDMA_LOG_ERR_RL("URMA command unimport JETTY failed.\n");
 		return URMA_FAIL;
 	}
 
@@ -522,7 +522,7 @@ urma_status_t udma_u_unbind_jetty(urma_jetty_t *jetty)
 
 	ret = urma_cmd_unbind_jetty(jetty);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command unbind JETTY failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command unbind JETTY failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -571,18 +571,18 @@ urma_jetty_grp_t *udma_u_create_jetty_grp(urma_context_t *ctx,
 
 	jetty_grp = (struct udma_u_jetty_grp *)calloc(1, sizeof(*jetty_grp));
 	if (!jetty_grp) {
-		UDMA_LOG_ERR("alloc JETTY group failed.\n");
+		UDMA_LOG_ERR_RL("alloc JETTY group failed.\n");
 		return NULL;
 	}
 
 	if (pthread_spin_init(&jetty_grp->lock, PTHREAD_PROCESS_PRIVATE)) {
-		UDMA_LOG_ERR("init JETTY group lock failed.\n");
+		UDMA_LOG_ERR_RL("init JETTY group lock failed.\n");
 		goto err_spin_init;
 	}
 
 	ret = urma_cmd_create_jetty_grp(ctx, &jetty_grp->base, cfg, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command create JETTY group failed.\n");
+		UDMA_LOG_ERR_RL("URMA command create JETTY group failed.\n");
 		goto err_cmd_create_jetty_grp;
 	}
 
@@ -608,7 +608,7 @@ urma_status_t udma_u_delete_jetty_grp(urma_jetty_grp_t *jetty_grp)
 
 	ret = urma_cmd_delete_jetty_grp(jetty_grp);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command delete JETTY group failed.\n");
+		UDMA_LOG_ERR_RL("URMA command delete JETTY group failed.\n");
 		return URMA_FAIL;
 	}
 
@@ -679,14 +679,14 @@ urma_target_jetty_t *udma_u_import_jetty_ex(urma_context_t *ctx,
 
 	tjetty = (struct udma_u_target_jetty *)calloc(1, sizeof(*tjetty));
 	if (tjetty == NULL) {
-		UDMA_LOG_ERR("target JETTY alloc failed in imported JETTY ex.\n");
+		UDMA_LOG_ERR_RL("target JETTY alloc failed in imported JETTY ex.\n");
 		return NULL;
 	}
 
 	udma_u_set_udata(&udrv_data, NULL, 0, NULL, 0);
 	if (urma_cmd_import_jetty_ex(ctx, &tjetty->urma_tjetty, &cfg,
 				     (urma_import_jetty_ex_cfg_t *)active_tp_cfg, &udrv_data) != 0) {
-		UDMA_LOG_ERR("URMA command import JETTY in export failed.\n");
+		UDMA_LOG_ERR_RL("URMA command import JETTY in export failed.\n");
 		free(tjetty);
 		return NULL;
 	}
@@ -739,7 +739,7 @@ urma_status_t udma_u_bind_jetty_ex(urma_jetty_t *jetty,
 	ret = urma_cmd_bind_jetty_ex(jetty, tjetty,
 				     (urma_bind_jetty_ex_cfg_t *)active_tp_cfg, NULL);
 	if (ret != 0) {
-		UDMA_LOG_ERR("URMA command bind JETTY in export failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command bind JETTY in export failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -758,13 +758,13 @@ urma_status_t udma_u_alloc_jetty(urma_context_t *ctx, urma_jetty_cfg_t *cfg,
 
 	udma_jetty = (struct udma_u_jetty *)calloc(1, sizeof(struct udma_u_jetty));
 	if (udma_jetty == NULL) {
-		UDMA_LOG_ERR("UDMA JETTY allocation failed.\n");
+		UDMA_LOG_ERR_RL("UDMA JETTY allocation failed.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = urma_cmd_alloc_jetty(ctx, cfg, &udma_jetty->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("alloc jetty failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("alloc jetty failed, ret = %d.\n", ret);
 		free(udma_jetty);
 		return URMA_FAIL;
 	}
@@ -782,7 +782,7 @@ urma_status_t udma_u_free_jetty(urma_jetty_t *jetty)
 
 	ret = urma_cmd_free_jetty(jetty, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("free jetty failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("free jetty failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1159,13 +1159,13 @@ urma_status_t udma_u_active_jetty(urma_jetty_t *jetty)
 			udma_jetty->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&udma_jetty->sq, udma_jetty->sq.sqe_bb_cnt * cfg->jfs_cfg.depth,
 			    UDMA_JFS_WQEBB, udma_jetty->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc JETTY SQ after DTU failed.\n");
+				UDMA_LOG_ERR_RL("failed to alloc JETTY SQ after DTU failed.\n");
 				goto err_active_jetty_cmd;
 			}
 			if (exec_jetty_active_cmd(udma_jetty, cfg))
 				goto err_active_jetty_cmd;
 		} else {
-			UDMA_LOG_ERR("failed to create jetty.\n");
+			UDMA_LOG_ERR_RL("failed to create jetty.\n");
 			goto err_active_jetty_cmd;
 		}
 	}
@@ -1195,7 +1195,7 @@ urma_status_t udma_u_deactive_jetty(urma_jetty_t *jetty)
 
 	ret = urma_cmd_deactive_jetty(jetty, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("deactivate JETTY failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("deactivate JETTY failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 

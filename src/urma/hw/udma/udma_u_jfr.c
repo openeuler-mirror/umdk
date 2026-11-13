@@ -63,7 +63,7 @@ static int udma_u_create_rq(struct udma_u_context *udma_ctx,
 
 	if (!udma_u_alloc_queue_buf(rq, wqebb_cnt, UDMA_JFR_WQEBB,
 				   UDMA_HW_PAGE_SIZE, true)) {
-		UDMA_LOG_ERR("failed to alloc JFR work queue entry buffer.\n");
+		UDMA_LOG_ERR_RL("failed to alloc JFR work queue entry buffer.\n");
 		return EINVAL;
 	}
 
@@ -118,13 +118,13 @@ struct udma_u_idx_ring *udma_ring_alloc(uint32_t cap)
 
 	ring = (struct udma_u_idx_ring *)calloc(1, sizeof(*ring));
 	if (!ring) {
-		UDMA_LOG_ERR("failed to calloc idx ring.\n");
+		UDMA_LOG_ERR_RL("failed to calloc idx ring.\n");
 		return NULL;
 	}
 
 	idx = (uint32_t *)calloc(cap, sizeof(*idx));
 	if (!idx) {
-		UDMA_LOG_ERR("failed to calloc idx memory.\n");
+		UDMA_LOG_ERR_RL("failed to calloc idx memory.\n");
 		free(ring);
 		return NULL;
 	}
@@ -204,7 +204,7 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 
 	udma_jfr = (struct udma_u_jfr *)calloc(1, sizeof(*udma_jfr));
 	if (!udma_jfr) {
-		UDMA_LOG_ERR("alloc JFR failed.\n");
+		UDMA_LOG_ERR_RL("alloc JFR failed.\n");
 		return NULL;
 	}
 
@@ -216,12 +216,12 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 		goto err_spin_init;
 
 	if (udma_u_alloc_jfr_idx_que(udma_jfr)) {
-		UDMA_LOG_ERR("failed to create JFR index queue.\n");
+		UDMA_LOG_ERR_RL("failed to create JFR index queue.\n");
 		goto err_alloc_idx;
 	}
 
 	if (udma_u_create_rq(udma_ctx, udma_jfr)) {
-		UDMA_LOG_ERR("failed to create JFR RQE buffer.\n");
+		UDMA_LOG_ERR_RL("failed to create JFR RQE buffer.\n");
 		goto err_create_rq;
 	}
 
@@ -237,7 +237,7 @@ urma_jfr_t *udma_u_create_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg)
 	*udma_jfr->long_sleeptime = false;
 	ret = exec_jfr_create_cmd(ctx, udma_jfr, cfg);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command create JFR failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command create JFR failed, ret = %d.\n", ret);
 		goto err_exec_cmd;
 	}
 
@@ -325,7 +325,7 @@ urma_status_t udma_u_delete_jfr(urma_jfr_t *jfr)
 
 	ret = urma_cmd_delete_jfr(jfr);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command delete JFR failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command delete JFR failed, ret = %d.\n", ret);
 		goto delete_err;
 	}
 	udma_u_free_jfr_detail(jfr);
@@ -357,7 +357,7 @@ urma_status_t udma_u_delete_jfr_batch(urma_jfr_t **jfr, int jfr_cnt, urma_jfr_t 
 
 	ret = urma_cmd_delete_jfr_batch(jfr, jfr_cnt, bad_jfr);
 	if (ret) {
-		UDMA_LOG_ERR("URMA command delete JFR failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("URMA command delete JFR failed, ret = %d.\n", ret);
 		goto delete_err;
 	}
 
@@ -433,7 +433,7 @@ urma_status_t udma_u_unimport_jfr(urma_target_jetty_t *target_jfr)
 	struct udma_u_target_jetty *tjfr = to_udma_u_target_jetty(target_jfr);
 
 	if (urma_cmd_unimport_jfr(target_jfr)) {
-		UDMA_LOG_ERR("unimport JFR failed.\n");
+		UDMA_LOG_ERR_RL("unimport JFR failed.\n");
 		return URMA_FAIL;
 	}
 
@@ -569,7 +569,7 @@ urma_target_jetty_t *udma_u_import_jfr_ex(urma_context_t *ctx,
 
 	tjfr = (struct udma_u_target_jetty *)calloc(1, sizeof(*tjfr));
 	if (tjfr == NULL) {
-		UDMA_LOG_ERR("failed to alloc target JFR in exp process.\n");
+		UDMA_LOG_ERR_RL("failed to alloc target JFR in exp process.\n");
 		return NULL;
 	}
 
@@ -585,7 +585,7 @@ urma_target_jetty_t *udma_u_import_jfr_ex(urma_context_t *ctx,
 
 	if (urma_cmd_import_jfr_ex(ctx, &tjfr->urma_tjetty,
 				   &cfg, (urma_import_jfr_ex_cfg_t *)active_tp_cfg, NULL) != 0) {
-		UDMA_LOG_ERR("ubcore export import JFR failed.\n");
+		UDMA_LOG_ERR_RL("ubcore export import JFR failed.\n");
 		free(tjfr);
 		return NULL;
 	}
@@ -633,13 +633,13 @@ urma_status_t udma_u_alloc_jfr(urma_context_t *ctx, urma_jfr_cfg_t *cfg, urma_jf
 
 	udma_jfr = (struct udma_u_jfr *)calloc(1, sizeof(*udma_jfr));
 	if (!udma_jfr) {
-		UDMA_LOG_ERR("calloc JFR is NULL.\n");
+		UDMA_LOG_ERR_RL("calloc JFR is NULL.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = urma_cmd_alloc_jfr(ctx, cfg, &udma_jfr->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("urma cmd alloc JFR failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("urma cmd alloc JFR failed, ret = %d.\n", ret);
 		free(udma_jfr);
 		udma_jfr = NULL;
 		return URMA_FAIL;
@@ -655,7 +655,7 @@ urma_status_t udma_u_free_jfr(urma_jfr_t *jfr)
 	urma_cmd_udrv_priv_t udata = {};
 
 	if (urma_cmd_free_jfr(jfr, &udata)) {
-		UDMA_LOG_ERR("failed to free user JFR.\n");
+		UDMA_LOG_ERR_RL("failed to free user JFR.\n");
 		return URMA_FAIL;
 	}
 
@@ -681,25 +681,25 @@ urma_status_t udma_u_active_jfr(urma_jfr_t *jfr)
 		return URMA_FAIL;
 
 	if (udma_u_alloc_jfr_idx_que(udma_jfr)) {
-		UDMA_LOG_ERR("failed to alloc JFR index queue.\n");
+		UDMA_LOG_ERR_RL("failed to alloc JFR index queue.\n");
 		goto err_alloc_idx;
 	}
 
 	if (udma_u_create_rq(udma_ctx, udma_jfr)) {
-		UDMA_LOG_ERR("failed to create JFR RQE buffer.\n");
+		UDMA_LOG_ERR_RL("failed to create JFR RQE buffer.\n");
 		goto err_create_rq;
 	}
 
 	if (!udma_jfr->swdb_cstm) {
 		udma_jfr->sw_db = (uint32_t *)udma_u_alloc_sw_db(udma_ctx, UDMA_JFR_TYPE_DB);
 		if (!udma_jfr->sw_db) {
-			UDMA_LOG_ERR("failed to alloc SW DB.\n");
+			UDMA_LOG_ERR_RL("failed to alloc SW DB.\n");
 			goto err_alloc_sw_db;
 		}
 
 		udma_jfr->long_sleeptime = (bool *)udma_u_alloc_sw_db(udma_ctx, UDMA_JFR_PAYLOAD);
 		if (!udma_jfr->long_sleeptime) {
-			UDMA_LOG_ERR("failed to alloc SW DB for payload.\n");
+			UDMA_LOG_ERR_RL("failed to alloc SW DB for payload.\n");
 			goto err_alloc_jfr_sleep_buf;
 		}
 		*udma_jfr->long_sleeptime = false;
@@ -707,7 +707,7 @@ urma_status_t udma_u_active_jfr(urma_jfr_t *jfr)
 
 	ret = udma_u_active_jfr_cmd(udma_jfr);
 	if (ret) {
-		UDMA_LOG_ERR("failed to activate JFR command, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("failed to activate JFR command, ret = %d.\n", ret);
 		goto err_active_cmd;
 	}
 
@@ -930,7 +930,7 @@ urma_status_t udma_u_deactive_jfr(urma_jfr_t *jfr)
 
 	ret = urma_cmd_deactive_jfr(jfr, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("failed to deactivate JFR, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("failed to deactivate JFR, ret = %d.\n", ret);
 		udma_u_jfr_table_remove(udma_ctx, udma_jfr);
 		return URMA_FAIL;
 	}

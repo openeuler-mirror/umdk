@@ -99,7 +99,7 @@ int udma_u_set_sq_by_resp(struct udma_u_jetty_queue *sq,
 		return 0;
 
 	if (resp->buf_addr == 0) {
-		UDMA_LOG_ERR("failed to get reserved address.\n");
+		UDMA_LOG_ERR_RL("failed to get reserved address.\n");
 		return EINVAL;
 	}
 
@@ -135,7 +135,7 @@ static int udma_u_exec_jfs_active_cmd(struct udma_u_jfs *jfs, urma_jfs_cfg_t *cf
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_active_jfs(&jfs->base, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to URMA command active JFS, ret is %d.\n", ret);
+		UDMA_LOG_ERR_RL("failed to URMA command active JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -175,7 +175,7 @@ int udma_u_exec_jfs_create_cmd(urma_context_t *ctx, struct udma_u_jfs *jfs,
 	udma_u_set_udata(&udata, &cmd, (uint32_t)sizeof(cmd), &resp, (uint32_t)sizeof(resp));
 	ret = urma_cmd_create_jfs(ctx, &jfs->base, cfg, &udata);
 	if (ret != 0) {
-		UDMA_LOG_ERR("failed to URMA command create JFS, ret is %d.\n", ret);
+		UDMA_LOG_ERR_RL("failed to URMA command create JFS, ret is %d.\n", ret);
 		return ret;
 	}
 
@@ -194,8 +194,10 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	struct udma_u_context *ctx = sq->ctx;
 	uint32_t jetty_depth = cfg->depth;
 	uint32_t aligned_size;
+	uint32_t sqe_ctl_len;
 	uint32_t sqe_bb_cnt;
 	bool is_ccu_jetty;
+	bool is_ucp_jetty;
 
 	if (cfg->priority >= UDMA_MAX_PRIORITY) {
 		UDMA_LOG_ERR("user mode JFS priority is out of range, priority is %u.\n",
@@ -212,12 +214,17 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	udma_u_init_sq_param(sq, cfg);
 
 	if (urma_query_device(ctx->urma_ctx.dev, &dev_attr_copy)) {
-		UDMA_LOG_ERR("JFS cannot query urma device attr.\n");
+		UDMA_LOG_ERR_RL("JFS cannot query urma device attr.\n");
 		goto err_get_tp_type;
 	}
 	sq->bind_tp_type = dev_attr_copy.dev_cap.priority_info[cfg->priority].tp_type;
 
-	sqe_bb_cnt = sq_cal_wqebb_num(SQE_WRITE_NOTIFY_CTL_LEN,
+	is_ucp_jetty = sq->db.id > 0 && ctx->ucp_jetty_max_cnt &&
+		       sq->db.id >= ctx->ucp_jetty_start_id &&
+		       sq->db.id < ctx->ucp_jetty_start_id + ctx->ucp_jetty_max_cnt;
+
+	sqe_ctl_len = is_ucp_jetty ? SQE_NORMAL_CTL_LEN : SQE_WRITE_NOTIFY_CTL_LEN;
+	sqe_bb_cnt = sq_cal_wqebb_num(sqe_ctl_len,
 				      get_max_sge_num(cfg->max_sge, sq->max_inline_size),
 				      UDMA_JFS_WQEBB);
 	if (sqe_bb_cnt > MAX_SQE_BB_NUM)
@@ -232,15 +239,19 @@ int udma_u_create_sq(struct udma_u_jetty_queue *sq, urma_jfs_cfg_t *cfg)
 	}
 	sq->max_sge_num = cfg->max_sge;
 
-	is_ccu_jetty = ctx->ccu_jetty_max_cnt &&
+	is_ccu_jetty = sq->db.id > 0 && ctx->ccu_jetty_max_cnt &&
 		       sq->db.id >= ctx->ccu_jetty_start_id &&
 		       sq->db.id < ctx->ccu_jetty_start_id + ctx->ccu_jetty_max_cnt;
-	aligned_size = is_ccu_jetty ?
-		(UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB) : UDMA_HW_PAGE_SIZE;
+	if (is_ccu_jetty)
+		aligned_size = UDMA_MIN_CCU_WQEBB_CNT * UDMA_JFS_WQEBB;
+	else if (is_ucp_jetty)
+		aligned_size = UDMA_JFS_WQEBB;
+	else
+		aligned_size = UDMA_HW_PAGE_SIZE;
 	sq->aligned_size = aligned_size;
 	if (!udma_u_alloc_queue_buf(sq, sq->sqe_bb_cnt * jetty_depth,
 				    UDMA_JFS_WQEBB, aligned_size, true)) {
-		UDMA_LOG_ERR("failed to alloc JFS work queue entry buffer.\n");
+		UDMA_LOG_ERR_RL("failed to alloc JFS work queue entry buffer.\n");
 		goto err_alloc_buf;
 	}
 
@@ -275,7 +286,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 
 	jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
 	if (jfs == NULL) {
-		UDMA_LOG_ERR("memory allocation failed.\n");
+		UDMA_LOG_ERR_RL("memory allocation failed.\n");
 		return NULL;
 	}
 
@@ -283,7 +294,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 	jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	jfs->sq.dtu_en = udma_ctx->dtu_enable;
 	if (udma_u_create_sq(&jfs->sq, cfg)) {
-		UDMA_LOG_ERR("failed to create SQ.\n");
+		UDMA_LOG_ERR_RL("failed to create SQ.\n");
 		goto err_create_sq;
 	}
 
@@ -293,7 +304,7 @@ urma_jfs_t *udma_u_create_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg)
 			jfs->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&jfs->sq, jfs->sq.sqe_bb_cnt * cfg->depth,
 			    UDMA_JFS_WQEBB, jfs->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
+				UDMA_LOG_ERR_RL("failed to alloc SQ buffer after DTU failed.\n");
 				goto err_exec_cmd;
 			}
 			if (udma_u_exec_jfs_create_cmd(ctx, jfs, cfg))
@@ -989,8 +1000,15 @@ static urma_status_t udma_set_sqe(struct udma_jfs_sqe_ctl *wqe_ctl,
 		tjetty = wr->tjetty;
 
 	if (!(sq->bind_tp_type.value & (1U << tjetty->tp_type))) {
-		UDMA_LOG_ERR("tp_type unmatched. tp_type: %u; bind_tp_type: %u.\n",
-			     tjetty->tp_type, sq->bind_tp_type.value);
+		UDMA_LOG_ERR("tp_type unmatched. tp_type:%u(%s%s%s ); bind_tp_type:0x%x(%s%s%s).\n",
+			     (uint32_t)tjetty->tp_type,
+			     tjetty->tp_type == URMA_RTP ? " rtp" : "",
+			     tjetty->tp_type == URMA_CTP ? " ctp" : "",
+			     tjetty->tp_type == URMA_UTP ? " utp" : "",
+			     sq->bind_tp_type.value,
+			     sq->bind_tp_type.bs.rtp ? " rtp" : "",
+			     sq->bind_tp_type.bs.ctp ? " ctp" : "",
+			     sq->bind_tp_type.bs.utp ? " utp" : "");
 		return URMA_EINVAL;
 	}
 
@@ -1299,13 +1317,13 @@ urma_status_t udma_u_alloc_jfs(urma_context_t *ctx, urma_jfs_cfg_t *cfg,
 
 	udma_jfs = (struct udma_u_jfs *)calloc(1, sizeof(struct udma_u_jfs));
 	if (udma_jfs == NULL) {
-		UDMA_LOG_ERR("UDMA JFS allocation failed.\n");
+		UDMA_LOG_ERR_RL("UDMA JFS allocation failed.\n");
 		return URMA_ENOMEM;
 	}
 
 	ret = urma_cmd_alloc_jfs(ctx, cfg, &udma_jfs->base, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("alloc JFS failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("alloc JFS failed, ret = %d.\n", ret);
 		free(udma_jfs);
 		return URMA_FAIL;
 	}
@@ -1323,7 +1341,7 @@ urma_status_t udma_u_free_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_free_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("free JFS failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("free JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 
@@ -1407,7 +1425,7 @@ static int udma_u_active_jfs_prepare(urma_jfs_t *jfs, urma_jfs_cfg_t *cfg)
 	udma_jfs->sq.sq_reserved = udma_ctx->sq_reserved;
 	ret = udma_u_create_sq(&udma_jfs->sq, cfg);
 	if (ret)
-		UDMA_LOG_ERR("failed to create SQ, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("failed to create SQ, ret = %d.\n", ret);
 
 	return ret;
 }
@@ -1444,11 +1462,11 @@ urma_status_t udma_u_active_jfs(urma_jfs_t *jfs)
 	udma_jfs->jfs_type = UDMA_URMA_EX_JETTY_TYPE;
 	ret = udma_u_exec_jfs_active_cmd(udma_jfs, cfg);
 	if (ret) {
-		if(udma_jfs->sq.dtu_en) {
+		if (udma_jfs->sq.dtu_en) {
 			udma_jfs->sq.dtu_en = false;
 			if (!udma_u_alloc_queue_buf(&udma_jfs->sq, udma_jfs->sq.sqe_bb_cnt * cfg->depth,
 			    UDMA_JFS_WQEBB, udma_jfs->sq.aligned_size, true)) {
-				UDMA_LOG_ERR("failed to alloc SQ buffer after DTU failed.\n");
+				UDMA_LOG_ERR_RL("failed to alloc SQ buffer after DTU failed.\n");
 				goto err_active_jfs_cmd;
 			}
 			if (udma_u_exec_jfs_active_cmd(udma_jfs, cfg))
@@ -1478,7 +1496,7 @@ urma_status_t udma_u_deactive_jfs(urma_jfs_t *jfs)
 
 	ret = urma_cmd_deactive_jfs(jfs, &udata);
 	if (ret) {
-		UDMA_LOG_ERR("deactivate JFS failed, ret = %d.\n", ret);
+		UDMA_LOG_ERR_RL("deactivate JFS failed, ret = %d.\n", ret);
 		return URMA_FAIL;
 	}
 

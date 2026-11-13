@@ -29,7 +29,7 @@ static uint64_t *udma_bitmap_alloc(uint32_t n_bits, uint32_t *bitmap_cnt)
 	*bitmap_cnt = align(n_bits, UDMA_BITS_PER_LONG) / UDMA_BITS_PER_LONG;
 	bitmap = (uint64_t *)calloc(*bitmap_cnt, sizeof(uint64_t));
 	if (!bitmap) {
-		UDMA_LOG_ERR("failed to calloc bitmap!\n");
+		UDMA_LOG_ERR_RL("failed to calloc bitmap!\n");
 		return NULL;
 	}
 
@@ -81,7 +81,7 @@ static struct udma_u_db_page *udma_add_db_page(struct udma_u_context *ctx,
 	page_size = ctx->page_size;
 	db_page = (struct udma_u_db_page *)calloc(1, sizeof(*db_page));
 	if (!db_page) {
-		UDMA_LOG_ERR("failed to calloc SW DB page!\n");
+		UDMA_LOG_ERR_RL("failed to calloc SW DB page!\n");
 		return NULL;
 	}
 
@@ -205,7 +205,7 @@ int udma_u_alloc_db(struct urma_context *urma_ctx, struct udma_u_doorbell *db)
 	db->addr = mmap(NULL, udma_u_ctx->page_size, PROT_READ | PROT_WRITE,
 			MAP_SHARED, urma_ctx->dev_fd, offset);
 	if (db->addr == MAP_FAILED) {
-		UDMA_LOG_ERR("failed to mmap doorbell page, id = %u, type = %u.\n",
+		UDMA_LOG_ERR_RL("failed to mmap doorbell page, id = %u, type = %u.\n",
 			     db->id, db->type);
 		return EINVAL;
 	}
