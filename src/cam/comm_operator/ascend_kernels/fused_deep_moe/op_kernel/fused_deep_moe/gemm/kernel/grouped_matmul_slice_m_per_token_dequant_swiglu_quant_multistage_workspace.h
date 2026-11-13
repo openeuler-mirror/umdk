@@ -634,16 +634,6 @@ public:
         AscendC::WaitFlag<AscendC::HardEvent::FIX_S>(FIRST_EXPERT_FIX_S_EVENT);
         // Slot 0 is this core's own: it is published like the rest, but nobody else polls it.
         int32_t sum = FlushAndGetValue<int32_t>(gmOut, 0);
-        // Pick the token count up here rather than after the loop, so this cube has nothing left to
-        // read between the fold and its own first group-0 block. A nonzero sum is enough: RecvCount
-        // drains the record copies on MTE3 before it raises any prefix flag, and no core raises its
-        // group-0 flag until it has consumed that prefix -- so one flag of any core already implies
-        // the whole record region is visible. On the usual path this lands in a round that was going
-        // to spin anyway, and the read is free.
-        if (!firstExpertCountValid && sum != 0) {
-            firstExpertTokenCount = FirstExpertTokenCount(0);
-            firstExpertCountValid = true;
-        }
         // Retire the FIX_M side before the loop head, where the next round's Mmad overwrites L0C.
         AscendC::WaitFlag<AscendC::HardEvent::FIX_M>(FIRST_EXPERT_FIX_M_EVENT);
         return sum == target;
@@ -705,13 +695,8 @@ public:
                 FirstExpertSpin();
             }
         }
-        // The loop only exits on a sum equal to the target, which is nonzero, so the hoist above has
-        // fired by now. Kept as a fallback so a future change to the flag encoding cannot silently
-        // leave this cube computing group 0 with a zero row count.
-        if (!firstExpertCountValid) {
-            firstExpertTokenCount = FirstExpertTokenCount(0);
-            firstExpertCountValid = true;
-        }
+        // Read the token count only after all notifications have arrived.
+        firstExpertTokenCount = FirstExpertTokenCount(0);
     }
 
     // Wait for the folded byte sum to appear on this core's own slot. The plain spin is enough here:
@@ -2695,10 +2680,8 @@ private:
     int32_t ownPrefixTotal{0};
     // Group 0 skips the shared atomic-add record and goes through the private-slot fold instead.
     bool useFirstExpertPrivate{false};
-    // Group 0's token count on the folding cube, picked up while it was already spinning so that it has
-    // nothing left to read between the fold and its own first block of group 0.
+    // Group 0's token count on the folding cube, read after the notification wait.
     uint32_t firstExpertTokenCount{0};
-    bool firstExpertCountValid{false};
     // Reserved workspace, used by the receive-side prefix publish.
     GM_ADDR gmReserved_{nullptr};
 };
