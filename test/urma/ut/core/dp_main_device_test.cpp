@@ -224,6 +224,7 @@ TEST(UrmaCoreTest, MainApisValidateProviderContextAndDeviceContracts)
 
     fixture.dev.ops = &provider;
     provider.name = "core_ut_provider";
+    EXPECT_EQ(0, urma_register_provider_ops(&provider));
     EXPECT_EQ(nullptr, urma_create_context(&fixture.dev, 0));
     fixture.sysfsDev.flag = URMA_SYSFS_DEV_FLAG_DRIVER_CREATED;
     provider.create_context = MockProviderCreateContext;
@@ -271,8 +272,10 @@ TEST(UrmaCoreTest, MainCreateContextReadsEidAndOpensLocalCdev)
     ASSERT_TRUE(sysfs.WriteFile("mock_cdev", "not a real device\n"));
     ASSERT_EQ(0, urma_str_to_eid("192.168.30.1", &expectedEid));
 
+    provider.name = "core_ut_provider";
     provider.create_context = MockProviderCreateContext;
     provider.delete_context = MockProviderDeleteContext;
+    EXPECT_EQ(0, urma_register_provider_ops(&provider));
     fixture.dev.ops = &provider;
     fixture.sysfsDev.flag = 0;
     fixture.sysfsDev.dev_attr.dev_cap.max_eid_cnt = 1;
@@ -290,6 +293,7 @@ TEST(UrmaCoreTest, MainCreateContextReadsEidAndOpensLocalCdev)
     provider.create_context = MockProviderCreateContextNull;
     ctx = urma_create_context(&fixture.dev, 0);
     EXPECT_EQ(nullptr, ctx);
+    EXPECT_EQ(0, urma_unregister_provider_ops(&provider));
 }
 
 TEST(UrmaCoreTest, MainProviderLoaderUsesLocalDlopenMocks)
