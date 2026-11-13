@@ -44,6 +44,7 @@
                 - [2.2.2.1.3 urma_get_device_by_name](#22213-urma_get_device_by_name)
                 - [2.2.2.1.4 urma_get_device_by_eid](#22214-urma_get_device_by_eid)
                 - [2.2.2.1.5 urma_query_device](#22215-urma_query_device)
+                - [2.2.2.1.6 urma_get_cached_device_attr](#22216-urma_get_cached_device_attr)
             - [2.2.2.2 eid](#2222-eid)
                 - [2.2.2.2.1 urma_get_eid_list](#22221-urma_get_eid_list)
                 - [2.2.2.2.2 urma_free_eid_list](#22222-urma_free_eid_list)
@@ -1282,7 +1283,7 @@ typedef struct urma_sysfs_dev {
     uint16_t device_id;
     uint16_t vendor_id;
     struct ub_list node; /* Add to device list */
-    uint32_t flag;
+    uint32_t flag; /* URMA_SYSFS_DEV_FLAG_* 标志位按位或，宏定义见 urma_provider.h */
     struct timespec time_created;
 } urma_sysfs_dev_t;
 ```
@@ -1695,6 +1696,41 @@ typedef enum urma_speed {
     URMA_SP_800G,
 } urma_speed_t;
 ```
+
+##### 2.2.2.1.6 urma_get_cached_device_attr
+
+1.  头文件
+
+#include "urma_provider.h"
+
+2.  原型
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_cached_device_attr(const [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, const [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) **dev_attr);
+
+定义文件: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
+
+3.  描述
+
+获取设备属性缓存的只读视图，不执行设备查询或 ioctl。该接口仅面向 provider，用于在创建对象等控制路径中快速读取稳定的设备能力字段。
+
+4.  约束
+
+- `dev_attr` 为输出参数，用于返回设备内部缓存的借用指针。成功返回后，调用方必须将 `*dev_attr` 及其指向的所有属性视为只读。
+- 调用方不得通过强制类型转换去除 `const` 限定并修改返回内容。修改会影响核心和所有 provider 共享的设备缓存，并可能破坏设备状态。
+- 返回指针不得释放、重新分配，其生命周期不得超过 `dev` 的生命周期。设备被移除或 `urma_uninit()` 完成后，该指针立即失效。
+- 本接口不刷新缓存。返回内容为最近一次成功设备查询后的快照，可能不代表当前运行状态。
+- 允许多个调用方并发读取，但不得与同一设备的 `urma_query_device()`、设备移除或反初始化并发使用。
+- 调用方应仅读取稳定的 capability 字段。运行期可能变化的端口字段应通过 `urma_query_device()` 获取。
+
+5.  参数
+
+@param[in] [Required] dev: urma device;
+
+@param[out] [Required] dev_attr: 只读的缓存设备属性；失败时置为 NULL;
+
+6.  返回值
+
+Return: URMA_SUCCESS on success, URMA_EINVAL for invalid parameters, or URMA_FAIL if the cached attributes have not been initialized.
 
 #### 2.2.2.2 eid
 

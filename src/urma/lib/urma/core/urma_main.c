@@ -470,6 +470,30 @@ urma_status_t urma_query_device(urma_device_t *dev, urma_device_attr_t *dev_attr
     return URMA_SUCCESS;
 }
 
+urma_status_t urma_get_cached_device_attr(const urma_device_t *dev, const urma_device_attr_t **dev_attr)
+{
+    if (dev_attr == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        errno = EINVAL;
+        return URMA_EINVAL;
+    }
+
+    *dev_attr = NULL;
+    if (dev == NULL || dev->sysfs_dev == NULL) {
+        URMA_LOG_ERR("Invalid parameter.\n");
+        errno = EINVAL;
+        return URMA_EINVAL;
+    }
+
+    if ((dev->sysfs_dev->flag & URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID) == 0) {
+        URMA_LOG_ERR("Cached device attributes are not initialized, dev_name=%s.\n", dev->name);
+        return URMA_FAIL;
+    }
+
+    *dev_attr = &dev->sysfs_dev->dev_attr;
+    return URMA_SUCCESS;
+}
+
 urma_device_t *urma_get_device_by_name(char *dev_name)
 {
     if (dev_name == NULL || strnlen(dev_name, URMA_MAX_NAME) >= URMA_MAX_NAME) {
