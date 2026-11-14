@@ -46,7 +46,7 @@ typedef struct urma_sysfs_dev {
     uint16_t device_id;
     uint16_t vendor_id;
     struct ub_list node; /* Add to device list */
-    uint32_t flag;
+    uint32_t flag; /* bitwise OR of URMA_SYSFS_DEV_FLAG_* defined in urma_provider.h */
     struct timespec time_created;
 } urma_sysfs_dev_t;
 

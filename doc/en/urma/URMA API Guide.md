@@ -42,6 +42,7 @@
                 - [2.2.2.1.3 urma_get_device_by_name](#22213-urma_get_device_by_name)
                 - [2.2.2.1.4 urma_get_device_by_eid](#22214-urma_get_device_by_eid)
                 - [2.2.2.1.5 urma_query_device](#22215-urma_query_device)
+                - [2.2.2.1.6 urma_get_cached_device_attr](#22216-urma_get_cached_device_attr)
             - [2.2.2.2 eid](#2222-eid)
                 - [2.2.2.2.1 urma_get_eid_list](#22221-urma_get_eid_list)
                 - [2.2.2.2.2 urma_free_eid_list](#22222-urma_free_eid_list)
@@ -1281,7 +1282,7 @@ typedef struct urma_sysfs_dev {
     uint16_t device_id;
     uint16_t vendor_id;
     struct ub_list node; /* Add to device list */
-    uint32_t flag;
+    uint32_t flag; /* bitwise OR of URMA_SYSFS_DEV_FLAG_* defined in urma_provider.h */
     struct timespec time_created;
 } urma_sysfs_dev_t;
 \`\`\`
@@ -1694,6 +1695,41 @@ typedef enum urma_speed {
     URMA_SP_800G,
 } urma_speed_t;
 \`\`\`
+
+##### 2.2.2.1.6 urma_get_cached_device_attr
+
+1. Header File
+
+#include "urma_provider.h"
+
+2. Prototype
+
+[3.2.1.1.2](#22112-urma_status_t) [urma_status_t](#22112-urma_status_t) urma_get_cached_device_attr(const [urma_device_t](#_ZH-CN_TOPIC_0000002521872497-chtext) *dev, const [urma_device_attr_t](#_ZH-CN_TOPIC_0000002521872503-chtext) **dev_attr);
+
+Definition file: [urma_provider.h](../../../src/urma/lib/urma/core/include/urma_provider.h)
+
+3. Description
+
+Get a read-only view of the cached device attributes without triggering a device query or ioctl. This provider-private fast path is intended for control paths that only need stable device capability fields when creating objects.
+
+4. Constraints
+
+- `dev_attr` is an output parameter used to return a borrowed pointer to the device's internal cache. On success, the caller must treat `*dev_attr` and all attributes reachable from it as read-only.
+- The caller must not cast away the `const` qualifier and modify the returned attributes. Such modification changes the cache shared by the core and all providers and may corrupt device state.
+- The returned pointer must not be released, reallocated, or retained beyond the lifetime of `dev`. Its lifetime must not exceed the device lifetime and ends when the device is removed or after `urma_uninit()` completes.
+- The interface does not refresh the cache. The returned content is a snapshot from the last successful device query and may not reflect the current runtime state.
+- Concurrent reads are allowed. The returned pointer must not be used concurrently with `urma_query_device()` on the same device or with device removal and uninitialization.
+- Only stable capability fields should be consumed. Runtime-changing port fields should be obtained through `urma_query_device()`.
+
+5. Parameters
+
+@param[in] [Required] dev: urma device;
+
+@param[out] [Required] dev_attr: read-only cached device attributes; set to NULL on failure;
+
+6. Return Value
+
+Return: URMA_SUCCESS on success, URMA_EINVAL for invalid parameters, or URMA_FAIL if the cached attributes have not been initialized.
 
 #### 2.2.2.2 eid
 
