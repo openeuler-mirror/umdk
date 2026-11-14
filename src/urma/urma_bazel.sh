@@ -444,7 +444,7 @@ extract_cmake_version()
     version=$(
         sed -n \
             -e 's/^[[:space:]]*VERSION[[:space:]]*\([0-9][0-9.]*\).*/\1/p' \
-            -e 's/^[[:space:]]*set[[:space:]]*([[:space:]]*PROJECT_VERSION[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' \
+            -e 's/^[[:space:]]*set[[:space:]]*([[:space:]]*\(PROJECT_VERSION\|URMA_ABI_VERSION\)[[:space:]]*"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\2/p' \
             "${file}" | head -n 1
     )
     if [ -n "${version}" ]; then

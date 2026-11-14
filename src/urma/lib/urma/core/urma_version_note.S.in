@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: MIT */
+/* ELF note: owner URMA, type 1.
+ * Descriptor: native-endian uint64_t api_version, then uint64_t abi_version.
+ */
+.section .note.urma.version, "a", %note
+.balign 4
+.long 5
+.long 16
+.long 1
+.asciz "URMA"
+.balign 4
+.quad @URMA_API_VERSION_CODE@
+.quad @URMA_ABI_VERSION_CODE@
+.balign 4
+
+.section .note.GNU-stack, "", %progbits

@@ -40,6 +40,7 @@ def urma_shared_library(
         linkopts = [],
         dynamic_lib_names = [],
         extra_link_dirs = None,
+        additional_linker_inputs = [],
         soname = None,
         visibility = None):
     """Emit ``{name}_internal``, ``{name}`` (.so), and ``{name}_linklib``."""
@@ -81,7 +82,7 @@ def urma_shared_library(
         name = name,
         linkshared = True,
         deps = [":" + internal],
-        additional_linker_inputs = shared_inputs,
+        additional_linker_inputs = shared_inputs + additional_linker_inputs,
         linkopts = shared_linkopts,
         visibility = vis,
     )

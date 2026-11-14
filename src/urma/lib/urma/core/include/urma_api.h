@@ -1218,6 +1218,12 @@ urma_status_t urma_get_smac(const urma_context_t *ctx, uint8_t *mac);
  */
 urma_status_t urma_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
 
+/**
+ * get abi version
+ * Return: current URMA_ABI_VERSION (major<<32 | minor<<16 | patch)
+ */
+uint64_t urma_get_abi_version(void);
+
 #ifdef __cplusplus
  }
 #endif
