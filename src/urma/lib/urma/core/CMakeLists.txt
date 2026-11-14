@@ -37,11 +37,13 @@ target_include_directories(urma
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include
 )
 target_include_directories(urma_static
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include
 )
 
 target_link_libraries(urma urma_common -ldl -lrt)
@@ -65,3 +67,10 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/urma_perf.h
     DESTINATION /usr/include/ub/umdk/urma
 )
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    install(FILES
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include/urma_du_hw.h
+        DESTINATION /usr/include/ub/umdk/urma
+    )
+endif()
