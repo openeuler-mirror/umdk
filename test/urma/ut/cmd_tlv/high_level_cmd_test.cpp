@@ -71,9 +71,11 @@ TEST(UrmaCmdTlvTest, HighLevelMiscCommandWrappersEmitExpectedHeaders)
     ExpectCapturedHeader(static_cast<unsigned long>(URMA_CMD), URMA_CMD_MODIFY_TP);
 
     std::strncpy(sysfsDev.dev_name, "mock_ub", sizeof(sysfsDev.dev_name) - 1);
+    EXPECT_EQ(0U, sysfsDev.flag & URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID);
     ResetIoctlCapture();
     EXPECT_EQ(0, urma_cmd_query_device_attr(urma_test::MOCK_IOCTL_FD, &sysfsDev));
     ExpectCapturedHeader(static_cast<unsigned long>(URMA_CMD), URMA_CMD_QUERY_DEV_ATTR);
+    EXPECT_NE(0U, sysfsDev.flag & URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID);
 
     netAddr.sin_family = AF_INET;
     ResetIoctlCapture();

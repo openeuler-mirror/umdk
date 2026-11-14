@@ -20,6 +20,7 @@ extern "C" {
 #endif
 
 #define URMA_SYSFS_DEV_FLAG_DRIVER_CREATED (0x1)
+#define URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID (0x2)
 #define URMA_CFG_MASK 0
 
 typedef enum {
@@ -421,6 +422,23 @@ int urma_cmd_get_eid_by_ip(const urma_context_t *ctx, const urma_net_addr_t *net
 int urma_cmd_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *eid, urma_net_addr_t *net_addr);
 int urma_cmd_get_smac(const urma_context_t *ctx, uint8_t *mac);
 int urma_cmd_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *net_addr, uint8_t *mac);
+
+/**
+ * Get cached device attributes without triggering a device query.
+ * This interface is intended for provider control paths that only need stable
+ * capability fields while creating objects. It performs no I/O or allocation.
+ * The returned attributes are a borrowed read-only view of the internal cache.
+ * Callers must not cast away const or modify any field; doing so may corrupt
+ * device state shared by the core and providers.
+ * The returned pointer must not outlive dev and becomes invalid when the device
+ * is removed or after urma_uninit() completes. It must not be used concurrently
+ * with urma_query_device() on the same device. Concurrent reads are allowed.
+ * @param[in] dev: urma device.
+ * @param[out] dev_attr: borrowed read-only cached device attributes; set to NULL on failure.
+ * Return: URMA_SUCCESS on success, URMA_EINVAL for invalid parameters, or
+ * URMA_FAIL if the cached attributes have not been initialized.
+ */
+urma_status_t urma_get_cached_device_attr(const urma_device_t *dev, const urma_device_attr_t **dev_attr);
 
 #ifdef __cplusplus
 }

@@ -2777,6 +2777,7 @@ int urma_cmd_query_device_attr(int dev_fd, struct urma_sysfs_dev *sysfs_dev)
 
     urma_device_attr_t *dev_attr = &sysfs_dev->dev_attr;
     (void)memcpy(dev_attr, &arg.out.attr, sizeof(urma_device_attr_t));
+    sysfs_dev->flag |= URMA_SYSFS_DEV_FLAG_DEV_ATTR_VALID;
 
     return 0;
 }
