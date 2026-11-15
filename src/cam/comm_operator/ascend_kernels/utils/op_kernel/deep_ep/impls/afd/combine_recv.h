@@ -5,6 +5,15 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * Original Source: https://github.com/deepseek-ai/DeepEP-Ascend @ 3b25377d
+ * Upstream file: deep_ep/include/deep_ep/impls/ep/combine_reduce_epilogue.hpp
+ * Proposed upstream notice (DeepEP-Ascend PR #25):
+ * Copyright (c) 2025 DeepSeek
+ * AFD source: puxiaokun3721/DeepEP-Ascend @ 19fe6b7
+ * AFD file: deep_ep/include/deep_ep/impls/afd/combine_recv.hpp
+ * CAM modifications: Gathered returned routes by token and
+ * applied route weights in the AFD epilogue.
  */
 #pragma once
 #include <deep_ep/impls/afd/dispatch_send.h>

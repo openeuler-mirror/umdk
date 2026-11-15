@@ -5,6 +5,12 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * AFD source: puxiaokun3721/DeepEP-Ascend @ 19fe6b7
+ * AFD file: deep_ep/include/deep_ep/layout/afd/context.hpp
+ * CAM modifications: Integrated the per-lane address tables and
+ * round control records for the AFD wire ABI; see the upstream
+ * baseline noted below.
  */
 #pragma once
 #include <cstdint>
@@ -22,6 +28,8 @@ constexpr __aicore__ __forceinline__ uint64_t align512(uint64_t n)
     return (n + 511) / 512 * 512;
 }
 constexpr uint32_t kAbiVersion = 2;
+constexpr uint32_t kSharedCommRounds = 0;
+constexpr uint32_t kLocalCommRounds = 1;
 // Current implementation-family bound per lane/physical slot, never a DP aggregate bound.
 constexpr uint32_t kMaxLaneTokens = 32768;
 enum ReturnProgressMode : uint32_t {
@@ -45,7 +53,8 @@ struct alignas(kNumUbAlignmentBytes) AFDControlBlock {
 struct alignas(kNumUbAlignmentBytes) AFDTaskInfo {
     uint32_t abi_version, src_rank_idx, payload_slot_idx, microbatch_idx;
     // num_tokens: this transaction logical row extent B_m, including masked-out rows.
-    // num_comm_rounds: common DP J_DP=max(1,max_m ceil(B_m/C_m)); exhausted members publish zeros.
+    // In shared mode, the DP uses a common round count and exhausted members publish zeros.
+    // In local mode, num_comm_rounds is this member's count, and reserved[0] is the mode.
     uint32_t layer_idx, num_tokens, num_comm_rounds, reserved[9];
 };
 struct alignas(kNumUbAlignmentBytes) AFDInbox {
@@ -88,7 +97,7 @@ struct alignas(kNumUbAlignmentBytes) AFDContextLayout {
     uint32_t num_layers, src_rank_idx, num_slots, return_progress_mode;
     // Endpoint-group channel stride: 0 = legacy single-endpoint table; N = N channels
     // per non-self peer (one local endpoint per (group, AIV)); table index = peer_base + aiv.
-    uint32_t channel_stride, reserved_pad0;
+    uint32_t channel_stride, comm_round_mode;
     uint64_t lanes_offset, peers_offset, addresses_offset, layers_offset;
     uint64_t context_bytes, payload_bytes, control_bytes, reserved_address;
     AFDWorkspace workspace;
@@ -100,6 +109,7 @@ static_assert(sizeof(AFDWorkspace) == 96 && sizeof(AFDContextLayout) == 256);
 static_assert(offsetof(AFDContextLayout, workspace) == 160);
 static_assert(offsetof(AFDContextLayout, return_progress_mode) == 60);
 static_assert(offsetof(AFDContextLayout, channel_stride) == 64);
+static_assert(offsetof(AFDContextLayout, comm_round_mode) == 68);
 constexpr __aicore__ __forceinline__ AFDWorkspace make_workspace(uint32_t c, uint32_t t, uint32_t k, uint32_t e,
                                                                  uint32_t n, uint32_t m, uint32_t slots)
 {

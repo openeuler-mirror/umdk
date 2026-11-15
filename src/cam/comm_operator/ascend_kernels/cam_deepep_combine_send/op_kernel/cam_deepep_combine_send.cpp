@@ -50,12 +50,14 @@ extern "C" __global__ __aicore__ void cam_deepep_combine_send(GM_ADDR x,
     p.num_ub_bytes = tilingData.numUbBytes;
     p.rank_idx = tilingData.rankIdx;
     p.timeout_cycles = tilingData.timeoutCycles;
+    p.active_bytes = tilingData.activeBytes;
+    p.completion_bytes = tilingData.completionBytes;
 
     deep_ep::afd::rt::combine_send_body(p,
         reinterpret_cast<__gm__ bfloat16_t*>(x),
         reinterpret_cast<__gm__ int*>(srcMetadata),
         reinterpret_cast<__gm__ const deep_ep::afd::AFDContextLayout*>(context),
-        reinterpret_cast<__gm__ const deep_ep::afd::AFDActive*>(active),
+        reinterpret_cast<__gm__ deep_ep::afd::AFDActive*>(active),
         reinterpret_cast<__gm__ void*>(controlBuffer),
         reinterpret_cast<__gm__ deep_ep::afd::AFDExecutionState*>(executionState),
         reinterpret_cast<__gm__ void*>(afdWorkspace),

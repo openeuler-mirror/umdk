@@ -8,6 +8,7 @@
  * History: 2026-11-03 create
  */
 
+#include <limits>
 #include <unistd.h>
 #include <torch/extension.h>
 #include <torch/csrc/autograd/custom_function.h>
@@ -29,11 +30,12 @@ constexpr int64_t kMaxExpertsPerRank = 512;
 constexpr int64_t kMaxNumTopk = 32;
 constexpr int64_t kMaxNumSourceLanes = 256;
 constexpr int64_t kMaxNumLayers = 64;
-constexpr int64_t kMaxPaddedTokens = 32768;
+constexpr int64_t kMaxLegacyPaddedTokens = 32768;
 constexpr int64_t kMaxTokensPerTile = 128;
 constexpr int64_t kMaxCompletionBytes = 65536;
 constexpr int64_t kMaxNumHidden = 8192;
 constexpr int64_t kMetadataWords = 4;
+constexpr int64_t kActiveHeaderBytes = 64;
 constexpr int64_t kTiledRank = 2;
 // One gradient slot per forward argument.
 constexpr size_t kForwardArgCount = 22;
@@ -98,6 +100,9 @@ at::Tensor CamDeepepCombineSendImplNpu(
     CheckDim(completion, 1, "completion");
     TORCH_CHECK(completion.size(0) == completionBytes,
         "combine_send: completion must be [completion_bytes]");
+    CheckByteBlob(active, "active");
+    TORCH_CHECK(active.is_contiguous() && active.numel() >= kActiveHeaderBytes,
+        "combine_send: active must be a contiguous byte vector covering its header");
 
     EXEC_NPU_CMD(aclnnCamDeepepCombineSend,
         // input
@@ -152,8 +157,12 @@ at::Tensor CamDeepepCombineSendImplMeta(
         "combine_send: num_source_lanes out of range: ", numSourceLanes);
     TORCH_CHECK(numLayers > 0 && numLayers <= kMaxNumLayers,
         "combine_send: num_layers out of range: ", numLayers);
-    TORCH_CHECK(maxPaddedTokens > 0 && maxPaddedTokens <= kMaxPaddedTokens,
+    TORCH_CHECK(maxPaddedTokens > 0 && maxPaddedTokens <= std::numeric_limits<int32_t>::max(),
         "combine_send: max_padded_tokens out of range: ", maxPaddedTokens);
+    const int64_t legacyActiveBytes = 64 + 64 * numSourceLanes +
+        32 * numSourceLanes * (numExperts / numRanks);
+    TORCH_CHECK(maxPaddedTokens <= kMaxLegacyPaddedTokens || active.numel() > legacyActiveBytes,
+        "combine_send: rows above the legacy limit require transaction storage");
     TORCH_CHECK(numTokensPerTile > 0 && numTokensPerTile <= kMaxTokensPerTile,
         "combine_send: num_tokens_per_tile out of range: ", numTokensPerTile);
     TORCH_CHECK(rankIdx >= 0 && rankIdx < numRanks, "combine_send: rank_idx out of range: ", rankIdx);

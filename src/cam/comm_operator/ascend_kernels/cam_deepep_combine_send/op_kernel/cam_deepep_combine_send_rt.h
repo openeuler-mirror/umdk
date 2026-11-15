@@ -11,10 +11,16 @@
  *       (issue_write_wqe) then tripped aivec 341. jetty_info's V dimension is
  *       dropped (only [GetBlockIdx()][a] is ever addressed).
  * History: 2026-11-03 create runtime port
+ *
+ * CAM source: deep_ep/impls/afd/combine_send.h (upstream and AFD sources
+ * are recorded in that header).
+ * CAM modifications: Sizes UB at runtime and commits transaction
+ * progress after payload writes have drained.
  */
 #pragma once
 #include <deep_ep/layout/afd/return.h>
 #include "cam_deepep_rt_common.h"
+#include "cam_deepep_combine_send_transaction.h"
 
 // Runtime-parameterized reverse transport.
 namespace deep_ep::afd::rt {
@@ -36,6 +42,8 @@ struct CombineSendParams {
     uint32_t num_ub_bytes;
     uint32_t rank_idx;
     uint64_t timeout_cycles;
+    uint64_t active_bytes;
+    uint32_t completion_bytes;
 };
 
 // Byte offsets from UB address 0, sized by the actual shape instead of the ABI
@@ -77,7 +85,7 @@ __aicore__ inline UBOffsets make_ub_offsets(const CombineSendParams &p)
 // Same phases as combine_send_impl: gate, directory/entry preflight, parallel
 // metadata preflight, per source-peer URMA writes, completion snapshot + ACKs.
 __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bfloat16_t *x, __gm__ int *src_metadata,
-                                         __gm__ const AFDContextLayout *context, __gm__ const AFDActive *active,
+                                         __gm__ const AFDContextLayout *context, __gm__ AFDActive *active,
                                          __gm__ void *control_buffer, __gm__ AFDExecutionState *execution_state,
                                          __gm__ void *workspace, __gm__ void *jetty_ptrs,
                                          __gm__ AFDCompletion *completion)
@@ -112,12 +120,27 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
     auto words = reinterpret_cast<__ubuf__ uint32_t *>(tmp);
     auto ws = reinterpret_cast<__gm__ uint8_t *>(workspace);
     auto result = reinterpret_cast<__gm__ uint32_t *>(ws + 32 * num_vec_cores);
+    if (p.active_bytes < sizeof(AFDActive)) {
+        if (vec_core_idx == 0) {
+            for (int i = 0; i < 8; ++i) {
+                words[i] = 0;
+            }
+            words[0] = ABORTED;
+            words[1] = BAD_ABI;
+            recv_store(execution_state, tmp, 32);
+        }
+        recv_join();
+        return;
+    }
     const auto task = recv_read(active);
+    const bool transaction_mode = task.reserved == kFfnTransactionMagic;
+    const bool transaction_storage = transaction_mode &&
+        p.active_bytes >= ffn_active_bytes(p.num_source_lanes, p.experts_per_rank, p.num_layers);
     if (task.valid == 0 && task.kind == ABORT) {
         return;
     }
     // No source access for inactive work. The scheduler owns the EMPTY contract.
-    if (task.valid == 0 && task.kind == NOP) {
+    if (!transaction_mode && task.valid == 0 && task.kind == NOP) {
         if (vec_core_idx == 0) {
             const auto state = recv_read(execution_state);
             if (task.num_entries || task.num_members || task.num_segments || task.num_expanded_tokens ||
@@ -134,23 +157,36 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
         return;
     }
     auto base = reinterpret_cast<__gm__ const uint8_t *>(context);
-    auto ab = reinterpret_cast<__gm__ const uint8_t *>(active);
+    auto ab = reinterpret_cast<__gm__ uint8_t *>(active);
+    auto transaction = transaction_storage ?
+        reinterpret_cast<__gm__ AFDFfnTransaction *>(ab + ffn_tx_offset(p.num_source_lanes, p.experts_per_rank)) :
+        nullptr;
     auto controls = reinterpret_cast<__gm__ uint8_t *>(control_buffer);
     auto grants = reinterpret_cast<__gm__ uint32_t *>(reinterpret_cast<__gm__ uint8_t *>(execution_state) + 32);
     if (vec_core_idx == 0) {
         uint32_t error = OK;
         const auto state = recv_read(execution_state);
-        const auto done = recv_read(completion);
         if (task.valid != 1 || (task.kind != WORK && task.kind != CONTROL)) {
             error = BAD_TASK;
+        } else if (p.completion_bytes < completion_deltas_offset(p.num_source_lanes) +
+                       align32(4uLL * task.num_members * p.experts_per_rank) ||
+                   (transaction_mode && !transaction_storage) ||
+                   (!transaction_mode && max_padded_tokens > kMaxLaneTokens)) {
+            error = BAD_ABI;
         } else if (state.error_code != OK || state.num_entries != task.num_entries ||
-                   state.stage != (task.kind == WORK ? COMPUTE_READY : INPUT_READY) ||
-                   (done.state != ARMED || done.error_code != OK || done.num_entries != task.num_entries ||
-                    done.num_members != task.num_members ||
-                    done.num_deltas != uint64_t(task.num_members) * uint32_t(experts_per_rank))) {
+                   state.stage != (task.kind == WORK ? COMPUTE_READY : INPUT_READY)) {
             error = STATE_ORDER;
+        } else if (!transaction_mode) {
+            const auto done = recv_read(completion);
+            if (done.state != ARMED || done.error_code != OK || done.num_entries != task.num_entries ||
+                done.num_members != task.num_members ||
+                done.num_deltas != uint64_t(task.num_members) * p.experts_per_rank) {
+                error = STATE_ORDER;
+            }
         }
-        if (context->abi_version != kAbiVersion || context->num_src_ranks != p.num_src_ranks ||
+        if (context->abi_version != kAbiVersion || context->comm_round_mode > kLocalCommRounds ||
+            (context->comm_round_mode == kLocalCommRounds && !transaction_mode) ||
+            context->num_src_ranks != p.num_src_ranks ||
             context->num_ranks != p.num_ranks || context->num_source_lanes != p.num_source_lanes ||
             context->num_experts != uint32_t(num_ranks) * uint32_t(experts_per_rank) ||
             context->num_topk != p.num_topk || context->num_vec_cores != p.num_vec_cores ||
@@ -163,7 +199,11 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
             task.num_padded_tokens > max_padded_tokens || task.num_expanded_tokens > task.num_padded_tokens ||
             task.entries_offset != active_entries_offset() ||
             task.members_offset != active_members_offset(p.num_source_lanes) ||
-            task.segments_offset != active_segments_offset(p.num_source_lanes)) {
+            task.segments_offset != active_segments_offset(p.num_source_lanes) ||
+            !recv_range(task.entries_offset, 32uLL * task.num_entries, p.active_bytes) ||
+            !recv_range(task.members_offset, 32uLL * task.num_members, p.active_bytes) ||
+            (task.num_segments != 0 &&
+             !recv_range(task.segments_offset, 32uLL * task.num_segments, p.active_bytes))) {
             error = BAD_TASK;
         }
         if (!recv_range(context->reserved_address, 32, context->context_bytes) || context->reserved_address == 0) {
@@ -182,15 +222,22 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
                 !recv_range(context->layers_offset, 4uLL * p.num_layers, context->context_bytes)) {
                 error = BAD_ABI;
             }
-            bool found = false;
             if (error == OK) {
-                for (int i = 0; i < num_layers; ++i) {
-                    found |= recv_read(reinterpret_cast<__gm__ const uint32_t *>(base + context->layers_offset) + i) ==
-                             task.layer_idx;
+                auto layers = reinterpret_cast<__gm__ const uint32_t *>(base + context->layers_offset);
+                if (transaction_mode) {
+                    error = task.layer_idx == kFfnMixedLayer ?
+                        validate_ffn_combine_slice(task, recv_read(transaction), ab, layers, p.num_source_lanes,
+                                                   p.experts_per_rank, p.num_layers) :
+                        BAD_LAYER;
+                } else {
+                    bool found = false;
+                    for (int i = 0; i < num_layers; ++i) {
+                        found |= recv_read(layers + i) == task.layer_idx;
+                    }
+                    if (!found) {
+                        error = BAD_LAYER;
+                    }
                 }
-            }
-            if (error == OK && !found) {
-                error = BAD_LAYER;
             }
         }
         for (int i = 0; i < 8; ++i) {
@@ -209,6 +256,9 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
             words[0] = ABORTED;
             words[1] = error;
             recv_store(execution_state, tmp, 32);
+            if (transaction_storage) {
+                AscendC::WriteGmByPassDCache(&transaction->state, kFfnAborted);
+            }
         }
         return error != OK;
     };
@@ -471,6 +521,9 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
                 recv_read(entries + i).is_final ? FINISHED : HELD;
             recv_store(ce + i, tmp, 32);
         }
+        if (transaction_mode) {
+            retire_ffn_slice_rounds(task, transaction, ab, entries, p.num_source_lanes, p.experts_per_rank);
+        }
         AscendC::DataSyncBarrier<AscendC::MemDsbT::DDR>();
         for (uint32_t i = 0; i < task.num_entries; ++i) {
             const auto entry = recv_read(ce + i);
@@ -515,6 +568,14 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
             words[w] = 0;
         }
         recv_store(execution_state, tmp, 32);
+        if (transaction_mode) {
+            const auto tx = recv_read(transaction);
+            AscendC::WriteGmByPassDCache(&transaction->next_group, tx.slice_end);
+            AscendC::WriteGmByPassDCache(&transaction->slice_idx, tx.slice_idx + 1);
+            AscendC::DataSyncBarrier<AscendC::MemDsbT::DDR>();
+            AscendC::WriteGmByPassDCache(&transaction->state,
+                tx.completed_entries == tx.num_entries ? kFfnComplete : kFfnSelected);
+        }
     }
     recv_join();
 }

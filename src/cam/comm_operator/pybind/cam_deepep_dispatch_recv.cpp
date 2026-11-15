@@ -38,6 +38,7 @@ constexpr int64_t kMinNumTokensPerStage = 1;
 constexpr int64_t kMaxNumTokensPerStage = 16;
 constexpr int64_t kMetadataWords = 4;
 constexpr int64_t kTiledRank = 2;
+constexpr int64_t kActiveHeaderBytes = 64;
 
 // One gradient slot per forward argument, and the fixed output positions.
 constexpr size_t kForwardArgCount = 28;
@@ -97,6 +98,25 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> CamDeepepDispatchRecvImplNpu(
     const int64_t numSfPacks,
     const int64_t numVecCores)
 {
+    CheckByteBlob(active, "active");
+    TORCH_CHECK(active.is_contiguous(), "dispatch_recv: active must be contiguous");
+    if (numRanks > 0 && numRanks <= kMaxNumRanks && numExperts > 0 && numExperts <= kMaxNumExperts &&
+        numSourceLanes > 0 && numSourceLanes <= kMaxNumSourceLanes) {
+        const int64_t legacyActiveBytes = kActiveHeaderBytes + 64 * numSourceLanes +
+            32 * numSourceLanes * (numExperts / numRanks);
+        if (active.size(0) > legacyActiveBytes) {
+            TORCH_CHECK(recvX.dim() == kTiledRank && recvX.size(0) == maxPaddedTokens &&
+                recvX.size(1) == numHidden && recvX.is_contiguous(),
+                "dispatch_recv: transaction recv_x must be contiguous [max_padded_tokens, num_hidden]");
+            TORCH_CHECK(recvSf.dim() == kTiledRank && recvSf.size(0) == maxPaddedTokens &&
+                recvSf.size(1) == numSfPacks, "dispatch_recv: transaction recv_sf shape mismatch");
+            TORCH_CHECK(recvSrcMetadata.dim() == kTiledRank && recvSrcMetadata.size(0) == maxPaddedTokens &&
+                recvSrcMetadata.size(1) == kMetadataWords && recvSrcMetadata.is_contiguous(),
+                "dispatch_recv: transaction recv_src_metadata must be contiguous [max_padded_tokens, 4]");
+            TORCH_CHECK(executionState.is_contiguous() && afdWorkspace.is_contiguous(),
+                "dispatch_recv: transaction execution state and scratch must be contiguous");
+        }
+    }
     vector<char> groupEpChars(groupEp.begin(), groupEp.end());
     groupEpChars.push_back('\0');
     char *groupEpPtr = &groupEpChars[0];
@@ -165,12 +185,17 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> CamDeepepDispatchRecvImplMeta(
         "dispatch_recv: num_source_lanes out of range: ", numSourceLanes);
     TORCH_CHECK(numLayers > 0 && numLayers <= kMaxNumLayers,
         "dispatch_recv: num_layers out of range: ", numLayers);
-    TORCH_CHECK(maxExpandedTokens > 0 && maxExpandedTokens <= kMaxLaneTokens,
+    TORCH_CHECK(maxExpandedTokens > 0 && maxExpandedTokens <= kMaxStride,
         "dispatch_recv: max_expanded_tokens out of range: ", maxExpandedTokens);
-    TORCH_CHECK(maxPaddedTokens > 0 && maxPaddedTokens <= kMaxLaneTokens,
+    TORCH_CHECK(maxPaddedTokens > 0 && maxPaddedTokens <= kMaxStride,
         "dispatch_recv: max_padded_tokens out of range: ", maxPaddedTokens);
     TORCH_CHECK(maxExpandedTokens <= maxPaddedTokens,
         "dispatch_recv: max_expanded_tokens must not exceed max_padded_tokens");
+    TORCH_CHECK(active.size(0) >= kActiveHeaderBytes, "dispatch_recv: active must cover its header");
+    const int64_t legacyActiveBytes = kActiveHeaderBytes + 64 * numSourceLanes +
+        32 * numSourceLanes * (numExperts / numRanks);
+    TORCH_CHECK(maxPaddedTokens <= kMaxLaneTokens || active.size(0) > legacyActiveBytes,
+        "dispatch_recv: rows above the legacy limit require transaction storage");
     TORCH_CHECK(expertAlignment > 0 && (expertAlignment & (expertAlignment - 1)) == 0,
         "dispatch_recv: expert_alignment must be a power of two");
     TORCH_CHECK(maxPaddedTokens >= expertAlignment,

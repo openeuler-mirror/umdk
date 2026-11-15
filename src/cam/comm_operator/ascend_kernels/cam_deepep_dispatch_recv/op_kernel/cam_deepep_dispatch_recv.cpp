@@ -57,11 +57,12 @@ extern "C" __global__ __aicore__ void cam_deepep_dispatch_recv(GM_ADDR payload,
     p.payload_bytes = tilingData.payloadBytes;
     p.control_bytes = tilingData.controlBytes;
     p.context_bytes = tilingData.contextBytes;
+    p.active_bytes = tilingData.activeBytes;
 
     deep_ep::afd::rt::dispatch_recv_body(p,
         reinterpret_cast<__gm__ void*>(payload),
         reinterpret_cast<__gm__ const deep_ep::afd::AFDContextLayout*>(context),
-        reinterpret_cast<__gm__ const deep_ep::afd::AFDActive*>(active),
+        reinterpret_cast<__gm__ deep_ep::afd::AFDActive*>(active),
         reinterpret_cast<__gm__ deep_ep::afd::AFDExecutionState*>(executionState),
         reinterpret_cast<__gm__ void*>(afdWorkspace),
         reinterpret_cast<__gm__ void*>(recvX),

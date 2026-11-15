@@ -5,6 +5,13 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * Original Source: https://github.com/deepseek-ai/DeepEP-Ascend @ 3b25377d
+ * Upstream file: deep_ep/include/deep_ep/comm/handle.hpp
+ * Proposed upstream notice (DeepEP-Ascend PR #25):
+ * Copyright (c) 2025 DeepSeek
+ * CAM modifications: Uses CAM's named alignment and shift constants in
+ * the ported UB JFS/JFC queue and remote-memory handle helpers.
  */
 #pragma once
 

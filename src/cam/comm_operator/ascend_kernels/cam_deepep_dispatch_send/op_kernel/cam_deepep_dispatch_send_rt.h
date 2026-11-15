@@ -6,6 +6,11 @@
  * Note: model-dependent sizes are tiling fields; only dtype/path stay
  *       compile-time. Derived from deep_ep/impls/afd/dispatch_send.h.
  * History: 2026-11-03 create runtime port
+ *
+ * CAM source: deep_ep/impls/afd/dispatch_send.h (upstream and AFD sources
+ * are recorded in that header).
+ * CAM modifications: Takes shape from tiling and supports per-source
+ * communication rounds with matching ledger entries.
  */
 #pragma once
 #include <climits>
@@ -284,14 +289,18 @@ __aicore__ inline void dispatch_body(const Params &p, __gm__ void *x, __gm__ sf_
     if (vec_core_idx == 0) {
         uint32_t code = OK;
         if (context->abi_version != kAbiVersion || task_info->abi_version != kAbiVersion ||
-            context->return_progress_mode > RETURN_ROUND_STEP) {
+            context->return_progress_mode > RETURN_ROUND_STEP || context->comm_round_mode > kLocalCommRounds ||
+            task_info->reserved[0] != context->comm_round_mode) {
             code = BAD_ABI;
         } else if (lane_idx == context->num_source_lanes || task_info->src_rank_idx != context->src_rank_idx ||
                    task_info->num_tokens > context->num_token_capacity || task_info->num_comm_rounds == 0) {
             code = BAD_TASK;
         } else {
             const uint32_t c = lanes[lane_idx].capacity;
-            if (task_info->num_comm_rounds < (uint64_t(task_info->num_tokens) + c - 1) / c) {
+            const uint64_t minimum = c ? (uint64_t(task_info->num_tokens) + c - 1) / c : 0;
+            const uint64_t local = minimum ? minimum : 1;
+            if (!c || task_info->num_comm_rounds < minimum ||
+                (context->comm_round_mode == kLocalCommRounds && task_info->num_comm_rounds != local)) {
                 code = BAD_TASK;
             }
             // [AFD] A blocking per-transaction recv cannot fairly release other slots.
@@ -610,6 +619,7 @@ __aicore__ inline void dispatch_body(const Params &p, __gm__ void *x, __gm__ sf_
                 inbox->layer_idx = task_info->layer_idx;
                 inbox->round_idx = round;
                 inbox->num_comm_rounds = task_info->num_comm_rounds;
+                inbox->reserved[0] = context->comm_round_mode;
                 inbox->num_round_tokens = length;
                 inbox->return_bit = saved.next_return_bit;
                 inbox->num_recv_records = AscendC::ReadGmByPassDCache(rtotals + f);

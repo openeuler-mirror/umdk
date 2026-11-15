@@ -132,8 +132,9 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     int send_status_words, int num_vec_cores) -> Tensor(d!)");
     // The three receive buffers are returned as a fixed-size aliased tuple: the
     // kernel writes them in place and returns the same storage. execution_state
-    // and afd_workspace (scratch) are also advanced in place by the kernel.
-    m.def("cam_deepep_dispatch_recv(Tensor payload, Tensor context, Tensor active, \
+    // and afd_workspace (scratch) are also advanced in place. In FFN transaction
+    // mode the kernel builds the next slice in the caller-owned active arena.
+    m.def("cam_deepep_dispatch_recv(Tensor payload, Tensor context, Tensor(f!) active, \
     Tensor(d!) execution_state, Tensor(e!) afd_workspace, Tensor control_buffer, \
     Tensor(a!) recv_x, Tensor(b!) recv_sf, Tensor(c!) recv_src_metadata, str group_ep, \
     int num_ranks, int num_experts, \
@@ -145,7 +146,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     // The kernel advances the caller-owned control plane in place: the send
     // path writes control_buffer (the peer inbox when the peer is this rank),
     // execution_state and the workspace scratch, and fills completion.
-    m.def("cam_deepep_combine_send(Tensor x, Tensor src_metadata, Tensor context, Tensor active, \
+    m.def("cam_deepep_combine_send(Tensor x, Tensor src_metadata, Tensor context, Tensor(e!) active, \
     Tensor(a!) control_buffer, Tensor(b!) execution_state, Tensor(c!) afd_workspace, Tensor jetty_ptrs, \
     Tensor(d!) completion, str group_ep, int num_src_ranks, int num_ranks, int num_experts, \
     int num_topk, int num_source_lanes, int num_layers, int max_padded_tokens, \

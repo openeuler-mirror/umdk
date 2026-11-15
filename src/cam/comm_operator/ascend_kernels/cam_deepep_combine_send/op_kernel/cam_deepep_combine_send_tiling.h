@@ -30,7 +30,9 @@ struct CamDeepepCombineSendTilingData {
     uint32_t numUbBytes;
     uint32_t rankIdx;
     uint64_t timeoutCycles;
-    uint32_t reserved[2];
+    uint64_t activeBytes;
+    uint32_t completionBytes;
+    uint32_t reserved;
 };
 }  // namespace Cam
 
