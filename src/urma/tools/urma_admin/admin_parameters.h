@@ -290,6 +290,7 @@ typedef struct admin_config {
     uint8_t eid_ns_mode;
     uint8_t priority;
     uint8_t SL;
+    uint32_t npu_id;
 } admin_config_t;
 
 

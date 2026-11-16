@@ -223,6 +223,8 @@ enum {
     UBCORE_ATTR_STATS,
     UBCORE_ATTR_TPID_QUERY_FLAG,   /* u8: non-zero = query single tpid state */
     UBCORE_ATTR_TPID,              /* u64: tpid to query (valid with QUERY_FLAG) */
+    UBCORE_ATTR_NPU_ID,
+    UBCORE_ATTR_LOG_LEVEL,
     UBCORE_ATTR_AFTER_LAST
 };
 
@@ -358,6 +360,7 @@ int admin_cmd_set_dev_ns_legacy(admin_config_t *cfg);
 // New command
 int admin_cmd_main(admin_config_t *cfg);
 
+int admin_cmd_npu(admin_config_t *cfg);
 int admin_cmd_agg(admin_config_t *cfg);
 int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
