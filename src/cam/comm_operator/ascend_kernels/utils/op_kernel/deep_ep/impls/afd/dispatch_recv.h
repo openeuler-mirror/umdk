@@ -5,6 +5,15 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * Original Source: https://github.com/deepseek-ai/DeepEP-Ascend @ 3b25377d
+ * Upstream file: deep_ep/include/deep_ep/impls/ep/dispatch_copy_epilogue.hpp
+ * Proposed upstream notice (DeepEP-Ascend PR #25):
+ * Copyright (c) 2025 DeepSeek
+ * AFD source: puxiaokun3721/DeepEP-Ascend @ 19fe6b7
+ * AFD file: deep_ep/include/deep_ep/impls/afd/dispatch_recv.hpp
+ * CAM modifications: Gathered AFD segments by expert and produced
+ * aligned FFN inputs with per-row return metadata.
  */
 #pragma once
 #include <kernel_operator.h>
@@ -150,13 +159,17 @@ __aicore__ inline AFDSendState recv_read_send_state_ubuf(__ubuf__ const uint8_t 
 // Batched MTE3 stores finish before the next merge pass reads its indices, so
 // this helper adds no scalar GM store/cache-coherence assumption.
 template <bool kByDestination>
-__aicore__ inline bool recv_segment_less(__gm__ const AFDActiveSegment *segments, uint32_t lhs, uint32_t rhs)
+__aicore__ inline bool recv_segment_less(__gm__ const AFDActiveSegment *segments, uint32_t lhs, uint32_t rhs,
+                                         bool layered = false)
 {
     const auto a = recv_read(segments + lhs), b = recv_read(segments + rhs);
     if constexpr (!kByDestination) {
         if (a.source_lane_idx != b.source_lane_idx) {
             return a.source_lane_idx < b.source_lane_idx;
         }
+    }
+    if (kByDestination && layered && a.reserved[0] != b.reserved[0]) {
+        return a.reserved[0] < b.reserved[0];
     }
     if (a.local_expert_idx != b.local_expert_idx) {
         return a.local_expert_idx < b.local_expert_idx;
@@ -169,7 +182,8 @@ __aicore__ inline bool recv_segment_less(__gm__ const AFDActiveSegment *segments
 // No native full-transaction histogram or hidden workspace is introduced.
 template <bool kByDestination>
 __aicore__ inline __gm__ uint32_t *recv_sort_segments(__gm__ const AFDActiveSegment *segments, __gm__ uint32_t *index,
-                                                      __gm__ uint32_t *scratch, uint32_t size, __ubuf__ uint8_t *tmp)
+                                                      __gm__ uint32_t *scratch, uint32_t size, __ubuf__ uint8_t *tmp,
+                                                      bool layered = false)
 {
     constexpr uint32_t kNumIndicesPerTransfer = 32;
     auto indices = reinterpret_cast<__ubuf__ uint32_t *>(tmp);
@@ -194,7 +208,7 @@ __aicore__ inline __gm__ uint32_t *recv_sort_segments(__gm__ const AFDActiveSegm
                     next = recv_read(index + left++);
                 } else {
                     const uint32_t lhs = recv_read(index + left), rhs = recv_read(index + right);
-                    if (recv_segment_less<kByDestination>(segments, lhs, rhs)) {
+                    if (recv_segment_less<kByDestination>(segments, lhs, rhs, layered)) {
                         next = lhs;
                         ++left;
                     } else {

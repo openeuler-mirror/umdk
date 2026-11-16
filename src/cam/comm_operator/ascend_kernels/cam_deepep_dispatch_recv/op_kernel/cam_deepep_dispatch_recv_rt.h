@@ -9,6 +9,11 @@
  *       math stays in the body. UB is carved from a runtime-sized pool so the
  *       host budget formula and the kernel use the same byte accounting.
  * History: 2026-11-03 create runtime port
+ *
+ * CAM source: deep_ep/impls/afd/dispatch_recv.h (upstream and AFD sources
+ * are recorded in that header).
+ * CAM modifications: Sizes UB at runtime and supports transaction
+ * slice gathering while retaining the legacy Active path.
  */
 #pragma once
 #include "cam_deepep_rt_common.h"
@@ -36,12 +41,18 @@ struct DispatchRecvParams {
     uint64_t payload_bytes;
     uint64_t control_bytes;
     uint64_t context_bytes;
+    uint64_t active_bytes;
 };
+} // namespace deep_ep::afd::rt
+
+#include "cam_deepep_dispatch_recv_transaction.h"
+
+namespace deep_ep::afd::rt {
 
 // Same phases as dispatch_copy_epilogue_impl: R0 gate, R1 directory preflight,
 // R2 parallel metadata preflight, R3-R5 two-stage output pipeline, R6 commit.
 __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ void *buffer,
-                                          __gm__ const AFDContextLayout *context, __gm__ const AFDActive *active,
+                                          __gm__ const AFDContextLayout *context, __gm__ AFDActive *active,
                                           __gm__ AFDExecutionState *execution_state, __gm__ void *workspace,
                                           __gm__ void *recv_x, __gm__ int16_t *recv_sf, __gm__ int *recv_src_metadata,
                                           __gm__ void *control_buffer)
@@ -90,7 +101,39 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
     auto ws = reinterpret_cast<__gm__ uint8_t *>(workspace);
     auto result = reinterpret_cast<__gm__ uint32_t *>(ws + 32 * num_vec_cores);
     recv_load(tmp, active, 64);
-    const AFDActive task = recv_read_active_ubuf(tmp);
+    AFDActive task = recv_read_active_ubuf(tmp);
+    const bool transaction_mode = task.reserved == kFfnTransactionMagic;
+    const bool local_rounds = context->comm_round_mode == kLocalCommRounds;
+    if (transaction_mode) {
+        if (vec_core_idx == 0) {
+            const bool arena_fits = p.active_bytes >= ffn_active_bytes(
+                p.num_source_lanes, p.experts_per_rank, p.num_layers);
+            uint32_t error = arena_fits ? prepare_dispatch_slice(p, active, execution_state, ws) : BAD_ABI;
+            if (error != OK) {
+                if (arena_fits) {
+                    abort_dispatch_transaction(active, p.num_source_lanes, p.experts_per_rank);
+                }
+                const auto previous = recv_read(execution_state);
+                if (previous.stage == ABORTED && previous.error_code != OK) {
+                    error = previous.error_code;
+                } else {
+                    AFDExecutionState aborted{};
+                    aborted.stage = ABORTED;
+                    aborted.error_code = error;
+                    write_dispatch_plan_record(execution_state, aborted);
+                }
+            }
+            words[0] = error;
+            recv_store(result, tmp, 32);
+        }
+        recv_join();
+        recv_load(tmp, result, 32);
+        if (words[0] != OK) {
+            return;
+        }
+        recv_load(tmp, active, 64);
+        task = recv_read_active_ubuf(tmp);
+    }
     // Immutable publication guarantees every launched AIV sees the same gate.
     // NOP/ABORT read no Context directory, Inbox, route or record.
     if (task.kind == ABORT && task.valid == 0) {
@@ -98,6 +141,7 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
     }
     if (vec_core_idx == 0) {
         uint32_t error = OK;
+        uint32_t sorted_in_scratch = 0;
         recv_load(tmp, execution_state, 32);
         const AFDExecutionState state = recv_read_execution_state_ubuf(tmp);
         if (task.kind == NOP && task.valid == 0) {
@@ -110,6 +154,10 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
         } else if (state.stage != SELECTED || state.error_code != OK || state.num_entries != task.num_entries) {
             error = STATE_ORDER;
         }
+        if (error == OK && !transaction_mode &&
+            (max_expanded_tokens > kMaxLaneTokens || max_padded_tokens > kMaxLaneTokens)) {
+            error = CAPACITY;
+        }
         if (error == OK && task.kind != NOP) {
             if (context->abi_version != kAbiVersion || context->num_ranks != p.num_ranks ||
                 context->num_experts != p.num_experts || context->num_topk != p.num_topk ||
@@ -117,7 +165,8 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                 context->num_sf_packs != p.num_sf_packs || context->num_source_lanes != p.num_source_lanes ||
                 context->num_layers != p.num_layers || context->context_bytes != context_bytes ||
                 context->payload_bytes != payload_bytes || context->control_bytes != control_bytes || rank_idx < 0 ||
-                rank_idx >= num_ranks) {
+                rank_idx >= num_ranks || context->comm_round_mode > kLocalCommRounds ||
+                (local_rounds && !transaction_mode)) {
                 error = BAD_ABI;
             }
             if (error == OK &&
@@ -129,7 +178,8 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                 error = BAD_ABI;
             }
             if (error == OK &&
-                (task.entries_offset != active_entries_offset() ||
+                (p.active_bytes < active_bytes(p.num_source_lanes, p.experts_per_rank) ||
+                 task.entries_offset != active_entries_offset() ||
                  task.members_offset != active_members_offset(p.num_source_lanes) ||
                  task.segments_offset != active_segments_offset(p.num_source_lanes) || task.num_entries == 0 ||
                  task.num_entries > p.num_source_lanes || task.num_members > p.num_source_lanes ||
@@ -151,12 +201,12 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
             auto segments = reinterpret_cast<__gm__ const AFDActiveSegment *>(ab + task.segments_offset);
             auto grants =
                 reinterpret_cast<__gm__ const uint32_t *>(reinterpret_cast<__gm__ uint8_t *>(execution_state) + 32);
-            bool legal_layer = false;
-            for (int i = 0; i < num_layers; ++i) {
-                legal_layer |=
-                    recv_read(reinterpret_cast<__gm__ const uint32_t *>(
-                                  reinterpret_cast<__gm__ const uint8_t *>(context) + context->layers_offset) +
-                              i) == task.layer_idx;
+            const auto layers = reinterpret_cast<__gm__ const uint32_t *>(base + context->layers_offset);
+            bool legal_layer = transaction_mode && task.layer_idx == kFfnMixedLayer;
+            if (!transaction_mode) {
+                for (int i = 0; i < num_layers; ++i) {
+                    legal_layer |= recv_read(layers + i) == task.layer_idx;
+                }
             }
             if (!legal_layer) {
                 error = BAD_LAYER;
@@ -223,11 +273,18 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                 next_segment += entry.num_segments;
                 uint64_t rows = 0;
                 uint32_t first_dp = 0, first_mb = 0, first_round = 0, first_rounds = 0;
+                const uint32_t layer_slot = transaction_mode ? recv_read(members + entry.member_begin).reserved[0] : 0;
+                if (transaction_mode && layer_slot >= p.num_layers) {
+                    error = BAD_LAYER;
+                    break;
+                }
+                const uint32_t entry_layer = transaction_mode ? recv_read(layers + layer_slot) : task.layer_idx;
                 for (uint32_t j = entry.member_begin; j < next_member && error == OK; ++j) {
                     const auto member = recv_read(members + j);
                     if (member.source_lane_idx >= uint32_t(num_source_lanes) || member.input_bit > 1 ||
                         member.return_bit > 1 || member.num_experts != uint32_t(experts_per_rank) ||
-                        member.delta_begin != j * uint64_t(experts_per_rank)) {
+                        member.delta_begin != j * uint64_t(experts_per_rank) ||
+                        (transaction_mode && member.reserved[0] != layer_slot)) {
                         error = BAD_TASK;
                         break;
                     }
@@ -260,9 +317,11 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                     const AFDInbox inbox = recv_read_inbox_ubuf(tmp);
                     recv_load(tmp, reinterpret_cast<__gm__ uint8_t *>(control_buffer) + address.input_ready_offset, 32);
                     if (words[0] != member.input_bit || inbox.return_bit != member.return_bit ||
-                        inbox.layer_idx != task.layer_idx || inbox.num_round_tokens > lane.capacity ||
+                        inbox.layer_idx != entry_layer || inbox.num_round_tokens > lane.capacity ||
                         inbox.num_recv_records > inbox.num_round_tokens || inbox.num_comm_rounds == 0 ||
-                        inbox.round_idx >= inbox.num_comm_rounds) {
+                        inbox.round_idx >= inbox.num_comm_rounds || inbox.reserved[0] != context->comm_round_mode ||
+                        (local_rounds && (member.reserved[1] != inbox.round_idx ||
+                                          member.reserved[2] != inbox.num_comm_rounds))) {
                         error = BAD_TASK;
                         break;
                     }
@@ -276,7 +335,8 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                         first_round = inbox.round_idx;
                         first_rounds = inbox.num_comm_rounds;
                     } else if (first_dp != lane.dp_idx || first_mb != inbox.microbatch_idx ||
-                               first_round != inbox.round_idx || first_rounds != inbox.num_comm_rounds) {
+                               first_round != inbox.round_idx ||
+                               (!local_rounds && first_rounds != inbox.num_comm_rounds)) {
                         error = BAD_TASK;
                         break;
                     }
@@ -302,7 +362,9 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                 for (uint32_t j = entry.segment_begin; j < next_segment && error == OK; ++j) {
                     const auto segment = recv_read(segments + j);
                     if (segment.entry_idx != i || segment.source_lane_idx >= uint32_t(num_source_lanes) ||
-                        segment.local_expert_idx >= uint32_t(experts_per_rank) || segment.num_routes == 0) {
+                        segment.local_expert_idx >= uint32_t(experts_per_rank) || segment.num_routes == 0 ||
+                        (transaction_mode &&
+                         segment.reserved[0] != layer_slot * p.experts_per_rank + segment.local_expert_idx)) {
                         error = BAD_TASK;
                         break;
                     }
@@ -322,7 +384,9 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                         segment.local_expert_idx == 0 ? 0 : recv_read(prefix + (segment.local_expert_idx - 1));
                     const uint64_t end = recv_read(prefix + segment.local_expert_idx);
                     if (segment.route_begin < begin || segment.route_begin > end ||
-                        segment.num_routes > end - segment.route_begin) {
+                        segment.num_routes > end - segment.route_begin ||
+                        (transaction_mode &&
+                         (segment.route_begin != begin || segment.num_routes != end - begin))) {
                         error = BAD_ROUTE;
                         break;
                     }
@@ -362,14 +426,21 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                     previous = segment;
                 }
                 if (error == OK) {
-                    ordered = recv_sort_segments<true>(segments, index, scratch, task.num_segments, tmp);
+                    ordered = recv_sort_segments<true>(segments, index, scratch, task.num_segments, tmp,
+                                                       transaction_mode);
+                    sorted_in_scratch = ordered == scratch;
                     uint64_t physical = 0;
-                    uint32_t next = 0;
-                    for (int e = 0; e < experts_per_rank && error == OK; ++e) {
+                    uint32_t next = 0, group = 0;
+                    while (error == OK && (transaction_mode ? next < task.num_segments : group < p.experts_per_rank)) {
+                        if (transaction_mode) {
+                            group = recv_read(segments + recv_read(ordered + next)).reserved[0];
+                        }
                         uint64_t count = 0;
                         while (next < task.num_segments) {
                             const auto segment = recv_read(segments + recv_read(ordered + next));
-                            if (segment.local_expert_idx != uint32_t(e)) {
+                            const uint32_t segment_group =
+                                transaction_mode ? segment.reserved[0] : segment.local_expert_idx;
+                            if (segment_group != group) {
                                 break;
                             }
                             if (segment.dst_row_begin != physical + count) {
@@ -386,6 +457,7 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                             break;
                         }
                         physical += padded;
+                        ++group;
                     }
                     if (error == OK && (next != task.num_segments || physical != task.num_padded_tokens)) {
                         error = BAD_TASK;
@@ -397,8 +469,12 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
             words[i] = 0;
         }
         words[0] = error;
+        words[1] = sorted_in_scratch;
         recv_store(result, tmp, 32);
         if (error != OK) {
+            if (transaction_mode) {
+                abort_dispatch_transaction(active, p.num_source_lanes, p.experts_per_rank);
+            }
             recv_load(tmp, execution_state, 32);
             words[0] = ABORTED;
             words[1] = error;
@@ -410,6 +486,7 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
     if (words[0] != OK || task.kind == NOP) {
         return;
     }
+    const bool sorted_in_scratch = words[1] != 0;
     if (task.kind == WORK) {
         auto ab = reinterpret_cast<__gm__ const uint8_t *>(active);
         auto segments = reinterpret_cast<__gm__ const AFDActiveSegment *>(ab + task.segments_offset);
@@ -509,6 +586,9 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
             words[0] = first_error;
             recv_store(result, tmp, 32);
             if (first_error != OK) {
+                if (transaction_mode) {
+                    abort_dispatch_transaction(active, p.num_source_lanes, p.experts_per_rank);
+                }
                 recv_load(tmp, execution_state, 32);
                 words[0] = ABORTED;
                 words[1] = first_error;
@@ -697,12 +777,29 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
         // output row. Native vector fill is retained; no route or record is read.
         bool padding_initialized = false;
         uint32_t physical = 0;
-        for (int e = 0; e < experts_per_rank; ++e) {
+        const auto index = ws + recv_workspace_bytes(p.num_vec_cores);
+        const auto sorted = reinterpret_cast<__gm__ const uint32_t *>(index +
+            (sorted_in_scratch ? recv_segment_index_bytes(
+                p.num_source_lanes, p.experts_per_rank, p.max_expanded_tokens) : 0));
+        uint32_t next = 0, group = 0;
+        while (transaction_mode ? next < task.num_segments : group < p.experts_per_rank) {
             uint32_t count = 0;
-            for (uint32_t j = 0; j < task.num_segments; ++j) {
-                const auto segment = recv_read(segments + j);
-                if (segment.local_expert_idx == uint32_t(e)) {
+            if (transaction_mode) {
+                group = recv_read(segments + recv_read(sorted + next)).reserved[0];
+                while (next < task.num_segments) {
+                    const auto segment = recv_read(segments + recv_read(sorted + next));
+                    if (segment.reserved[0] != group) {
+                        break;
+                    }
                     count += segment.num_routes;
+                    ++next;
+                }
+            } else {
+                for (uint32_t j = 0; j < task.num_segments; ++j) {
+                    const auto segment = recv_read(segments + j);
+                    if (segment.local_expert_idx == group) {
+                        count += segment.num_routes;
+                    }
                 }
             }
             const uint32_t aligned = uint32_t(expert_alignment);
@@ -732,6 +829,7 @@ __aicore__ inline void dispatch_recv_body(const DispatchRecvParams &p, __gm__ vo
                 row += num_stage_tokens;
             }
             physical += padded;
+            ++group;
         }
     }
     // R6 [AFD] Commit INPUT_READY after all output DMAs. No ACK, credit,

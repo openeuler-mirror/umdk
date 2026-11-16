@@ -5,6 +5,15 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * Original Source: https://github.com/deepseek-ai/DeepEP-Ascend @ 3b25377d
+ * Upstream file: deep_ep/include/deep_ep/impls/ep/dispatch.hpp
+ * Proposed upstream notice (DeepEP-Ascend PR #25):
+ * Copyright (c) 2025 DeepSeek
+ * AFD source: puxiaokun3721/DeepEP-Ascend @ 19fe6b7
+ * AFD file: deep_ep/include/deep_ep/impls/afd/dispatch_send.hpp
+ * CAM modifications: Added bounded tile routing and AFD slot,
+ * Inbox, and round-ledger handling.
  */
 #pragma once
 #include <climits>

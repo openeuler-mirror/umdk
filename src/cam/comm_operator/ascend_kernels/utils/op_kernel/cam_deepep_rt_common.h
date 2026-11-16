@@ -6,6 +6,11 @@
  * Note: model-dependent sizes are runtime arguments; only the timeout template of
  *       HcommJetty::drain/put stays compile-time and is fixed to one default.
  * History: 2026-11-03 extract from cam_deepep_dispatch_send_rt.h
+ *
+ * CAM source: deep_ep/impls/afd/dispatch_send.h (upstream and AFD
+ * sources are recorded in that header).
+ * CAM modifications: Shares the transport helpers across the runtime
+ * operators and passes the helper timeout at runtime.
  */
 #pragma once
 #include <climits>

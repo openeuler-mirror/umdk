@@ -37,7 +37,7 @@ struct CamDeepepDispatchRecvTilingData {
     uint64_t payloadBytes;
     uint64_t controlBytes;
     uint64_t contextBytes;
-    uint32_t reserved[2];
+    uint64_t activeBytes;
 };
 }  // namespace Cam
 

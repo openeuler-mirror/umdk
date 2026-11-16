@@ -46,8 +46,12 @@ constexpr uint32_t kMaxNumHidden = 8192;
 constexpr uint32_t kMaxNumSFPacks = 512;
 constexpr int64_t kMaxInt32 = 2147483647;
 constexpr uint64_t kMaxPhysicalUbBytes = 253952;
-// recv_src_metadata rows: [global slot, local slot, source rank, weight index].
+// recv_src_metadata rows: [source lane, round-local token, TopK slot, entry].
 constexpr int64_t kMetadataWords = 4;
+constexpr int64_t kActiveHeaderBytes = 64;
+constexpr size_t kInputActive = 2;
+constexpr size_t kInputExecutionState = 3;
+constexpr size_t kInputAfdWorkspace = 4;
 // Stage counts the kernel accepts: powers of two from 1 to 16.
 constexpr int64_t kMinNumTokensPerStage = 1;
 constexpr int64_t kMaxNumTokensPerStage = 16;
@@ -107,6 +111,15 @@ bool IsStageCount(int64_t t)
     return t >= kMinNumTokensPerStage && t <= kMaxNumTokensPerStage &&
         (t & (t - 1)) == 0;
 }
+
+int64_t ByteVectorSize(const gert::TilingContext* context, size_t input)
+{
+    const gert::StorageShape* shape = context->GetInputShape(input);
+    if (shape == nullptr || shape->GetStorageShape().GetDimNum() != 1) {
+        return 0;
+    }
+    return shape->GetStorageShape().GetDim(0);
+}
 }  // namespace
 
 namespace optiling {
@@ -150,8 +163,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         numSourceLanesValue <= 0 ||
         numSourceLanesValue > static_cast<int64_t>(kMaxNumSourceLanes) ||
         numLayersValue <= 0 || numLayersValue > static_cast<int64_t>(kMaxNumLayers) ||
-        maxExpandedTokensValue <= 0 || maxExpandedTokensValue > static_cast<int64_t>(kMaxLaneTokens) ||
-        maxPaddedTokensValue <= 0 || maxPaddedTokensValue > static_cast<int64_t>(kMaxLaneTokens) ||
+        maxExpandedTokensValue <= 0 || maxExpandedTokensValue > kMaxInt32 ||
+        maxPaddedTokensValue <= 0 || maxPaddedTokensValue > kMaxInt32 ||
         maxExpandedTokensValue > maxPaddedTokensValue ||
         expertAlignmentValue <= 0 ||
         (expertAlignmentValue & (expertAlignmentValue - 1)) != 0 ||
@@ -189,6 +202,17 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const uint32_t numSFPacks = static_cast<uint32_t>(numSFPacksValue);
     const uint32_t numHiddenBytes = numHidden * 2U;
 
+    const int64_t activeSize = ByteVectorSize(context, kInputActive);
+    OP_TILING_CHECK(activeSize < kActiveHeaderBytes,
+        OP_LOGE(context->GetNodeName(), "dispatch_recv active must be a byte vector covering its header"),
+        return ge::GRAPH_FAILED);
+    const uint64_t activeBytes = static_cast<uint64_t>(activeSize);
+    const uint64_t legacyActiveBytes = kActiveHeaderBytes + 64uLL * numSourceLanes +
+        32uLL * numSourceLanes * (numExperts / numRanks);
+    OP_TILING_CHECK(maxPaddedTokens > kMaxLaneTokens && activeBytes <= legacyActiveBytes,
+        OP_LOGE(context->GetNodeName(), "dispatch_recv rows above the legacy limit require transaction storage"),
+        return ge::GRAPH_FAILED);
+
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     const uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
     OP_TILING_CHECK(aivNum == 0, OP_LOGE(context->GetNodeName(), "no AIV core available"),
@@ -202,6 +226,19 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         return ge::GRAPH_FAILED);
     const uint32_t numVecCores = numVecCoresValue == 0 ?
         aivNum : static_cast<uint32_t>(numVecCoresValue);
+    if (activeBytes > legacyActiveBytes) {
+        const uint64_t segmentCapacity =
+            static_cast<uint64_t>(numSourceLanes) * (numExperts / numRanks);
+        const uint64_t indexCapacity =
+            segmentCapacity < maxExpandedTokens ? segmentCapacity : maxExpandedTokens;
+        const uint64_t executionBytes = 32uLL + Align32(4uLL * numSourceLanes);
+        const uint64_t workspaceBytes = 32uLL * numVecCores + 256uLL + 2uLL * Align32(4uLL * indexCapacity);
+        OP_TILING_CHECK(
+            ByteVectorSize(context, kInputExecutionState) < static_cast<int64_t>(executionBytes) ||
+            ByteVectorSize(context, kInputAfdWorkspace) < static_cast<int64_t>(workspaceBytes),
+            OP_LOGE(context->GetNodeName(), "dispatch_recv transaction execution state or scratch is undersized"),
+            return ge::GRAPH_FAILED);
+    }
 
     uint64_t ubSize = 0;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ubSize);
@@ -252,8 +289,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling->payloadBytes = static_cast<uint64_t>(payloadBytesValue);
     tiling->controlBytes = static_cast<uint64_t>(controlBytesValue);
     tiling->contextBytes = static_cast<uint64_t>(contextBytesValue);
-    tiling->reserved[0] = 0U;
-    tiling->reserved[1] = 0U;
+    tiling->activeBytes = activeBytes;
 
     context->SetBlockDim(numVecCores);
     return ge::GRAPH_SUCCESS;

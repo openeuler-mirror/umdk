@@ -12,6 +12,8 @@
  *          2026-11-04 document the max_padded_tokens contract
  */
 
+#include <limits>
+
 #include "../op_kernel/cam_deepep_combine_send_tiling.h"
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
@@ -93,7 +95,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         numSourceLanesValue <= 0 ||
         numSourceLanesValue > static_cast<int64_t>(kMaxNumSourceLanes) ||
         numLayersValue <= 0 || numLayersValue > static_cast<int64_t>(kMaxNumLayers) ||
-        maxPaddedTokensValue <= 0 || maxPaddedTokensValue > static_cast<int64_t>(kMaxLaneTokens) ||
+        maxPaddedTokensValue <= 0 || maxPaddedTokensValue > std::numeric_limits<int32_t>::max() ||
         numTokensPerTileValue <= 0 || numTokensPerTileValue > static_cast<int64_t>(kMaxTokensPerTile) ||
         rankIdxValue < 0 || rankIdxValue >= numRanksValue ||
         timeoutCyclesValue <= 0 ||
@@ -110,6 +112,18 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     const uint32_t numLayers = static_cast<uint32_t>(numLayersValue);
     const uint32_t maxPaddedTokens = static_cast<uint32_t>(maxPaddedTokensValue);
     const uint32_t numTokensPerTile = static_cast<uint32_t>(numTokensPerTileValue);
+
+    const gert::StorageShape* activeShape = context->GetInputShape(3);
+    OP_TILING_CHECK(activeShape == nullptr || activeShape->GetStorageShape().GetDimNum() != 1 ||
+        activeShape->GetStorageShape().GetDim(0) < 64,
+        OP_LOGE(context->GetNodeName(), "combine_send active must be a byte vector covering its header"),
+        return ge::GRAPH_FAILED);
+    const uint64_t activeBytes = static_cast<uint64_t>(activeShape->GetStorageShape().GetDim(0));
+    const uint64_t legacyActiveBytes = 64 + 64uLL * numSourceLanes +
+        32uLL * numSourceLanes * (numExperts / numRanks);
+    OP_TILING_CHECK(maxPaddedTokens > kMaxLaneTokens && activeBytes <= legacyActiveBytes,
+        OP_LOGE(context->GetNodeName(), "combine_send rows above the legacy limit require transaction storage"),
+        return ge::GRAPH_FAILED);
 
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     const uint32_t aivNum = ascendcPlatform.GetCoreNumAiv();
@@ -142,6 +156,18 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             numHidden = static_cast<uint32_t>(hidden);
         }
     }
+    if (activeBytes > legacyActiveBytes) {
+        const gert::StorageShape* metadataShape = context->GetInputShape(1);
+        OP_TILING_CHECK(xShape == nullptr || xShape->GetStorageShape().GetDimNum() != 2 ||
+            xShape->GetStorageShape().GetDim(0) < maxPaddedTokensValue ||
+            xShape->GetStorageShape().GetDim(1) != numHidden ||
+            metadataShape == nullptr || metadataShape->GetStorageShape().GetDimNum() != 2 ||
+            metadataShape->GetStorageShape().GetDim(0) < maxPaddedTokensValue ||
+            metadataShape->GetStorageShape().GetDim(1) != 4,
+            OP_LOGE(context->GetNodeName(),
+                "combine_send transaction tensors do not cover the configured row capacity"),
+            return ge::GRAPH_FAILED);
+    }
     OP_TILING_CHECK(numHidden == 0 || numHidden > kMaxNumHidden,
         OP_LOGE(context->GetNodeName(), "combine_send hidden is outside the support domain"),
         return ge::GRAPH_FAILED);
@@ -168,8 +194,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling->numUbBytes = static_cast<uint32_t>(ubSize);
     tiling->rankIdx = static_cast<uint32_t>(rankIdxValue);
     tiling->timeoutCycles = static_cast<uint64_t>(timeoutCyclesValue);
-    tiling->reserved[0] = 0U;
-    tiling->reserved[1] = 0U;
+    tiling->activeBytes = activeBytes;
+    tiling->completionBytes = static_cast<uint32_t>(completionBytesValue);
+    tiling->reserved = 0U;
 
     context->SetBlockDim(numVecCores);
     return ge::GRAPH_SUCCESS;
@@ -217,8 +244,8 @@ public:
             .DataType({ge::DT_INT32})
             .Format({ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND});
-        // AFD control plane: context is immutable during a round, while
-        // control_buffer / execution_state are advanced in place.
+        // AFD control plane: context is immutable during a round. Control and
+        // execution advance in place, as does the optional Active trailer.
         this->Input("context")
             .ParamType(REQUIRED)
             .DataType({ge::DT_UINT8})

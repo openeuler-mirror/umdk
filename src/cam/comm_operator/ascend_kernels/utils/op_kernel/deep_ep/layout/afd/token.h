@@ -5,6 +5,11 @@
  * Create: 2026-11-03
  * Note: Device header for the CAM DeepEP-compatible operators.
  * History: 2026-11-03 create for the cam_deepep operators
+ *
+ * AFD source: puxiaokun3721/DeepEP-Ascend @ 19fe6b7
+ * AFD file: deep_ep/include/deep_ep/layout/afd/token.hpp
+ * CAM modifications: Integrated the AFD token record and its
+ * payload and routing metadata offsets.
  */
 #pragma once
 #include <deep_ep/layout/afd/context.h>
