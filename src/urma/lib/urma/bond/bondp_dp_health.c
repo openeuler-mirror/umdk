@@ -297,6 +297,40 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
     }
 }
 
+/*
+ * Whether every imported tjetty is registered for health checking. Bond peers
+ * share the same topology, so a registered tjetty covers all of its local
+ * ports and comparing tjetty counts equals per-port coverage. Counting also
+ * stays correct when one local vjetty imports several tjettys. Called under
+ * ctx->mutex.
+ */
+bool bondp_hc_tjettys_all_registered(struct bondp_context *bdp_ctx)
+{
+    bondp_hc_ctx_t *hc_ctx = atomic_load(&bdp_ctx->hc_ctx);
+    if (hc_ctx == NULL) {
+        return false;
+    }
+
+    uint32_t registered_cnt = 0;
+    for (uint32_t i = 0; i < hc_ctx->node_num; ++i) {
+        bondp_hc_node_t *node = &hc_ctx->nodes[i];
+        (void)pthread_rwlock_rdlock(&node->lock);
+        bondp_target_jetty_t *tjetty = NULL;
+        UB_LIST_FOR_EACH (tjetty, hc_entry, &node->tjetty_list) {
+            registered_cnt++;
+        }
+        (void)pthread_rwlock_unlock(&node->lock);
+    }
+
+    uint32_t imported_cnt = atomic_load(&bdp_ctx->imported_tjetty_cnt);
+    if (imported_cnt != registered_cnt) {
+        URMA_LOG_ERR("AUTO_SKIP enable rejected: imported tjetty cnt=%u, health check "
+                     "registered tjetty cnt=%u.\n", imported_cnt, registered_cnt);
+        return false;
+    }
+    return true;
+}
+
 static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
                                    bondp_context_t *bdp_ctx);
 

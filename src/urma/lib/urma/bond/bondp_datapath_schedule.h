@@ -11,6 +11,7 @@
 #ifndef BONDP_DATAPATH_SCHEDULE_H
 #define BONDP_DATAPATH_SCHEDULE_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "bondp_connection.h"

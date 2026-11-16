@@ -42,6 +42,9 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
     }
 
     const bondp_comp_t *comp = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
+    /* With AUTO_SKIP_FAULTY active (RM Jetty + balance + enabled), a context
+     * BAD port does not make the jetty usable. */
+    bool auto_skip_active = bondp_jetty_auto_skip_active(comp);
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         /*
          * hc_valid is set after a rebuilt path passes health checking.  The
@@ -49,7 +52,8 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
          * virtual jetty is already usable before that first post.
          */
         if (comp->p_jetty[i] != NULL &&
-            (atomic_load(&comp->valid[i]) || atomic_load(&comp->hc_valid[i]))) {
+            (atomic_load(&comp->valid[i]) || atomic_load(&comp->hc_valid[i])) &&
+            !(auto_skip_active && atomic_load(&comp->bondp_ctx->port_status_bad[i]))) {
             return true;
         }
     }
@@ -792,6 +796,9 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         }
         return URMA_EINVAL;
     }
+    /* Computed once per post: only RM Jetty + balance + enabled context sets
+     * it to true (JFS / RC Jetty re-check keeps the legacy valid[]-only form). */
+    bool auto_skip_active = bondp_jetty_auto_skip_active(bdp_comp);
     for (int retry = 0; retry < BONDP_POST_SEND_MAX_RETRY; retry++) {
         urma_status_t ret = URMA_SUCCESS;
         int wr_count = 0;
@@ -936,7 +943,10 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             wr_entries[i]->target_idx = target_idx;
             wr_entries[i]->fixed_port = (hint != NULL);
         }
-        if (!atomic_load(&bdp_comp->valid[send_idx])) {
+        /* A hint-pinned WR ignores AUTO_SKIP BAD marks: the user explicitly
+         * chose the remote port and takes the egress risk. */
+        if (!bondp_jetty_port_usable(bdp_comp, (uint32_t)send_idx,
+                                      auto_skip_active && hint == NULL)) {
             for (int i = 0; i < wr_total; i++) {
                 wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)wr_entries[i];
                 hdr->entry_type = 0;
@@ -2014,6 +2024,29 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
     if (bdp_comp == NULL) {
         URMA_LOG_WARN_RL("Local jetty not found, skip send cr, idx=%d, local_id=%u\n", idx, cr->local_id);
         return CONVERT_SKIP;
+    }
+
+    /* AUTO_SKIP_FAULTY: mark status 4 before the WR entry lookup, because a
+     * failover-resent WR's entry may already be released by its backup-path
+     * completion while this CR still reports a real fault of the pjetty now
+     * installed at idx. Validate the instance under send_lock so late CRs from
+     * a rebuilt pjetty are dropped. Valid for both Jetty and JFS (same-layout
+     * union slot). */
+    if (bondp_auto_skip_active(bdp_comp->bondp_ctx) &&
+        cr->status == URMA_CR_LOC_ACCESS_ERR &&
+        idx >= 0 && (uint32_t)idx < URMA_UBAGG_DEV_MAX_NUM) {
+        bool current_pjetty_cr = false;
+        (void)pthread_spin_lock(&bdp_comp->send_lock);
+        urma_jetty_t *cur_pjetty = bdp_comp->p_jetty[idx];
+        if (cur_pjetty != NULL && cr->local_id == cur_pjetty->jetty_id.id) {
+            current_pjetty_cr = true;
+            bondp_set_port_status_bad(bdp_comp->bondp_ctx, (uint32_t)idx);
+        }
+        (void)pthread_spin_unlock(&bdp_comp->send_lock);
+        if (!current_pjetty_cr) {
+            URMA_LOG_WARN_RL("Ignore stale status 4 from old pjetty, idx=%d, cr_local_id=%u\n",
+                             idx, cr->local_id);
+        }
     }
 
     jfs_wr_entry_t *wr_entry = jfs_wr_buf_get(&bdp_comp->send_wr_buf, wr_id);

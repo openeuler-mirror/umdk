@@ -163,6 +163,20 @@ typedef struct bondp_context {
 #else
     std::atomic_bool port_status_bad[URMA_UBAGG_DEV_MAX_NUM];
 #endif
+    /* Auto skip faulty ports in balance mode path selection, configured via
+     * BONDP_USER_CTL_AUTO_SKIP_FAULTY. */
+#ifndef __cplusplus
+    atomic_bool auto_skip_faulty;
+#else
+    std::atomic_bool auto_skip_faulty;
+#endif
+    /* Jetty target imports (jfr excluded), for the AUTO_SKIP enable check.
+     * Atomic: import/unimport are not serialized with the enable path. */
+#ifndef __cplusplus
+    atomic_uint imported_tjetty_cnt;
+#else
+    std::atomic_uint imported_tjetty_cnt;
+#endif
 } bondp_context_t;
 
 typedef struct bondp_jfc {
@@ -359,6 +373,40 @@ static inline void bondp_seg_base_to_seg(const urma_seg_base_t *base, urma_seg_t
 static inline bool is_single_dev_mode(bondp_context_t *ctx)
 {
     return ctx->bonding_mode == BONDP_BONDING_MODE_STANDALONE;
+}
+
+/* AUTO_SKIP_FAULTY (BONDP_USER_CTL_AUTO_SKIP_FAULTY) active check. Balance mode
+ * is compared first so that other bonding modes do not pay the atomic load. */
+static inline bool bondp_auto_skip_active(const bondp_context_t *bdp_ctx)
+{
+    return bdp_ctx->bonding_mode == BONDP_BONDING_MODE_BALANCE &&
+           atomic_load(&bdp_ctx->auto_skip_faulty);
+}
+
+/* Jetty-scoped AUTO_SKIP check: only RM Jetty send scheduling consumes the
+ * context BAD port status. RC Jetty, JFS and receive paths must not use it. */
+static inline bool bondp_jetty_auto_skip_active(const bondp_comp_t *bdp_comp)
+{
+    return bdp_comp->comp_type == BONDP_COMP_JETTY &&
+           bdp_comp->v_jetty.jetty_cfg.jfs_cfg.trans_mode == URMA_TM_RM &&
+           bondp_auto_skip_active(bdp_comp->bondp_ctx);
+}
+
+/* Unified port usability for send scheduling: non-JETTY comps only check
+ * valid[]; a JETTY also rejects context BAD ports when auto_skip_active. */
+static inline bool bondp_jetty_port_usable(const bondp_comp_t *bdp_comp, uint32_t local_idx,
+                                           bool auto_skip_active)
+{
+    if (bdp_comp->comp_type != BONDP_COMP_JETTY) {
+        return atomic_load(&bdp_comp->valid[local_idx]) != 0;
+    }
+    if (!atomic_load(&bdp_comp->valid[local_idx])) {
+        return false;
+    }
+    if (auto_skip_active && atomic_load(&bdp_comp->bondp_ctx->port_status_bad[local_idx])) {
+        return false;
+    }
+    return true;
 }
 
 #endif // BONDP_TYPES_H
