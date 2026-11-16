@@ -28,8 +28,8 @@ static int cmd_npu_usage(admin_config_t *cfg)
                  "  urma_admin npu <NPU_ID> show dev <DEV> jfr   [JFR_ID]\n"
                  "  urma_admin npu <NPU_ID> show dev <DEV> jetty [JETTY_ID]\n"
                  "  urma_admin npu <NPU_ID> show dev <DEV> rc    [RC_ID]\n"
-                 "  urma_admin npu <NPU_ID> show dev <DEV> tp    [TP_ID]\n"
-                 "  urma_admin npu <NPU_ID> show dev <DEV> tpreuse\n"
+                 "  urma_admin npu <NPU_ID> show dev <DEV> tp    [TP_ID]   (not implemented yet)\n"
+                 "  urma_admin npu <NPU_ID> show dev <DEV> tpreuse         (not implemented yet)\n"
                  "  urma_admin npu <NPU_ID> set log_level <0-%u>\n"
                  "\n"
                  "Options:\n"
@@ -47,12 +47,57 @@ static int cmd_npu_usage(admin_config_t *cfg)
     return 0;
 }
 
-static bool npu_is_supported_res(const char *res)
+static int npu_parse_res_type(const char *res, tool_res_key_type_t *type)
 {
-    return strcmp(res, "jfc") == 0 || strcmp(res, "jfs") == 0 ||
-           strcmp(res, "jfr") == 0 || strcmp(res, "jetty") == 0 ||
-           strcmp(res, "rc") == 0 || strcmp(res, "tp") == 0 ||
-           strcmp(res, "tpreuse") == 0;
+    if (strcmp(res, "jfc") == 0) {
+        *type = TOOL_RES_KEY_JFC;
+    } else if (strcmp(res, "jfs") == 0) {
+        *type = TOOL_RES_KEY_JFS;
+    } else if (strcmp(res, "jfr") == 0) {
+        *type = TOOL_RES_KEY_JFR;
+    } else if (strcmp(res, "jetty") == 0) {
+        *type = TOOL_RES_KEY_JETTY;
+    } else if (strcmp(res, "rc") == 0) {
+        *type = TOOL_RES_KEY_RC;
+    } else {
+        (void)printf("Invalid resource type: %s, supported: jfc|jfs|jfr|jetty|rc\n", res);
+        return -EINVAL;
+    }
+    return 0;
+}
+
+static void npu_print_query_error(int ret)
+{
+    switch (ret) {
+        case -ENODEV:
+            (void)printf("NPU or device not found, check NPU_ID and DEV.\n");
+            break;
+        case -EOPNOTSUPP:
+            (void)printf("NPU resource query is not supported.\n");
+            break;
+        case -EMSGSIZE:
+            (void)printf("NPU resource query result is too large.\n");
+            break;
+        case -EPERM:
+        case -EACCES:
+            (void)printf("Permission denied, run as root or grant CAP_NET_ADMIN.\n");
+            break;
+        case -EIO:
+            (void)printf("H2D query failed, check that the H2D link is established.\n");
+            break;
+        case -EPROTO:
+            (void)printf("H2D query returned malformed data.\n");
+            break;
+        case -EINVAL:
+            (void)printf("Invalid NPU resource query parameters.\n");
+            break;
+        case -ENODATA:
+            (void)printf("No NPU resource data returned.\n");
+            break;
+        default:
+            (void)printf("NPU resource query failed, ret: %d.\n", ret);
+            break;
+    }
 }
 
 static int cmd_npu_show(admin_config_t *cfg)
@@ -63,30 +108,54 @@ static int cmd_npu_show(admin_config_t *cfg)
         return -EINVAL;
     }
 
-    arg = pop_arg(cfg);
-    if (arg == NULL) {
+    char *dev_name = pop_arg(cfg);
+    if (dev_name == NULL) {
         (void)printf("Missing device name.\n");
         return -EINVAL;
     }
 
-    arg = pop_arg(cfg);
-    if (arg == NULL) {
+    char *res = pop_arg(cfg);
+    if (res == NULL) {
         (void)printf("Missing resource type.\n");
         return -EINVAL;
     }
-    if (!npu_is_supported_res(arg)) {
-        (void)printf("Invalid resource type: %s.\n", arg);
+    /*
+     * TODO: TPID list/state/reuse are C-phase work.
+     */
+    if (strcmp(res, "tp") == 0 || strcmp(res, "tpreuse") == 0) {
+        (void)printf("NPU TPID query is not implemented yet.\n");
+        return -EOPNOTSUPP;
+    }
+
+    tool_res_key_type_t type;
+    int ret = npu_parse_res_type(res, &type);
+    if (ret != 0) {
+        return ret;
+    }
+
+    char *id_arg = pop_arg(cfg);
+    uint32_t key = 0;
+    uint32_t key_cnt = 0;
+    if (id_arg != NULL) {
+        ret = ub_str_to_u32(id_arg, &key);
+        if (ret != 0) {
+            (void)printf("Invalid resource ID: %s.\n", id_arg);
+            return -EINVAL;
+        }
+        key_cnt = 1;
+    }
+    if (cfg->argc != 0) {
+        (void)printf("Too many arguments.\n");
         return -EINVAL;
     }
 
-    /*
-     * TODO: Send URMA_CORE_H2D_QUERY_RES or URMA_CORE_H2D_SHOW_TPID_* with
-     * NPU_ID/DEV_NAME/query-key attributes, then print the dump result. The
-     * kernel H2D dump handlers currently return -EOPNOTSUPP.
-     */
-    (void)printf("NPU resource query is not implemented yet, npu: %u, resource: %s.\n",
-                 cfg->npu_id, arg);
-    return -EOPNOTSUPP;
+    ret = admin_cmd_npu_query_res(cfg->npu_id, dev_name, type, key, key_cnt);
+    if (ret != 0) {
+        npu_print_query_error(ret);
+        return ret;
+    }
+
+    return 0;
 }
 
 static int cmd_npu_set(admin_config_t *cfg)
