@@ -28,6 +28,13 @@ template <int NA, int L, int T, int NC> struct alignas(kNumUbAlignmentBytes) Com
     alignas(kNumUbAlignmentBytes) uint8_t jetty_info[NC][NA][96], ub_sqe[512];
     alignas(kNumUbAlignmentBytes) int metadata[2][T][4];
     alignas(kNumUbAlignmentBytes) int lane_to_entry[L], lane_to_member[L];
+    // [PERF] Immutable per-lane Context fields used by the record hot path:
+    // src_rank_idx picks the destination peer, capacity bounds the preflight and
+    // return_offset is the remote record base. Filled once per kernel start from
+    // the values the member scan has to read anyway, so the inner record loops
+    // touch UB only instead of doing 8 bypass-DCACHE GM reads per record.
+    alignas(kNumUbAlignmentBytes) uint32_t lane_src_rank[L], lane_capacity[L];
+    alignas(kNumUbAlignmentBytes) uint64_t lane_return_base[L];
     alignas(kNumUbAlignmentBytes) uint8_t control[256];
 };
 
@@ -156,6 +163,12 @@ __aicore__ void combine_send_impl(__gm__ bfloat16_t *x, __gm__ int *src_metadata
     uint32_t error = OK;
     for (int l = 0; l < L; ++l) {
         ub->lane_to_entry[l] = ub->lane_to_member[l] = -1;
+        // Sentinel for the lane cache: a lane without a member in this task is
+        // unreachable from the metadata path (preflight rejects it as BAD_ROUTE),
+        // so capacity 0 and src_rank NA can never select a destination.
+        ub->lane_src_rank[l] = static_cast<uint32_t>(NA);
+        ub->lane_capacity[l] = 0;
+        ub->lane_return_base[l] = 0;
     }
     uint64_t next_member = 0, next_segment = 0, total = 0;
     for (uint32_t i = 0; i < task.num_entries && error == OK; ++i) {
@@ -184,6 +197,11 @@ __aicore__ void combine_send_impl(__gm__ bfloat16_t *x, __gm__ int *src_metadata
             ub->lane_to_member[l] = m;
             const auto lane = recv_read(lanes + l);
             const auto ret = recv_read(return_lanes + l);
+            // [PERF] Cache what the record hot path needs; these two GM reads are
+            // required here for validation anyway, so the cache costs no traffic.
+            ub->lane_src_rank[l] = lane.src_rank_idx;
+            ub->lane_capacity[l] = lane.capacity;
+            ub->lane_return_base[l] = ret.return_offset;
             if (lane.src_rank_idx >= NA || lane.capacity == 0 || lane.capacity > kMaxLaneTokens ||
                 lane.phase != task.phase) {
                 error = BAD_ABI;
@@ -253,7 +271,7 @@ __aicore__ void combine_send_impl(__gm__ bfloat16_t *x, __gm__ int *src_metadata
                     error = BAD_ROUTE;
                     continue;
                 }
-                if (ub->lane_to_entry[md[0]] != md[3] || uint32_t(md[1]) >= lanes[md[0]].capacity) {
+                if (ub->lane_to_entry[md[0]] != md[3] || uint32_t(md[1]) >= ub->lane_capacity[md[0]]) {
                     error = BAD_ROUTE;
                 }
                 ++num_valid;
@@ -350,13 +368,17 @@ __aicore__ void combine_send_impl(__gm__ bfloat16_t *x, __gm__ int *src_metadata
                     if (md[0] < 0) {
                         continue;
                     }
-                    const auto lane = recv_read(lanes + md[0]);
-                    if (int(lane.src_rank_idx) != a) {
+                    // [PERF] Hot path is UB-only. Previously every (record, source
+                    // peer) pair re-read AFDLane (32B = 8 bypass-DCACHE scalar
+                    // loads) and the return-lane base from GM; both are immutable
+                    // Context fields cached by the member scan above.
+                    const uint32_t ml = uint32_t(md[0]);
+                    if (int(ub->lane_src_rank[ml]) != a) {
                         continue;
                     }
-                    peer.peer_info = ub->peer_infos + lane.src_rank_idx;
+                    peer.peer_info = ub->peer_infos + a;
                     const uint64_t offset =
-                        return_lanes[md[0]].return_offset + (uint64_t(md[1]) * K + md[2]) * directory.return_stride;
+                        ub->lane_return_base[ml] + (uint64_t(md[1]) * K + md[2]) * directory.return_stride;
                     append_write_task<1, Timeout>(jetty_a, peer, offset, x + uint64_t(row + j) * H, nullptr, 2 * H, 0,
                                                   num_task_tokens, inflight);
                 }

@@ -551,6 +551,9 @@ __aicore__ inline void dispatch_body(const Params &p, __gm__ void *x, __gm__ sf_
                                  (jetty_f.jetty_info->cq_depth & (jetty_f.jetty_info->cq_depth - 1)) == 0 &&
                                  jetty_f.jetty_info->num_wqebb_bytes == handle::kNumWQEBBBytes);
                 uint32_t inflight = 0, num_task_tokens = 0;
+                // [PERF] Fixed record base of this (lane, peer) pair: one GM read
+                // per peer segment instead of one per emitted record.
+                const uint64_t records_offset = addresses[lane_idx * num_ranks + f].records_offset;
                 for (uint32_t i = 0; i < size; ++i) {
                     const uint32_t row = tile * uint32_t(num_tokens_per_tile) + i, global = begin + row;
                     const auto gm_meta = ws + w.metadata_send_buffer + uint64_t(row) * uint64_t(num_metadata_bytes);
@@ -560,7 +563,7 @@ __aicore__ inline void dispatch_body(const Params &p, __gm__ void *x, __gm__ sf_
                         }
                         peer.peer_info = peer_info + f;
                         const uint64_t off =
-                            addresses[lane_idx * num_ranks + f].records_offset +
+                            records_offset +
                             uint64_t(dst_slot_idx[int(i) * num_topk + k]) * token_layout.record_stride();
                         append_write_task<2>(
                             jetty_f, peer, off,

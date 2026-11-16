@@ -32,6 +32,32 @@
 // transport-level drain/put calls keep one fixed compile-time timeout.
 namespace deep_ep::afd::rt {
 constexpr uint32_t kNumMaxPendingWrites = 32;
+// Request completion for every payload WRITE by default.
+//
+// Completion contract the batch-tail mode would have to satisfy (why it is off):
+//   * odr (ordering, bits 18:16 of the SQE) = 5 requests the strongest request
+//     ordering for THIS WQE; it does not widen a later WQE's ordering to cover
+//     earlier ones.
+//   * fence (bit 19) = 1 makes the current WQE wait for all prior WQEs to
+//     complete. It is a wait, not an aggregation of their completions.
+//   * cqe (bit 21) = 1 makes THIS WQE publish exactly one CQE on completion.
+//     The CQ is a ring of per-WQE entries; "n_completions" in packed_head is the
+//     consumer cursor (see handle.h poll_cq), so it only has the meaning
+//     "CQEs consumed" when every SQE publishes one.
+// Therefore a batch-tail CQE proves the tail WQE completed; it does not by
+// itself prove that the batch's earlier payload writes reached the visibility
+// the A-side Done/Consumed protocol requires. Enabling the mode needs either a
+// documented device guarantee for that ordering+cqe combination, or an explicit
+// fence/notify between the last payload write and the ACK publication.
+// Keep this switch in sync with dispatch_send.h.
+// NOTE: this switch only enables the batch-tail completion experiment. The lane
+// metadata caching and dispatch address hoisting in this change are independent
+// and stay active either way, so a run with the switch off is NOT a rollback of
+// the whole change and must not be reported as one.
+#ifndef CAM_DEEPEP_BATCHED_FINAL_FLAGS
+#define CAM_DEEPEP_BATCHED_FINAL_FLAGS 0
+#endif
+constexpr bool kEnableBatchedFinalFlags = CAM_DEEPEP_BATCHED_FINAL_FLAGS != 0;
 constexpr int64_t kDefaultTimeoutCycles = 1000000000;
 // Correct physical UB on 950/3510. 192 KiB is the A2/2201 value and must not be
 // used as the budget; the host still validates against GetCoreMemSize(UB).
@@ -135,7 +161,15 @@ __simt_vf__ __aicore__ __launch_bounds__(kNumWritesPerTask *warpSize) void issue
         const auto token_sqebb_idx = task_sqebb_idx + token_idx * kNumWQEBBsPerToken;
         uint64_t wqe_word = 0;
         if (lane_idx == 0) {
-            wqe_word = handle::kWriteSQEHeaderTemplate | handle::kWriteSQEFinalFlags;
+            // The experimental mode requests a completion only at the batch tail.
+            wqe_word = handle::kWriteSQEHeaderTemplate;
+            if constexpr (kEnableBatchedFinalFlags) {
+                if (token_idx + 1 == num_tokens) {
+                    wqe_word |= handle::kWriteSQEFinalFlags;
+                }
+            } else {
+                wqe_word |= handle::kWriteSQEFinalFlags;
+            }
             wqe_word |= static_cast<uint64_t>((token_sqebb_idx & handle::kSQDepth) == 0) << 31;
             wqe_word |= token_sqebb_idx & (handle::kSQDepth - 1);
         }
@@ -182,7 +216,8 @@ __aicore__ inline void issue_write_task(handle::HcommJetty &jetty, uint32_t &num
     if (inflight + num_tokens > kNumMaxPendingWrites) {
         flush_writes(jetty, inflight);
     }
-    // Each preceding group has drained; at most 32 CQEs/64 SQ BBs are live.
+    // Each preceding group has drained; at most kNumMaxPendingWrites records
+    // (<= 2 SQ BBs each) and at most one CQE per record are live.
     // Existing caller checks cq_depth > 32+10, so no poll of unpublished WRs.
     const auto current_head = static_cast<uint32_t>(jetty.jetty_info->packed_head);
     asc_sync_notify(PIPE_S, PIPE_V, EVENT_ID4);
@@ -192,7 +227,12 @@ __aicore__ inline void issue_write_task(handle::HcommJetty &jetty, uint32_t &num
                                                       jetty.jetty_info->sq_base_addr, current_head, num_tokens);
     asc_sync_notify(PIPE_V, PIPE_S, EVENT_ID4);
     asc_sync_wait(PIPE_V, PIPE_S, EVENT_ID4);
-    const auto completions = static_cast<uint32_t>(jetty.jetty_info->packed_head >> kNumHighHalfShiftBits) + num_tokens;
+    // One CQE per issue batch when batched final flags are on, so the expected
+    // completion count in packed_head[63:32] advances by one per batch instead
+    // of one per record. drain() polls this same counter, and the SQ head below
+    // still advances by num_tokens * kNumWQEBBsPerToken (one SQE per record).
+    const auto completions = static_cast<uint32_t>(jetty.jetty_info->packed_head >> kNumHighHalfShiftBits) +
+                             (kEnableBatchedFinalFlags ? 1u : num_tokens);
     jetty.jetty_info->packed_head = uint64_t(uint32_t(current_head + num_tokens * kNumWQEBBsPerToken)) |
                                     (uint64_t(completions) << kNumHighHalfShiftBits);
     inflight += num_tokens;
