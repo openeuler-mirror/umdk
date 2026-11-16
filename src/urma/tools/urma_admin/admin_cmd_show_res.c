@@ -296,6 +296,10 @@ static void admin_print_res_dev(struct nlattr *head, int len)
 
 typedef struct admin_query_res_cb_arg {
     tool_res_key_type_t type;
+    uint32_t idx;
+    bool count_printed;
+    bool header_printed;
+    bool received;
 } admin_query_res_cb_arg_t;
 
 static void print_query_res(struct nlattr *attr_ptr, tool_res_key_type_t type, int len)
@@ -551,6 +555,185 @@ static int admin_nl_query_res(const admin_cmd_query_res_t *arg, int (*cb)(struct
     int ret = admin_nl_send_recv_msg(msg, cb, cb_arg, UBCORE_GENL);
     admin_nl_free_msg(msg);
     return ret;
+}
+
+static void admin_h2d_list_res_cnt(tool_res_key_type_t type, uint32_t cnt)
+{
+    switch (type) {
+        case TOOL_RES_KEY_JFC:
+            (void)printf("\n----------JFC----------\n");
+            (void)printf("jfc_cnt             :%u \n", cnt);
+            break;
+        case TOOL_RES_KEY_JFS:
+            (void)printf("\n----------JFS----------\n");
+            (void)printf("jfs_cnt             :%u \n", cnt);
+            break;
+        case TOOL_RES_KEY_JFR:
+            (void)printf("\n----------JFR----------\n");
+            (void)printf("jfr_cnt             :%u \n", cnt);
+            break;
+        case TOOL_RES_KEY_JETTY:
+            (void)printf("\n---------JETTY---------\n");
+            (void)printf("jetty_cnt             :%u \n", cnt);
+            break;
+        case TOOL_RES_KEY_RC:
+            (void)printf("\n----------RC-----------\n");
+            (void)printf("rc_cnt              :%u \n", cnt);
+            break;
+        default:
+            break;
+    }
+}
+
+static void admin_h2d_list_res_val(tool_res_key_type_t type, uint32_t idx, uint32_t id)
+{
+    switch (type) {
+        case TOOL_RES_KEY_JFC:
+            (void)printf("jfc_id[%u]          \t:%u\n", idx, id);
+            break;
+        case TOOL_RES_KEY_JFS:
+            (void)printf("jfs_id[%u]          \t:%u\n", idx, id);
+            break;
+        case TOOL_RES_KEY_JFR:
+            (void)printf("jfr_id[%u]          \t:%u\n", idx, id);
+            break;
+        case TOOL_RES_KEY_JETTY:
+            (void)printf("jetty_id[%u]          \t:%u\n", idx, id);
+            break;
+        case TOOL_RES_KEY_RC:
+            (void)printf("rc_id[%u]           \t:%u\n", idx, id);
+            break;
+        default:
+            break;
+    }
+}
+
+static int admin_h2d_query_res_list_cb(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attr_ptr = genlmsg_data(genlhdr);
+    int len = genlmsg_attrlen(genlhdr, 0);
+    admin_query_res_cb_arg_t *cb_arg = (admin_query_res_cb_arg_t *)arg;
+    struct nlattr *nla;
+    int rem;
+
+    if (!cb_arg->header_printed) {
+        (void)printf("**********%s**********\n", g_query_res_type[cb_arg->type]);
+        cb_arg->header_printed = true;
+    }
+
+    nla_for_each_attr(nla, attr_ptr, len, rem)
+    {
+        int attr = nla_type(nla);
+
+        switch (cb_arg->type) {
+            case TOOL_RES_KEY_JFC:
+                if (attr == UBCORE_RES_DEV_JFC_CNT && !cb_arg->count_printed) {
+                    admin_h2d_list_res_cnt(cb_arg->type, nla_get_u32(nla));
+                    cb_arg->count_printed = true;
+                } else if (attr == UBCORE_RES_DEV_JFC_VAL) {
+                    admin_h2d_list_res_val(cb_arg->type, cb_arg->idx++, nla_get_u32(nla));
+                }
+                break;
+            case TOOL_RES_KEY_JFS:
+                if (attr == UBCORE_RES_DEV_JFS_CNT && !cb_arg->count_printed) {
+                    admin_h2d_list_res_cnt(cb_arg->type, nla_get_u32(nla));
+                    cb_arg->count_printed = true;
+                } else if (attr == UBCORE_RES_DEV_JFS_VAL) {
+                    admin_h2d_list_res_val(cb_arg->type, cb_arg->idx++, nla_get_u32(nla));
+                }
+                break;
+            case TOOL_RES_KEY_JFR:
+                if (attr == UBCORE_RES_DEV_JFR_CNT && !cb_arg->count_printed) {
+                    admin_h2d_list_res_cnt(cb_arg->type, nla_get_u32(nla));
+                    cb_arg->count_printed = true;
+                } else if (attr == UBCORE_RES_DEV_JFR_VAL) {
+                    admin_h2d_list_res_val(cb_arg->type, cb_arg->idx++, nla_get_u32(nla));
+                }
+                break;
+            case TOOL_RES_KEY_JETTY:
+                if (attr == UBCORE_RES_DEV_JETTY_CNT && !cb_arg->count_printed) {
+                    admin_h2d_list_res_cnt(cb_arg->type, nla_get_u32(nla));
+                    cb_arg->count_printed = true;
+                } else if (attr == UBCORE_RES_DEV_JETTY_VAL) {
+                    admin_h2d_list_res_val(cb_arg->type, cb_arg->idx++, nla_get_u32(nla));
+                }
+                break;
+            case TOOL_RES_KEY_RC:
+                if (attr == UBCORE_RES_DEV_RC_CNT && !cb_arg->count_printed) {
+                    admin_h2d_list_res_cnt(cb_arg->type, nla_get_u32(nla));
+                    cb_arg->count_printed = true;
+                } else if (attr == UBCORE_RES_DEV_RC_VAL) {
+                    admin_h2d_list_res_val(cb_arg->type, cb_arg->idx++, nla_get_u32(nla));
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (len > 0) {
+        cb_arg->received = true;
+    }
+    return 0;
+}
+
+/* H2D variant of cb_handler: arg is always a genuine admin_query_res_cb_arg_t, so it may
+ * be written (cb_arg->received). cb_handler must stay read-only because it is also passed
+ * an admin_config_t * at the v2p call sites. */
+static int cb_handler_h2d(struct nl_msg *msg, void *arg)
+{
+    struct nlmsghdr *hdr = nlmsg_hdr(msg);
+    struct genlmsghdr *genlhdr = genlmsg_hdr(hdr);
+    struct nlattr *attr_ptr = genlmsg_data(genlhdr);
+    int len = genlmsg_attrlen(genlhdr, 0);
+    admin_query_res_cb_arg_t *cb_arg = (admin_query_res_cb_arg_t *)arg;
+
+    print_query_res(attr_ptr, cb_arg->type, len);
+    if (len > 0) {
+        cb_arg->received = true;
+    }
+
+    return 0;
+}
+
+static int admin_nl_h2d_query_res(uint32_t npu_id, const char *dev_name,
+                                  tool_res_key_type_t type, uint32_t key,
+                                  uint32_t key_cnt)
+{
+    admin_query_res_cb_arg_t cb_arg = {.type = type};
+    struct nl_msg *msg = admin_nl_alloc_msg(URMA_CORE_H2D_QUERY_RES, NLM_F_DUMP, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    admin_nl_put_u32(msg, UBCORE_ATTR_NPU_ID, npu_id);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY, key);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_TYPE, (uint32_t)type);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_EXT, 0);
+    admin_nl_put_u32(msg, UBCORE_ATTR_TOOL_QUERY_KEY_CNT, key_cnt);
+
+    int ret = admin_nl_send_recv_msg(msg,
+        key_cnt == 0 ? admin_h2d_query_res_list_cb : cb_handler_h2d,
+        &cb_arg, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    if (ret != 0) {
+        return ret;
+    }
+    if (!cb_arg.received) {
+        return -ENODATA;
+    }
+
+    return 0;
+}
+
+int admin_cmd_npu_query_res(uint32_t npu_id, const char *dev_name,
+                            tool_res_key_type_t type, uint32_t key,
+                            uint32_t key_cnt)
+{
+    return admin_nl_h2d_query_res(npu_id, dev_name, type, key, key_cnt);
 }
 
 static int admin_cmd_show_res(const char *dev_name, tool_res_key_type_t type, uint32_t key,
