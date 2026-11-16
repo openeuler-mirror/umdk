@@ -16,6 +16,24 @@ namespace CVSoftSync {
     constexpr uint32_t SOFT_SYNC_SPACE_SIZE = 512;
 }
 
+// Combine data-as-flag. A receive token is h * sizeof(bf16) bytes, cut into whole 512B blocks
+// (256 bf16 elements; tiling rejects an h that is not a multiple of 256). This rank's gmm1 writes
+// SENTINEL_FLAG into the last 32B of every block before it sends the token, and the peer's gmm2
+// epilogue overwrites those bytes with the real payload. A block has landed exactly when none of
+// its tail words still hold the sentinel. The sentinel sits in bytes the payload overwrites, so
+// the receive stride is unchanged.
+namespace CombineDataAsFlag {
+    // Two bf16 sNaNs (0x7F81), compared together as one int32 word.
+    constexpr int32_t SENTINEL_FLAG = 0x7F817F81;
+    constexpr uint32_t BLOCK_BYTES = 512;
+    constexpr uint32_t TAIL_BYTES = 32;
+    constexpr uint32_t TAIL_OFFSET = BLOCK_BYTES - TAIL_BYTES;   // 480
+    constexpr uint32_t INTS_PER_BLOCK = BLOCK_BYTES / sizeof(int32_t);
+    constexpr uint32_t TAIL_INTS = TAIL_BYTES / sizeof(int32_t);  // 8
+    // Blocks per token. h must be a multiple of 256; tiling rejects anything else.
+    constexpr uint32_t BLOCK_ELEMS = 256;
+}
+
 template<typename T>
 __aicore__ inline T FlushAndGetValue(AscendC::GlobalTensor<T> &globalTensor, uint64_t index)
 {

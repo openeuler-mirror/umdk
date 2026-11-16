@@ -85,6 +85,8 @@ constexpr uint32_t SINGLE_HIDDEN_INDEX = 2;
 constexpr uint32_t MAX_TENSOR_COUNT = 256;
 constexpr uint32_t MB_SIZE = 1024 * 1024;
 constexpr uint32_t DOUBLE_BUFFER = 2;
+// bf16 elements in one gmm2 N tile, i.e. one 512B block of the combine receive region.
+constexpr uint32_t COMBINE_BLOCK_ELEMS = 256;
 }  // namespace
 
 namespace optiling {
@@ -751,6 +753,15 @@ static ge::graphStatus FusedDeepMoeTilingFuncImpl(gert::TilingContext &context)
     const int64_t batchSize = xStorageShape->GetStorageShape().GetDim(0);
     tilingData->fusedDeepMoeInfo.bs = batchSize;
     const int64_t hiddenSize = xStorageShape->GetStorageShape().GetDim(1);
+    // The combine receive region is laid out as whole 512B blocks, one per gmm2 N tile of 256 bf16
+    // elements, and the data-as-flag sentinel lives in the last 32B of each block. A hidden size that
+    // is not a multiple of 256 leaves a final tile narrower than 480B, so its sentinel bytes are never
+    // overwritten and every token would wait on them forever. Reject instead of hanging at run time.
+    OPS_ERR_IF(hiddenSize % COMBINE_BLOCK_ELEMS != 0,
+        OPS_LOG_E(nodeName,
+            "hidden size must be a multiple of %u for the combine receive layout, but got %ld.",
+            COMBINE_BLOCK_ELEMS, hiddenSize),
+        return ge::GRAPH_FAILED);
     tilingData->fusedDeepMoeInfo.h = hiddenSize;
 
     const gert::StorageShape *expertIdsStorageShape = context.GetInputShape(INPUT_EXPERT_IDS_INDEX);

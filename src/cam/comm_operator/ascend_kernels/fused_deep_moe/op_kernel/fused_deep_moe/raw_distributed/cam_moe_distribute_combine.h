@@ -38,6 +38,22 @@ constexpr uint64_t STATE_WIN_OFFSET = 900 * 1024;
 constexpr uint16_t SEND_SYNC_EVENT_ID = 6;
 constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
 
+// Combine data-as-flag.
+//
+// A token occupies h * sizeof(ExpandXType) bytes of the receive region, cut into whole 512B blocks by
+// the gmm2 N tile width (256 bf16 elements; tiling rejects any h that is not a multiple of it). This
+// rank's gmm1 primes the last 32B of every block with CombineDataAsFlag::SENTINEL_FLAG, and a peer's
+// gmm2 epilogue writes the block's payload densely, overwriting those bytes. So "the tail is no longer
+// the sentinel" means "this block has landed": no counter, no separate flag word, and no ordering
+// between a data write and a flag write.
+//
+// The layout costs nothing -- the sentinel sits in bytes the payload overwrites anyway, so
+// expertPerSizeOnWin_ and every other stride are unchanged.
+//
+// Set to 0 to restore the previous whole-batch SetStatus/WaitDispatch handshake. Both paths stay in the
+// file so a regression can be attributed by rebuilding with this one constant changed.
+#define ENABLE_COMBINE_DATA_AS_FLAG 1
+
 template <AscendC::HardEvent event>
 __aicore__ inline void SyncFunc()
 {
@@ -63,6 +79,12 @@ struct CombineCalcInfo {
 template <TemplateMC2TypeClass>
 class CamMoeDistributeCombine {
 public:
+    // Shared-expert execution uses the original send/receive handshake; only ordinary deep-fuse runs
+    // the per-slot combine path on both sibling AIVs.
+    static constexpr bool kUseCombineSentinel =
+        (ENABLE_COMBINE_DATA_AS_FLAG != 0) && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0) &&
+        ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) == 0);
+
     __aicore__ inline CamMoeDistributeCombine(){};
     __aicore__ inline void Init(GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount,
                                 GM_ADDR tpSendCount, GM_ADDR scales, GM_ADDR xActiveMask, GM_ADDR XOut,
@@ -98,6 +120,7 @@ private:
     __aicore__ inline void SplitCoreCal();
     __aicore__ inline void SetStatus();
     __aicore__ inline void WaitDispatch();
+    __aicore__ inline bool CombineSlotReady(GM_ADDR slotAddr);
     __aicore__ GM_ADDR GetWinAddrByRankId(const int32_t rankId, const uint8_t domain, const uint8_t expertLocalId = 0U)
     {
         if (domain == EP_DOMAIN) {
@@ -213,6 +236,9 @@ private:
     uint64_t totalWinSize_{0};
     TQueBind<QuePosition::VECIN, QuePosition::VECOUT, 1> moeQueue_;
     TQue<QuePosition::VECIN, 1> moeSumQueue_;
+    // Keep sparse tail transfers separate from payload transfers: both are MTE2-to-V, and a shared
+    // event can let a payload consumer observe a poll transfer instead of its own data.
+    TQue<QuePosition::VECIN, 1> combineTailQueue_;
     TQueBind<QuePosition::VECIN, QuePosition::VECOUT, 1> gmTpSendCountQueue_;
     TQue<QuePosition::VECIN, 1> gmTpSendCountInQueue_;
     TQue<QuePosition::VECIN, 1> winTpSendCountInQueue_;
@@ -235,6 +261,8 @@ private:
     TBuf<> xActMaskTBuf_;
     TBuf<> xActMaskCastTBuf_;
     TBuf<> xActMaskSumTBuf_;
+    // Padded tail words and one aligned comparison mask per 64-int32 repeat.
+    TBuf<> combinePollBuf_;
     float sumTarget_{0.0};
     int32_t epStateValue_;
 };
@@ -267,7 +295,13 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->fusedDeepMoeInfo.h;
     axisK_ = tilingData->fusedDeepMoeInfo.k;
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
+    // Token work is split over every vector core once readiness is per-token: the sentinel poll and the
+    // fold for a token are independent of every other token, so there is no reason to keep half the
+    // cores idle waiting on a batch-wide signal. The non-sentinel paths still hand the work to one
+    // sub-block (see gmm2), so they keep the old count and index.
+    if constexpr (kUseCombineSentinel) {
+        aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
+    } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
         aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
     } else {
         aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
@@ -307,7 +341,10 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     }
 
     InitStatusTargetSum();
-    if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
+    if constexpr (kUseCombineSentinel) {
+        // Every vector core participates, so the index is the raw AIV id (0 .. aivNum_ - 1).
+        coreIdx_ = AscendC::GetBlockIdx();
+    } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
         coreIdx_ = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
     }
     SplitCoreCal();
@@ -368,7 +405,11 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     tpipe_->Reset();
     uint32_t bsMulTopkSizeAligned = Ceil(axisBS_ * axisK_ * sizeof(int32_t), UB_ALIGN) * UB_ALIGN;
     tpipe_->InitBuffer(readStateBuf_, UB_ALIGN);
-    tpipe_->InitBuffer(statusBuf_, sendRankNum_ * UB_ALIGN);
+    // Whole-batch WaitDispatch is compiled out on the sentinel path, and these four buffers exist only
+    // for that spin. Keep them off this core's UB so the per-token poll does not pay for them.
+    if constexpr (!kUseCombineSentinel) {
+        tpipe_->InitBuffer(statusBuf_, sendRankNum_ * UB_ALIGN);
+    }
     tpipe_->InitBuffer(expertIdsBuf_, bsMulTopkSizeAligned);
     tpipe_->InitBuffer(expandScalesBuf_, bsMulTopkSizeAligned);
     tpipe_->InitBuffer(tokenBuf_, axisH_ * sizeof(ExpandXType));
@@ -377,9 +418,22 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AlltoAllBuf
     tpipe_->InitBuffer(sumFloatBuf_, axisHFloatSize_);
     tpipe_->InitBuffer(indexCountsBuf_, bsMulTopkSizeAligned);
     tpipe_->InitBuffer(moeSumQueue_, BUFFER_NUM, axisHExpandXTypeSize_);
-    tpipe_->InitBuffer(gatherMaskOutBuf_, epWorldSize_ * sizeof(float));
-    tpipe_->InitBuffer(gatherTmpBuf_, sizeof(uint32_t));
-    tpipe_->InitBuffer(statusSumOutBuf_, sizeof(float));
+    if constexpr (!kUseCombineSentinel) {
+        tpipe_->InitBuffer(gatherMaskOutBuf_, epWorldSize_ * sizeof(float));
+        tpipe_->InitBuffer(gatherTmpBuf_, sizeof(uint32_t));
+        tpipe_->InitBuffer(statusSumOutBuf_, sizeof(float));
+    }
+    // Scratch for an exact int32 sentinel comparison. The tail queue is padded to complete
+    // CompareScalar repeats; the poll buffer holds one aligned mask per repeat.
+    if constexpr (kUseCombineSentinel) {
+        const uint32_t blocks = axisH_ / CombineDataAsFlag::BLOCK_ELEMS;
+        const uint32_t tailWords = blocks * CombineDataAsFlag::TAIL_INTS;
+        const uint32_t compareRepeats = Ceil(tailWords, 64U);
+        const uint32_t paddedTailBytes = compareRepeats * 64U * sizeof(int32_t);
+        const uint32_t maskBytes = compareRepeats * UB_ALIGN;
+        tpipe_->InitBuffer(combinePollBuf_, maskBytes + UB_ALIGN);
+        tpipe_->InitBuffer(combineTailQueue_, 1U, paddedTailBytes);
+    }
 
     if constexpr (EXEC_FLAG & EXEC_FLAG_X_ACTIVE_MASK) {
         axisBsAlignSize_ = Ceil(axisBS_ * sizeof(bool), UB_ALIGN) * UB_ALIGN;
@@ -628,6 +682,64 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitDispatc
     AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
 }
 
+// Poll every int32 word in every sparse tail. A tail is ready only after none of its words still
+// carries the sentinel; the payload is fetched separately by LocalWindowCopy after this returns true.
+template <TemplateMC2TypeClass>
+__aicore__ inline bool CamMoeDistributeCombine<TemplateMC2TypeFunc>::CombineSlotReady(
+    GM_ADDR slotAddr)
+{
+    const uint32_t blocksPerToken = axisH_ / CombineDataAsFlag::BLOCK_ELEMS;
+    if (blocksPerToken == 0U) {
+        return true;
+    }
+    static_assert(sizeof(ExpandXType) == 2, "combine sentinel blocks are 256 2-byte elements");
+    const uint32_t tailWords = blocksPerToken * CombineDataAsFlag::TAIL_INTS;
+    const uint32_t compareRepeats = (tailWords + 63U) / 64U;
+    const uint32_t paddedWords = compareRepeats * 64U;
+    GlobalTensor<int32_t> tailGM;
+    tailGM.SetGlobalBuffer(
+        (__gm__ int32_t *)(slotAddr + CombineDataAsFlag::TAIL_OFFSET),
+        (static_cast<uint64_t>(blocksPerToken - 1U) * CombineDataAsFlag::BLOCK_BYTES +
+         CombineDataAsFlag::TAIL_BYTES) / sizeof(int32_t));
+
+    DataCopyParams tailParams{
+        static_cast<uint16_t>(blocksPerToken), 1U,
+        static_cast<uint16_t>(CombineDataAsFlag::BLOCK_BYTES / UB_ALIGN - 1U), 0U};
+    LocalTensor<int32_t> tailUb = combineTailQueue_.AllocTensor<int32_t>();
+    DataCopy(tailUb, tailGM, tailParams);
+    combineTailQueue_.EnQue(tailUb);
+    tailUb = combineTailQueue_.DeQue<int32_t>();
+
+    LocalTensor<uint8_t> maskBytes = combinePollBuf_.Get<uint8_t>();
+    // CompareScalar consumes complete 64-int32 repeats. The queue is padded so the final
+    // repeat can be compared without another UB-to-UB transfer; padding cannot match the sentinel.
+    if (paddedWords > tailWords) {
+        AscendC::Duplicate<int32_t>(
+            tailUb[tailWords], static_cast<int32_t>(0), paddedWords - tailWords);
+        AscendC::PipeBarrier<PIPE_V>();
+    }
+    AscendC::SetMaskNorm();
+    for (uint32_t repeat = 0; repeat < compareRepeats; ++repeat) {
+        AscendC::Duplicate<int32_t>(
+            maskBytes[repeat * UB_ALIGN].ReinterpretCast<int32_t>(), 0, UB_ALIGN / sizeof(int32_t));
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::CompareScalar<int32_t, uint8_t>(
+            maskBytes[repeat * UB_ALIGN], tailUb[repeat * 64U],
+            CombineDataAsFlag::SENTINEL_FLAG, AscendC::CMPMODE::EQ, 64U);
+    }
+    SyncFunc<AscendC::HardEvent::V_S>();
+
+    LocalTensor<uint32_t> masks = maskBytes.ReinterpretCast<uint32_t>();
+    bool ready = true;
+    for (uint32_t repeat = 0; repeat < compareRepeats; ++repeat) {
+        if (masks.GetValue(repeat * 8U) != 0U || masks.GetValue(repeat * 8U + 1U) != 0U) {
+            ready = false;
+        }
+    }
+    combineTailQueue_.FreeTensor<int32_t>(tailUb);
+    return ready;
+}
+
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindowCopy()
 {
@@ -694,30 +806,61 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::LocalWindow
         uint32_t index = tokenIndex * axisK_;
         SyncFunc<AscendC::HardEvent::MTE3_V>();
         Duplicate(sumFloatBufLocal, (float)0, axisH_);
+        // Which of this token's slots are real: a negative expert id means it did not route there, so
+        // there is nothing to wait for and nothing to fold.
+        const uint32_t tokenBase = index;
+        uint32_t pending = 0;
         for (uint32_t i = 0; i < axisK_; i++) {
-            int32_t moeExpert = expertIdsLocal.GetValue(index);
-            if (moeExpert < 0) {
-                index++;
-                continue;
+            pending |= static_cast<uint32_t>(expertIdsLocal.GetValue(tokenBase + i) >= 0) << i;
+        }
+        // Fold a slot the moment it lands instead of waiting for the whole topk first.
+        //
+        // The wait and the fold used to be two phases: every slot had to be ready before the first
+        // payload was even fetched. Interleaving them lets a slot's payload transfer and vector work
+        // overlap the wait for the slots that have not arrived, so the token's critical path becomes
+        // "wait for the last slot" rather than "wait for the last slot, then fold them all".
+        //
+        // It cannot publish the result early: the fold accumulates into sumFloatBufLocal and the store
+        // below still needs every slot, so the output is identical. The win is latency, not work.
+        //
+        // The rotation matters as much as the early fold. Each pass re-checks only what is still
+        // outstanding, so a slot that is already in never sits behind a slot that is slow -- otherwise
+        // the eighth slot landing first would still be invisible until the first one arrived.
+        while (pending != 0U) {
+            for (uint32_t i = 0; i < axisK_; i++) {
+                if ((pending & (1U << i)) == 0U) {
+                    continue;
+                }
+                GM_ADDR slotBase = (__gm__ uint8_t *)(epWindowGM_) +
+                                   expertPerSizeOnWin_ * expertIdsLocal.GetValue(tokenBase + i) +
+                                   indexCountsLocal.GetValue(tokenBase + i) * axisHExpandXTypeSize_;
+                if constexpr (kUseCombineSentinel) {
+                    // Poll only the sparse tails. Fetch the assigned slice after readiness is known.
+                    if (!CombineSlotReady(slotBase)) {
+                        continue;
+                    }
+                }
+                pending &= ~(1U << i);
+
+                float scaleVal = expandScalesLocal.GetValue(tokenBase + i);
+                GM_ADDR wAddr = slotBase + tokenOffset * sizeof(ExpandXType);
+                rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)wAddr);
+                LocalTensor<ExpandXType> tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
+                DataCopy(tmpUb, rowTmpGlobal_, processLen);
+                moeSumQueue_.EnQue(tmpUb);
+                tmpUb = moeSumQueue_.DeQue<ExpandXType>();
+                Cast(rowTmpFloatLocal, tmpUb, AscendC::RoundMode::CAST_NONE, processLen);
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Muls(mulBufLocal, rowTmpFloatLocal, scaleVal, processLen);
+                AscendC::PipeBarrier<PIPE_V>();
+                AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, mulBufLocal, processLen);
+                moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
             }
-            float scaleVal = expandScalesLocal.GetValue(index);
-            GM_ADDR wAddr = (__gm__ uint8_t *)(epWindowGM_) +
-                            expertPerSizeOnWin_ * moeExpert +
-                            indexCountsLocal.GetValue(index) * axisHExpandXTypeSize_ +
-                            tokenOffset * sizeof(ExpandXType);
-            rowTmpGlobal_.SetGlobalBuffer((__gm__ ExpandXType *)wAddr);
-            ExpandXType val = rowTmpGlobal_.GetValue(0);
-            LocalTensor<ExpandXType> tmpUb = moeSumQueue_.AllocTensor<ExpandXType>();
-            DataCopy(tmpUb, rowTmpGlobal_, processLen);
-            moeSumQueue_.EnQue(tmpUb);
-            tmpUb = moeSumQueue_.DeQue<ExpandXType>();
-            Cast(rowTmpFloatLocal, tmpUb, AscendC::RoundMode::CAST_NONE, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Muls(mulBufLocal, rowTmpFloatLocal, scaleVal, processLen);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Add(sumFloatBufLocal, sumFloatBufLocal, mulBufLocal, processLen);
-            index++;
-            moeSumQueue_.FreeTensor<ExpandXType>(tmpUb);
+            if constexpr (kUseCombineSentinel) {
+                if (pending != 0U) {
+                    SPIN_WAIT_CYCLES();
+                }
+            }
         }
         LocalTensor<ExpandXType> rowTmpLocal = tokenBuf_.Get<ExpandXType>();
 
@@ -759,15 +902,24 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::AllToAllSen
         SetWaitTpStatusAndDisPatch();
         AlltoAllBuffInit();
     }
+    // The deep-fuse path no longer runs here at all (gmm2 hands the work to ReducePermute with every
+    // vector core), so the SEND/RECV rendezvous and the status broadcast exist for the TP-attached
+    // shallow path only.
     if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
-        AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+        if constexpr (!kUseCombineSentinel) {
+            AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
+            AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+        }
     } else {
         SyncAll<true>();
     }
-    SetStatus();
+    if constexpr (!kUseCombineSentinel) {
+        SetStatus();
+    }
     if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
+        if constexpr (!kUseCombineSentinel) {
+            AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
+        }
     } else {
         SyncAll<true>();
     }
@@ -777,17 +929,33 @@ template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermute()
 {
     AlltoAllBuffInit();
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
-    } else {
-        SyncAll<true>();
+    // With per-token readiness there is no send/receive split left to rendezvous: every vector core runs
+    // here, primes nothing, and only polls the slots it owns. The SEND flag existed solely to keep the
+    // send sub-block ahead of the receive sub-block, and the RECV flag to release it once the peer
+    // status had been published -- both are what the sentinel replaced.
+    if constexpr (!kUseCombineSentinel) {
+        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+            AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
+        } else {
+            SyncAll<true>();
+        }
     }
 
-    WaitDispatch();
+    if constexpr (!kUseCombineSentinel) {
+        WaitDispatch();
+    }
     LocalWindowCopy();
 
-    if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-        AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+    if constexpr (kUseCombineSentinel) {
+        // Mode 1: 仅同步同一个 AI Core 内的两个 AIV
+        AscendC::CrossCoreSetFlag<1, PIPE_MTE3>(RECV_SYNC_EVENT_ID);
+        AscendC::CrossCoreWaitFlag<1>(RECV_SYNC_EVENT_ID);
+    }
+
+    if constexpr (!kUseCombineSentinel) {
+        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+            AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+        }
     }
 }
 

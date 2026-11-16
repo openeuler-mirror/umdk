@@ -753,6 +753,19 @@ public:
             winDataSizeOffset + rankId * OPT_RANK_OFFSET);
     }
 
+    // Base of THIS rank's own combine receive half -- the half the combiner's Init selects.
+    // GetWindAddrByRankId adds this core's winDataSizeOffset, which is the dispatch half read at
+    // startup, while the combiner reads the state word after UpdateAndCleanInfo inverted it and so
+    // lands on the other half. The delta is applied explicitly rather than adding a whole half on top
+    // of the wrong base. Same arithmetic the old whole-half priming used.
+    __aicore__ inline GM_ADDR GetCombineRecvBaseAddr()
+    {
+        uint32_t combineDataState = (dataState == 0) ? 1 : 0;
+        uint64_t halfStride = static_cast<uint64_t>(epRankSize) * moeExpertNumPerRank * expertPerSizeOnWin;
+        int64_t halfDelta = static_cast<int64_t>(combineDataState) - static_cast<int64_t>(dataState);
+        return GetWindAddrByRankId(epRankId) + static_cast<int64_t>(halfDelta * halfStride);
+    }
+
     template <>
     CATLASS_DEVICE void operator()<AscendC::AIC>(Params const &params)
     {
@@ -1245,6 +1258,12 @@ public:
             yDenseTensor = resource.ubBuf.template GetBufferByByte<int8_t>(ubOffset);
             ubOffset += CEIL_UP(denseTokenBytes);
         }
+        // DataCopyParams advances the source by blockLen + srcStride blocks on each repeat. Reserve
+        // one contiguous 32B sentinel for every 512B block in a token so srcStride 0 reads valid data.
+        const uint32_t combineSentinelBlocks = tokenLength / CombineDataAsFlag::BLOCK_ELEMS;
+        const uint32_t combineSentinelBytes = combineSentinelBlocks * CombineDataAsFlag::TAIL_BYTES;
+        AscendC::LocalTensor<int32_t> combineSentinel = resource.ubBuf.template GetBufferByByte<int32_t>(ubOffset);
+        ubOffset += CEIL_UP(combineSentinelBytes);
         int32_t outBufferNum = (UB_SIZE - ubOffset) / hCommuSize;
         if (outBufferNum > MAX_OUT_BUFFER_NUM) {
             outBufferNum = MAX_OUT_BUFFER_NUM;
@@ -1265,11 +1284,45 @@ public:
             AscendC::Duplicate<float>(yInt8Tensor[i].template ReinterpretCast<float>(), blockFlag,
                                       hCommuSize / sizeof(float));
         }
+        AscendC::Duplicate<int32_t>(combineSentinel, CombineDataAsFlag::SENTINEL_FLAG,
+                                    combineSentinelBytes / sizeof(int32_t));
         AscendC::PipeBarrier<PIPE_V>();
+        // The staging buffer is produced on V and consumed by MTE3 in the loop below.
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
         AscendC::GlobalTensor<int8_t> dstWinGMTensor;
+        // Loop invariant, so it is computed once rather than once per token. Not `const GM_ADDR`:
+        // GM_ADDR is a macro expanding to `__gm__ uint8_t*`, where a leading const binds to the pointee
+        // and the pointer arithmetic below would then not convert back to GM_ADDR.
+        GM_ADDR combineRecvBase = GetCombineRecvBaseAddr();
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
         AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(1);
         uint32_t sendValidTokenIndex = 0;
+        for (uint32_t tokenIndex = startTokenId; tokenIndex < endTokenId; ++tokenIndex) {
+            int32_t dstExpertId = expertIdsTensor_(tokenIndex);
+            if (dstExpertId < 0) {
+                continue;
+            }
+            int32_t curExpertCnt = 0;
+            CalExpandxIdx(dstExpertId, tokenIndex, curExpertCnt);
+            expertCountTensor(tokenIndex - startTokenId) = curExpertCnt;
+
+            // Prime this token's local combine slot before dispatch sends its payload. Both writes
+            // use the same MTE3 pipe, so a peer cannot publish the combine result before the sentinel.
+            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+                GM_ADDR tailAddr = combineRecvBase +
+                                   static_cast<uint64_t>(dstExpertId) * expertPerSizeOnWin +
+                                   static_cast<uint64_t>(curExpertCnt) * tokenLength * sizeof(XType) +
+                                   CombineDataAsFlag::TAIL_OFFSET;
+                AscendC::GlobalTensor<int32_t> tailGM;
+                tailGM.SetGlobalBuffer((__gm__ int32_t *)tailAddr);
+                // One 32B tail per 512B block: land one block, then skip the 480B payload.
+                AscendC::DataCopyParams tailParams{
+                    static_cast<uint16_t>(combineSentinelBlocks), 1U, 0U,
+                    static_cast<uint16_t>(CombineDataAsFlag::BLOCK_BYTES / UB_BLOCK_SIZE - 1)};
+                AscendC::DataCopy(tailGM, combineSentinel, tailParams);
+            }
+        }
         for (uint32_t sendGroupIndex = 0; sendGroupIndex < moeExpertNumPerRank; ++sendGroupIndex) {
             for (uint32_t tokenIndex = startTokenId; tokenIndex < endTokenId; ++tokenIndex) {
                 int32_t dstExpertId = expertIdsTensor_(tokenIndex);
@@ -1285,9 +1338,7 @@ public:
                 uint32_t outIndex = sendValidTokenIndex % outBufferNum;
                 int32_t outEventId = sendValidTokenIndex % outBufferNum;
                 sendValidTokenIndex += 1;
-                int32_t curExpertCnt = 0;
-                CalExpandxIdx(dstExpertId, tokenIndex, curExpertCnt);
-                expertCountTensor(tokenIndex - startTokenId) = curExpertCnt;
+                int32_t curExpertCnt = expertCountTensor(tokenIndex - startTokenId);
                 uint32_t tempRankId = dstExpertId / moeExpertNumPerRank;
                 GM_ADDR rankGM = (__gm__ uint8_t *)(
                     GetWindAddrByRankId(tempRankId) +
