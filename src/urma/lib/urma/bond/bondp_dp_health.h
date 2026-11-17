@@ -74,6 +74,12 @@ void bondp_hc_tjetty_sync_valid(const struct bondp_target_jetty *bdp_tjetty);
  */
 void bondp_set_port_status_bad(struct bondp_context *bdp_ctx, uint32_t local_idx);
 
+/**
+ * Whether every imported tjetty is registered for health checking. Caller
+ * should hold ctx->mutex.
+ */
+bool bondp_hc_tjettys_all_registered(struct bondp_context *bdp_ctx);
+
 #ifdef __cplusplus
 }
 #endif

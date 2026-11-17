@@ -512,6 +512,10 @@ urma_status_t urma_bind_jetty(urma_jetty_t *jetty, urma_target_jetty_t *tjetty);
 
 若已通过 `BONDP_USER_CTL_SET_BONDING_PORT` 在上下文上配置了端口子集，则 Jetty 与 JFR 的导入仅经该端口子集建立物理 target 连接。每个已配置的本地端口与每个远端目标至多参与一条选定的物理路径（一对一配对），因此导入的物理路径数不超过本地配置端口数与远端目标数中的较小者。该端口子集必须包含与对端拓扑连通的端口，否则导入将因无可建链路径而失败。
 
+在 balance 模式且健康检查上下文可用时，可通过 `urma_user_ctl` 的 `BONDP_USER_CTL_AUTO_SKIP_FAULTY` 操作开启端口自动避障（输入 `addr` 与 `len` 均须为 0，开启后不可关闭）。开启后，物理 Jetty 发送完成的 `URMA_CR_LOC_ACCESS_ERR` 会将对应本地端口标记为上下文级 BAD；同一上下文的 RM Jetty 发送调度会避开该端口，RC Jetty、JFS 和接收路径不使用该状态进行选路。开启后不允许修改 bonding 模式与上下文配置。
+
+当上下文已开启端口自动避障时，RM Jetty 导入额外要求对端启用健康检查，且每个已建立物理 target 连接的本地端口至少具有一条有效的健康检查路径；任一条件不满足时导入失败并返回 NULL，错误原因置为 EOPNOTSUPP。RC Jetty 不受这两项检查限制。
+
 用户关注基于不感知传输层的URMA API使用流程。
 
 ## 5.2 控制面

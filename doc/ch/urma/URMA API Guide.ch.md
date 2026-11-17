@@ -6839,6 +6839,38 @@ typedef struct bondp_wr_hint {
 
 以该方式下发的发送 WR 被钉在指定目标端口上，不会被改道到其他目标端口：若该端口故障，将向上层返回 error CQE，而不是经备用路径重发。同一故障路径上正常调度的发送 WR 仍会正常切换到备用路径。
 
+##### 2.5.1.1.5 BONDP_USER_CTL_AUTO_SKIP_FAULTY
+
+balance 模式下的端口自动避障一次性开关，opcode 定义在 [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_ubagg.h) 中。开启后，同一上下文的 RM Jetty 发送调度会避开被标记为故障的本端端口。
+
+1.  头文件
+
+#include "urma_ubagg.h"
+
+2.  调用方式
+
+- `in->opcode`：`BONDP_USER_CTL_AUTO_SKIP_FAULTY`；
+- `in->addr` 与 `in->len`：均须为 0，本操作不携带输入参数；
+- `out`：不使用，可为 0。
+
+3.  前置条件与返回值
+
+| 条件 | 返回值 |
+| --- | --- |
+| `in->addr` 或 `in->len` 不为 0 | 非 0（`-EINVAL`） |
+| bonding 模式不是 balance | 非 0（`-EINVAL`） |
+| 上下文未启用健康检查（`hc_ctx` 不可用） | 非 0（`-EINVAL`） |
+| 已开启（重复调用，幂等） | 0 |
+| 已 import 的 tjetty 未全部注册健康检查（如对端未开启） | 非 0（`-EINVAL`） |
+| 全部校验通过 | 0 |
+
+4.  行为说明
+
+- 本开关一次性且不可逆：开启后无法关闭，仅销毁上下文可复位；已开启时重复调用返回成功。
+- 开启后，物理 Jetty 发送完成的 `URMA_CR_LOC_ACCESS_ERR` 在通过当前 pjetty 实例校验后，将对应本地端口标记为上下文级 BAD；同一上下文的 RM Jetty 发送调度（balance 选路）避开 BAD 端口；端口 hint 指定下发与 failover 重发不避让 BAD 端口（调用方自行承担出口风险）；RC Jetty、JFS 与接收路径不使用该状态选路。BAD 状态可由健康检查探测成功后清除。
+- 开启后，`BONDP_USER_CTL_SET_BONDING_MODE` 与上下文配置修改接口被拒绝（返回 `-EINVAL`），配置冻结。
+- 开启后新导入的 RM Jetty 要求对端启用健康检查，且每个建立物理 target 连接的本地端口至少有一条健康检查路径；开启前已导入的 Jetty 由本操作的前置校验兜底。详见《URMA User Guide》。
+
 #### 2.5.1.2 bondp_modify_jfr
 
 1.  头文件

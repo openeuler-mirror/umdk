@@ -17,6 +17,7 @@
 #include "urma_log.h"
 
 #include "bondp_cp_tjetty.h"
+#include "bondp_dp_health.h"
 #include "bondp_provider_ops.h"
 #include "bondp_types.h"
 #include "urma_ubagg.h"
@@ -572,6 +573,53 @@ static int bondp_user_ctl_query_port_status(urma_context_t *ctx, urma_user_ctl_i
     return 0;
 }
 
+static int bondp_user_ctl_auto_skip_faulty(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                           urma_user_ctl_out_t *out)
+{
+    (void)out;
+
+    if (in->addr != 0 || in->len != 0) {
+        URMA_LOG_ERR("Invalid AUTO_SKIP_FAULTY parameter.\n");
+        return -EINVAL;
+    }
+
+    /* this user_ctl opcode may config after urma_ctx used, so do not check ctx atomic_cnt */
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+
+    /* Serialize with config/mode changes (bondp_set_ctx_cfg and
+     * bondp_set_bonding_mode take the same mutex). */
+    (void)pthread_mutex_lock(&ctx->mutex);
+    if (atomic_load(&bdp_ctx->auto_skip_faulty)) {
+        (void)pthread_mutex_unlock(&ctx->mutex);
+        URMA_LOG_INFO("AUTO_SKIP_FAULTY is already enabled.\n");
+        return URMA_SUCCESS;
+    }
+    if (bdp_ctx->bonding_mode != BONDP_BONDING_MODE_BALANCE) {
+        URMA_LOG_ERR("AUTO_SKIP_FAULTY requires balance mode.\n");
+        (void)pthread_mutex_unlock(&ctx->mutex);
+        return -EINVAL;
+    }
+    if (!bdp_ctx->enable_health_check || atomic_load(&bdp_ctx->hc_ctx) == NULL) {
+        URMA_LOG_ERR("AUTO_SKIP_FAULTY requires an available health-check context.\n");
+        (void)pthread_mutex_unlock(&ctx->mutex);
+        return -EINVAL;
+    }
+    /* A tjetty imported before the switch is on bypassed the import checks;
+     * every imported tjetty must be health-check registered so a BAD port
+     * always has a probe path to recover it. */
+    if (!bondp_hc_tjettys_all_registered(bdp_ctx)) {
+        URMA_LOG_ERR("AUTO_SKIP_FAULTY rejected: not every imported tjetty is health-check "
+                     "registered, enable the peer health check first.\n");
+        (void)pthread_mutex_unlock(&ctx->mutex);
+        return -EINVAL;
+    }
+
+    atomic_store(&bdp_ctx->auto_skip_faulty, true);
+    (void)pthread_mutex_unlock(&ctx->mutex);
+    URMA_LOG_INFO("AUTO_SKIP_FAULTY enabled.\n");
+    return URMA_SUCCESS;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     if (in == NULL) {
@@ -606,6 +654,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_user_ctl_set_ctx_cfg(ctx, in, out);
         case BONDP_USER_CTL_QUERY_PORT_STATUS:
             return bondp_user_ctl_query_port_status(ctx, in, out);
+        case BONDP_USER_CTL_AUTO_SKIP_FAULTY:
+            return bondp_user_ctl_auto_skip_faulty(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;

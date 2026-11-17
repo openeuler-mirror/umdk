@@ -24,6 +24,7 @@ extern "C" {
 #define BONDP_USER_CTL_BONDING BONDP_USER_CTL_BONDING
 #define BONDP_USER_CTL_SET_CTX_CFG BONDP_USER_CTL_SET_CTX_CFG
 #define BONDP_HAS_DATAPATH_QUERY BONDP_HAS_DATAPATH_QUERY
+#define BONDP_HAS_AUTO_SKIP_FAULTY BONDP_HAS_AUTO_SKIP_FAULTY
 
 #define URMA_UBAGG_DEV_MAX_NUM        (20)
 #define URMA_UBAGG_MAX_CONNECTION     (URMA_UBAGG_DEV_MAX_NUM * URMA_UBAGG_DEV_MAX_NUM)
@@ -88,6 +89,10 @@ typedef enum bondp_user_ctl_opcode {
      * small (a capacity of 0 is allowed for size probing). Appended at the
      * tail to keep the numbering of the existing opcodes stable. */
     BONDP_USER_CTL_OPCODE_FILL_USER_TSEG,
+    /* One-shot, irreversible: enable context-scoped auto-skip of faulty local
+     * ports for balance-mode RM Jetty send scheduling.
+     * in: addr=0, len=0; requires balance mode and health-check context. */
+    BONDP_USER_CTL_AUTO_SKIP_FAULTY,
 } bondp_user_ctl_opcode_t;
 
 typedef enum bondp_port_status_state {
