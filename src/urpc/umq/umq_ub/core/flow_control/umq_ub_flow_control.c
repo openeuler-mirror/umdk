@@ -842,7 +842,6 @@ void umq_ub_flow_control_uninit(ub_queue_t *queue)
 
     free(fc);
     queue->flow_control = NULL;
-    UMQ_VLOG_INFO(VLOG_UMQ, "umq flow control uninit success\n");
 }
 
 int umq_ub_window_init(ub_flow_control_t *fc, umq_ub_bind_info_t *bind_info)
