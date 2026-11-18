@@ -79,11 +79,9 @@ struct CombineCalcInfo {
 template <TemplateMC2TypeClass>
 class CamMoeDistributeCombine {
 public:
-    // Shared-expert execution uses the original send/receive handshake; only ordinary deep-fuse runs
-    // the per-slot combine path on both sibling AIVs.
+    // Both deep-fuse paths poll per-slot readiness. Shared execution assigns combine only to sub-block 1.
     static constexpr bool kUseCombineSentinel =
-        (ENABLE_COMBINE_DATA_AS_FLAG != 0) && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0) &&
-        ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) == 0);
+        (ENABLE_COMBINE_DATA_AS_FLAG != 0) && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0);
 
     __aicore__ inline CamMoeDistributeCombine(){};
     __aicore__ inline void Init(GM_ADDR expandX, GM_ADDR expertIds, GM_ADDR expandIdx, GM_ADDR epSendCount,
@@ -93,6 +91,7 @@ public:
     __aicore__ inline void AllToAllSend();
     __aicore__ inline void ReducePermute();
     __aicore__ inline void ProcessCombine();
+    __aicore__ inline void CombineAivBarrier();
 
     __aicore__ inline CombineCalcInfo &GetCalcInfo()
     {
@@ -295,11 +294,9 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     activeMaskBsCnt_ = axisBS_;
     axisH_ = tilingData->fusedDeepMoeInfo.h;
     axisK_ = tilingData->fusedDeepMoeInfo.k;
-    // Token work is split over every vector core once readiness is per-token: the sentinel poll and the
-    // fold for a token are independent of every other token, so there is no reason to keep half the
-    // cores idle waiting on a batch-wide signal. The non-sentinel paths still hand the work to one
-    // sub-block (see gmm2), so they keep the old count and index.
-    if constexpr (kUseCombineSentinel) {
+    // Split token work across all AIVs for non-shared combine. Shared combine is assigned to sub-block 1,
+    // so its worker count and index stay at the AIC level even when sentinel polling is enabled.
+    if constexpr (kUseCombineSentinel && !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
         aivNum_ = tilingData->fusedDeepMoeInfo.aivNum;
     } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
         aivNum_ = tilingData->fusedDeepMoeInfo.aicNum;
@@ -341,7 +338,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     }
 
     InitStatusTargetSum();
-    if constexpr (kUseCombineSentinel) {
+    if constexpr (kUseCombineSentinel && !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
         // Every vector core participates, so the index is the raw AIV id (0 .. aivNum_ - 1).
         coreIdx_ = AscendC::GetBlockIdx();
     } else if constexpr (EXEC_FLAG & (EXEC_FLAG_DEEP_FUSE | EXEC_FLAG_SHARED_EXPERT)) {
@@ -682,6 +679,13 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::WaitDispatc
     AscendC::CrossCoreWaitFlag(RECV_SYNC_EVENT_ID);
 }
 
+template <TemplateMC2TypeClass>
+__aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::CombineAivBarrier()
+{
+    AscendC::CrossCoreSetFlag<1, PIPE_MTE3>(RECV_SYNC_EVENT_ID);
+    AscendC::CrossCoreWaitFlag<1>(RECV_SYNC_EVENT_ID);
+}
+
 // Poll every int32 word in every sparse tail. A tail is ready only after none of its words still
 // carries the sentinel; the payload is fetched separately by LocalWindowCopy after this returns true.
 template <TemplateMC2TypeClass>
@@ -953,16 +957,27 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ReducePermu
 template <TemplateMC2TypeClass>
 __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::ProcessCombine()
 {
-    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
-    AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+    // Shared deep-fuse combine has no send-side rendezvous. Let sub-block 1 enter slot polling
+    // immediately; the receive barrier below runs only after its local copy is complete and still
+    // protects sub0's soft-sync cleanup.
+    if constexpr (!kUseCombineSentinel || !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
+        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(SEND_SYNC_EVENT_ID);
+        AscendC::CrossCoreWaitFlag(SEND_SYNC_EVENT_ID);
+    }
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         BuffInit();
         SetWaitTpStatusAndDisPatch();
     }
     AlltoAllBuffInit();
-    SetStatus();
-    WaitDispatch();
+    if constexpr (!kUseCombineSentinel) {
+        SetStatus();
+        WaitDispatch();
+    }
     LocalWindowCopy();
+    if constexpr (kUseCombineSentinel && (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
+        // Pair with shared sub-block 0 before it clears this core's soft-sync state.
+        CombineAivBarrier();
+    }
 }
 }  // namespace MoeDistributeCombineImpl
 
