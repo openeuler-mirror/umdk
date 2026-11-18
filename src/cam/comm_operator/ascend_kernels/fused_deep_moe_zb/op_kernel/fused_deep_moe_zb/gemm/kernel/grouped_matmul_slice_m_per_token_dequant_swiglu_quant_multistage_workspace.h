@@ -56,6 +56,10 @@ constexpr uint32_t UB_PART_SIZE = 4;
 constexpr uint32_t DISPATCH_SEND_CORE_NUM = 36;
 constexpr uint32_t DISPATCH_RECV_CORE_NUM = 12;
 constexpr uint32_t COPY_FULL_EXPERT_IDS_BS = 512;
+// half Sum is exact for integer 0/1 masks only through 2048; larger batches must chunk.
+constexpr uint32_t MASK_SUM_CHUNK = 2048;
+// 32B block holds 16 half elements; Sum's aligned extent must use this, not UB_ALIGN-as-elems.
+constexpr uint32_t HALF_PER_BLOCK = 16;
 constexpr uint32_t ROUND_SYNC_CLEAR_UB_OFFSET = 512;
 constexpr uint32_t GMM1_ICACHE_PRELOAD_LEN = 8;
 constexpr float CROSS_RANK_SYNC_FLAG = 2.0f;
@@ -212,6 +216,16 @@ public:
 
             layout::RowMajor layoutUbInput{actualTileShape, ubTileStride};
 
+            // Only actualTileShape.row() rows were loaded from GM. Bound vector ops and the
+            // high/low DataCopy loop to that count: the W8A8 path stops via
+            // layoutOutput.GetTileLayout(actualTileShape), but raw DataCopy would otherwise spill
+            // stale UB rows past this group's token range onto the next expert's x2.
+            const uint32_t validRows = actualTileShape.row();
+            if (validRows == 0) {
+                continue;
+            }
+            const uint32_t validCount = validRows * tileColumn;
+
             AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(0);
             AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(0);
             // continue swiglu computing here and then quant
@@ -221,41 +235,41 @@ public:
             AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
 
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
-            AscendC::Mul(ubInput, ubInput, ubInputRightHalf, tileCount);
+            AscendC::Mul(ubInput, ubInput, ubInputRightHalf, validCount);
             AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Abs(ubAbs, ubInput, tileCount);
+            AscendC::Abs(ubAbs, ubInput, validCount);
             AscendC::PipeBarrier<PIPE_V>();
 
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            for (uint32_t rowIdx = 0; rowIdx < validRows; ++rowIdx) {
                 AscendC::Max(ubMax[rowIdx * halfTileColumn], ubAbs[rowIdx * tileColumn],
                              ubAbs[rowIdx * tileColumn + halfTileColumn], halfTileColumn);
             }
 
             AscendC::PipeBarrier<PIPE_V>();
             // ubInput is dead after this and is reused as ReduceMax's work buffer below.
-            AscendC::Muls(ubInputTmp, ubInput, 127.f, tileCount);
+            AscendC::Muls(ubInputTmp, ubInput, 127.f, validCount);
             AscendC::PipeBarrier<PIPE_V>();
 
             // Rows of ubMax are halfTileColumn floats apart. The host guarantees that stride is
             // a whole number of 64-float vector repeats, which both keeps every ReduceMax source
             // address aligned and keeps the reduction free of a trailing partial repeat. Each row
             // also gets its own slice of the work buffer so the calls carry no mutual dependency.
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            for (uint32_t rowIdx = 0; rowIdx < validRows; ++rowIdx) {
                 AscendC::ReduceMax<float>(ubReduceMax[rowIdx * REDUCE_MAX_DST_STRIDE],
                     ubMax[rowIdx * halfTileColumn], ubInput[rowIdx * halfTileColumn], halfTileColumn, false);
             }
             AscendC::PipeBarrier<PIPE_V>();
 
-            // Gather the per-row maxima back into tileRow contiguous floats: one element per
+            // Gather the per-row maxima back into validRows contiguous floats: one element per
             // repeat, with the source advancing one 32B block (REDUCE_MAX_DST_STRIDE floats).
-            AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, tileRow, 1, 1, 1,
+            AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, validRows, 1, 1, 1,
                                     AscendC::ReduceOrder::ORDER_ONLY_VALUE);
             AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
             AscendC::PipeBarrier<PIPE_V>();
 
             AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(0);
             AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(0);
-            AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, tileRow);
+            AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, validRows);
             AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
 
             auto dequantScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
@@ -271,20 +285,20 @@ public:
             copyUbToGmDequantScale(gmTileDequantScale, ubDequantScale, layoutGmTileDequantScale, layoutUbDequantScale);
 
             AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            for (uint32_t rowIdx = 0; rowIdx < validRows; ++rowIdx) {
                 AscendC::Muls(ubQuantF32[rowIdx * tileColumn], ubInputTmp[rowIdx * tileColumn],
                               1.f / ubReduceMax.GetValue(rowIdx * REDUCE_MAX_DST_STRIDE), tileColumn);
             }
 
             AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Cast(ubQuantS32, ubQuantF32, AscendC::RoundMode::CAST_RINT, tileCount);
+            AscendC::Cast(ubQuantS32, ubQuantF32, AscendC::RoundMode::CAST_RINT, validCount);
             AscendC::PipeBarrier<PIPE_V>();
             AscendC::SetDeqScale(static_cast<half>(1.0));
-            AscendC::Cast(ubQuantF16, ubQuantS32, AscendC::RoundMode::CAST_RINT, tileCount);
+            AscendC::Cast(ubQuantF16, ubQuantS32, AscendC::RoundMode::CAST_RINT, validCount);
             AscendC::PipeBarrier<PIPE_V>();
 
             // W4A8: int8 -> int4 conversion with packing
-            AscendC::Cast(ubOutput, ubQuantF16, AscendC::RoundMode::CAST_RINT, tileCount);
+            AscendC::Cast(ubOutput, ubQuantF16, AscendC::RoundMode::CAST_RINT, validCount);
             auto gmTileOutput = gmOutput[params.layoutOutput.GetOffset(tileOffset)];
 
             AscendC::PipeBarrier<PIPE_V>();
@@ -297,7 +311,8 @@ public:
             const size_t LAST_LEN_VK = (tileColumn % 256) / CONSTANT_TWO;
             const half ONE_SIXTEENTH = static_cast<half>(0.0625f);
 
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            // Interleaved high/low with per-row PIPE_ALL (correctness baseline).
+            for (uint32_t rowIdx = 0; rowIdx < validRows; ++rowIdx) {
                 auto inputOffset = rowIdx * tileColumn;
                 auto outputOffset = inputOffset;
                 // High 4-bit processing start
@@ -2123,13 +2138,24 @@ public:
     CATLASS_DEVICE
     void TokenActiveMaskCal(GM_ADDR gmXActiveMask, int64_t ubOffset)
     {
+        // half Sum is exact for 0/1 masks only through MASK_SUM_CHUNK (2048). Larger
+        // batches chunk and accumulate in int. Keep the 4-arg Sum + sharedTmp used
+        // elsewhere in this kernel: 3-arg Sum(dst, src[offset]) on resource.ubBuf hit
+        // UB OOB on device. Always rebuild each chunk via GetBufferByByte.
+        if (axisBS == 0) {
+            activeMaskBsCnt = 0;
+            return;
+        }
+
         int64_t subUbOffset = ubOffset;
         AscendC::LocalTensor<bool> maskInputTensor = (resource.ubBuf.template
                                                             GetBufferByByte<bool>(subUbOffset));
         AscendC::LocalTensor<int8_t> maskInputInt8Tensor = maskInputTensor.template ReinterpretCast<int8_t>();
         subUbOffset += CEIL_UP(axisBS * sizeof(bool));
-        AscendC::LocalTensor<half> maskTmpTensor = (resource.ubBuf.template
-                                                            GetBufferByByte<half>(subUbOffset));
+        const int64_t halfBaseOffset = subUbOffset;
+        const uint32_t halfElemAlloc = CEIL_UP(axisBS * sizeof(half)) / sizeof(half);
+        AscendC::LocalTensor<half> maskHalfTensor = (resource.ubBuf.template
+                                                            GetBufferByByte<half>(halfBaseOffset));
         subUbOffset += CEIL_UP(axisBS * sizeof(half));
         AscendC::LocalTensor<half> sumOutTensor = (resource.ubBuf.template
                                                             GetBufferByByte<half>(subUbOffset));
@@ -2138,20 +2164,40 @@ public:
 
         AscendC::GlobalTensor<bool> xActiveMaskGMTensor;
         xActiveMaskGMTensor.SetGlobalBuffer((__gm__ bool *)gmXActiveMask);
-        uint32_t axisBsAlignSize = CEIL_UP(axisBS * sizeof(bool));
 
         AscendC::DataCopyExtParams maskParams = {1U, static_cast<uint32_t>(axisBS * sizeof(bool)), 0U, 0U, 0U};
         AscendC::DataCopyPadExtParams<bool> maskCopyPadParams{false, 0U, 0U, 0U};
         AscendC::DataCopyPad(maskInputTensor, xActiveMaskGMTensor, maskParams, maskCopyPadParams);
         AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
         AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
-        AscendC::Cast(maskTmpTensor, maskInputInt8Tensor, AscendC::RoundMode::CAST_NONE, axisBS);
+        // Zero the allocated half span so Sum's aligned tail past axisBS stays 0.
+        AscendC::Duplicate(maskHalfTensor, static_cast<half>(0.0), halfElemAlloc);
         AscendC::PipeBarrier<PIPE_V>();
-        AscendC::SumParams params{1, axisBsAlignSize, axisBS};
-        AscendC::Sum(sumOutTensor, maskTmpTensor, sharedTmpBuffer, params);
-        AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
-        AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
-        activeMaskBsCnt = static_cast<int32_t>(sumOutTensor.GetValue(0));
+        AscendC::Cast(maskHalfTensor, maskInputInt8Tensor, AscendC::RoundMode::CAST_NONE, axisBS);
+        AscendC::PipeBarrier<PIPE_V>();
+
+        uint32_t cnt = 0;
+        for (uint32_t maskOffset = 0; maskOffset < axisBS; maskOffset += MASK_SUM_CHUNK) {
+            uint32_t maskCount = (axisBS - maskOffset < MASK_SUM_CHUNK) ?
+                (axisBS - maskOffset) : MASK_SUM_CHUNK;
+            // Align to a 32B half-block and never past the allocated half span (e.g. bs=2049
+            // used to request 32 elems from offset 2048 while only 16 pad slots existed).
+            uint32_t maskCountAligned = ((maskCount + HALF_PER_BLOCK - 1) / HALF_PER_BLOCK) * HALF_PER_BLOCK;
+            uint32_t remainElems = halfElemAlloc - maskOffset;
+            if (maskCountAligned > remainElems) {
+                maskCountAligned = remainElems;
+            }
+            AscendC::LocalTensor<half> chunkSrc = resource.ubBuf.template GetBufferByByte<half>(
+                halfBaseOffset + static_cast<int64_t>(maskOffset) * sizeof(half));
+            AscendC::SumParams params{1, maskCountAligned, maskCount};
+            AscendC::Sum(sumOutTensor, chunkSrc, sharedTmpBuffer, params);
+            AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
+            cnt += static_cast<uint32_t>(static_cast<int32_t>(sumOutTensor.GetValue(0)));
+            AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
+        }
+        activeMaskBsCnt = (cnt > axisBS) ? axisBS : cnt;
     }
 
     CATLASS_DEVICE
