@@ -20,5 +20,7 @@ public class SncTopology {
     @NonNull
     private Label label = new Label();
 
+    private int rackNumber;
+
     private Map<String, SncNode> nodeMap = new HashMap<>();
 }

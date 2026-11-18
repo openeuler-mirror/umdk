@@ -3,15 +3,14 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  * Description: calculate route test
  * Author: jiang wen jiang
- * Create: 2026-07-29
+ * Create: 2026-11-18
  * Note:
  */
 
-package com.huawei.umdk.snc.route;
+package com.huawei.umdk.snc.route.instantiation;
 
 import com.huawei.umdk.snc.SncService;
 import com.huawei.umdk.snc.config.SNCConfig;
-import com.huawei.umdk.snc.entity.DrainEvent;
 import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
@@ -23,6 +22,8 @@ import com.huawei.umdk.snc.entity.SwForwardingChip;
 import com.huawei.umdk.snc.entity.SwPortEntity;
 import com.huawei.umdk.snc.entity.SwitchLevel;
 import com.huawei.umdk.snc.log.Logger;
+import com.huawei.umdk.snc.route.RouteMspTest;
+import com.huawei.umdk.snc.route.TestUtils;
 import com.huawei.umdk.snc.route.topo.template.model.Label;
 import com.huawei.umdk.snc.route.topo.template.model.SncNode;
 import com.huawei.umdk.snc.route.topo.template.model.SncPort;
@@ -39,7 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class RouteInstantiationTest {
+public class SuperNode512Test {
     private static final Logger log = new Logger(RouteMspTest.class);
 
     private static final Map<String, SncTopology> topologyMap = new HashMap<>();
@@ -63,14 +64,14 @@ public class RouteInstantiationTest {
     private static void constructSuperNode() {
         superNode.setName("SuperNode1");
 
-        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
-        SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512.getValue());
+        SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue());
 
         Map<String, NpuDevice> npuDevices = new HashMap<>();
         Map<String, SwDevice> swDevices = new HashMap<>();
 
-        // 1. 创建NPU设备：4个rack × 8个board × 4个NPU = 128个NPU
-        for (int rack = 1; rack <= 4; rack++) {
+        // 1. 创建NPU设备：16个rack × 8个board × 4个NPU = 128个NPU
+        for (int rack = 1; rack <= 16; rack++) {
             for (int board = 1; board <= 8; board++) {
                 for (int npuIndex = 1; npuIndex <= 4; npuIndex++) {
                     int boardIndex = board * 2 - 1;
@@ -86,8 +87,8 @@ public class RouteInstantiationTest {
             }
         }
 
-        // 2. 创建L1 switch设备：4个rack × 4个L1 sw = 16个L1 sw
-        for (int rack = 1; rack <= 4; rack++) {
+        // 2. 创建L1 switch设备：16个rack × 4个L1 sw = 64个L1 sw
+        for (int rack = 1; rack <= 16; rack++) {
             for (int index = 1; index <= 4; index++) {
                 String deviceName = getL1SwName(superNode.getName(), rack, index);
                 Map<Integer, SwForwardingChip> chips = new HashMap<>();
@@ -100,8 +101,8 @@ public class RouteInstantiationTest {
             }
         }
 
-        // 3. 创建L2 switch设备：4个L2 sw，每个含chip 1和chip 2
-        for (int index = 1; index <= 4; index++) {
+        // 3. 创建L2 switch设备：16个L2 sw，每个含chip 1和chip 2
+        for (int index = 1; index <= 16; index++) {
             String deviceName = getL2SwName(superNode.getName(), index);
             Map<Integer, SwForwardingChip> chips = new HashMap<>();
             SwForwardingChip chip1 = new SwForwardingChip(1);
@@ -124,7 +125,7 @@ public class RouteInstantiationTest {
             int ubpu = Integer.parseInt(npuNode.getLabel().getNames().get("ubpu"));
             int die = Integer.parseInt(npuNode.getLabel().getNames().get("die"));
 
-            for (int rack = 1; rack <= 4; rack++) {
+            for (int rack = 1; rack <= 16; rack++) {
                 String npuDeviceName = getNpuDeviceName(superNode.getName(), rack, slot, ubpu);
                 NpuDevice npuDevice = npuDevices.get(npuDeviceName);
                 NpuForwardingChip chip = npuDevice.getForwardingChips().get(die);
@@ -257,7 +258,7 @@ public class RouteInstantiationTest {
                 interfaceList.add(outPortInfo.getPortName());
             }
             // 按端口从低到高打印：端口名中的数字段按数值比较（如 400GUB1/2/10 排在 400GUB1/2/2 之后）
-            interfaceList.sort(RouteInstantiationTest::comparePortName);
+            interfaceList.sort(SuperNode512Test::comparePortName);
             for (String interfaceName : interfaceList) {
                 log.info("    %s", interfaceName);
             }
@@ -285,7 +286,7 @@ public class RouteInstantiationTest {
     @Test
     void makeRoutesTest() {
         Map<String, Map<String, RoutingEntry>> result = sncService.makeRoutes(superNode,
-            SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+            SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         // 拼接该npu对应的路由的key
         String key = npuDevice.getDeviceName().concat("#").concat("2");
@@ -294,45 +295,45 @@ public class RouteInstantiationTest {
         // 目的为本框31个npu：每个npu 1个 聚合 cna
         // 目的为本框4个l1 sw：每个l1 sw 1个 node cna
         // 框间发布地址转换：
-        // 目的为其他框npu：3框，每框32个npu，每个npu 1个 聚合 cna
-        Assertions.assertEquals(31 + 4 + 3 * 32, routeMap.size());
+        // 目的为其他框npu：15框，每框32个npu，每个npu 1个 聚合 cna
+        Assertions.assertEquals(31 + 4 + 15 * 32, routeMap.size());
     }
 
     @Test
     void calculateNpuRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue());
         NpuDevice npuDevice = superNode.getNpuDevices().get(getNpuDeviceName(superNode.getName(), 2, 3, 4));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(npuDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
         // 目的为本框31个npu：每个npu 1个 聚合 cna
         // 目的为本框4个l1 sw：每个l1 sw 1个 node cna
         // 框间发布地址转换：
-            // 目的为其他框npu：3框，每框32个npu，每个npu 1个 聚合 cna
-        Assertions.assertEquals(31 + 4 + 3 * 32, routeMap.size());
+            // 目的为其他框npu：15框，每框32个npu，每个npu 1个 聚合 cna
+        Assertions.assertEquals(31 + 4 + 15 * 32, routeMap.size());
     }
 
     @Test
     void calculateL1SwRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL1SwName(superNode.getName(), 3, 2));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 1);
         printRoutingEntry(routeMap);
         // 目的为本框32个npu：每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
-        // 目的为1个l2 sw：每个l2 sw 2个 node cna
+        // 目的为4个l2 sw：每个l2 sw 2个 node cna
         // 发布地址转换：
-            // 1.1 目的为其他框l1 sw：3个l1 sw，每个l1 sw 1个 node cna
-            // 1.2 目的为其他框npu：3框，每框32个npu，每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
-        Assertions.assertEquals(32 * (2 + 1 + 1 + 1) + 2 + 3 + 3 * 32 * (2 + 1 + 1 + 1), routeMap.size());
+            // 1.1 目的为其他框l1 sw：15个l1 sw，每个l1 sw 1个 node cna
+            // 1.2 目的为其他框npu：15框，每框32个npu，每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
+        Assertions.assertEquals(32 * (2 + 1 + 1 + 1) + 4 * 2 + 15 + 15 * 32 * (2 + 1 + 1 + 1), routeMap.size());
     }
 
     @Test
     void calculateL2SwRouteTest() {
-        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
+        sncService.makeRoutes(superNode, SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue());
         SwDevice swDevice = superNode.getSwDevices().get(getL2SwName(superNode.getName(), 3));
         Map<String, RoutingEntry> routeMap = sncService.getNodeRoute(swDevice.getDeviceName(), 2);
         printRoutingEntry(routeMap);
-        // 目的128个npu：每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
-        // 目的为4个l1 sw：每个l1 sw 1个 node cna
-        Assertions.assertEquals(128 * (2 + 1 + 1 + 1) + 4, routeMap.size());
+        // 目的512个npu：每个npu 2个 port cna、1个 pg cna、1个node cna、1个聚合cna
+        // 目的为16个l1 sw：每个l1 sw 1个 node cna
+        Assertions.assertEquals(512 * (2 + 1 + 1 + 1) + 16, routeMap.size());
     }
 }

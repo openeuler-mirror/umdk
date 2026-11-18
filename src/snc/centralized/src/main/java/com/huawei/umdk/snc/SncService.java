@@ -55,8 +55,16 @@ public class SncService {
     private static final Logger LOG = new Logger(SncService.class);
 
     private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList(
-        SuperNodeType.ATLAS950_GALAXY_RACK32.getValue() + ".json",
-        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json");
+        SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue() + ".json",
+        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json",
+        SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512.getValue() + ".json",
+        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue() + ".json"
+    );
+
+    private static final Map<SuperNodeType, SuperNodeType> GALAXY_TEMPLATE_MAP = Map.of(
+        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128, SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128,
+        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512, SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512
+    );
 
     // key: xPod_type
     private final Map<String, SncTopology> topologyMap = new HashMap<>();
@@ -428,7 +436,9 @@ public class SncService {
 
         calculateDefaultTemplateRoute(topologyMap, routeTemplateMap);
 
-        RouteInstantiationService.instantiateXpodRoute(topologyMap, routeTemplateMap, superNodeRoutes);
+        for (Map.Entry<SuperNodeType, SuperNodeType> entry : GALAXY_TEMPLATE_MAP.entrySet()) {
+            RouteInstantiationService.instantiateGalaxyXpodRoute(entry, topologyMap, routeTemplateMap, superNodeRoutes);
+        }
 
         routeCalculated = true;
     }

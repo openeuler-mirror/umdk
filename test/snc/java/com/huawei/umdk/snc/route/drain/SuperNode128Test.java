@@ -6,7 +6,7 @@
  * Note:
  */
 
-package com.huawei.umdk.snc.route;
+package com.huawei.umdk.snc.route.drain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,6 +29,7 @@ import com.huawei.umdk.snc.entity.ConvergedPrefix;
 import com.huawei.umdk.snc.entity.ConvergedRouteResult;
 import com.huawei.umdk.snc.entity.DeviceEntity;
 import com.huawei.umdk.snc.entity.DrainEvent;
+import com.huawei.umdk.snc.route.TestUtils;
 import com.huawei.umdk.snc.route.topo.template.model.SuperNodeType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +59,7 @@ import com.huawei.umdk.snc.route.topo.template.model.SncTopology;
 /**
  * ActiveDrainService 切流单元测试。
  */
-public class SuperNode128ActiveDrainServiceTest {
+public class SuperNode128Test {
     private static final Map<String, SncTopology> topologyMap = new HashMap<>();
 
     private static final SuperNode superNode = new SuperNode();
@@ -80,7 +81,7 @@ public class SuperNode128ActiveDrainServiceTest {
     private static void constructSuperNode() {
         superNode.setName("SuperNode1");
 
-        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32.getValue());
+        SncTopology rackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue());
         SncTopology interRackTopology = topologyMap.get(SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue());
 
         Map<String, NpuDevice> npuDevices = new HashMap<>();

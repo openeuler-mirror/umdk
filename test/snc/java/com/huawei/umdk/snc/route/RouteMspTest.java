@@ -55,7 +55,7 @@ public class RouteMspTest {
 
     @Test
     void calculateNpuRouteTest() {
-        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:npu|slot:1|ubpu:1|die:2");
@@ -77,7 +77,7 @@ public class RouteMspTest {
 
     @Test
     void calculateL1SwRouteTest() {
-        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l1_sw|index:1");
@@ -98,7 +98,7 @@ public class RouteMspTest {
 
     @Test
     void calculateL2SwRouteTest() {
-        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32.getValue();
+        String templateType = SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue();
         Map<String, Map<String, RouteTable>> routeMaps = SncService.routeMSP();
         Map<String, RouteTable> routeMap = routeMaps.get(templateType);
         RouteTable routeTable = routeMap.get("type:l2_sw|index:1|chip:1");
