@@ -295,17 +295,12 @@ public:
         uint32_t coreIdx = AscendC::GetBlockIdx() / AscendC::GetSubBlockNum();
         uint32_t coreNum = AscendC::GetBlockNum();
         do {
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                // This RECV set used to have its wait inside ReducePermute, which only sub-block 1 ran.
-                // Now every vector core runs ReducePermute with per-token readiness, so that wait is
-                // gone and this set would have no partner -- an unmatched CrossCore set accumulates and
-                // freezes the system after 15 launches. Skip it on the sentinel path.
-                if constexpr (!MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc>::
-                                  kUseCombineSentinel) {
-                    if (AscendC::GetSubBlockIdx() == 0) {
-                        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(
-                            MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
-                    }
+            if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) &&
+                          !MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc>::
+                              kUseCombineSentinel) {
+                if (AscendC::GetSubBlockIdx() == 0) {
+                    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(
+                        MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
                 }
             }
             BlockScheduler blockScheduler;
@@ -383,9 +378,14 @@ public:
             }
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
                 if (AscendC::GetSubBlockIdx() == 0) {
-                    AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
+                    if constexpr (!MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc>::
+                                      kUseCombineSentinel || !(EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
+                        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(
+                            MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
+                    }
                     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
-                        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
+                        AscendC::CrossCoreSetFlag<0x0, PIPE_MTE3>(
+                            MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
                     }
                     GemmCoord inGroupProblemShape = params.sharedGmm2ProblemShape;
 
@@ -417,8 +417,14 @@ public:
                         target += 1;
                         blockEpilogue(0, UINT32_MAX, blockShapeMNK, blockCoordMNK, actualBlockShapeMNK);
                     }
-                    AscendC::CrossCoreWaitFlag(MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
-                    AscendC::CrossCoreWaitFlag(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
+                    if constexpr (MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc>::
+                                      kUseCombineSentinel && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
+                        // Pair with sub-block 1 once its routed combine is complete, then clear soft-sync.
+                        combiner->CombineAivBarrier();
+                    } else {
+                        AscendC::CrossCoreWaitFlag(MoeDistributeCombineImpl::SEND_SYNC_EVENT_ID);
+                        AscendC::CrossCoreWaitFlag(MoeDistributeCombineImpl::RECV_SYNC_EVENT_ID);
+                    }
                 }
             }
         } while (false);
