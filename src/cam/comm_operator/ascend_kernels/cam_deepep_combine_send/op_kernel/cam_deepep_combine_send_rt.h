@@ -225,9 +225,17 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
             if (error == OK) {
                 auto layers = reinterpret_cast<__gm__ const uint32_t *>(base + context->layers_offset);
                 if (transaction_mode) {
+                    const FfnCombineAckView ack{
+                        reinterpret_cast<__gm__ const AFDPeer *>(base + directory.source_peers_offset),
+                        reinterpret_cast<__gm__ const AFDLane *>(base + context->lanes_offset),
+                        reinterpret_cast<__gm__ const AFDReturnLane *>(base + directory.lanes_offset),
+                        reinterpret_cast<__gm__ const AFDAddress *>(base + context->addresses_offset),
+                        p.num_src_ranks, p.num_ranks, uint32_t(rank_idx),
+                        uint32_t(p.num_source_lanes), task.phase
+                    };
                     error = task.layer_idx == kFfnMixedLayer ?
                         validate_ffn_combine_slice(task, recv_read(transaction), ab, layers, p.num_source_lanes,
-                                                   p.experts_per_rank, p.num_layers) :
+                                                    p.experts_per_rank, p.num_layers, ack) :
                         BAD_LAYER;
                 } else {
                     bool found = false;
@@ -521,38 +529,34 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
                 recv_read(entries + i).is_final ? FINISHED : HELD;
             recv_store(ce + i, tmp, 32);
         }
+        const FfnCombineAckView ack{
+            source_peers, lanes, return_lanes, addresses, p.num_src_ranks, p.num_ranks, uint32_t(rank_idx),
+            uint32_t(p.num_source_lanes), task.phase
+        };
         if (transaction_mode) {
-            retire_ffn_slice_rounds(task, transaction, ab, entries, p.num_source_lanes, p.experts_per_rank);
+            // A zero-row ACK that fails its lane/control validation must stop here:
+            // publishing READY/COMMITTED afterwards would report a retired round whose
+            // Done/Consumed were never written. Report through the kernel's normal
+            // error channel (the same one abort_if_error reads).
+            const uint32_t retire_error =
+                retire_ffn_slice_rounds(task, transaction, ab, entries, p.num_source_lanes, p.experts_per_rank,
+                                        ack, tmp);
+            if (retire_error != OK) {
+                for (int i = 0; i < 8; ++i) {
+                    words[i] = 0;
+                }
+                words[0] = retire_error;
+                recv_store(result, tmp, 32);
+                AscendC::WriteGmByPassDCache(&transaction->state, kFfnAborted);
+            }
+        }
+        // Nothing below may publish when the retirement above failed; the abort is
+        // already recorded in result/transaction state.
+        if (recv_read(result) != OK) {
+            return;
         }
         AscendC::DataSyncBarrier<AscendC::MemDsbT::DDR>();
-        for (uint32_t i = 0; i < task.num_entries; ++i) {
-            const auto entry = recv_read(ce + i);
-            if (!entry.is_final) {
-                continue;
-            }
-            for (uint32_t m = entry.member_begin; m < entry.member_begin + entry.num_members; ++m) {
-                const auto member = recv_read(cm + m);
-                const auto l = member.source_lane_idx;
-                for (int w = 0; w < 8; ++w) {
-                    words[w] = 0;
-                }
-                words[0] = member.return_bit;
-                store_control(reinterpret_cast<__gm__ uint8_t *>(source_peers[lanes[l].src_rank_idx].control_base) +
-                                  return_lanes[l].done_offset + uint64_t(rank_idx) * 64,
-                              tmp);
-            }
-            for (uint32_t m = entry.member_begin; m < entry.member_begin + entry.num_members; ++m) {
-                const auto member = recv_read(cm + m);
-                const auto l = member.source_lane_idx;
-                for (int w = 0; w < 8; ++w) {
-                    words[w] = 0;
-                }
-                words[0] = member.input_bit;
-                store_control(reinterpret_cast<__gm__ uint8_t *>(source_peers[lanes[l].src_rank_idx].control_base) +
-                                  addresses[uint64_t(l) * uint32_t(num_ranks) + uint32_t(rank_idx)].consumed_offset,
-                              tmp);
-            }
-        }
+        publish_completion_acks<kMaxSourceLanes>(ce, task.num_entries, cm, p.num_source_lanes, ack, tmp);
         for (int w = 0; w < 8; ++w) {
             words[w] = 0;
         }
