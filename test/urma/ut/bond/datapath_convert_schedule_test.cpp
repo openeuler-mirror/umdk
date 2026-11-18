@@ -280,11 +280,12 @@ TEST(UrmaBondTest, DatapathScheduleCoversModesAndErrors)
 
     fixture.comp.active_count = 1;
     fixture.target.active_count = 0;
-    EXPECT_EQ(-1, schedule_send(&fixture.target.v_tjetty, &fixture.comp, &sendIdx, &targetIdx, nullptr));
+    /* a target jetty imported without any usable port is a configuration error, not a retry */
+    EXPECT_EQ(URMA_EINVAL, schedule_send(&fixture.target.v_tjetty, &fixture.comp, &sendIdx, &targetIdx, nullptr));
 
     fixture.target.active_count = 1;
     fixture.ctx.bonding_mode = static_cast<bondp_bonding_mode_t>(0xff);
-    EXPECT_EQ(-1, schedule_send(&fixture.target.v_tjetty, &fixture.comp, &sendIdx, &targetIdx, nullptr));
+    EXPECT_EQ(URMA_EINVAL, schedule_send(&fixture.target.v_tjetty, &fixture.comp, &sendIdx, &targetIdx, nullptr));
     EXPECT_EQ(-1, schedule_recv(&fixture.comp, &recvIdx));
 }
 
@@ -342,8 +343,8 @@ TEST(UrmaBondTest, DatapathScheduleSendFixedPinsAndValidatesTargetPort)
     EXPECT_EQ(0, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 1, &sendIdx));
     EXPECT_EQ(1, sendIdx);
 
-    /* No path reaches an out-of-range target port. */
-    EXPECT_EQ(-1, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 2, &sendIdx));
+    /* No imported path names this target port: it is not part of the connection at all. */
+    EXPECT_EQ(URMA_EINVAL, schedule_send_fixed(&fixture.target.v_tjetty, &fixture.comp, 2, &sendIdx));
 
     /* An invalid local port cannot serve as the egress even if the path exists. */
     fixture.comp.valid[1] = false;
