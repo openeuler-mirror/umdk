@@ -317,7 +317,6 @@ typedef struct perftest_config {
     bool enable_imm;
     bool enable_notify;
     bool enable_err_continue;
-    bool error_suspend;
 
     /* user tp */
     bool enable_user_tp;
@@ -366,6 +365,7 @@ typedef struct perftest_config {
     bool enable_va;
     uint64_t v_address;
     bool share_jfs;
+    bool error_suspend;
     perftest_mgmt_type_t mgmt_type;
     char *mgmt_addr; /* UB only: local eid string for mgmt channel. Required in UB mode. */
 } perftest_config_t;
