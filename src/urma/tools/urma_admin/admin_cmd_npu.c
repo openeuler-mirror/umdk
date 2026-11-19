@@ -28,8 +28,8 @@ static int cmd_npu_usage(admin_config_t *cfg)
                  "  urma_admin npu <NPU_ID> show dev <DEV> jfr   [JFR_ID]\n"
                  "  urma_admin npu <NPU_ID> show dev <DEV> jetty [JETTY_ID]\n"
                  "  urma_admin npu <NPU_ID> show dev <DEV> rc    [RC_ID]\n"
-                 "  urma_admin npu <NPU_ID> show dev <DEV> tp    [TP_ID]   (not implemented yet)\n"
-                 "  urma_admin npu <NPU_ID> show dev <DEV> tpreuse         (not implemented yet)\n"
+                 "  urma_admin npu <NPU_ID> show dev <DEV> tp    [TP_ID]\n"
+                 "  urma_admin npu <NPU_ID> show dev <DEV> tpreuse\n"
                  "  urma_admin npu <NPU_ID> set log_level <0-%u>\n"
                  "\n"
                  "Options:\n"
@@ -119,37 +119,51 @@ static int cmd_npu_show(admin_config_t *cfg)
         (void)printf("Missing resource type.\n");
         return -EINVAL;
     }
-    /*
-     * TODO: TPID list/state/reuse are C-phase work.
-     */
-    if (strcmp(res, "tp") == 0 || strcmp(res, "tpreuse") == 0) {
-        (void)printf("NPU TPID query is not implemented yet.\n");
-        return -EOPNOTSUPP;
-    }
-
-    tool_res_key_type_t type;
-    int ret = npu_parse_res_type(res, &type);
-    if (ret != 0) {
-        return ret;
-    }
 
     char *id_arg = pop_arg(cfg);
-    uint32_t key = 0;
-    uint32_t key_cnt = 0;
-    if (id_arg != NULL) {
-        ret = ub_str_to_u32(id_arg, &key);
-        if (ret != 0) {
-            (void)printf("Invalid resource ID: %s.\n", id_arg);
-            return -EINVAL;
-        }
-        key_cnt = 1;
-    }
     if (cfg->argc != 0) {
         (void)printf("Too many arguments.\n");
         return -EINVAL;
     }
 
-    ret = admin_cmd_npu_query_res(cfg->npu_id, dev_name, type, key, key_cnt);
+    int ret;
+    if (strcmp(res, "tp") == 0) {
+        bool query_tpid = false;
+        uint64_t tpid = 0;
+        if (id_arg != NULL) {
+            ret = ub_str_to_u64(id_arg, &tpid);
+            if (ret != 0) {
+                (void)printf("Invalid TP_ID: %s.\n", id_arg);
+                return -EINVAL;
+            }
+            query_tpid = true;
+        }
+        ret = admin_cmd_npu_show_tpid_list(cfg->npu_id, dev_name, query_tpid, tpid);
+    } else if (strcmp(res, "tpreuse") == 0) {
+        if (id_arg != NULL) {
+            (void)printf("Too many arguments.\n");
+            return -EINVAL;
+        }
+        ret = admin_cmd_npu_show_tpid_reuse(cfg->npu_id, dev_name);
+    } else {
+        tool_res_key_type_t type;
+        ret = npu_parse_res_type(res, &type);
+        if (ret != 0) {
+            return ret;
+        }
+        uint32_t key = 0;
+        uint32_t key_cnt = 0;
+        if (id_arg != NULL) {
+            ret = ub_str_to_u32(id_arg, &key);
+            if (ret != 0) {
+                (void)printf("Invalid resource ID: %s.\n", id_arg);
+                return -EINVAL;
+            }
+            key_cnt = 1;
+        }
+        ret = admin_cmd_npu_query_res(cfg->npu_id, dev_name, type, key, key_cnt);
+    }
+
     if (ret != 0) {
         npu_print_query_error(ret);
         return ret;
@@ -177,6 +191,11 @@ static int cmd_npu_set(admin_config_t *cfg)
     if (ub_str_to_u32(arg, &level) != 0 || level >= URMA_VLOG_LEVEL_MAX) {
         (void)printf("Invalid log level: %s, expected 0-%u.\n", arg,
                      (uint32_t)URMA_VLOG_LEVEL_DEBUG);
+        return -EINVAL;
+    }
+
+    if (cfg->argc != 0) {
+        (void)printf("Too many arguments.\n");
         return -EINVAL;
     }
 

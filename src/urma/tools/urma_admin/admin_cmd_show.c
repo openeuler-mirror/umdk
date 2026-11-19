@@ -1638,6 +1638,81 @@ static int cmd_show_dev_tpreuse(admin_config_t *cfg)
     return admin_cmd_show_tpid_reuse(cfg);
 }
 
+static int admin_nl_h2d_show_tpid_list(uint32_t npu_id, const char *dev_name,
+                                       bool query_tpid, uint64_t tpid)
+{
+    tpid_show_print_ctx_t ctx = {0};
+    struct nl_msg *msg;
+    int ret;
+
+    msg = admin_nl_alloc_msg(URMA_CORE_H2D_SHOW_TPID_LIST, NLM_F_DUMP, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+    admin_nl_put_u32(msg, UBCORE_ATTR_NPU_ID, npu_id);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+    if (query_tpid) {
+        admin_nl_put_u8(msg, UBCORE_ATTR_TPID_QUERY_FLAG, 1);
+        admin_nl_put_u64(msg, UBCORE_ATTR_TPID, tpid);
+    }
+
+    ctx.dev_name = dev_name;
+    ctx.tpid = tpid;
+    (void)printf("npu_id        : %u\n", npu_id);
+    (void)printf("dev_name      : %s\n", dev_name);
+    ret = admin_nl_send_recv_msg(msg, tpid_show_msg_cb, &ctx, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    if (ret != 0) {
+        (void)printf("Failed to query tpid list via H2D, npu: %u, dev: %s, ret: %d.\n",
+                     npu_id, dev_name, ret);
+        return ret;
+    }
+    if (!query_tpid && !ctx.any) {
+        (void)printf("No tpid_list found via H2D, npu: %u, dev: %s.\n", npu_id, dev_name);
+    }
+    return 0;
+}
+
+int admin_cmd_npu_show_tpid_list(uint32_t npu_id, const char *dev_name,
+                                 bool query_tpid, uint64_t tpid)
+{
+    return admin_nl_h2d_show_tpid_list(npu_id, dev_name, query_tpid, tpid);
+}
+
+static int admin_nl_h2d_show_tpid_reuse(uint32_t npu_id, const char *dev_name)
+{
+    tpid_show_print_ctx_t ctx = {0};
+    struct nl_msg *msg;
+    int ret;
+
+    msg = admin_nl_alloc_msg(URMA_CORE_H2D_SHOW_TPID_REUSE, NLM_F_DUMP, UBCORE_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+    admin_nl_put_u32(msg, UBCORE_ATTR_NPU_ID, npu_id);
+    admin_nl_put_string(msg, UBCORE_ATTR_DEV_NAME, dev_name);
+
+    ctx.dev_name = dev_name;
+    (void)printf("npu_id        : %u\n", npu_id);
+    (void)printf("dev_name      : %s\n", dev_name);
+    ret = admin_nl_send_recv_msg(msg, tpid_show_msg_cb, &ctx, UBCORE_GENL);
+    admin_nl_free_msg(msg);
+    if (ret != 0) {
+        (void)printf("Failed to query tpid reuse via H2D, npu: %u, dev: %s, ret: %d.\n",
+                     npu_id, dev_name, ret);
+        return ret;
+    }
+    if (!ctx.any) {
+        (void)printf("No tpid_reuse found via H2D, npu: %u, dev: %s.\n", npu_id, dev_name);
+    }
+    return 0;
+}
+
+int admin_cmd_npu_show_tpid_reuse(uint32_t npu_id, const char *dev_name)
+{
+    return admin_nl_h2d_show_tpid_reuse(npu_id, dev_name);
+}
+
 static int cmd_show_topo(admin_config_t *cfg)
 {
     char *node_id_arg = pop_arg(cfg);
