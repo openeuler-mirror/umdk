@@ -364,6 +364,9 @@ int admin_cmd_npu(admin_config_t *cfg);
 int admin_cmd_npu_query_res(uint32_t npu_id, const char *dev_name,
                             tool_res_key_type_t type, uint32_t key,
                             uint32_t key_cnt);
+int admin_cmd_npu_show_tpid_list(uint32_t npu_id, const char *dev_name,
+                                 bool query_tpid, uint64_t tpid);
+int admin_cmd_npu_show_tpid_reuse(uint32_t npu_id, const char *dev_name);
 int admin_cmd_agg(admin_config_t *cfg);
 int admin_cmd_dev(admin_config_t *cfg);
 int admin_cmd_eid(admin_config_t *cfg);
