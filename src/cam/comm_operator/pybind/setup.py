@@ -169,10 +169,10 @@ sources = [
     "./moe_combine_send_async.cpp",
     "./moe_dispatch_recv_async.cpp",
     "./moe_dispatch_send_async.cpp",
-    "./cam_deepep_dispatch_send.cpp",
-    "./cam_deepep_dispatch_recv.cpp",
-    "./cam_deepep_combine_send.cpp",
-    "./cam_deepep_combine_recv.cpp",
+    "./afd_async_dispatch_send.cpp",
+    "./afd_async_dispatch_recv.cpp",
+    "./afd_async_combine_send.cpp",
+    "./afd_async_combine_recv.cpp",
 ]
 
 
