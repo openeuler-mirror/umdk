@@ -451,6 +451,20 @@ urma_status_t udma_u_get_jfc_opt(urma_jfc_t *jfc, uint64_t opt, void *buf, uint3
 		return udma_u_get_jfc_opt_from_kernel(jfc, opt, buf, len);
 	case URMA_JFC_FULL_CTX:
 		return udma_u_get_jfc_full_ctx(jfc, buf, len);
+	case URMA_JFC_DU_INFO: {
+		struct udma_u_jfc *ujfc = to_udma_u_jfc(jfc);
+		urma_jfc_du_info_t *info = (urma_jfc_du_info_t *)buf;
+
+		if (len != sizeof(urma_jfc_du_info_t))
+			return URMA_EINVAL;
+		info->cqe_base_addr = (uint64_t)(uintptr_t)ujfc->cq.qbuf;
+		info->sw_db_addr = (uint64_t)(uintptr_t)ujfc->sw_db;
+		info->qbuf_size = ujfc->cq.qbuf_size;
+		info->baseblk_shift = ujfc->cq.baseblk_shift;
+		info->baseblk_cnt = ujfc->cq.baseblk_cnt;
+		info->ci = ujfc->cq.ci;
+		break;
+	}
 	default:
 		return URMA_FAIL;
 	}

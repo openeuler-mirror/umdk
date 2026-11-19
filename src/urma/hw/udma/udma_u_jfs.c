@@ -1340,6 +1340,11 @@ urma_status_t udma_u_get_jfs_opt(urma_jfs_t *jfs, uint64_t opt, void *buf, uint3
 	if (urma_ret && urma_ret != URMA_EEXIST)
 		return urma_ret;
 
+	if (opt == URMA_JFS_DU_INFO && udma_jfs->sq.is_wqe_lock_buf_jetty) {
+		UDMA_LOG_ERR("direct urma info is not supported on wqe lock buffer jfs\n");
+		return URMA_EINVAL;
+	}
+
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jfs_opt(jfs, opt, buf, len, &udata);
 		if (ret) {

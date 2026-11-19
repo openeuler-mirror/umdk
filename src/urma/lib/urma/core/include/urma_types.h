@@ -497,6 +497,17 @@ typedef struct urma_jfc {
     urma_jfc_opt_t urma_jfc_opt;
 } urma_jfc_t;
 
+/* payload of opt URMA_JFC_DU_INFO, direct urma hardware view of JFC */
+typedef struct urma_jfc_du_info {
+    uint64_t cqe_base_addr;
+    uint64_t sw_db_addr;
+    uint32_t qbuf_size;
+    uint32_t baseblk_shift;
+    uint32_t baseblk_cnt;
+    uint32_t ci;
+    uint32_t reserved[4];
+} urma_jfc_du_info_t;
+
 typedef enum urma_order_type {
     URMA_DEF_ORDER,
     URMA_OT, // target ordering
@@ -582,6 +593,24 @@ typedef struct urma_jfs {
     uint32_t async_events_acked;
     urma_jfs_opt_t urma_jfs_opt;
 } urma_jfs_t;
+
+/* payload of opt URMA_JFS_DU_INFO, direct urma hardware view of JFS */
+typedef struct urma_jfs_du_info {
+    uint64_t sqe_base_addr;
+    uint64_t db_addr;
+    uint64_t dwqe_addr;
+    uint64_t rc_tjetty;
+    uint32_t qbuf_size;
+    uint32_t baseblk_shift;
+    uint32_t baseblk_cnt;
+    uint32_t max_inline_size;
+    uint32_t max_sge_num;
+    uint32_t pi;
+    uint32_t ci;
+    uint32_t dwqe_enable;
+    uint32_t st64b_en;
+    uint32_t reserved[1];
+} urma_jfs_du_info_t;
 
 typedef enum urma_jfs_attr_mask {
     JFS_STATE = 0x1
