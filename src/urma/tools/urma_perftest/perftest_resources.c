@@ -2863,6 +2863,218 @@ void destroy_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     destroy_duplex_ctx(ctx, cfg);
 }
 
+#ifdef UB_ARCH_ARM64
+
+static urma_target_jetty_t *du_target_jetty(perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t id)
+{
+    if (cfg->trans_mode == URMA_TM_RC) {
+        return ctx->du_jfs[id].rc_tjetty;
+    }
+    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+        return ctx->import_tjetty[id];
+    }
+    return ctx->import_tjfr[id];
+}
+
+static uint32_t du_log2(uint32_t value)
+{
+    uint32_t shift = 0;
+
+    while ((1U << shift) < value) {
+        shift++;
+    }
+    return shift;
+}
+
+static int du_query_jfs(perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t id)
+{
+    urma_jfs_du_info_t info = {0};
+    struct urma_du_jfs *dj = &ctx->du_jfs[id];
+    urma_status_t status;
+
+    if (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) {
+        status = urma_get_jetty_opt(ctx->jetty[id], URMA_JFS_DU_INFO, &info, sizeof(info));
+    } else {
+        status = urma_get_jfs_opt(ctx->jfs[id], URMA_JFS_DU_INFO, &info, sizeof(info));
+    }
+    if (status != URMA_SUCCESS) {
+        LOG_ERROR("Failed to get du info of jfs %u, status: %d.\n", id, (int)status);
+        return -1;
+    }
+    if (info.sqe_base_addr == 0 || info.qbuf_size == 0 || info.baseblk_cnt == 0 ||
+        (info.baseblk_cnt & (info.baseblk_cnt - 1)) != 0) {
+        LOG_ERROR("Invalid du jfs view %u, qbuf: %lu, size: %u, baseblk_cnt: %u.\n", id,
+                  info.sqe_base_addr, info.qbuf_size, info.baseblk_cnt);
+        return -1;
+    }
+
+    dj->qbuf = (void *)(uintptr_t)info.sqe_base_addr;
+    dj->qbuf_end = (uint8_t *)dj->qbuf + info.qbuf_size;
+    dj->qbuf_size = info.qbuf_size;
+    dj->baseblk_shift = info.baseblk_shift;
+    dj->baseblk_cnt = info.baseblk_cnt;
+    dj->max_inline_size = info.max_inline_size;
+    dj->max_sge_num = info.max_sge_num;
+    dj->trans_mode = cfg->trans_mode;
+    dj->jfs_id = (cfg->jetty_mode == PERFTEST_JETTY_DUPLEX) ? ctx->jetty[id]->jetty_id.id :
+                                                                 ctx->jfs[id]->jfs_id.id;
+    dj->pi = info.pi;
+    dj->ci = info.ci;
+    dj->rc_tjetty = (urma_target_jetty_t *)(uintptr_t)info.rc_tjetty;
+    dj->db_addr = (volatile void *)(uintptr_t)info.db_addr;
+    dj->dwqe_addr = (void *)(uintptr_t)info.dwqe_addr;
+    dj->dwqe_enable = info.dwqe_enable != 0;
+    dj->st64b_en = info.st64b_en != 0;
+
+    if (cfg->trans_mode == URMA_TM_RC && dj->rc_tjetty == NULL) {
+        LOG_ERROR("du jfs %u is not bound to a target jetty in RC mode.\n", id);
+        return -1;
+    }
+    if (du_target_jetty(ctx, cfg, id) == NULL) {
+        LOG_ERROR("du jfs %u has no target jetty.\n", id);
+        return -1;
+    }
+    return 0;
+}
+
+static int du_query_jfc(perftest_context_t *ctx, uint32_t id)
+{
+    urma_jfc_du_info_t info = {0};
+    struct urma_du_jfc *dc = &ctx->du_jfc[id];
+    urma_status_t status;
+
+    status = urma_get_jfc_opt(ctx->jfc_s[id], URMA_JFC_DU_INFO, &info, sizeof(info));
+    if (status != URMA_SUCCESS) {
+        LOG_ERROR("Failed to get du info of jfc %u, status: %d.\n", id, (int)status);
+        return -1;
+    }
+    if (info.cqe_base_addr == 0 || info.sw_db_addr == 0 || info.qbuf_size == 0 ||
+        info.baseblk_cnt == 0 || (info.baseblk_cnt & (info.baseblk_cnt - 1)) != 0) {
+        LOG_ERROR("Invalid du jfc view %u, qbuf: %lu, sw_db: %lu, size: %u, baseblk_cnt: %u.\n", id,
+                  info.cqe_base_addr, info.sw_db_addr, info.qbuf_size, info.baseblk_cnt);
+        return -1;
+    }
+
+    dc->qbuf = (void *)(uintptr_t)info.cqe_base_addr;
+    dc->qbuf_size = info.qbuf_size;
+    dc->baseblk_shift = info.baseblk_shift;
+    dc->baseblk_cnt = info.baseblk_cnt;
+    dc->baseblk_mask = info.baseblk_cnt - 1;
+    dc->cq_shift = du_log2(info.baseblk_cnt);
+    dc->ci = info.ci;
+    dc->idx = ctx->jfc_s[id]->jfc_id.id;
+    dc->sw_db = (volatile uint32_t *)(uintptr_t)info.sw_db_addr;
+
+    return 0;
+}
+
+static void du_build_sqe_tpl(perftest_context_t *ctx, const perftest_config_t *cfg, uint32_t id)
+{
+    struct urma_du_sqe_ctl *sqe = (struct urma_du_sqe_ctl *)(ctx->du_sqe_tpl +
+        (uint64_t)id * URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB);
+    struct urma_du_wqe_sge *sge;
+    urma_target_jetty_t *tjetty = du_target_jetty(ctx, cfg, id);
+    urma_target_seg_t *tseg = ctx->import_tseg[id];
+
+    (void)memset(sqe, 0, URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB);
+    sqe->opcode = URMA_DU_OPCODE_WRITE;
+    sqe->flag = URMA_DU_SQE_FLAG_COMPLETE_ENABLE |
+        (ctx->du_inline_mode ? URMA_DU_SQE_FLAG_INLINE : 0);
+    sqe->tp_id = tjetty->tp.tpn;
+    sqe->rmt_jetty_type = (uint8_t)tjetty->type;
+    urma_du_swap_endian128(tjetty->id.eid.raw, sqe->rmt_eid);
+    sqe->rmt_jetty_or_seg_id = tseg->seg.token_id >> URMA_DU_TID_SHIFT;
+    sqe->token_en = tseg->seg.attr.bs.token_policy != URMA_TOKEN_NONE;
+    sqe->rmt_token_value = g_perftest_token.token;
+
+    if (ctx->du_inline_mode) {
+        sqe->inline_msg_len = cfg->size;
+    } else {
+        sqe->sge_num = 1;
+        sge = (struct urma_du_wqe_sge *)((uint8_t *)sqe + URMA_DU_SQE_NORMAL_CTL_LEN);
+        sge->length = cfg->size;
+    }
+}
+
+static int du_refresh_tpl(perftest_context_t *ctx, perftest_config_t *cfg)
+{
+    if (cfg->du == false) {
+        return 0;
+    }
+
+    ctx->du_inline_mode = (cfg->size <= cfg->inline_size) &&
+        (cfg->size <= ctx->du_jfs[0].max_inline_size);
+    if (ctx->du_inline_mode &&
+        cfg->size > URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB - URMA_DU_SQE_NORMAL_CTL_LEN) {
+        LOG_ERROR("du inline size %u exceeds template capacity %u.\n", cfg->size,
+                  URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB - URMA_DU_SQE_NORMAL_CTL_LEN);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < cfg->jettys; i++) {
+        du_build_sqe_tpl(ctx, cfg, i);
+    }
+    return 0;
+}
+
+int activate_du(perftest_context_t *ctx, perftest_config_t *cfg)
+{
+    if (cfg->du == false) {
+        return 0;
+    }
+    if (ctx->du_jfs != NULL) {
+        return du_refresh_tpl(ctx, cfg);
+    }
+
+    ctx->du_jfs = calloc(cfg->jettys, sizeof(struct urma_du_jfs));
+    ctx->du_jfc = calloc(cfg->jettys, sizeof(struct urma_du_jfc));
+    ctx->du_sqe_tpl = calloc(cfg->jettys, URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB);
+    if (ctx->du_jfs == NULL || ctx->du_jfc == NULL || ctx->du_sqe_tpl == NULL) {
+        LOG_ERROR("Failed to alloc du context.\n");
+        deactivate_du(ctx, cfg);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < cfg->jettys; i++) {
+        if (du_query_jfs(ctx, cfg, i) != 0 || du_query_jfc(ctx, i) != 0) {
+            deactivate_du(ctx, cfg);
+            return -1;
+        }
+        ctx->du_jfs[i].wrid = calloc(ctx->du_jfs[i].baseblk_cnt, sizeof(uintptr_t));
+        if (ctx->du_jfs[i].wrid == NULL) {
+            LOG_ERROR("Failed to alloc du wrid %u.\n", i);
+            deactivate_du(ctx, cfg);
+            return -1;
+        }
+    }
+
+    if (du_refresh_tpl(ctx, cfg) != 0) {
+        deactivate_du(ctx, cfg);
+        return -1;
+    }
+    return 0;
+}
+
+void deactivate_du(perftest_context_t *ctx, perftest_config_t *cfg)
+{
+    if (cfg->du == false) {
+        return;
+    }
+    if (ctx->du_jfs != NULL) {
+        for (uint32_t i = 0; i < cfg->jettys; i++) {
+            free(ctx->du_jfs[i].wrid);
+        }
+    }
+    free(ctx->du_jfs);
+    free(ctx->du_jfc);
+    free(ctx->du_sqe_tpl);
+    ctx->du_jfs = NULL;
+    ctx->du_jfc = NULL;
+    ctx->du_sqe_tpl = NULL;
+}
+
+#endif /* UB_ARCH_ARM64 */
+
 static urma_status_t warm_up_post_send(perftest_context_t *ctx, uint32_t index, const perftest_config_t *cfg)
 {
     urma_jfs_wr_t jfs_wr = ctx->run_ctx.jfs_wr[index * cfg->jfs_post_list];

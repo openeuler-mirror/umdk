@@ -168,6 +168,8 @@ static void usage(const char *argv0)
         "  --retry_num  <num>          Set retry num for user_tp, default: 7.\n"
         "  --ack_timeout <num>         Set ack timeout for user_tp, default: 15.\n"
         "  --sge_num <num>             Set sge_num for wr, default: 1.\n"
+        "  --du                        Direct urma user-managed data path, only for write_lat/write_bw,\n"
+        "                              RM/RC, simplex/duplex, single jetty, sge_num 1.\n"
         "  --enable_write_dirty <time> Enable write dirty and set the period of write dirty, default: disable.\n"
         "  --pair_num <num>            Enable multiplayer model and set the number of connection, default: disable.\n"
         "  --sip <ip>                  Set source ip address.\n"
@@ -396,6 +398,7 @@ static void init_cfg(perftest_config_t *cfg)
     cfg->min_size = 0;
     cfg->max_size = 0;
     cfg->enable_random_size = 0;
+    cfg->du = false;
     verbose_set_level(VLOG_LEVEL_INFO);
 }
 
@@ -682,6 +685,7 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
         {"share_jfs",           no_argument,       NULL, PERFTEST_OPT_SHARE_JFS},
         {"min_size",            required_argument, NULL, PERFTEST_OPT_SET_MIN_SIZE},
         {"max_size",            required_argument, NULL, PERFTEST_OPT_SET_MAX_SIZE},
+        {"du",                  no_argument,       NULL, PERFTEST_OPT_DU},
         {"aggr_mode",           required_argument, NULL, PERFTEST_OPT_AGGR_MODE},
         {"stdout",              no_argument,       NULL, PERFTEST_OPT_STDOUT},
         {"bond_mode",           required_argument, NULL, PERFTEST_OPT_BOND_MODE},
@@ -1078,6 +1082,9 @@ int perftest_parse_args(int argc, char *argv[], perftest_config_t *cfg)
             case PERFTEST_OPT_SET_MAX_SIZE:
                 (void)ub_str_to_u32(optarg, &cfg->max_size);
                 cfg->enable_random_size = 1;
+                break;
+            case PERFTEST_OPT_DU:
+                cfg->du = true;
                 break;
             case PERFTEST_OPT_STDOUT:
                 verbose_set_level(VLOG_LEVEL_VVERBOSE);
@@ -1492,6 +1499,59 @@ int check_local_cfg(perftest_config_t *cfg)
         LOG_ERROR("notify takes effect only in write test, and conflicts with immediate.\n");
         exit(1);
     }
+#ifdef UB_ARCH_ARM64
+    if (cfg->du == true) {
+        if (cfg->cmd != PERFTEST_WRITE_LAT && cfg->cmd != PERFTEST_WRITE_BW) {
+            LOG_ERROR("du takes effect only in write_lat/write_bw test.\n");
+            exit(1);
+        }
+        if (cfg->trans_mode != URMA_TM_RM && cfg->trans_mode != URMA_TM_RC) {
+            LOG_ERROR("du takes effect only in RM/RC trans mode.\n");
+            exit(1);
+        }
+        if (cfg->use_flat_api == true) {
+            LOG_ERROR("du conflicts with use_flat_api.\n");
+            exit(1);
+        }
+        if (cfg->use_jfce == true) {
+            LOG_ERROR("du conflicts with use_jfce.\n");
+            exit(1);
+        }
+        if (cfg->enable_credit == true || cfg->enable_notify == true || cfg->enable_imm == true) {
+            LOG_ERROR("du conflicts with credit/notify/imm.\n");
+            exit(1);
+        }
+        if (cfg->min_size != 0 || cfg->max_size != 0) {
+            LOG_ERROR("du conflicts with random message size.\n");
+            exit(1);
+        }
+        if (cfg->sge_num != 1) {
+            LOG_ERROR("du takes effect only with sge_num 1.\n");
+            exit(1);
+        }
+        if (cfg->jettys != 1) {
+            LOG_ERROR("du takes effect only with 1 jetty.\n");
+            exit(1);
+        }
+        if (cfg->bidirection == true) {
+            LOG_ERROR("du conflicts with bidirectional bw.\n");
+            exit(1);
+        }
+        if (cfg->warm_up == true) {
+            LOG_ERROR("du conflicts with warm_up.\n");
+            exit(1);
+        }
+        if (cfg->time_type.bs.infinite == 1) {
+            LOG_ERROR("du conflicts with infinite mode.\n");
+            exit(1);
+        }
+    }
+#else
+    if (cfg->du == true) {
+        LOG_ERROR("du is only supported on AArch64.\n");
+        exit(1);
+    }
+#endif
     if (cfg->inf_period_ms != 0) {
         if (cfg->time_type.bs.infinite != 1) {
             LOG_ERROR("inf_period_ms takes effect only in infinite mode.\n");
@@ -1667,6 +1727,12 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
         return -1;
     }
 
+    if (local_cfg->du != remote_cfg->du) {
+        LOG_ERROR("Config inconsistent[du],local: %s, remote: %s.\n",
+                  PERFTEST_BOOL_TO_STR(local_cfg->du), PERFTEST_BOOL_TO_STR(remote_cfg->du));
+        return -1;
+    }
+
     if (local_cfg->order != remote_cfg->order) {
         LOG_ERROR("Config inconsistent[order],local: %u, remote: %u.\n",
                   local_cfg->order, remote_cfg->order);
@@ -1713,11 +1779,11 @@ static int check_both_side_cfg(const perftest_config_t *local_cfg, const perftes
     return 0;
 }
 
-#define OFF_SET (360)
+#define OFF_SET ((int)sizeof(perftest_config_t))
 
 int check_remote_cfg(perftest_config_t *cfg)
 {
-    perftest_config_t remote_cfg;
+    perftest_config_t remote_cfg = {0};
     for (uint32_t i = 0; i < cfg->pair_num; i++) {
         int ret = sync_data(cfg, i, OFF_SET, (char *)cfg, (char *)&remote_cfg);
         if (ret != 0) {

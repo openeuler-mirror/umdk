@@ -205,7 +205,8 @@ enum perftest_opts {
     PERFTEST_OPT_V_ADDRESS,
     PERFTEST_OPT_SHARE_JFS,
     PERFTEST_OPT_SET_MIN_SIZE,
-    PERFTEST_OPT_SET_MAX_SIZE
+    PERFTEST_OPT_SET_MAX_SIZE,
+    PERFTEST_OPT_DU
 };
 
 typedef enum perftest_rate_limiter_units {
@@ -355,6 +356,7 @@ typedef struct perftest_config {
     bool enable_va;
     uint64_t v_address;
     bool share_jfs;
+    bool du;
 } perftest_config_t;
 
 typedef struct perftest_value_range {

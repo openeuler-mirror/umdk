@@ -236,6 +236,187 @@ static inline uint64_t get_remote_seg_va(const perftest_context_t *ctx, const pe
     return ctx->remote_seg[i].ubva.va;
 }
 
+#ifdef UB_ARCH_ARM64
+
+static int du_post_write(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id, uint64_t rid,
+                         uint64_t lva, uint64_t rva, bool last, bool complete)
+{
+    struct urma_du_jfs *b = &ctx->du_jfs[id];
+    struct urma_du_sqe_bb *bb = (struct urma_du_sqe_bb *)(ctx->du_sqe_tpl +
+        (uint64_t)id * URMA_DU_MAX_SQE_BB_NUM * URMA_DU_WQEBB);
+    struct urma_du_sqe_ctl *tpl = &bb->ctl;
+    struct urma_du_wqe_sge *sge;
+    uint8_t *ring_sqe;
+    uint8_t *dst;
+    const uint8_t *src;
+    uint32_t pi = b->pi;
+    uint32_t idx = pi & (b->baseblk_cnt - 1);
+    uint32_t i;
+    uint32_t wqebb_cnt = ctx->du_inline_mode ?
+        (URMA_DU_SQE_NORMAL_CTL_LEN + cfg->size - 1) / URMA_DU_WQEBB + 1 : 1; /* 1 sge */
+
+    if (!urma_du_sq_has_room(b, pi, wqebb_cnt)) {
+        return ENOMEM;
+    }
+
+    if (complete) {
+        tpl->flag |= URMA_DU_SQE_FLAG_COMPLETE_ENABLE;
+    } else {
+        tpl->flag &= (uint32_t)~URMA_DU_SQE_FLAG_COMPLETE_ENABLE;
+    }
+
+    tpl->rmt_addr_l_or_token_id = (uint32_t)(rva & URMA_DU_SQE_CTL_RMA_ADDR_BIT);
+    tpl->rmt_addr_h_or_token_value =
+        (uint32_t)((rva >> URMA_DU_SQE_CTL_RMA_ADDR_OFFSET) & URMA_DU_SQE_CTL_RMA_ADDR_BIT);
+    if (ctx->du_inline_mode) {
+        (void)memcpy((uint8_t *)tpl + URMA_DU_SQE_NORMAL_CTL_LEN, (void *)lva, cfg->size);
+    } else {
+        sge = (struct urma_du_wqe_sge *)((uint8_t *)tpl + URMA_DU_SQE_NORMAL_CTL_LEN);
+        sge->va = lva;
+    }
+
+    for (i = 0; i < wqebb_cnt; i++) {
+        b->wrid[(pi + i) & (b->baseblk_cnt - 1)] = rid;
+    }
+
+    tpl->owner = ((pi & b->baseblk_cnt) == 0) ? 1 : 0;
+    pi += wqebb_cnt;
+    tpl->sqe_bb_idx = (uint16_t)pi;
+    ring_sqe = (uint8_t *)b->qbuf + ((uint64_t)idx << b->baseblk_shift);
+
+    dst = ring_sqe;
+    src = (const uint8_t *)tpl;
+    for (i = 0; i < wqebb_cnt; i++) {
+        urma_du_mmio_memcpy_x64((uint64_t *)dst, (const uint64_t *)src);
+        dst += URMA_DU_WQEBB;
+        src += URMA_DU_WQEBB;
+        if (dst == (uint8_t *)b->qbuf_end) {
+            dst = (uint8_t *)b->qbuf;
+        }
+    }
+
+    if (last) {
+        if (b->dwqe_enable && wqebb_cnt == 1 && pi - b->ci == 1) {
+            urma_du_write_dsqe(b, bb, pi);
+        } else {
+            urma_du_ring_sq_db(b, pi);
+        }
+    }
+    b->pi = pi;
+    return 0;
+}
+
+static int du_post_write_lat(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id, uint64_t *rid,
+                             uint64_t seq)
+{
+    uint64_t lva = (cfg->seg_pre_jetty == false) ?
+        (uint64_t)(uintptr_t)ctx->local_buf[0] + (cfg->jettys + id) * ctx->buf_size :
+        (uint64_t)(uintptr_t)ctx->local_buf[id] + ctx->buf_size; // Second half for local memory
+    uint64_t rva = get_remote_seg_va(ctx, cfg, id);
+
+    for (uint32_t j = 0; j < cfg->jfs_post_list; j++) {
+        bool last = (j + 1) == cfg->jfs_post_list;
+        bool complete = ((seq + j + 1) % cfg->cq_mod) == 0;
+        int ret = du_post_write(ctx, cfg, id, ++(*rid), lva, rva, last, complete);
+        if (ret != 0) {
+            return ret;
+        }
+    }
+    return 0;
+}
+
+static int du_poll_one_slim(struct urma_du_jfc *dc, struct urma_du_jfs *dj)
+{
+    struct urma_du_cqe *cqe = urma_du_get_cqe(dc, dc->ci);
+    urma_cr_status_t status;
+
+    if (!urma_du_cqe_valid(dc, dc->ci, cqe)) {
+        return 0;
+    }
+    urma_du_from_device_barrier();
+    if (cqe->s_r == URMA_DU_CQE_FOR_RECEIVE || cqe->fd == URMA_DU_FLUSH_DONE) {
+        return -1;
+    }
+    if ((cqe->status | cqe->substatus) != 0) {
+        if (urma_du_get_cr_status((uint8_t)cqe->status, (uint8_t)cqe->substatus, &status) != 0 ||
+            status != URMA_CR_SUCCESS) {
+            return -1;
+        }
+    }
+    urma_du_advance_sq_ci(dj, cqe->entry_idx);
+    dj->ci++;
+    dc->ci++;
+    urma_du_update_jfc_ci(dc, dc->ci);
+    return 1;
+}
+
+static int du_poll_one(struct urma_du_jfc *dc, struct urma_du_jfs *dj, urma_cr_t *cr)
+{
+    struct urma_du_cqe *cqe = urma_du_get_cqe(dc, dc->ci);
+    urma_cr_status_t status;
+
+    if (!urma_du_cqe_valid(dc, dc->ci, cqe)) {
+        return 0;
+    }
+    urma_du_from_device_barrier();
+    if (cqe->s_r == URMA_DU_CQE_FOR_RECEIVE || cqe->fd == URMA_DU_FLUSH_DONE) {
+        return -1;
+    }
+    if (urma_du_get_cr_status((uint8_t)cqe->status, (uint8_t)cqe->substatus, &status) != 0) {
+        return -1;
+    }
+    urma_du_advance_sq_ci(dj, cqe->entry_idx);
+    cr->status = status;
+    cr->user_ctx = (uint64_t)dj->wrid[dj->ci & (dj->baseblk_cnt - 1)];
+    dj->ci++;
+    dc->ci++;
+    urma_du_update_jfc_ci(dc, dc->ci);
+    return 1;
+}
+
+static int du_poll_until_expected_cqe(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id,
+                                      uint64_t scnt)
+{
+    int cqe_expected =
+        (int)(scnt / cfg->cq_mod - (scnt - cfg->jfs_post_list) / cfg->cq_mod);
+    struct urma_du_jfs *dj = &ctx->du_jfs[id];
+    struct urma_du_jfc *dc = &ctx->du_jfc[id];
+
+    do {
+        int cqe_cnt = du_poll_one_slim(dc, dj);
+        if (cqe_cnt < 0) {
+            LOG_ERROR("Failed DU CR, id:%u.\n", id);
+            return -1;
+        }
+        cqe_expected -= cqe_cnt;
+        if (cfg->time_type.bs.duration == 1 && ctx->run_ctx.state == END_STATE) {
+            break;
+        }
+    } while (cqe_expected > 0);
+    return 0;
+}
+
+static int du_poll_batch(perftest_context_t *ctx, perftest_config_t *cfg, urma_cr_t *cr, int max)
+{
+    int total = 0;
+
+    for (uint32_t i = 0; i < cfg->jettys && total < max; i++) {
+        while (total < max) {
+            int ret = du_poll_one(&ctx->du_jfc[i], &ctx->du_jfs[i], &cr[total]);
+            if (ret < 0) {
+                return -1;
+            }
+            if (ret == 0) {
+                break;
+            }
+            total++;
+        }
+    }
+    return total;
+}
+
+#endif /* UB_ARCH_ARM64 */
+
 static int poll_jfc_until_expected_cqe(perftest_context_t *ctx, perftest_config_t *cfg, uint32_t id, urma_cr_t *cr)
 {
     if (cfg->use_jfce == true) {
@@ -387,6 +568,11 @@ static void *run_write_lat_simplex(void *arg)
             *post_buf = (char)(scnt / cfg->jfs_post_list);
 
             urma_status_t status;
+#ifdef UB_ARCH_ARM64
+            if (cfg->du == true) {
+                status = (urma_status_t)du_post_write_lat(ctx, cfg, id, &rid, scnt - cfg->jfs_post_list);
+            } else
+#endif
             if (cfg->use_flat_api) {
                 uint64_t lva = (uint64_t)(uintptr_t)ctx->local_buf[0] + ctx->buf_size; // Second half for local memory
                 uint64_t rva = ctx->remote_seg[0].ubva.va;
@@ -416,6 +602,13 @@ static void *run_write_lat_simplex(void *arg)
         }
 
         if (ccnt < cfg->iters || cfg->time_type.bs.duration == 1) {
+#ifdef UB_ARCH_ARM64
+            if (cfg->du == true) {
+                if (du_poll_until_expected_cqe(ctx, cfg, id, scnt) != 0) {
+                    goto free_cr;
+                }
+            } else
+#endif
             if (poll_jfc_until_expected_cqe(ctx, cfg, id, cr) != 0) {
                 goto free_cr;
             }
@@ -1527,10 +1720,18 @@ static void *run_write_lat_duplex(void *arg)
 
             urma_jfs_wr_t *wr = &run_ctx->jfs_wr[id * cfg->jfs_post_list];
             urma_jfs_wr_t *bad_wr = NULL;
-            for (uint32_t i = 0; i < cfg->jfs_post_list; i++) {
-                wr[i].user_ctx = (uintptr_t)++rid;
+            urma_status_t status;
+#ifdef UB_ARCH_ARM64
+            if (cfg->du == true) {
+                status = (urma_status_t)du_post_write_lat(ctx, cfg, id, &rid, scnt - cfg->jfs_post_list);
+            } else
+#endif
+            {
+                for (uint32_t i = 0; i < cfg->jfs_post_list; i++) {
+                    wr[i].user_ctx = (uintptr_t)++rid;
+                }
+                status = urma_post_jetty_send_wr(ctx->jetty[id], wr, &bad_wr);
             }
-            urma_status_t status = urma_post_jetty_send_wr(ctx->jetty[id], wr, &bad_wr);
             if (status != URMA_SUCCESS) {
                 LOG_ERROR("Failed to post jfs wr, id:%u, status:%d, scnt:%lu, rcnt:%lu\n",
                           id, (int)status, scnt, rcnt);
@@ -1543,6 +1744,13 @@ static void *run_write_lat_duplex(void *arg)
         }
 
         if (ccnt < cfg->iters || cfg->time_type.bs.duration == 1) {
+#ifdef UB_ARCH_ARM64
+            if (cfg->du == true) {
+                if (du_poll_until_expected_cqe(ctx, cfg, id, scnt) != 0) {
+                    goto free_cr;
+                }
+            } else
+#endif
             if (poll_jfc_until_expected_cqe(ctx, cfg, id, cr) != 0) {
                 goto free_cr;
             }
@@ -1571,6 +1779,13 @@ static int run_write_lat_once(perftest_context_t *ctx, perftest_config_t *cfg)
         return ret;
     }
 
+#ifdef UB_ARCH_ARM64
+    if (activate_du(ctx, cfg) != 0) {
+        destroy_jfs_wr(ctx);
+        return -1;
+    }
+#endif
+
     if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
         ret = run_lat_test(ctx, cfg, run_write_lat_simplex);
     } else {
@@ -1596,16 +1811,25 @@ int run_write_lat(perftest_context_t *ctx, perftest_config_t *cfg)
             cfg->size = (1U << i);
             if (run_write_lat_once(ctx, cfg) != 0) {
                 LOG_ERROR("Failed to run once write lat, size: %u.\n", cfg->size);
+#ifdef UB_ARCH_ARM64
+                deactivate_du(ctx, cfg);
+#endif
                 return -1;
             }
         }
     } else {
         if (run_write_lat_once(ctx, cfg) != 0) {
             LOG_ERROR("Failed to run once write lat, size: %u.\n", cfg->size);
+#ifdef UB_ARCH_ARM64
+            deactivate_du(ctx, cfg);
+#endif
             return -1;
         }
     }
 
+#ifdef UB_ARCH_ARM64
+    deactivate_du(ctx, cfg);
+#endif
     return 0;
 }
 
@@ -1909,6 +2133,30 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                     expected_send_cqes = get_expected_send_cqes(wr);
                 }
                 urma_jfs_wr_t *bad_wr = NULL;
+#ifdef UB_ARCH_ARM64
+                if (cfg->du == true) {
+                    uint64_t lva = (uint64_t)(uintptr_t)ctx->local_buf[index] + ctx->buf_size;
+                    uint64_t rva = get_remote_seg_va(ctx, cfg, index);
+                    for (uint32_t j = 0; j < cfg->jfs_post_list; j++) {
+                        bool last = (j + 1) == cfg->jfs_post_list;
+                        bool complete = ((run_ctx->scnt[index] + j + 1) % cfg->cq_mod) == 0 ||
+                                        (cfg->jfs_post_list == 1 && cfg->time_type.bs.iterations == 1 &&
+                                         run_ctx->scnt[index] == cfg->iters - 1);
+                        uint64_t lva_j = lva;
+                        uint64_t rva_j = rva;
+                        if (cfg->size <= (ctx->page_size / PERFTEST_BUF_NUM)) {
+                            uint32_t step = PERFTEST_ALIGN_CACHELINE(cfg->size, cfg->cache_line_size);
+                            uint64_t off = ((run_ctx->scnt[index] + j) % (ctx->page_size / step)) * step;
+                            lva_j += off;
+                            rva_j += off;
+                        }
+                        status = (urma_status_t)du_post_write(ctx, cfg, index, index, lva_j, rva_j, last, complete);
+                        if (status != URMA_SUCCESS) {
+                            break;
+                        }
+                    }
+                } else
+#endif
                 if (cfg->jetty_mode == PERFTEST_JETTY_SIMPLEX) {
                     status = urma_post_jfs_wr(ctx->jfs[index], wr, &bad_wr);
                 } else {
@@ -1927,7 +2175,8 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                 }
 
                 /* In the case of non wr_list, the address of each wqe is also incremented. */
-                if (cfg->jfs_post_list == 1 && cfg->size <= (ctx->page_size / PERFTEST_BUF_NUM)) {
+                if (cfg->du == false && cfg->jfs_post_list == 1 &&
+                    cfg->size <= (ctx->page_size / PERFTEST_BUF_NUM)) {
                     uint32_t local_sge_idx = (index * cfg->jfs_post_list) * PERFTEST_SGE_NUM_PRE_WR *
                                                  cfg->sge_num +
                                              cfg->sge_num;
@@ -1982,7 +2231,14 @@ static int run_once_bw(perftest_context_t *ctx, perftest_config_t *cfg)
                     goto free_cr;
                 }
             }
-            cqe_cnt = urma_poll_jfc(ctx->jfc_s[0], PERFTEST_POLL_BATCH, cr);
+#ifdef UB_ARCH_ARM64
+            if (cfg->du == true) {
+                cqe_cnt = du_poll_batch(ctx, cfg, cr, PERFTEST_POLL_BATCH);
+            } else
+#endif
+            {
+                cqe_cnt = urma_poll_jfc(ctx->jfc_s[0], PERFTEST_POLL_BATCH, cr);
+            }
             if (cqe_cnt > 0) {
                 if (cfg->use_jfce == true) {
                     consume_pending_send_cqes(&pending_send_cqes, cqe_cnt);
@@ -3257,6 +3513,11 @@ static int prepare_run_bw_once(perftest_context_t *ctx, perftest_config_t *cfg,
         LOG_ERROR("Failed to perform warm_up, api_type: %d.\n", (int)cfg->api_type);
         goto err_dest_jfs_wr;
     }
+#ifdef UB_ARCH_ARM64
+    if (activate_du(ctx, cfg) != 0) {
+        goto err_dest_jfs_wr;
+    }
+#endif
     if (cfg->bidirection) {
         for (i = 0; i < cfg->pair_num; i++) {
             ret = sync_time(cfg, i, g_bi_exchange_info[cfg->api_type].before);
@@ -3410,14 +3671,23 @@ int run_write_bw(perftest_context_t *ctx, perftest_config_t *cfg)
         for (uint32_t i = 1; i <= cfg->order; i++) {
             cfg->size = (1U << i);
             if (run_bw_once(ctx, cfg) != 0) {
+#ifdef UB_ARCH_ARM64
+                deactivate_du(ctx, cfg);
+#endif
                 return -1;
             }
         }
     } else {
         if (run_bw_once(ctx, cfg) != 0) {
+#ifdef UB_ARCH_ARM64
+            deactivate_du(ctx, cfg);
+#endif
             return -1;
         }
     }
+#ifdef UB_ARCH_ARM64
+    deactivate_du(ctx, cfg);
+#endif
     return 0;
 }
 

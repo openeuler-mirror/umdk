@@ -17,6 +17,9 @@
 
 #include "perftest_parameters.h"
 #include "ub_get_clock.h"
+#ifdef UB_ARCH_ARM64
+#include "urma_du.h"
+#endif
 
 #define PERFTEST_BUF_NUM     (2)
 #define PERFTEST_MAX_BUF_LEN (1UL << PERFTEST_SIZE_ORDER)
@@ -119,6 +122,13 @@ typedef struct perftest_context {
     run_test_ctx_t run_ctx;
     bool infinite_print;
 
+#ifdef UB_ARCH_ARM64
+    struct urma_du_jfs *du_jfs;
+    struct urma_du_jfc *du_jfc;
+    bool du_inline_mode;
+    uint8_t *du_sqe_tpl;
+#endif
+
     /* send credit */
     uint64_t **ctrl_buf;
     urma_target_seg_t **credit_seg;
@@ -167,4 +177,9 @@ int rearm_jfc(perftest_context_t *ctx, const perftest_config_t *cfg);
 
 /* Warm_up function is only available for READ/WRITE/ATOMIC bw test. */
 int perform_warm_up(perftest_context_t *ctx, perftest_config_t *cfg);
+
+#ifdef UB_ARCH_ARM64
+int activate_du(perftest_context_t *ctx, perftest_config_t *cfg);
+void deactivate_du(perftest_context_t *ctx, perftest_config_t *cfg);
+#endif
 #endif
