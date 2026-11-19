@@ -1,0 +1,249 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+// CPU fixture: production code is inserted at the marked locations by pytest.
+#include <cassert>
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <vector>
+
+#define __aicore__
+#define __simt_vf__
+#define __ubuf__
+#define __gm__
+#define __launch_bounds__(...)
+#define EP_DEVICE_ASSERT(value) assert(value)
+constexpr uint32_t warpSize = 32;
+constexpr uint32_t kNumHighHalfShiftBits = 32;
+constexpr int PIPE_S = 0, PIPE_V = 1, EVENT_ID4 = 4;
+struct { uint32_t x; } threadIdx{};
+inline void asc_sync_notify(int, int, int) {}
+inline void asc_sync_wait(int, int, int) {}
+inline void asc_threadfence() {}
+inline void asc_stcg(uint64_t *dst, uint64_t value) { *dst = value; }
+
+namespace AscendC {
+struct HcommUrmaSqeCtx { uint8_t bytes[48]; };
+struct HcommUrmaSgeCtx { uint8_t bytes[16]; };
+namespace Simt {
+struct Dim3 {
+    uint32_t x;
+    Dim3(uint32_t x, uint32_t, uint32_t) : x(x) {}
+};
+template <auto Function, class... Args> void VF_CALL(Dim3 dim, Args... args)
+{
+    for (threadIdx.x = 0; threadIdx.x < dim.x; ++threadIdx.x) {
+        Function(args...);
+    }
+}
+}
+}
+
+namespace handle {
+@HANDLE_CONSTANTS@
+struct HcommPeerInfo {
+    uint64_t tp_id_num_sges_rmt_token_id, rmt_eid[2], rmt_token_value_udf;
+    uint64_t rmt_base_addr, rmt_buffer_size;
+};
+static_assert(sizeof(HcommPeerInfo) == 48);
+struct HcommPeer { HcommPeerInfo *peer_info; };
+struct HcommJettyInfo { uint64_t sq_base_addr, packed_head; };
+
+// The CQ sees SQEs only after a doorbell, so missing submission cannot be
+// mistaken for a successful completion merely because an SQE was constructed.
+struct Queue {
+    std::vector<uint64_t> sq = std::vector<uint64_t>(kSQDepth * 8);
+    uint64_t saved_head;
+    uint32_t submitted, cq_tail;
+    uint32_t doorbells = 0;
+    Queue(uint32_t head, uint32_t completions)
+        : saved_head(uint64_t(head) | (uint64_t(completions) << 32)),
+          submitted(head), cq_tail(completions) {}
+    uint64_t &word(uint32_t bb, uint32_t lane)
+    {
+        return sq[((bb + lane / 8) & (kSQDepth - 1)) * 8 + lane % 8];
+    }
+    void submit(uint64_t packed)
+    {
+        ++doorbells;
+        const auto head = uint32_t(packed);
+        assert(uint32_t(head - submitted) < kSQDepth);
+        while (submitted != head) {
+            const uint64_t header = word(submitted, 0);
+            assert((header & 0xffffu) == (submitted & (kSQDepth - 1)));
+            assert(((header >> 31) & 1) == ((submitted & kSQDepth) == 0));
+            assert(((header >> 40) & 0xff) == 3);
+            const uint32_t sges = (word(submitted, 1) >> 24) & 0xff;
+            assert(sges == 1 || sges == 2);
+            const bool cqe = (header >> 21) & 1;
+            assert(((header >> 19) & 1) == cqe);
+            assert(((header >> 16) & 7) == (cqe ? 5u : 1u));
+            auto dst = reinterpret_cast<uint8_t *>(word(submitted, 5));
+            for (uint32_t sge = 0; sge < sges; ++sge) {
+                const auto bytes = uint32_t(word(submitted, 6 + sge * 2));
+                auto src = reinterpret_cast<const void *>(word(submitted, 7 + sge * 2));
+                std::memcpy(dst, src, bytes);
+                dst += bytes;
+            }
+            cq_tail += cqe;
+            submitted += (48 + 16 * sges + 63) / 64;
+        }
+        saved_head = packed;
+    }
+};
+
+struct HcommJetty {
+    HcommJettyInfo info;
+    HcommJettyInfo *jetty_info = &info;
+    alignas(32) uint8_t staging[512]{};
+    uint8_t *ub_sqe = staging;
+    Queue &queue;
+    explicit HcommJetty(Queue &queue)
+        : info{reinterpret_cast<uint64_t>(queue.sq.data()), queue.saved_head}, queue(queue) {}
+    void ring_doorbell() { queue.submit(info.packed_head); }
+    template <int64_t> void drain()
+    {
+        assert(queue.cq_tail == uint32_t(info.packed_head >> 32));
+        assert(queue.submitted == uint32_t(info.packed_head));
+    }
+    // Unchanged scalar-put contract; the batch helpers under test are real code.
+    template <int64_t, bool Commit> void put(const HcommPeer &peer, void *, void *offset,
+                                            void *src, uint64_t bytes)
+    {
+        const uint32_t head = uint32_t(info.packed_head);
+        queue.word(head, 0) = kWriteSQEHeaderTemplate | kWriteSQEFinalFlags |
+            (uint64_t((head & kSQDepth) == 0) << 31) | (head & (kSQDepth - 1));
+        queue.word(head, 1) = uint64_t(1) << 24;
+        queue.word(head, 5) = peer.peer_info->rmt_base_addr + reinterpret_cast<uint64_t>(offset);
+        queue.word(head, 6) = bytes;
+        queue.word(head, 7) = reinterpret_cast<uint64_t>(src);
+        info.packed_head = uint64_t(uint32_t(head + 1)) |
+            (uint64_t(uint32_t((info.packed_head >> 32) + 1)) << 32);
+        if constexpr (Commit) { ring_doorbell(); }
+    }
+};
+}
+
+namespace subject {
+@PENDING_CONSTANT@
+@SWITCH@
+constexpr int64_t kDefaultTimeoutCycles = 1000000000;
+@HELPERS@
+@TRANSPORT@
+template <int Sges> void issue(handle::HcommJetty &jetty, uint32_t &pending, uint32_t &inflight)
+{
+    issue_write_task<Sges@TIMEOUT_ARGUMENT@>(jetty, pending, inflight);
+}
+void flush(handle::HcommJetty &jetty, uint32_t &inflight)
+{
+    flush_writes@TIMEOUT_TEMPLATE@(jetty, inflight);
+}
+void scalar(handle::HcommJetty &jetty, const handle::HcommPeer &peer,
+            uint64_t offset, uint32_t *value, uint32_t &inflight)
+{
+    put_at_offset@TIMEOUT_TEMPLATE@(jetty, peer, offset, value, sizeof(*value), inflight);
+}
+template <int Sges> void run(uint32_t count, uint32_t initial_head)
+{
+    handle::Queue queues[]{{initial_head, UINT32_MAX - 2}, {initial_head, UINT32_MAX - 2}};
+    std::vector<uint8_t> payload(count * 16), metadata(count * 16);
+    for (uint32_t i = 0; i < count * 16; ++i) {
+        payload[i] = uint8_t(i * 7 + 3);
+        metadata[i] = uint8_t(i * 11 + 5);
+    }
+    std::vector<uint8_t> remote((count + 2) * 32);
+    handle::HcommPeerInfo peer_info{};
+    peer_info.rmt_base_addr = reinterpret_cast<uint64_t>(remote.data());
+    peer_info.rmt_buffer_size = remote.size();
+    handle::HcommPeer peer{&peer_info};
+    // Reload both peer queues across three submissions: no stale local head.
+    for (int round = 0; round < 3; ++round) {
+        for (auto &queue : queues) {
+            std::memset(remote.data(), 0, remote.size());
+            handle::HcommJetty jetty(queue);
+            uint32_t pending = 0, inflight = 0;
+            const uint64_t before = jetty.info.packed_head;
+            const uint32_t doorbells = queue.doorbells;
+            issue<Sges>(jetty, pending, inflight);
+            flush(jetty, inflight);
+            assert(jetty.info.packed_head == before && queue.doorbells == doorbells);
+            // An odd scalar SQE before payload also exercises 2-BB wrap and
+            // the pre-issue flush when inflight + batch exceeds 32 records.
+            uint32_t control = 0x12345678;
+            scalar(jetty, peer, count * 32, &control, inflight);
+            for (uint32_t i = 0; i < count; ++i) {
+                append_write_task<Sges@TIMEOUT_ARGUMENT@>(
+                    jetty, peer, i * 32, payload.data() + i * 16,
+                    Sges == 2 ? metadata.data() + i * 16 : nullptr,
+                    16, Sges == 2 ? 16 : 0, pending, inflight);
+            }
+            issue<Sges>(jetty, pending, inflight);
+            flush(jetty, inflight);
+            assert(pending == 0 && inflight == 0);
+            for (uint32_t i = 0; i < count; ++i) {
+                assert(std::memcmp(remote.data() + i * 32, payload.data() + i * 16, 16) == 0);
+                if constexpr (Sges == 2) {
+                    assert(std::memcmp(remote.data() + i * 32 + 16, metadata.data() + i * 16, 16) == 0);
+                }
+            }
+            const uint32_t cqes = 1 + (kEnableBatchedFinalFlags ? (count + 7) / 8 : count);
+            assert(queue.cq_tail == uint32_t(uint32_t(before >> 32) + cqes));
+            assert(queue.submitted == uint32_t(uint32_t(before) + 1 + count * Sges));
+            // Scalar route/control writes following the drained payload retain
+            // individual completions in either macro mode.
+            scalar(jetty, peer, count * 32, &control, inflight);
+            scalar(jetty, peer, count * 32 + 4, &control, inflight);
+            flush(jetty, inflight);
+            assert(queue.cq_tail == uint32_t(uint32_t(before >> 32) + cqes + 2));
+        }
+    }
+}
+}
+
+namespace layout {
+@UB_LAYOUT@
+@HOST_BUDGET@
+void check()
+{
+    uint32_t maximum = 0;
+    for (uint32_t ranks : {1u, 2u, 15u, 16u, 255u, 256u}) {
+        for (uint32_t lanes = 1; lanes <= 256; ++lanes) {
+            for (uint32_t tile = 1; tile <= 128; ++tile) {
+                CombineSendParams p{};
+                p.num_src_ranks = ranks;
+                p.num_source_lanes = lanes;
+                p.num_tokens_per_tile = tile;
+                const auto o = make_ub_offsets(p);
+                const uint32_t starts[]{o.ub_sqe, o.peer_info, o.jetty_info, o.metadata,
+                    o.lane_to_entry, o.lane_to_member, o.lane_src_rank, o.lane_capacity,
+                    o.lane_return_base, o.control, o.total};
+                const uint32_t sizes[]{512, 48 * ranks, 96 * ranks, 2 * ((16 * tile + 31) / 32 * 32),
+                    4 * lanes, 4 * lanes, 4 * lanes, 4 * lanes, 8 * lanes, 256};
+                for (size_t i = 0; i < 10; ++i) {
+                    assert(starts[i] % 32 == 0);
+                    assert(starts[i] + sizes[i] <= starts[i + 1]);
+                }
+                assert(o.total <= kCombineSendUbBytes);
+                if (o.total > maximum) { maximum = o.total; }
+            }
+        }
+    }
+    assert(maximum == kCombineSendUbBytes);
+    assert(maximum == 47872);
+}
+}
+
+int main()
+{
+    for (uint32_t head : {0u, handle::kSQDepth - 2, handle::kSQDepth - 1, UINT32_MAX - 1}) {
+        for (uint32_t count : {0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u,
+                               23u, 24u, 25u, 31u, 32u, 33u, 63u, 64u, 65u, 257u, 1025u}) {
+            subject::run<1>(count, head);
+            subject::run<2>(count, head);
+        }
+    }
+    layout::check();
+    std::cout << "queue and UB checks passed\n";
+}

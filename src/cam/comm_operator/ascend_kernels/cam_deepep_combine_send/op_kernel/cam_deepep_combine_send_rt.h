@@ -50,7 +50,10 @@ struct CombineSendParams {
 // maxima. The SIMT write path hands ub_sqe and the peer rows to the vector
 // unit, so both regions sit at the bottom of the view.
 struct UBOffsets {
-    uint32_t ub_sqe, peer_info, jetty_info, metadata, lane_to_entry, lane_to_member, control;
+    uint32_t ub_sqe, peer_info, jetty_info, metadata, lane_to_entry, lane_to_member;
+    // [PERF] Immutable per-lane Context fields used by the record hot path; see
+    // the lane cache in deep_ep/impls/afd/combine_send.h.
+    uint32_t lane_src_rank, lane_capacity, lane_return_base, control;
     uint32_t total;
 };
 
@@ -77,6 +80,9 @@ __aicore__ inline UBOffsets make_ub_offsets(const CombineSendParams &p)
     o.metadata = reserve_region(at, 2u * align32_up(16u * p.num_tokens_per_tile));
     o.lane_to_entry = reserve_region(at, 4u * p.num_source_lanes);
     o.lane_to_member = reserve_region(at, 4u * p.num_source_lanes);
+    o.lane_src_rank = reserve_region(at, 4u * p.num_source_lanes);
+    o.lane_capacity = reserve_region(at, 4u * p.num_source_lanes);
+    o.lane_return_base = reserve_region(at, 8u * p.num_source_lanes);
     o.control = reserve_region(at, 256u);
     o.total = at;
     return o;
@@ -115,6 +121,9 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
     auto metadata = reinterpret_cast<__ubuf__ int *>(ub + o.metadata);
     auto lane_to_entry = reinterpret_cast<__ubuf__ int *>(ub + o.lane_to_entry);
     auto lane_to_member = reinterpret_cast<__ubuf__ int *>(ub + o.lane_to_member);
+    auto lane_src_rank = reinterpret_cast<__ubuf__ uint32_t *>(ub + o.lane_src_rank);
+    auto lane_capacity = reinterpret_cast<__ubuf__ uint32_t *>(ub + o.lane_capacity);
+    auto lane_return_base = reinterpret_cast<__ubuf__ uint64_t *>(ub + o.lane_return_base);
     const int md_stage_ints = 4 * num_tokens_per_tile;
     auto tmp = ub + o.control;
     auto words = reinterpret_cast<__ubuf__ uint32_t *>(tmp);
@@ -285,6 +294,11 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
     uint32_t error = OK;
     for (int l = 0; l < num_source_lanes; ++l) {
         lane_to_entry[l] = lane_to_member[l] = -1;
+        // Sentinel: a lane without a member in this task is unreachable from the
+        // metadata path (preflight rejects it as BAD_ROUTE).
+        lane_src_rank[l] = uint32_t(num_src_ranks);
+        lane_capacity[l] = 0;
+        lane_return_base[l] = 0;
     }
     uint64_t next_member = 0, next_segment = 0, total = 0;
     for (uint32_t i = 0; i < task.num_entries && error == OK; ++i) {
@@ -314,6 +328,11 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
             lane_to_member[l] = m;
             const auto lane = recv_read(lanes + l);
             const auto ret = recv_read(return_lanes + l);
+            // [PERF] Cache what the record hot path needs; both GM reads are
+            // required here for validation anyway, so the cache is free.
+            lane_src_rank[l] = lane.src_rank_idx;
+            lane_capacity[l] = lane.capacity;
+            lane_return_base[l] = ret.return_offset;
             if (lane.src_rank_idx >= uint32_t(num_src_ranks) || lane.capacity == 0 || lane.capacity > kMaxLaneTokens ||
                 lane.phase != task.phase) {
                 error = BAD_ABI;
@@ -386,7 +405,7 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
                     error = BAD_ROUTE;
                     continue;
                 }
-                if (lane_to_entry[md[0]] != md[3] || uint32_t(md[1]) >= lanes[md[0]].capacity) {
+                if (lane_to_entry[md[0]] != md[3] || uint32_t(md[1]) >= lane_capacity[md[0]]) {
                     error = BAD_ROUTE;
                 }
                 ++num_valid;
@@ -482,13 +501,16 @@ __aicore__ inline void combine_send_body(const CombineSendParams &p, __gm__ bflo
                     if (md[0] < 0) {
                         continue;
                     }
-                    const auto lane = recv_read(lanes + md[0]);
-                    if (int(lane.src_rank_idx) != a) {
+                    // [PERF] Hot path is UB-only: the lane table is cached at
+                    // kernel start instead of re-reading AFDLane (32B of
+                    // bypass-DCACHE scalars) per (record, source peer).
+                    const uint32_t ml = uint32_t(md[0]);
+                    if (int(lane_src_rank[ml]) != a) {
                         continue;
                     }
-                    peer.peer_info = peer_infos + lane.src_rank_idx;
+                    peer.peer_info = peer_infos + a;
                     const uint64_t offset =
-                        return_lanes[md[0]].return_offset +
+                        lane_return_base[ml] +
                         (uint64_t(md[1]) * uint32_t(num_topk) + uint32_t(md[2])) * directory.return_stride;
                     append_write_task<1>(jetty_a, peer, offset, x + uint64_t(row + j) * uint32_t(num_hidden), nullptr,
                                          uint32_t(2 * num_hidden), 0, num_task_tokens, inflight);

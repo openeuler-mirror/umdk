@@ -40,11 +40,12 @@ constexpr uint32_t kMaxLaneTokens = 32768;
 constexpr uint32_t kMaxNumHidden = 8192;
 constexpr uint32_t kMaxCompletionBytes = 65536;
 constexpr uint64_t kDefaultTimeoutCycles = 1000000000;
-// Cam mirrors the static device view CombineSendUBRT (ABI maxima, address 0):
+// Upper bound for make_ub_offsets() at the admitted shape maxima:
 // 48*256 peer infos + 96*256 jetty info + 512 SQE + 2*128*16 metadata +
-// 2*256*4 lane maps + 256 control.
+// 2*256*4 lane maps + 256*(4+4+8) cached lane fields + 256 control.
 constexpr uint64_t kCombineSendUbBytes = 48uLL * 256uLL + 96uLL * 256uLL + 512uLL +
-    2uLL * 128uLL * 4uLL * 4uLL + 2uLL * 256uLL * 4uLL + 256uLL;
+    2uLL * 128uLL * 4uLL * 4uLL + 2uLL * 256uLL * 4uLL +
+    256uLL * (4uLL + 4uLL + 8uLL) + 256uLL;
 
 // Attributes reach tiling as int64. Read the full value and let the caller
 // check the domain before narrowing: narrowing first turned a negative or
@@ -141,8 +142,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     uint64_t ubSize = 0;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ubSize);
-    OP_TILING_CHECK(ubSize < kCombineSendUbBytes,
-        OP_LOGE(context->GetNodeName(), "combine_send UB layout exceeds available UB"),
+    const uint32_t dynUbSize = ubSize > 32768U ?
+        static_cast<uint32_t>(ubSize) - 32768U : static_cast<uint32_t>(ubSize);
+    OP_TILING_CHECK(dynUbSize < kCombineSendUbBytes,
+        OP_LOGE(context->GetNodeName(), "combine_send UB layout exceeds the dynamic UB window"),
         return ge::GRAPH_FAILED);
 
     // hidden is a tensor dimension, not an attr: bf16 -> 2 bytes per element,
@@ -188,10 +191,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     // that touches a routing array past it traps as aivec 341 no matter
     // the layout. Request all but 32 KiB of the vector buffer; the rest
     // covers the static shared-memory reserve the launcher adds on top.
-    const uint32_t dynUbSize = ubSize > 32768U ?
-        static_cast<uint32_t>(ubSize) - 32768U : static_cast<uint32_t>(ubSize);
     (void)context->SetDynUBufSize(dynUbSize);
-    tiling->numUbBytes = static_cast<uint32_t>(ubSize);
+    tiling->numUbBytes = dynUbSize;
     tiling->rankIdx = static_cast<uint32_t>(rankIdxValue);
     tiling->timeoutCycles = static_cast<uint64_t>(timeoutCyclesValue);
     tiling->activeBytes = activeBytes;

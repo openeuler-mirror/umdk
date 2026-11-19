@@ -43,7 +43,9 @@ static constexpr uint64_t kNopSQEHeaderTemplate = 0x0000110000000000ULL;
 // token_en[28] = 1, rmt_jetty_type[30:29] = 1, owner[31] = 0 (filled per WQEBB),
 // target_hint[39:32] = 0, opcode[47:40] = 0x3, inline_msg_len[63:54] = 0.
 static constexpr uint64_t kWriteSQEHeaderTemplate = 0x0000030030010000ULL;
-// The final payload WRITE uses odr=5, fence=1 and cqe=1 to cover prior SQEs.
+// CANN 9.2.0 hcomm_inner_def.h documents odr=5 (strong ordering), fence=1
+// (wait for prior WQEs) and cqe=1 (request a completion). Batching also
+// requires prior payloads to be visible at the peer when the tail CQE arrives.
 static constexpr uint64_t kWriteSQEFinalFlags = (1ULL << 18) | (1ULL << 19) | (1ULL << 21);
 
 struct alignas(kNumUint64AlignmentBytes) HcommPeerInfo {

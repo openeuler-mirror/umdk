@@ -38,6 +38,13 @@ namespace deep_ep::afd {
 // route_tile is NOT simt_persistent_worker: it runs twice per bounded tile.
 // Public dispatchSend/launcher names and template argument order remain stable.
 constexpr uint32_t kNumMaxPendingWrites = 32;
+// Default to one completion per payload WRITE. Set to 1 only for hardware
+// validation of batch-tail completion (see kWriteSQEFinalFlags). The lane
+// cache and dispatch address hoisting are enabled independently of this switch.
+#ifndef CAM_DEEPEP_BATCHED_FINAL_FLAGS
+#define CAM_DEEPEP_BATCHED_FINAL_FLAGS 0
+#endif
+constexpr bool kEnableBatchedFinalFlags = CAM_DEEPEP_BATCHED_FINAL_FLAGS != 0;
 // [REUSE+AFD] Native DispatchUBLayout naming; AFD bounded tiles and control scratch.
 template <int kNumExperts, int kNumRanks, int kNumTopk, int kNumTokensPerTile, int kNumMetadataBytes, int kNumVecCores>
 struct alignas(kNumUbAlignmentBytes) DispatchUBLayout {
@@ -240,7 +247,15 @@ __simt_vf__ __aicore__ __launch_bounds__(kNumWritesPerTask *warpSize) void issue
         const auto token_sqebb_idx = task_sqebb_idx + token_idx * kNumWQEBBsPerToken;
         uint64_t wqe_word = 0;
         if (lane_idx == 0) {
-            wqe_word = handle::kWriteSQEHeaderTemplate | handle::kWriteSQEFinalFlags;
+            // In the experimental mode only the last SQE requests a CQE.
+            wqe_word = handle::kWriteSQEHeaderTemplate;
+            if constexpr (kEnableBatchedFinalFlags) {
+                if (token_idx + 1 == num_tokens) {
+                    wqe_word |= handle::kWriteSQEFinalFlags;
+                }
+            } else {
+                wqe_word |= handle::kWriteSQEFinalFlags;
+            }
             wqe_word |= static_cast<uint64_t>((token_sqebb_idx & handle::kSQDepth) == 0) << 31;
             wqe_word |= token_sqebb_idx & (handle::kSQDepth - 1);
         }
@@ -287,7 +302,8 @@ __aicore__ inline void issue_write_task(handle::HcommJetty &jetty, uint32_t &num
     if (inflight + num_tokens > kNumMaxPendingWrites) {
         flush_writes<kNumTimeoutCycles>(jetty, inflight);
     }
-    // Each preceding group has drained; at most 32 CQEs/64 SQ BBs are live.
+    // Each preceding group has drained; at most kNumMaxPendingWrites records
+    // (<= 2 SQ BBs each) and at most one CQE per record are live.
     // Existing caller checks cq_depth > 32+10, so no poll of unpublished WRs.
     const auto current_head = static_cast<uint32_t>(jetty.jetty_info->packed_head);
     asc_sync_notify(PIPE_S, PIPE_V, EVENT_ID4);
@@ -297,7 +313,12 @@ __aicore__ inline void issue_write_task(handle::HcommJetty &jetty, uint32_t &num
                                                       jetty.jetty_info->sq_base_addr, current_head, num_tokens);
     asc_sync_notify(PIPE_V, PIPE_S, EVENT_ID4);
     asc_sync_wait(PIPE_V, PIPE_S, EVENT_ID4);
-    const auto completions = static_cast<uint32_t>(jetty.jetty_info->packed_head >> kNumHighHalfShiftBits) + num_tokens;
+    // Expected completion count in packed_head[63:32]. With batched final flags
+    // this issue writes exactly one cqe=1 SQE, so the high half advances by one
+    // per batch instead of one per record; drain() polls that same counter and
+    // therefore still waits for the last CQE of the whole batch.
+    const auto completions = static_cast<uint32_t>(jetty.jetty_info->packed_head >> kNumHighHalfShiftBits) +
+                             (kEnableBatchedFinalFlags ? 1u : num_tokens);
     jetty.jetty_info->packed_head = uint64_t(uint32_t(current_head + num_tokens * kNumWQEBBsPerToken)) |
                                     (uint64_t(completions) << kNumHighHalfShiftBits);
     inflight += num_tokens;
@@ -634,6 +655,10 @@ __aicore__ void dispatch_impl(__gm__ void *x, __gm__ sf_pack_t *sf, __gm__ int64
                                  (jetty_f.jetty_info->cq_depth & (jetty_f.jetty_info->cq_depth - 1)) == 0 &&
                                  jetty_f.jetty_info->num_wqebb_bytes == handle::kNumWQEBBBytes);
                 uint32_t inflight = 0, num_task_tokens = 0;
+                // [PERF] Fixed record base of this (lane, peer) pair: one GM read
+                // per peer segment instead of one per emitted record.
+                const uint64_t records_offset =
+                    recv_read(addresses + uint64_t(lane_idx) * kNumRanks + f).records_offset;
                 for (uint32_t i = 0; i < size; ++i) {
                     const uint32_t row = tile * kNumTokensPerTile + i, global = begin + row;
                     const auto gm_meta = ws + w.metadata_send_buffer + uint64_t(row) * kNumMetadataBytes;
@@ -643,7 +668,7 @@ __aicore__ void dispatch_impl(__gm__ void *x, __gm__ sf_pack_t *sf, __gm__ int64
                         }
                         peer.peer_info = ub->peer_info + f;
                         const uint64_t off =
-                            addresses[lane_idx * kNumRanks + f].records_offset +
+                            records_offset +
                             uint64_t(ub->dst_slot_idx[i * kNumTopk + k]) * token_layout.record_stride();
                         append_write_task<2, kNumTimeoutCycles>(
                             jetty_f, peer, off, static_cast<__gm__ uint8_t *>(x) + uint64_t(global) * kNumHiddenBytes,
