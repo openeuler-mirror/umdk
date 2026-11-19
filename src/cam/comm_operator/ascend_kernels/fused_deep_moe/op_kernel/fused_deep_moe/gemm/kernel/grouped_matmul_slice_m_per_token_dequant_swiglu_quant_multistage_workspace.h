@@ -67,6 +67,17 @@ constexpr uint32_t NOTIFY_TABLE_ROW_STRIDE = 192;  // int32 units: 24 cells x 32
 // group's currentM row write as its swiglu-done announce does.
 constexpr uint32_t NOTIFY_TABLE_ROWS = 25;
 constexpr uint32_t NOTIFY_PUBLISH_ROW_INDEX = 24;
+// swiglu-done event sequence numbers (NotifySendCoreDone/WaitSendCoresDone): every producer
+// completes its events IN ORDER - the shared expert's dequant is event 1 and routed group g
+// is event g + 2 - so one per-producer counter covers every event, and a waiter for event e
+// has implicitly waited for every earlier event of that producer as well.
+constexpr uint32_t NOTIFY_EVENT_SEQ_SHARED_EXPERT = 1;
+constexpr uint32_t NOTIFY_EVENT_SEQ_ROUTED_GROUP_BASE = 2;
+// V_MTE3 event id that drains a V-pipe staging fill before its MTE3 copy reads it (the
+// swiglu-done announce staging in NotifySendCoreDone and the currentM row staging in
+// CompCoreFunc). Ids 0/2/3 of this direction are owned by the recv-side table zero and
+// BlockQuant (see post_swiglu_dynamic_quant.h), so it stays at 4.
+constexpr int32_t V_MTE3_STAGING_DRAIN_EVENT_ID = 4;
 // gmm2-moving-forward notify slots: one per expert group (+1 for the shared expert), the
 // int32 counter lives at field 0 of each 128B slot. Must match the constants in
 // grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h. 1011KB = right after
@@ -296,7 +307,8 @@ constexpr int32_t UB_SIZE = 184 * 1024;
 #define PRE_COUNT_INDEX 2
 #define SELF_COUNT_INDEX 3
 #define TOTAL_COUNT_INDEX 4
-#define SWIGLU_DONE_INDEX 5  // per-group barrier: send cores count themselves here once their group swiglu writes drained
+// per-group barrier: send cores count themselves here once their group swiglu writes drained
+#define SWIGLU_DONE_INDEX 5
 #define GROUP_TOKEN_COUNT 3  // equal to SELF_COUNT_INDEX
 #define GROUP_INFO_SIZE 32
 
@@ -618,11 +630,13 @@ public:
     __aicore__ inline void WaitGroupTokenNumReady(AscendC::GlobalTensor<int32_t>& groupTokenNumStateTensor,
                                                   uint32_t expected)
     {
-        while (true) {
-            if (FlushAndGetValue<int32_t>(groupTokenNumStateTensor, 0) == static_cast<int32_t>(expected)) {
-                break;
+        bool tokenNumReady = false;
+        while (!tokenNumReady) {
+            tokenNumReady = FlushAndGetValue<int32_t>(groupTokenNumStateTensor, 0) ==
+                            static_cast<int32_t>(expected);
+            if (!tokenNumReady) {
+                SPIN_WAIT_CYCLES();
             }
-            SPIN_WAIT_CYCLES();
         }
     }
 
@@ -850,8 +864,8 @@ public:
         const uint32_t publishCells = isPublishCore ? 2 : 1;
         AscendC::Duplicate<float>(notifyTensor, static_cast<float>(static_cast<int32_t>(eventSeq)),
                                   publishCells * NOTIFY_TABLE_CELLS * INT32_COUNT_PER_BLOCK);
-        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(4);
-        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(4);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(V_MTE3_STAGING_DRAIN_EVENT_ID);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(V_MTE3_STAGING_DRAIN_EVENT_ID);
         AscendC::GlobalTensor<float> rowTensor;
         rowTensor.SetGlobalBuffer((__gm__ float *)(statusDataSpaceGm + SEND_DONE_TABLE_OFFSET) +
                                   static_cast<uint64_t>(aiCoreGroupIdx) * NOTIFY_TABLE_ROW_STRIDE);
@@ -859,6 +873,19 @@ public:
                           publishCells * NOTIFY_TABLE_CELLS * INT32_COUNT_PER_BLOCK);
         AscendC::PipeBarrier<PIPE_MTE3>();
     }
+
+    // UB scratch of the deep-fuse swiglu-done wait: this consumer's PRIVATE status column
+    // (one 32B float block per producer, never read by any other core) plus the clamp,
+    // gather and sum scratch behind it, and the GM column it polls. Filled once by
+    // InitSwigluDoneWaitScratch, consumed on every round by PollSwigluDoneTable.
+    struct SwigluDoneWaitScratch {
+        AscendC::LocalTensor<float> statusTensor;
+        AscendC::LocalTensor<float> gatherTensor;
+        AscendC::LocalTensor<float> sumTensor;
+        AscendC::LocalTensor<uint32_t> gatherTmpTensor;
+        AscendC::LocalTensor<uint8_t> sumTmpTensor;
+        AscendC::GlobalTensor<float> colTensor;
+    };
 
     CATLASS_DEVICE
     void WaitSendCoresDone(uint32_t eventSeq, int64_t waitUbOffset)
@@ -869,29 +896,47 @@ public:
             AscendC::PipeBarrier<PIPE_ALL>();
             return;
         }
+        WaitSendCoresDoneDeepFuse(eventSeq, waitUbOffset);
+    }
+
+    CATLASS_DEVICE
+    void WaitSendCoresDoneDeepFuse(uint32_t eventSeq, int64_t waitUbOffset)
+    {
+        SwigluDoneWaitScratch scratch;
+        InitSwigluDoneWaitScratch(scratch, waitUbOffset);
+        PollSwigluDoneTable(scratch, eventSeq);
+    }
+
+    CATLASS_DEVICE
+    void InitSwigluDoneWaitScratch(SwigluDoneWaitScratch &scratch, int64_t waitUbOffset)
+    {
         uint32_t coreCount = aiCoreGroupNum;
         int64_t subUbOffset = waitUbOffset;
         // status: this consumer's PRIVATE column - one 32B float block per producer
         // (24 blocks, 768B), never read by any other core; then the clamp scratch.
-        AscendC::LocalTensor<float> statusTensor =
-            resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        scratch.statusTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         subUbOffset += coreCount * INT32_COUNT_PER_BLOCK * sizeof(int32_t);
-        AscendC::LocalTensor<float> gatherTensor =
-            resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        scratch.gatherTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         subUbOffset += coreCount * sizeof(float);
-        AscendC::LocalTensor<float> sumTensor =
-            resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
+        scratch.sumTensor = resource.ubBuf.template GetBufferByByte<float>(subUbOffset);
         subUbOffset += INT32_COUNT_PER_BLOCK * sizeof(int32_t);
-        AscendC::LocalTensor<uint32_t> gatherTmpTensor =
-            resource.ubBuf.template GetBufferByByte<uint32_t>(subUbOffset);
+        scratch.gatherTmpTensor = resource.ubBuf.template GetBufferByByte<uint32_t>(subUbOffset);
         subUbOffset += INT32_COUNT_PER_BLOCK * sizeof(int32_t);
-        AscendC::LocalTensor<uint8_t> sumTmpTensor =
-            resource.ubBuf.template GetBufferByByte<uint8_t>(subUbOffset);
+        scratch.sumTmpTensor = resource.ubBuf.template GetBufferByByte<uint8_t>(subUbOffset);
 
-        gatherTmpTensor.SetValue(0, 1);
-        AscendC::GlobalTensor<float> colTensor;
-        colTensor.SetGlobalBuffer((__gm__ float *)(statusDataSpaceGm + SEND_DONE_TABLE_OFFSET) +
-                                  static_cast<uint64_t>(aiCoreGroupIdx) * INT32_COUNT_PER_BLOCK);
+        scratch.gatherTmpTensor.SetValue(0, 1);
+        scratch.colTensor.SetGlobalBuffer((__gm__ float *)(statusDataSpaceGm + SEND_DONE_TABLE_OFFSET) +
+                                          static_cast<uint64_t>(aiCoreGroupIdx) * INT32_COUNT_PER_BLOCK);
+    }
+
+    // The deep-fuse swiglu-done poll itself (see the channel design above NotifySendCoreDone):
+    // one strided MTE2 refreshes the private status column, GatherMask packs it, a single Mins
+    // cap clamps every producer's counter at eventSeq and Sum counts. SPIN_WAIT_CYCLES backs
+    // off between polls.
+    CATLASS_DEVICE
+    void PollSwigluDoneTable(SwigluDoneWaitScratch &scratch, uint32_t eventSeq)
+    {
+        uint32_t coreCount = aiCoreGroupNum;
         // one 32B block per producer cell: blockLen = 1 block, 23 blocks of gap = 768B period
         AscendC::DataCopyParams intriParams{static_cast<uint16_t>(coreCount), 1,
                                             NOTIFY_TABLE_ROW_STRIDE / INT32_COUNT_PER_BLOCK - 1, 0};
@@ -907,23 +952,24 @@ public:
         float sumTarget = target * static_cast<float>(static_cast<int32_t>(coreCount));
         AscendC::SetFlag<AscendC::HardEvent::S_V>(0);
         AscendC::WaitFlag<AscendC::HardEvent::S_V>(0);
-        while (true) {
-            AscendC::DataCopy(statusTensor, colTensor, intriParams);
+        bool allCoresDone = false;
+        while (!allCoresDone) {
+            AscendC::DataCopy(scratch.statusTensor, scratch.colTensor, intriParams);
             AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(0);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(0);
-            AscendC::GatherMask(gatherTensor, statusTensor, gatherTmpTensor, true, mask,
-                                {1, static_cast<uint16_t>(coreCount), 1, 0}, rsvdCnt);
+            AscendC::GatherMask(scratch.gatherTensor, scratch.statusTensor, scratch.gatherTmpTensor,
+                                true, mask, {1, static_cast<uint16_t>(coreCount), 1, 0}, rsvdCnt);
             AscendC::PipeBarrier<PIPE_V>();
             // single-op compare: cap every counter at eventSeq, the sum does the counting
-            AscendC::Mins(gatherTensor, gatherTensor, target, coreCount);
+            AscendC::Mins(scratch.gatherTensor, scratch.gatherTensor, target, coreCount);
             AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Sum(sumTensor, gatherTensor, sumTmpTensor, sumParams);
+            AscendC::Sum(scratch.sumTensor, scratch.gatherTensor, scratch.sumTmpTensor, sumParams);
             AscendC::SetFlag<AscendC::HardEvent::V_S>(0);
             AscendC::WaitFlag<AscendC::HardEvent::V_S>(0);
-            if (sumTensor.GetValue(0) >= sumTarget) {
-                break;
+            allCoresDone = scratch.sumTensor.GetValue(0) >= sumTarget;
+            if (!allCoresDone) {
+                SPIN_WAIT_CYCLES();
             }
-            SPIN_WAIT_CYCLES();
         }
     }
 
@@ -2420,18 +2466,17 @@ public:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
+    // Deep fuse only, recv core 0 only: zero the swiglu-done table (with its 25th publish
+    // row) before anything can write it - the first producer write needs the AIC's group-0
+    // MMADs, which need recv core 0's group-0 notify, which is issued well after this point.
+    // Without this zero the table keeps the previous launch's counters and every
+    // WaitSendCoresDone passes instantly - the barrier goes inert and the quant races the
+    // dequant (reads in-flight swiglu rows, clobbers unconsumed x1/x1Scale).
     CATLASS_DEVICE
-    void RecvCoreFunc(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmEpSendCount)
+    void ZeroSendDoneTable()
     {
         if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0) {
             if (recvCoreIdx == 0) {
-                // Zero the swiglu-done table before anything can write it: the first
-                // producer write needs the AIC's group-0 MMADs, which need recv core 0's
-                // group-0 notify, which is issued well after this point. Without this zero
-                // the table keeps the previous launch's counters and every
-                // WaitSendCoresDone passes instantly - the barrier goes inert and the
-                // quant races the dequant (reads in-flight swiglu rows, clobbers
-                // unconsumed x1/x1Scale).
                 AscendC::LocalTensor<float> zeroTensor =
                     resource.ubBuf.template GetBufferByByte<float>(0);
                 uint32_t zeroCount = NOTIFY_TABLE_ROWS * NOTIFY_TABLE_ROW_STRIDE;
@@ -2445,6 +2490,12 @@ public:
                 AscendC::PipeBarrier<PIPE_ALL>();
             }
         }
+    }
+
+    CATLASS_DEVICE
+    void RecvCoreFunc(GM_ADDR gmX1, GM_ADDR gmX1Scale, GM_ADDR gmEpSendCount)
+    {
+        ZeroSendDoneTable();
         ubOffset = 0;
         // RecvCount's bucket heads and publish staging share this first block, so tokenPrefix starts
         // after both. The replicated staging grows with epRankSize; a record that does not fit in the
@@ -2624,9 +2675,9 @@ public:
                     // RecvQuantCoreFunc) wait for every send core's announcement, which also
                     // implies the shared MMADs are done (shareX1 fully consumed). Event 1 is
                     // the shared expert's dequant.
-                    NotifySendCoreDone(1, notifyUbOffset);
+                    NotifySendCoreDone(NOTIFY_EVENT_SEQ_SHARED_EXPERT, notifyUbOffset);
                     if constexpr (kQuantOnSendCore) {
-                        WaitSendCoresDone(1, quantWaitUbOffset);
+                        WaitSendCoresDone(NOTIFY_EVENT_SEQ_SHARED_EXPERT, quantWaitUbOffset);
                         uint32_t nOut = shareN / 2;
                         uint32_t quantRowOnce = 0;
                         CalQuantRow(nOut, quantRowOnce);
@@ -2775,8 +2826,8 @@ public:
                             AscendC::PipeBarrier<PIPE_ALL>();
                             AscendC::Duplicate<int32_t>(mRowTensor, static_cast<int32_t>(currentM),
                                                         GMM2_GROUP_M_ROW_STRIDE);
-                            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(4);
-                            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(4);
+                            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(V_MTE3_STAGING_DRAIN_EVENT_ID);
+                            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(V_MTE3_STAGING_DRAIN_EVENT_ID);
                             AscendC::GlobalTensor<int32_t> mGm;
                             mGm.SetGlobalBuffer(Gmm2GroupMTable(gmGroupList) +
                                                 static_cast<uint64_t>(groupIdx) * GMM2_GROUP_M_ROW_STRIDE);
@@ -2793,9 +2844,9 @@ public:
                             AscendC::PipeBarrier<PIPE_MTE3>();
                         }
                     }
-                    NotifySendCoreDone(groupIdx + 2, notifyUbOffset);
+                    NotifySendCoreDone(groupIdx + NOTIFY_EVENT_SEQ_ROUTED_GROUP_BASE, notifyUbOffset);
                     if constexpr (kQuantOnSendCore) {
-                        WaitSendCoresDone(groupIdx + 2, quantWaitUbOffset);
+                        WaitSendCoresDone(groupIdx + NOTIFY_EVENT_SEQ_ROUTED_GROUP_BASE, quantWaitUbOffset);
                         auto swigluLayout = layout::RowMajor{currentM, n};
                         quantParams = typename BlockQuant<ArchTag>::Params {
                             gmSwigluOutput + gmSwigluOutputOffset, swigluLayout,
@@ -2820,6 +2871,61 @@ public:
         AscendC::PipeBarrier<PIPE_ALL>();
     }
 
+    // The shared expert's slice of RecvQuantCoreFunc: wait for every send core's shared
+    // swiglu output to drain, quantize it, then announce the shared quant done to gmm2's
+    // AIC. Runs before the routed groups' loop - the shared swiglu output is produced
+    // first. Event 1 is the shared expert's dequant.
+    CATLASS_DEVICE
+    void RecvQuantSharedExpert(Params const &params, uint32_t &quantStartCoreIdx,
+                               int64_t quantWaitUbOffset, int64_t gmm2NotifyUbOffset)
+    {
+        if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
+            WaitSendCoresDone(NOTIFY_EVENT_SEQ_SHARED_EXPERT, quantWaitUbOffset);
+            uint32_t currentM = params.bs;
+            uint32_t nOut = params.shareN / 2;
+            uint32_t quantRowOnce = 0;
+            CalQuantRow(nOut, quantRowOnce);
+            typename BlockQuant<ArchTag>::Params quantParams;
+            auto swigluLayout = layout::RowMajor{currentM, params.shareN};
+            quantParams = typename BlockQuant<ArchTag>::Params {
+                reinterpret_cast<__gm__ float *>(params.gmShareSwigluOut), swigluLayout,
+                (__gm__ ElementDequantScale *)params.gmShareX2Scale, params.layoutDequantScale,
+                (__gm__ ElementOutput *)params.gmShareX2, params.layoutShareOutput,
+                quantRowOnce,           nOut};
+            BlockQuant<ArchTag> blockQuant(resource, quantParams);
+            RunSwigluQuantBlocks(blockQuant, currentM, nOut, quantRowOnce, true, recvCoreIdx,
+                                 quantStartCoreIdx);
+            // Drain the shared quant writes, then announce to gmm2's AIC.
+            SyncEpilogueQuantHandoff();
+            NotifyGmm2QuantDone(localExpertNum, gmm2NotifyUbOffset);
+        }
+    }
+
+    // Read this recv worker's private currentM cell for one routed group out of the gmm2
+    // currentM table. The caller's swiglu-done wait has already seen every send core's
+    // group-g announce, and the row writer writes the row before its announce (one core's
+    // MTE3 FIFO), so the row has formally landed. The V core reads the 32B cell with ONE
+    // MTE2 DataCopy (L2 path, no DCCI) - the wait scratch is dead once the wait returned.
+    // GetValue is a SCALAR (S-pipe) read, so the drain sync is the MTE2->S event: an
+    // MTE2_V here gated the V pipe only and left the S pipe free to read the scratch
+    // before the copy landed - stale scratch content poisoned every downstream address
+    // computed from currentM (the old MTE-fault trigger).
+    CATLASS_DEVICE
+    uint32_t ReadGroupMCell(Params const &params, uint32_t groupIdx, int64_t scratchUbOffset)
+    {
+        AscendC::LocalTensor<int32_t> mCellTensor =
+            resource.ubBuf.template GetBufferByByte<int32_t>(scratchUbOffset);
+        AscendC::GlobalTensor<int32_t> groupMTensor;
+        groupMTensor.SetGlobalBuffer(
+            Gmm2GroupMTable(reinterpret_cast<__gm__ ElementGroupList *>(params.ptrGroupList)) +
+            static_cast<int64_t>(groupIdx) * GMM2_GROUP_M_ROW_STRIDE +
+            static_cast<int64_t>(GMM2_GROUP_M_AIV_COL_BASE + aivIdx) * INT32_COUNT_PER_BLOCK);
+        AscendC::DataCopy(mCellTensor, groupMTensor, INT32_COUNT_PER_BLOCK);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
+        return static_cast<uint32_t>(mCellTensor.GetValue(0));
+    }
+
     // Version B of the per-group swiglu-quant (QUANT_ON_RECV_CORE): runs on the recv cores,
     // which are otherwise idle after RecvCoreFunc. The quant of group g overlaps with the send
     // cores' dequant of the following groups (each 1C2V group = epilogue AIV + quant AIV).
@@ -2832,7 +2938,6 @@ public:
         // Make sure RecvCoreFunc's own pipe usage is complete before reusing its UB region.
         AscendC::PipeBarrier<PIPE_ALL>();
         auto gmSwigluOutput = reinterpret_cast<__gm__ float *>(params.gmSwigluOut);
-        auto gmShareSwigluOutput = reinterpret_cast<__gm__ float *>(params.gmShareSwigluOut);
         // Rotation cursor shared by the shared-expert and routed quant phases (recv cores).
         uint32_t quantStartCoreIdx = 0;
         // UB scratch for the partitioned swiglu-done wait (WaitSendCoresDone), ~2.5KB: above
@@ -2842,27 +2947,7 @@ public:
         // budget bounds a BlockQuant at ~176KB from offset 0) and below the 192KB UB limit.
         int64_t gmm2NotifyUbOffset = 184 * 1024;
 
-        // shared expert first: its swiglu output is produced before the routed groups'
-        if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-            WaitSendCoresDone(1, quantWaitUbOffset);
-            uint32_t currentM = params.bs;
-            uint32_t nOut = params.shareN / 2;
-            uint32_t quantRowOnce = 0;
-            CalQuantRow(nOut, quantRowOnce);
-            typename BlockQuant<ArchTag>::Params quantParams;
-            auto swigluLayout = layout::RowMajor{currentM, params.shareN};
-            quantParams = typename BlockQuant<ArchTag>::Params {
-                gmShareSwigluOutput, swigluLayout,
-                (__gm__ ElementDequantScale *)params.gmShareX2Scale, params.layoutDequantScale,
-                (__gm__ ElementOutput *)params.gmShareX2, params.layoutShareOutput,
-                quantRowOnce,           nOut};
-            BlockQuant<ArchTag> blockQuant(resource, quantParams);
-            RunSwigluQuantBlocks(blockQuant, currentM, nOut, quantRowOnce, true, recvCoreIdx,
-                                 quantStartCoreIdx);
-            // Drain the shared quant writes, then announce to gmm2's AIC.
-            SyncEpilogueQuantHandoff();
-            NotifyGmm2QuantDone(localExpertNum, gmm2NotifyUbOffset);
-        }
+        RecvQuantSharedExpert(params, quantStartCoreIdx, quantWaitUbOffset, gmm2NotifyUbOffset);
 
         uint32_t n = params.problemShape.n();
         uint32_t nOut = n / 2;
@@ -2882,27 +2967,8 @@ public:
         for (uint32_t groupIdx = 0; groupIdx < localExpertNum; ++groupIdx) {
             // Wait until every send core has drained this group's swiglu writes; by then the
             // group's MMADs are done as well and the token count (GROUP_TOKEN_COUNT) is stable.
-            WaitSendCoresDone(groupIdx + 2, quantWaitUbOffset);
-            // currentM comes from the gmm2 currentM table (this worker's private cell):
-            // the swiglu-done wait above saw every send core's group-g announce, and send
-            // core 0 writes the row before its announce (one core's MTE3 FIFO), so the row
-            // has formally landed. The V core reads the 32B cell with ONE MTE2 DataCopy
-            // (L2 path, no DCCI) - the wait scratch is dead once the wait returned.
-            // GetValue is a SCALAR (S-pipe) read, so the drain sync is the MTE2->S event:
-            // an MTE2_V here gated the V pipe only and left the S pipe free to read the
-            // cell before the copy landed - stale scratch content poisoned every
-            // downstream address computed from currentM (the old MTE-fault trigger).
-            AscendC::LocalTensor<int32_t> mCellTensor =
-                resource.ubBuf.template GetBufferByByte<int32_t>(quantWaitUbOffset);
-            AscendC::GlobalTensor<int32_t> groupMTensor;
-            groupMTensor.SetGlobalBuffer(
-                Gmm2GroupMTable(reinterpret_cast<__gm__ ElementGroupList *>(params.ptrGroupList)) +
-                static_cast<int64_t>(groupIdx) * GMM2_GROUP_M_ROW_STRIDE +
-                static_cast<int64_t>(GMM2_GROUP_M_AIV_COL_BASE + aivIdx) * INT32_COUNT_PER_BLOCK);
-            AscendC::DataCopy(mCellTensor, groupMTensor, INT32_COUNT_PER_BLOCK);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-            uint32_t currentM = static_cast<uint32_t>(mCellTensor.GetValue(0));
+            WaitSendCoresDone(groupIdx + NOTIFY_EVENT_SEQ_ROUTED_GROUP_BASE, quantWaitUbOffset);
+            uint32_t currentM = ReadGroupMCell(params, groupIdx, quantWaitUbOffset);
             if (currentM > 0) {
                 auto groupSwigluLayout = layout::RowMajor{currentM, n};
                 quantParams = typename BlockQuant<ArchTag>::Params {

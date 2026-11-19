@@ -30,6 +30,11 @@ constexpr uint32_t OP_TYPE_ALL_TO_ALL = 8;
 constexpr uint32_t SYSTEM_NEED_WORKSPACE = 16 * 1024 * 1024;
 constexpr uint32_t GM_ALIGN_SIZE = 512;
 constexpr uint32_t TOKEN_DTYPE_BYTE_SIZE = 2;
+// gmm2-moving-forward currentM table geometry (deep fuse only): one row per expert group of
+// GMM2_GROUP_M_CELLS private GMM2_GROUP_M_CELL_BYTES consumer cells (24 AICs + 48 AIVs).
+// Mirrors the kernel-side GMM2_GROUP_M_COLS / GMM2_GROUP_M_ROW_STRIDE - keep in sync.
+constexpr uint32_t GMM2_GROUP_M_CELLS = 72;
+constexpr uint32_t GMM2_GROUP_M_CELL_BYTES = 32;
 constexpr uint32_t L1_TILE_BYTE_SIZE = 32 * 1024;
 constexpr uint32_t CUBE_WORKSPACE_STAGE = 4;
 // Tail of the user workspace, shared with the kernel-side receive bookkeeping (the per-expert
@@ -700,11 +705,12 @@ static ge::graphStatus SetWorkSpace(gert::TilingContext &context, const char *no
         0 : maxTokenNum * h * TOKEN_DTYPE_BYTE_SIZE, GM_ALIGN_SIZE);
     size_t groupListSize = CeilUp(moeExpertNumPerRank * sizeof(int64_t), GM_ALIGN_SIZE);
     // gmm2-moving-forward currentM table appended to the groupList region (deep fuse
-    // only): one 768B row per group (24 private 32B consumer cells) - see the gmm1
-    // kernel's send-core-0 writer. The kernels derive the table base as ptrGroupList +
+    // only): one 2304B row per group (72 private 32B consumer cells) - see the gmm1
+    // kernel's last-send-core writer. The kernels derive the table base as ptrGroupList +
     // CeilUp(localExpertNum * 8, 512) - keep in sync.
     if (GMM2_MOVING_FORWARD && moeExpertNumPerRank != 1) {
-        groupListSize += CeilUp(moeExpertNumPerRank * 72 * 32, GM_ALIGN_SIZE);
+        groupListSize += CeilUp(moeExpertNumPerRank * GMM2_GROUP_M_CELLS * GMM2_GROUP_M_CELL_BYTES,
+                                GM_ALIGN_SIZE);
     }
     size_t expandIdxSize = CeilUp(batchSize * topK * sizeof(int32_t), GM_ALIGN_SIZE);
     size_t epSendCountSize = CeilUp(epRankSize * moeExpertNumPerRank * sizeof(int32_t), GM_ALIGN_SIZE);

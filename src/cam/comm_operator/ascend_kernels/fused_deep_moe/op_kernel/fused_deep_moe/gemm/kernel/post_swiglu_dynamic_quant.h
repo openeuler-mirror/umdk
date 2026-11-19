@@ -38,6 +38,15 @@ namespace QuantSpaceInfo {
 // 2/3 = BlockQuant, 4 = this handoff drain.
 constexpr int32_t EPILOGUE_QUANT_HANDOFF_EVENT_ID = 4;
 
+// BlockQuant's own pipe event ids, disjoint from the BlockEpilogue's while both are alive on
+// the same core (the quant-on-send-core variant - see EPILOGUE_QUANT_HANDOFF_EVENT_ID above
+// for the MTE3_V map): id 3 is the input channel (V_MTE2 guards the ubInput refill, MTE2_V
+// the swiglu read, V_MTE3/MTE3_V the dequant-scale staging, V_S the quant-scale scalar
+// readback) and id 2 is the output channel (V_MTE3/MTE3_V around the int8 cast and its
+// copy-out).
+constexpr int32_t BLOCK_QUANT_INPUT_EVENT_ID = 3;
+constexpr int32_t BLOCK_QUANT_OUTPUT_EVENT_ID = 2;
+
 // Wait until every MTE3 copy issued so far on this core has completed, so the consumer side can
 // safely read back the GM data just written out and reuse the producer's UB region.
 __aicore__ inline void SyncEpilogueQuantHandoff()
@@ -130,17 +139,17 @@ public:
         ubQuantS32 = ubAbs.ReinterpretCast<int32_t>();
         ubQuantF16 = ubAbs.ReinterpretCast<half>();
 
-        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(3);
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(3);
-        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(2);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_OUTPUT_EVENT_ID);
     }
 
     // Kept from the "grouped swiglu" line (the rest of its plumbing is reverted): the
     // kernels construct BlockQuant once and update the per-group pointers through this,
-    // so the event pre-Sets above are not re-issued per group. Note the ids stay at
-    // 0/1 (the a86f6bce 3/2 allocation only matters if a BlockEpilogue is ever alive on
-    // the SAME core at the same time - i.e. the quant-on-send-core variant; the default
-    // recv-quant build has each object on its own core type).
+    // so the event pre-Sets above are not re-issued per group. The 3/2 id allocation only
+    // matters when a BlockEpilogue is alive on the SAME core at the same time - i.e. the
+    // quant-on-send-core variant; the default recv-quant build has each object on its own
+    // core type.
     CATLASS_DEVICE
     void UpdateParams(Params const &params_)
     {
@@ -150,9 +159,9 @@ public:
     CATLASS_DEVICE
     ~BlockQuant()
     {
-        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(3);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(3);
-        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(2);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_OUTPUT_EVENT_ID);
     }
 
     CATLASS_DEVICE
@@ -179,100 +188,131 @@ public:
         uint32_t subblockIdx = singleAiv ? 0 : AscendC::GetSubBlockIdx();
         uint32_t subblockNum = singleAiv ? 1 : AscendC::GetSubBlockNum();
         for (uint32_t loopIdx = subblockIdx; loopIdx < tileLoops; loopIdx += subblockNum) {
-            auto tileCoord = epilogueTileSwizzle.GetTileCoord(loopIdx);
-            auto actualTileShape = epilogueTileSwizzle.GetActualTileShape(tileCoord);
-            auto tileOffsetInBlock = tileCoord * tileShape;
-            auto tileOffset = blockOffset + tileOffsetInBlock;
-
-            auto gmTileInput = gmInput[params.layoutInput.GetOffset(tileOffset)];
-            auto layoutGmTileInput = params.layoutInput.GetTileLayout(actualTileShape);
-
-            layout::RowMajor layoutUbInput{actualTileShape, ubTileStride};
-
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(3);
-            // continue swiglu computing here and then quant
-            copyGmToUbInput(ubInput, gmTileInput, layoutUbInput, layoutGmTileInput);
-            copyGmToUbInput(ubInputRightHalf, gmTileInput[params.layoutInput.shape(1) >> 1],
-                            layoutUbInput, layoutGmTileInput);
-            AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(3);
-
-            AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(3);
-            AscendC::Mul(ubInput, ubInput, ubInputRightHalf, tileCount);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Abs(ubAbs, ubInput, tileCount);
-            AscendC::PipeBarrier<PIPE_V>();
-
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
-                AscendC::Max(ubMax[rowIdx * halfTileColumn], ubAbs[rowIdx * tileColumn],
-                             ubAbs[rowIdx * tileColumn + halfTileColumn], halfTileColumn);
-            }
-
-            AscendC::PipeBarrier<PIPE_V>();
-            // ubInput is dead after this and is reused as ReduceMax's work buffer below.
-            AscendC::Muls(ubInputTmp, ubInput, 127.f, tileCount);
-            AscendC::PipeBarrier<PIPE_V>();
-
-            // Rows of ubMax are halfTileColumn floats apart. The host guarantees that stride is
-            // a whole number of 64-float vector repeats, which both keeps every ReduceMax source
-            // address aligned and keeps the reduction free of a trailing partial repeat. Each row
-            // also gets its own slice of the work buffer so the calls carry no mutual dependency.
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
-                AscendC::ReduceMax<float>(ubReduceMax[rowIdx * QuantSpaceInfo::REDUCE_MAX_DST_STRIDE],
-                    ubMax[rowIdx * halfTileColumn], ubInput[rowIdx * halfTileColumn], halfTileColumn, false);
-            }
-            AscendC::PipeBarrier<PIPE_V>();
-
-            // Gather the per-row maxima back into tileRow contiguous floats: one element per
-            // repeat, with the source advancing one 32B block (REDUCE_MAX_DST_STRIDE floats).
-            AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, tileRow, 1, 1, 1,
-                                    AscendC::ReduceOrder::ORDER_ONLY_VALUE);
-            AscendC::SetFlag<AscendC::HardEvent::V_S>(3);
-            AscendC::PipeBarrier<PIPE_V>();
-
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(3);
-            AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, tileRow);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(3);
-
-            auto dequantScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
-            auto dequantScaleTileShape = actualTileShape.template GetCoordByAxis<0>();
-
-            auto gmTileDequantScale = gmDequantScale[params.layoutDequantScale.GetOffset(dequantScaleTileOffset)];
-            auto layoutGmTileDequantScale = params.layoutDequantScale.GetTileLayout(dequantScaleTileShape);
-
-            auto layoutUbDequantScale =
-                LayoutDequantScale::template MakeLayoutInUb<ElementDequantScale>(dequantScaleTileShape);
-
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(3);
-            copyUbToGmDequantScale(gmTileDequantScale, ubDequantScale, layoutGmTileDequantScale, layoutUbDequantScale);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(3);
-
-            AscendC::WaitFlag<AscendC::HardEvent::V_S>(3);
-            for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
-                AscendC::Muls(ubQuantF32[rowIdx * tileColumn], ubInputTmp[rowIdx * tileColumn],
-                              1.f / ubReduceMax.GetValue(rowIdx * QuantSpaceInfo::REDUCE_MAX_DST_STRIDE),
-                              tileColumn);
-            }
-
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::Cast(ubQuantS32, ubQuantF32, AscendC::RoundMode::CAST_RINT, tileCount);
-            AscendC::PipeBarrier<PIPE_V>();
-            AscendC::SetDeqScale(static_cast<half>(1.0));
-            AscendC::Cast(ubQuantF16, ubQuantS32, AscendC::RoundMode::CAST_RINT, tileCount);
-            AscendC::PipeBarrier<PIPE_V>();
-
-            AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(2);
-            AscendC::Cast(ubOutput, ubQuantF16, AscendC::RoundMode::CAST_RINT, tileCount);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(2);
-            AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(3);
-            auto gmTileOutput = gmOutput[params.layoutOutput.GetOffset(tileOffset)];
-            auto layoutGmTileOutput = params.layoutOutput.GetTileLayout(actualTileShape);
-
-            LayoutOutput layoutUbOutput{actualTileShape, ubTileStride};
-
-            AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(2);
-            copyUbToGmOutput(gmTileOutput, ubOutput, layoutGmTileOutput, layoutUbOutput);
-            AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(2);
+            QuantTileComputeScales(blockOffset, actualBlockShape, epilogueTileSwizzle, loopIdx, gmInput);
+            QuantTileEmitOutput(blockOffset, actualBlockShape, epilogueTileSwizzle, loopIdx, gmDequantScale,
+                                gmOutput);
         }
+    }
+
+    // One quant tile, part 1: load the tile's swiglu input halves, multiply them into the
+    // swiglu product, find the per-row maxima and reduce them into the per-row quant scale
+    // and the staged dequant scale. The pipe-event choreography is exactly the pre-split
+    // operator()'s - do not reorder it against QuantTileEmitOutput.
+    CATLASS_DEVICE
+    void QuantTileComputeScales(MatrixCoord const &blockOffset, MatrixCoord const &actualBlockShape,
+                                EpilogueTileSwizzle &epilogueTileSwizzle, uint32_t loopIdx,
+                                AscendC::GlobalTensor<ElementInput> gmInput)
+    {
+        auto ubTileStride = MakeCoord(static_cast<int64_t>(tileColumn), 1L);
+        auto tileShape = MakeCoord(tileRow, tileColumn);
+        auto tileCoord = epilogueTileSwizzle.GetTileCoord(loopIdx);
+        auto actualTileShape = epilogueTileSwizzle.GetActualTileShape(tileCoord);
+        auto tileOffsetInBlock = tileCoord * tileShape;
+        auto tileOffset = blockOffset + tileOffsetInBlock;
+
+        auto gmTileInput = gmInput[params.layoutInput.GetOffset(tileOffset)];
+        auto layoutGmTileInput = params.layoutInput.GetTileLayout(actualTileShape);
+
+        layout::RowMajor layoutUbInput{actualTileShape, ubTileStride};
+
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE2>(BLOCK_QUANT_INPUT_EVENT_ID);
+        // continue swiglu computing here and then quant
+        copyGmToUbInput(ubInput, gmTileInput, layoutUbInput, layoutGmTileInput);
+        copyGmToUbInput(ubInputRightHalf, gmTileInput[params.layoutInput.shape(1) >> 1],
+                        layoutUbInput, layoutGmTileInput);
+        AscendC::SetFlag<AscendC::HardEvent::MTE2_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+
+        AscendC::WaitFlag<AscendC::HardEvent::MTE2_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::Mul(ubInput, ubInput, ubInputRightHalf, tileCount);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Abs(ubAbs, ubInput, tileCount);
+        AscendC::PipeBarrier<PIPE_V>();
+
+        for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            AscendC::Max(ubMax[rowIdx * halfTileColumn], ubAbs[rowIdx * tileColumn],
+                         ubAbs[rowIdx * tileColumn + halfTileColumn], halfTileColumn);
+        }
+
+        AscendC::PipeBarrier<PIPE_V>();
+        // ubInput is dead after this and is reused as ReduceMax's work buffer below.
+        AscendC::Muls(ubInputTmp, ubInput, 127.f, tileCount);
+        AscendC::PipeBarrier<PIPE_V>();
+
+        // Rows of ubMax are halfTileColumn floats apart. The host guarantees that stride is
+        // a whole number of 64-float vector repeats, which both keeps every ReduceMax source
+        // address aligned and keeps the reduction free of a trailing partial repeat. Each row
+        // also gets its own slice of the work buffer so the calls carry no mutual dependency.
+        for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            AscendC::ReduceMax<float>(ubReduceMax[rowIdx * QuantSpaceInfo::REDUCE_MAX_DST_STRIDE],
+                ubMax[rowIdx * halfTileColumn], ubInput[rowIdx * halfTileColumn], halfTileColumn, false);
+        }
+        AscendC::PipeBarrier<PIPE_V>();
+
+        // Gather the per-row maxima back into tileRow contiguous floats: one element per
+        // repeat, with the source advancing one 32B block (REDUCE_MAX_DST_STRIDE floats).
+        AscendC::WholeReduceMax(ubQuantScale, ubReduceMax, 1, tileRow, 1, 1, 1,
+                                AscendC::ReduceOrder::ORDER_ONLY_VALUE);
+        AscendC::SetFlag<AscendC::HardEvent::V_S>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::PipeBarrier<PIPE_V>();
+
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+        AscendC::Muls(ubDequantScale, ubQuantScale, 1.0f / 127.0f, tileRow);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(BLOCK_QUANT_INPUT_EVENT_ID);
+    }
+
+    // One quant tile, part 2: copy the dequant scale out, quantize the swiglu product against
+    // the per-row maxima and emit the int8 output (see QuantTileComputeScales for part 1).
+    CATLASS_DEVICE
+    void QuantTileEmitOutput(MatrixCoord const &blockOffset, MatrixCoord const &actualBlockShape,
+                             EpilogueTileSwizzle &epilogueTileSwizzle, uint32_t loopIdx,
+                             AscendC::GlobalTensor<ElementDequantScale> gmDequantScale,
+                             AscendC::GlobalTensor<ElementOutput> gmOutput)
+    {
+        auto ubTileStride = MakeCoord(static_cast<int64_t>(tileColumn), 1L);
+        auto tileShape = MakeCoord(tileRow, tileColumn);
+        auto tileCoord = epilogueTileSwizzle.GetTileCoord(loopIdx);
+        auto actualTileShape = epilogueTileSwizzle.GetActualTileShape(tileCoord);
+        auto tileOffset = blockOffset + tileCoord * tileShape;
+
+        auto dequantScaleTileOffset = tileOffset.template GetCoordByAxis<0>();
+        auto dequantScaleTileShape = actualTileShape.template GetCoordByAxis<0>();
+
+        auto gmTileDequantScale = gmDequantScale[params.layoutDequantScale.GetOffset(dequantScaleTileOffset)];
+        auto layoutGmTileDequantScale = params.layoutDequantScale.GetTileLayout(dequantScaleTileShape);
+
+        auto layoutUbDequantScale =
+            LayoutDequantScale::template MakeLayoutInUb<ElementDequantScale>(dequantScaleTileShape);
+
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(BLOCK_QUANT_INPUT_EVENT_ID);
+        copyUbToGmDequantScale(gmTileDequantScale, ubDequantScale, layoutGmTileDequantScale, layoutUbDequantScale);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_INPUT_EVENT_ID);
+
+        AscendC::WaitFlag<AscendC::HardEvent::V_S>(BLOCK_QUANT_INPUT_EVENT_ID);
+        for (uint32_t rowIdx = 0; rowIdx < tileRow; ++rowIdx) {
+            AscendC::Muls(ubQuantF32[rowIdx * tileColumn], ubInputTmp[rowIdx * tileColumn],
+                          1.f / ubReduceMax.GetValue(rowIdx * QuantSpaceInfo::REDUCE_MAX_DST_STRIDE),
+                          tileColumn);
+        }
+
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::Cast(ubQuantS32, ubQuantF32, AscendC::RoundMode::CAST_RINT, tileCount);
+        AscendC::PipeBarrier<PIPE_V>();
+        AscendC::SetDeqScale(static_cast<half>(1.0));
+        AscendC::Cast(ubQuantF16, ubQuantS32, AscendC::RoundMode::CAST_RINT, tileCount);
+        AscendC::PipeBarrier<PIPE_V>();
+
+        AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_OUTPUT_EVENT_ID);
+        AscendC::Cast(ubOutput, ubQuantF16, AscendC::RoundMode::CAST_RINT, tileCount);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(BLOCK_QUANT_OUTPUT_EVENT_ID);
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(BLOCK_QUANT_INPUT_EVENT_ID);
+        auto gmTileOutput = gmOutput[params.layoutOutput.GetOffset(tileOffset)];
+        auto layoutGmTileOutput = params.layoutOutput.GetTileLayout(actualTileShape);
+
+        LayoutOutput layoutUbOutput{actualTileShape, ubTileStride};
+
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(BLOCK_QUANT_OUTPUT_EVENT_ID);
+        copyUbToGmOutput(gmTileOutput, ubOutput, layoutGmTileOutput, layoutUbOutput);
+        AscendC::SetFlag<AscendC::HardEvent::MTE3_V>(BLOCK_QUANT_OUTPUT_EVENT_ID);
     }
 
 private:

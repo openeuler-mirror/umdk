@@ -60,6 +60,9 @@ namespace GMM2 {
     constexpr uint64_t GROUP_TOKEN_NUM_OFFSET = 932 * 1024;
     constexpr uint64_t SHARE_QUANT_SOFT_SYNC_OFFSET = 988 * 1024;
     constexpr uint32_t GROUP_INFO_SIZE = 32;  // int32 units, 128B per expert slot (one spinner per DCCI sector)
+    // LateStateCleanup's zero-staging chunk, 32KB per copy - also the staging capacity: the
+    // byte offset right after it is where the expertTokenNums staging begins.
+    constexpr uint32_t CLEAN_CHUNK_INTS = 8192;
     // gmm1's deep-fuse receive-side regions inside the reserved workspace (gmReserved), also
     // cleaned by LateStateCleanup; must match the constants in
     // grouped_matmul_slice_m_per_token_dequant_swiglu_quant_multistage_workspace.h, which owns
@@ -302,14 +305,15 @@ public:
         AscendC::LocalTensor<float> flagTensor =
             resource.ubBuf.template GetBufferByByte<float>(184 * 1024);
         float target = static_cast<float>(static_cast<int32_t>(groupIdx) + 2);
-        while (true) {
+        bool rowPublished = false;
+        while (!rowPublished) {
             AscendC::DataCopy(flagTensor, cellTensor, GMM2::INT32_COUNT_PER_BLOCK);
             AscendC::SetFlag<AscendC::HardEvent::MTE2_S>(0);
             AscendC::WaitFlag<AscendC::HardEvent::MTE2_S>(0);
-            if (flagTensor.GetValue(0) >= target) {
-                break;
+            rowPublished = flagTensor.GetValue(0) >= target;
+            if (!rowPublished) {
+                SPIN_WAIT_CYCLES();
             }
-            SPIN_WAIT_CYCLES();
         }
     }
 
@@ -359,11 +363,10 @@ public:
     {
         uint32_t aivIdx = AscendC::GetBlockIdx();
         uint32_t subBlockNum = AscendC::GetSubBlockNum();
-        uint32_t coreIdx = aivIdx / subBlockNum;
+        // GetSubBlockNum is at least 1 on every launch shape this kernel runs; the fallback
+        // only keeps the divisor provably non-zero.
+        uint32_t coreIdx = subBlockNum > 0 ? aivIdx / subBlockNum : aivIdx;
         uint32_t localExpertNum = params.problemCount;
-        // 32KB per zero chunk: also the staging capacity - the byte offset right after it
-        // is where the expertTokenNums staging below begins.
-        constexpr uint32_t CLEAN_CHUNK_INTS = 8192;
 
         // The one staging, pre-filled ONCE with the largest single copy this core issues:
         // deep fuse is owner-only (one strided slot sweep plus the region list below), the
@@ -372,7 +375,7 @@ public:
         uint32_t zeroInts = GMM2::INT32_COUNT_PER_BLOCK;  // own soft-sync slots / share-quant slot
         if (withGmm1Work && isCleanupOwner) {
             if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                zeroInts = CLEAN_CHUNK_INTS;
+                zeroInts = GMM2::CLEAN_CHUNK_INTS;
             } else {
                 zeroInts = GMM2::GROUP_INFO_SIZE * (localExpertNum + 1);
             }
@@ -384,207 +387,242 @@ public:
         AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
 
         if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-            // One core, one copy: all three soft-sync ladders sit back-to-back on the same
-            // 512B slot pitch - the gmm1 AIC->AIV counters at GMM1_SOFT_SYNC_OFFSET (24
-            // slots), this kernel's own gmm2 counters at SOFT_SYNC_OFFSET (24 slots), and
-            // the shared expert's quant slot exactly on the next boundary - so blocks of
-            // one 32B slot head at dstStride=15 sweep 2*blockNum (+1) heads, the same 32B
-            // heads the old per-core own-slot copies zeroed. Every deep-fuse call site runs
-            // WaitEpiloguesDone before this function, and that poll proves every AIV's
-            // routed and shared epilogue loops - the last readers of both ladders - are
-            // done; the non-owners have no slot of their own left to clean.
-            if (isCleanupOwner && withGmm1Work) {
-                const uint16_t slotBlocks = static_cast<uint16_t>(
-                    AscendC::GetBlockNum() * 2 +
-                    ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) ? 1 : 0));
-                AscendC::GlobalTensor<int32_t> softSyncTensor;
-                softSyncTensor.SetGlobalBuffer(
-                    (__gm__ int32_t *)(syncGmAddr + GMM2::GMM1_SOFT_SYNC_OFFSET));
-                AscendC::DataCopy(softSyncTensor, tmpZeroLocalTensor,
-                                  AscendC::DataCopyParams{slotBlocks, 1, 0, 15});
-            }
-            if (!isCleanupOwner || !withGmm1Work) {
-                return;
-            }
+            LateStateCleanupDeepFuse(params, localExpertNum, isCleanupOwner, withGmm1Work,
+                                     tmpZeroLocalTensor);
         } else {
-            // Shallow keeps the per-core own-slot cleans: there is no grid-wide
-            // epilogue-done poll here, so a core only ever zeroes the slots its own AI
-            // core reads - its own gmm2 slot, plus its gmm1-side slot when the variant has
-            // gmm1 work (shallow shared, guarded by the SEND rendezvous at the call site).
-            // This kernel's own gmm2 soft-sync slot (subblock 0): the block counter slot at
-            // SOFT_SYNC_OFFSET - one streamed copy, no event pair of its own.
-            if (AscendC::GetSubBlockIdx() == 0) {
-                AscendC::GlobalTensor<int32_t> softSyncTensor;
-                softSyncTensor.SetGlobalBuffer((__gm__ int32_t *)(syncGmAddr + GMM2::SOFT_SYNC_OFFSET));
-                AscendC::DataCopy(
-                    softSyncTensor[coreIdx * CVSoftSync::SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
-                    tmpZeroLocalTensor, GMM2::INT32_COUNT_PER_BLOCK);
-            }
-            if (!withGmm1Work) {
-                return;
-            }
-            // own core's gmm1 AIC->AIV block-counter slot (subblock 0, as before)
-            if (AscendC::GetSubBlockIdx() == 0) {
-                // The ReducePermute-side publish row needs no clean here: it is the swiglu-done
-                // table's 25th row, zeroed each launch by gmm1's recv core 0 together with the
-                // rest of the table (see WaitRowPublished).
-                AscendC::GlobalTensor<int32_t> softSyncTensor;
-                softSyncTensor.SetGlobalBuffer((__gm__ int32_t *)(syncGmAddr + GMM2::GMM1_SOFT_SYNC_OFFSET));
-                AscendC::DataCopy(
-                    softSyncTensor[coreIdx * CVSoftSync::SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
-                    tmpZeroLocalTensor, GMM2::INT32_COUNT_PER_BLOCK);
-            }
-            if (!isCleanupOwner) {
-                return;
+            LateStateCleanupShallow(params, isCleanupOwner, withGmm1Work, tmpZeroLocalTensor, coreIdx);
+        }
+    }
+
+    // Deep-fuse half of LateStateCleanup (see there for the safety argument): the one
+    // strided ladder sweep over all three soft-sync tables, then - after the early-out the
+    // non-owners take - the owner-only notify-region cleans and the expertTokenNums write.
+    CATLASS_DEVICE
+    void LateStateCleanupDeepFuse(Params const &params, uint32_t localExpertNum, bool isCleanupOwner,
+                                  bool withGmm1Work, AscendC::LocalTensor<int32_t> &tmpZeroLocalTensor)
+    {
+        // One core, one copy: all three soft-sync ladders sit back-to-back on the same
+        // 512B slot pitch - the gmm1 AIC->AIV counters at GMM1_SOFT_SYNC_OFFSET (24
+        // slots), this kernel's own gmm2 counters at SOFT_SYNC_OFFSET (24 slots), and
+        // the shared expert's quant slot exactly on the next boundary - so blocks of
+        // one 32B slot head at dstStride=15 sweep 2*blockNum (+1) heads, the same 32B
+        // heads the old per-core own-slot copies zeroed. Every deep-fuse call site runs
+        // WaitEpiloguesDone before this function, and that poll proves every AIV's
+        // routed and shared epilogue loops - the last readers of both ladders - are
+        // done; the non-owners have no slot of their own left to clean.
+        if (isCleanupOwner && withGmm1Work) {
+            const uint16_t slotBlocks = static_cast<uint16_t>(
+                AscendC::GetBlockNum() * 2 +
+                ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) ? 1 : 0));
+            AscendC::GlobalTensor<int32_t> softSyncTensor;
+            softSyncTensor.SetGlobalBuffer(
+                (__gm__ int32_t *)(syncGmAddr + GMM2::GMM1_SOFT_SYNC_OFFSET));
+            AscendC::DataCopy(softSyncTensor, tmpZeroLocalTensor,
+                              AscendC::DataCopyParams{slotBlocks, 1, 0, 15});
+        }
+        if (!isCleanupOwner || !withGmm1Work) {
+            return;
+        }
+        CleanLateNotifyRegions(params, localExpertNum, tmpZeroLocalTensor);
+        WriteLateExpertTokenNums(params, localExpertNum);
+    }
+
+    // Shallow half of LateStateCleanup (see there for the safety argument): the per-core
+    // own-slot cleans - there is no grid-wide epilogue-done poll here, so a core only ever
+    // zeroes the slots its own AI core reads - then, for the owner, the notify-region cleans
+    // and the expertTokenNums write.
+    CATLASS_DEVICE
+    void LateStateCleanupShallow(Params const &params, bool isCleanupOwner, bool withGmm1Work,
+                                 AscendC::LocalTensor<int32_t> &tmpZeroLocalTensor, uint32_t coreIdx)
+    {
+        uint32_t localExpertNum = params.problemCount;
+        // This kernel's own gmm2 soft-sync slot (subblock 0): the block counter slot at
+        // SOFT_SYNC_OFFSET - one streamed copy, no event pair of its own.
+        if (AscendC::GetSubBlockIdx() == 0) {
+            AscendC::GlobalTensor<int32_t> softSyncTensor;
+            softSyncTensor.SetGlobalBuffer((__gm__ int32_t *)(syncGmAddr + GMM2::SOFT_SYNC_OFFSET));
+            AscendC::DataCopy(
+                softSyncTensor[coreIdx * CVSoftSync::SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
+                tmpZeroLocalTensor, GMM2::INT32_COUNT_PER_BLOCK);
+        }
+        if (!withGmm1Work) {
+            return;
+        }
+        // own core's gmm1 AIC->AIV block-counter slot (subblock 0, as before)
+        if (AscendC::GetSubBlockIdx() == 0) {
+            // The ReducePermute-side publish row needs no clean here: it is the swiglu-done
+            // table's 25th row, zeroed each launch by gmm1's recv core 0 together with the
+            // rest of the table (see WaitRowPublished).
+            AscendC::GlobalTensor<int32_t> softSyncTensor;
+            softSyncTensor.SetGlobalBuffer((__gm__ int32_t *)(syncGmAddr + GMM2::GMM1_SOFT_SYNC_OFFSET));
+            AscendC::DataCopy(
+                softSyncTensor[coreIdx * CVSoftSync::SOFT_SYNC_SPACE_SIZE / sizeof(int32_t)],
+                tmpZeroLocalTensor, GMM2::INT32_COUNT_PER_BLOCK);
+        }
+        if (!isCleanupOwner) {
+            return;
+        }
+        CleanLateNotifyRegions(params, localExpertNum, tmpZeroLocalTensor);
+        WriteLateExpertTokenNums(params, localExpertNum);
+    }
+
+    // LateStateCleanup's owner-only notify-state cleans. Everything here re-issues plain MTE3
+    // copies from the one staging - no pipe events of their own; the queue lands them in order
+    // and retires the rest at kernel exit.
+    CATLASS_DEVICE
+    void CleanLateNotifyRegions(Params const &params, uint32_t localExpertNum,
+                                AscendC::LocalTensor<int32_t> &tmpZeroLocalTensor)
+    {
+        // clean GROUP_TOKEN_NUM (recv->AIC notify fields, incl. the +1 shared-expert
+        // slot) and the shared-input-quant slot; by the cleanup owner
+        AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
+        groupTokenNumStateTensor.SetGlobalBuffer(
+            (__gm__ int32_t *)(syncGmAddr + GMM2::GROUP_TOKEN_NUM_OFFSET));
+        AscendC::DataCopy(groupTokenNumStateTensor, tmpZeroLocalTensor,
+                          GMM2::GROUP_INFO_SIZE * (localExpertNum + 1));
+        if constexpr ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) &&
+                      ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0)) {
+            // Deep fuse: the shared-input-quant slot already went out as the sweep's
+            // last block above; shallow keeps this copy - there is no sweep outside
+            // deep fuse.
+            AscendC::GlobalTensor<int32_t> shareQuantTokenStateTensor;
+            shareQuantTokenStateTensor.SetGlobalBuffer(
+                (__gm__ int32_t *)(syncGmAddr + GMM2::SHARE_QUANT_SOFT_SYNC_OFFSET));
+            AscendC::DataCopy(shareQuantTokenStateTensor, tmpZeroLocalTensor,
+                              GMM2::INT32_COUNT_PER_BLOCK);
+        }
+        // gmm2 quant-ready notify slots (see NotifyGmm2QuantDone / WaitGmm2QuantReady),
+        // moved here from the gmm1 AIC-0 head: the state window is persistent, so a zero
+        // retired before this kernel exits is still standing when the next launch's first
+        // atomic add runs - which is all the head zero ever guaranteed. Every consumer of
+        // this launch's counts is done (see the transitivity note above). The counts are
+        // not parity-encoded, so this clean is load-bearing: a launch that dies mid-way
+        // leaves stale counts behind and the NEXT launch would read them as ready - on
+        // any abnormal termination, restart the process.
+        if constexpr (GMM2::MOVING_FORWARD && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
+            const uint32_t notifySlotCount =
+                localExpertNum + ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) ? 1 : 0);
+            AscendC::GlobalTensor<int32_t> gmm2NotifyTensor;
+            gmm2NotifyTensor.SetGlobalBuffer(
+                (__gm__ int32_t *)(syncGmAddr + GMM2::NOTIFY_GMM2_SOFT_SYNC_OFFSET));
+            AscendC::DataCopy(gmm2NotifyTensor, tmpZeroLocalTensor,
+                              notifySlotCount * GMM2::NOTIFY_GMM2_SLOT_STRIDE);
+        }
+        if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
+            CleanLateRecvFlagRegions(params, localExpertNum, tmpZeroLocalTensor);
+        }
+    }
+
+    // This tree's deep-fuse receive-side regions in the reserved workspace, moved here from
+    // the gmm1 kernel's UpdateAndCleanInfo like the cleans above (gmReserved plumbed through
+    // GmmDeq). Zero the per-(expert, recv-core) ready flag lines and the whole first-expert
+    // ACK/publish region, so a stale value can never read as ready on the next launch: a
+    // zero flag never satisfies a flag wait, a zero first-expert slot adds nothing to the
+    // fold's byte sum, and a zeroed publish line can never be read as this launch's
+    // completion. The flag region is laid out for RECV_PREFIX_MAX_GROUPS groups and the
+    // split receive that publishes the flags itself requires no more groups than that, so
+    // the clean is capped at the layout bound: with localExpertNum above it the gmm1-side
+    // flagInts form would run past the region into the rest of the workspace.
+    CATLASS_DEVICE
+    void CleanLateRecvFlagRegions(Params const &params, uint32_t localExpertNum,
+                                  AscendC::LocalTensor<int32_t> &tmpZeroLocalTensor)
+    {
+        const uint32_t flagGroups = (localExpertNum < GMM2::RECV_PREFIX_MAX_GROUPS)
+                                        ? localExpertNum : GMM2::RECV_PREFIX_MAX_GROUPS;
+        const uint32_t flagInts = flagGroups * GMM2::RECV_PERFLAG_GROUP_INTS;
+        AscendC::GlobalTensor<int32_t> flagRegion;
+        flagRegion.SetGlobalBuffer(
+            (__gm__ int32_t *)(params.gmReserved + GMM2::RECV_PREFIX_FLAG_BASE));
+        for (uint32_t done = 0; done < flagInts; done += GMM2::CLEAN_CHUNK_INTS) {
+            const uint32_t thisChunk = (flagInts - done < GMM2::CLEAN_CHUNK_INTS)
+                                          ? (flagInts - done) : GMM2::CLEAN_CHUNK_INTS;
+            AscendC::DataCopy(flagRegion[done], tmpZeroLocalTensor, thisChunk);
+        }
+        const uint32_t firstExpertInts =
+            static_cast<uint32_t>(GMM2::FIRST_EXPERT_REGION_BYTES / sizeof(int32_t));
+        AscendC::GlobalTensor<int32_t> firstExpertRegion;
+        firstExpertRegion.SetGlobalBuffer(
+            (__gm__ int32_t *)(params.gmReserved + GMM2::FIRST_EXPERT_ACK_OFFSET),
+            firstExpertInts);
+        for (uint32_t done = 0; done < firstExpertInts; done += GMM2::CLEAN_CHUNK_INTS) {
+            const uint32_t thisChunk = (firstExpertInts - done < GMM2::CLEAN_CHUNK_INTS)
+                                          ? (firstExpertInts - done) : GMM2::CLEAN_CHUNK_INTS;
+            AscendC::DataCopy(firstExpertRegion[done], tmpZeroLocalTensor, thisChunk);
+        }
+    }
+
+    // LateStateCleanup's expertTokenNums (op OUTPUT) write, by the cleanup owner, exactly as
+    // the gmm1-side code did. This is the ONLY writer of the expert_token_nums output in deep
+    // fuse - the shallow path produces it inside the dispatcher (UpdataTokenNumsOut at the
+    // end of dispatcher.Process), which deep fuse does not run. groupList is intentionally
+    // NOT written: nothing reads it in deep fuse (both gmm2 sides and the gmm1 quant workers
+    // use the currentM table behind the groupList entries, the gmm1 AICs use GROUP_TOKEN_NUM)
+    // and it is not an op output.
+    CATLASS_DEVICE
+    void WriteLateExpertTokenNums(Params const &params, uint32_t localExpertNum)
+    {
+        // Read epSendCount directly, NOT the currentM table: this cold one-core tail
+        // runs concurrently with every core's currentM slice zeroing above, so the
+        // table is being wiped while this block executes. epSendCount is untouched by
+        // the cleanup and holds the same per-group diffs. The per-element DCCI READS
+        // stay (the counts are cross-core written); the WRITE side is bulk now: the
+        // diffs are staged in UB and the 64B-aligned interior goes out as ONE DataCopy
+        // (GetPhyAddr yields the base for the alignment split; the DMA path has no
+        // Data Cache to flush). Only the head (base .. first 64B boundary) and the
+        // tail (the < 8 elements past the last full 64B) stay scalar SetValue, and
+        // their flushes are batched into one DataCacheCleanAndInvalid per side instead
+        // of one per element: SINGLE_CACHE_LINE on the head's non-aligned base cleans
+        // exactly [base, 64B boundary) - the head and nothing before it - while the
+        // tail's start is 64B-aligned, so its DCCI cleans the tail's whole line, which
+        // the DataCopy region never enters (the head's does not either: it ends at the
+        // boundary). Nothing reads the output back inside this launch, so the batched
+        // flush only has to land before kernel exit.
+        AscendC::GlobalTensor<int32_t> sendCountsGlobal;
+        sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(params.ptrGroupListI32));
+        AscendC::GlobalTensor<int64_t> expertTokenNumsTensor;
+        expertTokenNumsTensor.SetGlobalBuffer(reinterpret_cast<__gm__ int64_t *>(params.ptrExpertTokenNums));
+
+        const uint64_t tokenNumsAddr =
+            reinterpret_cast<uint64_t>(expertTokenNumsTensor.GetPhyAddr());
+        const uint32_t headElems = static_cast<uint32_t>(
+            (((tokenNumsAddr + 63ULL) & ~63ULL) - tokenNumsAddr) / sizeof(int64_t));
+        const uint32_t clampedHead = headElems > localExpertNum ? localExpertNum : headElems;
+        const uint32_t midElems = (localExpertNum - clampedHead) & ~7U;
+        const uint32_t tailElems = localExpertNum - clampedHead - midElems;
+
+        AscendC::LocalTensor<int64_t> midLocal =
+            resource.ubBuf.template GetBufferByByte<int64_t>(GMM2::CLEAN_CHUNK_INTS * sizeof(int32_t));
+        uint32_t midIdx = 0;
+        uint32_t tmpTokenNum = 0;
+        for (uint32_t localMoeIndex = 0; localMoeIndex < localExpertNum; ++localMoeIndex) {
+            uint32_t tokenNum = FlushAndGetValue<int32_t>(
+                sendCountsGlobal, localMoeIndex * params.epRankSize + params.epRankSize - 1);
+            int64_t expertTokenNum =
+                static_cast<int64_t>(tokenNum) - static_cast<int64_t>(tmpTokenNum);
+            tmpTokenNum = tokenNum;
+            if (localMoeIndex < clampedHead || localMoeIndex >= clampedHead + midElems) {
+                expertTokenNumsTensor.SetValue(localMoeIndex, expertTokenNum);
+            } else {
+                midLocal.SetValue(midIdx, expertTokenNum);
+                midIdx += 1;
             }
         }
-
-        if (isCleanupOwner) {
-            // Everything below re-issues plain MTE3 copies from the one staging - no pipe
-            // events of their own; the queue lands them in order and retires the rest at
-            // kernel exit.
-            // clean GROUP_TOKEN_NUM (recv->AIC notify fields, incl. the +1 shared-expert
-            // slot) and the shared-input-quant slot; by the cleanup owner
-            AscendC::GlobalTensor<int32_t> groupTokenNumStateTensor;
-            groupTokenNumStateTensor.SetGlobalBuffer(
-                (__gm__ int32_t *)(syncGmAddr + GMM2::GROUP_TOKEN_NUM_OFFSET));
-            AscendC::DataCopy(groupTokenNumStateTensor, tmpZeroLocalTensor,
-                              GMM2::GROUP_INFO_SIZE * (localExpertNum + 1));
-            if constexpr ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) &&
-                          ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0)) {
-                // Deep fuse: the shared-input-quant slot already went out as the sweep's
-                // last block above; shallow keeps this copy - there is no sweep outside
-                // deep fuse.
-                AscendC::GlobalTensor<int32_t> shareQuantTokenStateTensor;
-                shareQuantTokenStateTensor.SetGlobalBuffer(
-                    (__gm__ int32_t *)(syncGmAddr + GMM2::SHARE_QUANT_SOFT_SYNC_OFFSET));
-                AscendC::DataCopy(shareQuantTokenStateTensor, tmpZeroLocalTensor,
-                                  GMM2::INT32_COUNT_PER_BLOCK);
-            }
-            // gmm2 quant-ready notify slots (see NotifyGmm2QuantDone / WaitGmm2QuantReady),
-            // moved here from the gmm1 AIC-0 head: the state window is persistent, so a zero
-            // retired before this kernel exits is still standing when the next launch's first
-            // atomic add runs - which is all the head zero ever guaranteed. Every consumer of
-            // this launch's counts is done (see the transitivity note above). The counts are
-            // not parity-encoded, so this clean is load-bearing: a launch that dies mid-way
-            // leaves stale counts behind and the NEXT launch would read them as ready - on
-            // any abnormal termination, restart the process.
-            if constexpr (GMM2::MOVING_FORWARD && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
-                const uint32_t notifySlotCount =
-                    localExpertNum + ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) ? 1 : 0);
-                AscendC::GlobalTensor<int32_t> gmm2NotifyTensor;
-                gmm2NotifyTensor.SetGlobalBuffer(
-                    (__gm__ int32_t *)(syncGmAddr + GMM2::NOTIFY_GMM2_SOFT_SYNC_OFFSET));
-                AscendC::DataCopy(gmm2NotifyTensor, tmpZeroLocalTensor,
-                                  notifySlotCount * GMM2::NOTIFY_GMM2_SLOT_STRIDE);
-            }
-            // This tree's deep-fuse receive-side regions in the reserved workspace, moved here
-            // from the gmm1 kernel's UpdateAndCleanInfo like the cleans above (gmReserved plumbed
-            // through GmmDeq). Zero the per-(expert, recv-core) ready flag lines and the whole
-            // first-expert ACK/publish region, so a stale value can never read as ready on the
-            // next launch: a zero flag never satisfies a flag wait, a zero first-expert slot adds
-            // nothing to the fold's byte sum, and a zeroed publish line can never be read as this
-            // launch's completion. The flag region is laid out for RECV_PREFIX_MAX_GROUPS groups
-            // and the split receive that publishes the flags itself requires no more groups than
-            // that, so the clean is capped at the layout bound: with localExpertNum above it the
-            // gmm1-side flagInts form would run past the region into the rest of the workspace.
-            if constexpr (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) {
-                const uint32_t flagGroups = (localExpertNum < GMM2::RECV_PREFIX_MAX_GROUPS)
-                                                ? localExpertNum : GMM2::RECV_PREFIX_MAX_GROUPS;
-                const uint32_t flagInts = flagGroups * GMM2::RECV_PERFLAG_GROUP_INTS;
-                AscendC::GlobalTensor<int32_t> flagRegion;
-                flagRegion.SetGlobalBuffer(
-                    (__gm__ int32_t *)(params.gmReserved + GMM2::RECV_PREFIX_FLAG_BASE));
-                for (uint32_t done = 0; done < flagInts; done += CLEAN_CHUNK_INTS) {
-                    const uint32_t thisChunk = (flagInts - done < CLEAN_CHUNK_INTS)
-                                                  ? (flagInts - done) : CLEAN_CHUNK_INTS;
-                    AscendC::DataCopy(flagRegion[done], tmpZeroLocalTensor, thisChunk);
-                }
-                const uint32_t firstExpertInts =
-                    static_cast<uint32_t>(GMM2::FIRST_EXPERT_REGION_BYTES / sizeof(int32_t));
-                AscendC::GlobalTensor<int32_t> firstExpertRegion;
-                firstExpertRegion.SetGlobalBuffer(
-                    (__gm__ int32_t *)(params.gmReserved + GMM2::FIRST_EXPERT_ACK_OFFSET),
-                    firstExpertInts);
-                for (uint32_t done = 0; done < firstExpertInts; done += CLEAN_CHUNK_INTS) {
-                    const uint32_t thisChunk = (firstExpertInts - done < CLEAN_CHUNK_INTS)
-                                                  ? (firstExpertInts - done) : CLEAN_CHUNK_INTS;
-                    AscendC::DataCopy(firstExpertRegion[done], tmpZeroLocalTensor, thisChunk);
-                }
-            }
+        if (midElems > 0) {
+            // UB scalar stores -> MTE3, the same handoff id/pattern as the gmm1
+            // kernel's StoreStatePairFlippedByDma.
+            AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
+            AscendC::DataCopy(expertTokenNumsTensor[clampedHead], midLocal, midElems);
         }
-
-        // expertTokenNums (op OUTPUT): by the cleanup owner, exactly as the gmm1-side
-        // code did. This is the ONLY writer of the expert_token_nums output in deep fuse -
-        // the shallow path produces it inside the dispatcher (UpdataTokenNumsOut at the end
-        // of dispatcher.Process), which deep fuse does not run. groupList is intentionally
-        // NOT written: nothing reads it in deep fuse (both gmm2 sides and the gmm1 quant
-        // workers use the currentM table behind the groupList entries, the gmm1 AICs use
-        // GROUP_TOKEN_NUM) and it is not an op output.
-        if (isCleanupOwner) {
-            // Read epSendCount directly, NOT the currentM table: this cold one-core tail
-            // runs concurrently with every core's currentM slice zeroing above, so the
-            // table is being wiped while this block executes. epSendCount is untouched by
-            // the cleanup and holds the same per-group diffs. The per-element DCCI READS
-            // stay (the counts are cross-core written); the WRITE side is bulk now: the
-            // diffs are staged in UB and the 64B-aligned interior goes out as ONE DataCopy
-            // (GetPhyAddr yields the base for the alignment split; the DMA path has no
-            // Data Cache to flush). Only the head (base .. first 64B boundary) and the
-            // tail (the < 8 elements past the last full 64B) stay scalar SetValue, and
-            // their flushes are batched into one DataCacheCleanAndInvalid per side instead
-            // of one per element: SINGLE_CACHE_LINE on the head's non-aligned base cleans
-            // exactly [base, 64B boundary) - the head and nothing before it - while the
-            // tail's start is 64B-aligned, so its DCCI cleans the tail's whole line, which
-            // the DataCopy region never enters (the head's does not either: it ends at the
-            // boundary). Nothing reads the output back inside this launch, so the batched
-            // flush only has to land before kernel exit.
-            AscendC::GlobalTensor<int32_t> sendCountsGlobal;
-            sendCountsGlobal.SetGlobalBuffer(reinterpret_cast<__gm__ int32_t *>(params.ptrGroupListI32));
-            AscendC::GlobalTensor<int64_t> expertTokenNumsTensor;
-            expertTokenNumsTensor.SetGlobalBuffer(reinterpret_cast<__gm__ int64_t *>(params.ptrExpertTokenNums));
-
-            const uint64_t tokenNumsAddr =
-                reinterpret_cast<uint64_t>(expertTokenNumsTensor.GetPhyAddr());
-            const uint32_t headElems = static_cast<uint32_t>(
-                (((tokenNumsAddr + 63ULL) & ~63ULL) - tokenNumsAddr) / sizeof(int64_t));
-            const uint32_t clampedHead = headElems > localExpertNum ? localExpertNum : headElems;
-            const uint32_t midElems = (localExpertNum - clampedHead) & ~7U;
-            const uint32_t tailElems = localExpertNum - clampedHead - midElems;
-
-            AscendC::LocalTensor<int64_t> midLocal =
-                resource.ubBuf.template GetBufferByByte<int64_t>(CLEAN_CHUNK_INTS * sizeof(int32_t));
-            uint32_t midIdx = 0;
-            uint32_t tmpTokenNum = 0;
-            for (uint32_t localMoeIndex = 0; localMoeIndex < localExpertNum; ++localMoeIndex) {
-                uint32_t tokenNum = FlushAndGetValue<int32_t>(
-                    sendCountsGlobal, localMoeIndex * params.epRankSize + params.epRankSize - 1);
-                int64_t expertTokenNum =
-                    static_cast<int64_t>(tokenNum) - static_cast<int64_t>(tmpTokenNum);
-                tmpTokenNum = tokenNum;
-                if (localMoeIndex < clampedHead || localMoeIndex >= clampedHead + midElems) {
-                    expertTokenNumsTensor.SetValue(localMoeIndex, expertTokenNum);
-                } else {
-                    midLocal.SetValue(midIdx, expertTokenNum);
-                    midIdx += 1;
-                }
-            }
-            if (midElems > 0) {
-                // UB scalar stores -> MTE3, the same handoff id/pattern as the gmm1
-                // kernel's StoreStatePairFlippedByDma.
-                AscendC::SetFlag<AscendC::HardEvent::S_MTE3>(0);
-                AscendC::WaitFlag<AscendC::HardEvent::S_MTE3>(0);
-                AscendC::DataCopy(expertTokenNumsTensor[clampedHead], midLocal, midElems);
-            }
-            if (clampedHead > 0) {
-                AscendC::DataCacheCleanAndInvalid<int64_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
-                                                  AscendC::DcciDst::CACHELINE_OUT>(
-                    expertTokenNumsTensor[0]);
-            }
-            if (tailElems > 0) {
-                AscendC::DataCacheCleanAndInvalid<int64_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
-                                                  AscendC::DcciDst::CACHELINE_OUT>(
-                    expertTokenNumsTensor[clampedHead + midElems]);
-            }
+        if (clampedHead > 0) {
+            AscendC::DataCacheCleanAndInvalid<int64_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                              AscendC::DcciDst::CACHELINE_OUT>(
+                expertTokenNumsTensor[0]);
+        }
+        if (tailElems > 0) {
+            AscendC::DataCacheCleanAndInvalid<int64_t, AscendC::CacheLine::SINGLE_CACHE_LINE,
+                                              AscendC::DcciDst::CACHELINE_OUT>(
+                expertTokenNumsTensor[clampedHead + midElems]);
         }
     }
 
@@ -841,17 +879,19 @@ public:
                     params.layoutPerTokenScale.GetTileLayout(inGroupProblemShape.template GetCoordByAxis<0>());
                 LayoutD layoutD = params.layoutD.GetTileLayout(inGroupProblemShape.GetCoordMN());
                 EpilogueParams epilogueParams;
+                __gm__ ElementC *gmCBase = reinterpret_cast<__gm__ ElementC *>(
+                    kMovingForward ? params.ptrC : params.ptrWorkspace);
                 if constexpr (EXEC_FLAG & EXEC_FLAG_TENSOR_LIST) {
                     gmScalePtr = reinterpret_cast<__gm__ ElementScale*>(
                                     gmScaleListTensor.GetDataPtr<int32_t>(groupIdx));
                     epilogueParams = EpilogueParams {
-                            reinterpret_cast<__gm__ ElementC *>(kMovingForward ? params.ptrC : params.ptrWorkspace) + gmGroupOffsetC,
+                            gmCBase + gmGroupOffsetC,
                             gmScalePtr, layoutScale,
                             params.ptrPerTokenScale + gmGroupOffsetPerTokenScale, layoutPerTokenScale,
                             params.ptrD + gmGroupOffsetD, layoutD};
                 } else {
                     epilogueParams = EpilogueParams{
-                                            reinterpret_cast<__gm__ ElementC *>(kMovingForward ? params.ptrC : params.ptrWorkspace) + gmGroupOffsetC,
+                                            gmCBase + gmGroupOffsetC,
                                             gmScalePtr + gmGroupOffsetScale,
                                             layoutScale,
                                             params.ptrPerTokenScale + gmGroupOffsetPerTokenScale,
