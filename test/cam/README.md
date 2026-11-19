@@ -1,10 +1,119 @@
 <!--
 SPDX-License-Identifier: MIT
 Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
-Description: Routed async CAM operator test guide.
+Description: CAM operator test coverage and run guide.
 -->
 
-# Routed async CAM operator tests
+# CAM operator tests
+
+Run the commands in this guide from the repository root.
+
+| Operators | Test entry | Coverage and environment |
+| --- | --- | --- |
+| `moe_dispatch_send_async`, `moe_dispatch_recv_async`, `moe_combine_send_async`, `moe_combine_recv_async` | [Routed async tests](#routed-async-cam-operator-tests) | Ascend 910C precision and timing. Includes balanced/sparse routes, FP16/BF16 and optional INT8 dispatch quantization. |
+| `cam_deepep_dispatch_send`, `cam_deepep_dispatch_recv`, `cam_deepep_combine_send`, `cam_deepep_combine_recv` | [DeepEP AFD benchmark](#deepep-afd-benchmark-ascend-950) | Ascend 950 BF16 correctness and communication benchmark against official DeepEP-Ascend EP. |
+| The four `cam_deepep_*` operators | [DeepEP Meta tests](ut/cam_deepep/) | PyTorch schema, shape and dtype checks through the installed CAM wheel. No NPU executes the kernels. |
+| `a2e`, `e2a` | [A2E/E2A device test](#a2e-and-e2a-ascend-a3) | Ascend A3, BF16 eager mode, 16 HCCL ranks (8 MoE + 8 Attention). |
+
+## A2E and E2A (Ascend A3)
+
+The [eager device test](ut/a2e_e2a/test_a2e_e2a.py) checks the expert-side
+output shape and the Attention-side round trip. Run it in a CAM multiprocess
+UT environment with 16 ranks, torchair, the installed CAM wheel and OPP, and
+the `test/cam/ut/util` fixtures imported by the test. Those fixtures must be
+available before pytest can collect the case.
+
+## DeepEP AFD benchmark (Ascend 950)
+
+The [benchmark driver](benchmark_deepep_afd.py) runs both backends on the same
+logical BF16 inputs and routes. CAM measures the four asynchronous operators
+separately. The official backend measures the complete EP dispatch and combine
+calls. The CPU tests check route counts, byte accounting, report compatibility,
+source verification, and ACK/control diagnostics. The route mapping and golden
+tensor tests use CPU PyTorch.
+
+```bash
+# No Ascend software or device needed.
+python3 test/cam/benchmark_deepep_afd.py --dry-run --num-processes 4
+python3 test/cam/benchmark_deepep_afd.py --dry-run --num-processes 8
+python3 -m pytest -o addopts= test/cam/ut/cam_deepep/test_deepep_benchmark*.py
+
+# Requires an installed CAM wheel. Uses the PyTorch Meta device.
+python3 -m pytest -o addopts= test/cam/ut/cam_deepep/test_cam_deepep_meta_*.py
+```
+
+For device runs, use matching CANN, torch and torch-npu on Ascend 950.
+Build and install the CAM wheel and OPP for the four DeepEP operators using
+the [CAM build and installation guide](../../src/cam/README.md):
+
+```bash
+./build/cam/build.sh -c ascend950 -a \
+  "cam_deepep_dispatch_send;cam_deepep_dispatch_recv;cam_deepep_combine_send;cam_deepep_combine_recv"
+```
+
+Set `OWNER_ROOT` to the built companion DeepEP-Ascend checkout at `25b5153e`
+and `OFFICIAL_ROOT` to the built official checkout at `4dfccac4`. Both use
+DeepJIT `65f51395`. The driver uses `python3` to spawn the workers locally.
+Use 2, 4 or 8 NPUs for 1A1F, 2A2F or 4A4F, with the Attention ranks first.
+
+To verify an installation against a particular build, fingerprint the vendor
+directory from that build's run package, then pass the resulting SHA-256 to
+the CAM run. Record the source commit alongside the fingerprint.
+
+```bash
+python3 test/cam/benchmark_deepep_afd.py --fingerprint-cam-opp "$BUILT_CAM_VENDOR_DIR" > built-opp.json
+OPP_SHA=$(python3 -c 'import json; print(json.load(open("built-opp.json"))["sha256"])')
+```
+
+```bash
+# Check four reuse rounds, route/weight correctness and ACKs before timing.
+python3 test/cam/benchmark_deepep_afd.py --backend cam --deepep-root "$OWNER_ROOT" \
+  --expected-cam-opp-sha256 "$OPP_SHA" \
+  --num-processes 4 --num-ai-cores 1 --num-tokens 64 --hidden 7168 \
+  --num-topk 2 --num-experts 8 --cache-mode warm --correctness-rounds 4 \
+  --skip-perf-test --diagnostics-dir output/afd-smoke --output output/afd-smoke.json
+
+# Run each backend separately using the same shape, placement and timing options.
+# Remove --skip-perf-test and use a new output path after the shape passes.
+python3 test/cam/benchmark_deepep_afd.py --backend official --deepep-root "$OFFICIAL_ROOT" \
+  --num-processes 4 --num-ai-cores 32 --num-tokens 4096 --hidden 7168 \
+  --num-topk 6 --num-experts 256 --skip-perf-test --output output/ep-2a2f-check.json
+python3 test/cam/benchmark_deepep_afd.py --backend cam --deepep-root "$OWNER_ROOT" \
+  --expected-cam-opp-sha256 "$OPP_SHA" \
+  --num-processes 4 --num-ai-cores 32 --num-tokens 4096 --hidden 7168 \
+  --num-topk 6 --num-experts 256 --skip-perf-test --output output/afd-2a2f-check.json
+
+# Compare successful timed reports with matching workloads and environments.
+python3 test/cam/benchmark_deepep_afd.py --compare output/ep-2a2f.json output/afd-2a2f.json
+```
+
+For 4A4F, pass `--num-processes 8`. Each Attention rank still has 4096 tokens.
+Use `--cam-root` and `--cam-reference` when testing another checkout's installed
+CAM build. K=6/E=256 is a target workload. CAM CombineSend has reported device
+error 507035 on that shape, so use a passing shape for timed comparisons.
+The driver reports latency comparisons and keeps each backend's bandwidth in
+its own byte accounting, excluding allocation padding from the numerator.
+
+After the first dispatch, each CAM rank resolves the four ACLNN entry points
+and their workspace queries in the already mapped operator library. The
+rank report records the resolved OPP root, mapped API path and SHA-256 values
+for the API, tiling libraries, kernel objects and descriptors. The object
+list identifies the installed kernel variants under that root. A CANN loader
+trace is needed to distinguish individual variants when several are present.
+Without an expected digest, the report identifies the observed package and
+leaves the match to the intended build unspecified. Timed runs and automatic
+comparison require a consistent observed package across all ranks.
+
+CAM dispatch includes a barrier between DS and DR. Its device envelope is
+`max_A(DS) + max_F(DR)`. The combine envelope is `max(max_F(CS), max_A(CR))`.
+The official backend uses the maximum complete EP event for each phase.
+Report these staged envelopes alongside the harness times. Qualifying the
+32-AIV target requires repeated correctness rounds and unprofiled latency
+samples at **both** 2A2F and 4A4F with the same workload and the recorded build.
+Track those device runs and their raw timing samples in
+[the 32-AIV target-workload issue](https://gitcode.com/openeuler/umdk/issues/1110).
+
+## Routed async CAM operator tests
 
 These scripts test UMDK's four compact routed-only asynchronous communication
 operators in `torch.ops.umdk_cam_op_lib`:
