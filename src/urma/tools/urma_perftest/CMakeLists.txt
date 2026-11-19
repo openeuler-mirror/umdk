@@ -20,6 +20,7 @@ target_include_directories(urma_perftest
     PRIVATE
         ${CMAKE_SOURCE_DIR}/urma/lib/urma/core/include
         ${CMAKE_SOURCE_DIR}/urma/lib/urma/bond/include
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include
         ${CMAKE_SOURCE_DIR}/urma/common/include
 )
 
