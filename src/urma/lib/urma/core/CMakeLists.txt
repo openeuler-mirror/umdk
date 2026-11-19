@@ -70,7 +70,9 @@ install(FILES
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     install(FILES
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include/urma_du.h
         ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include/urma_du_hw.h
+        ${CMAKE_SOURCE_DIR}/urma/lib/urma/core_ext/include/urma_du_poll_inline.h
         DESTINATION /usr/include/ub/umdk/urma
     )
 endif()
