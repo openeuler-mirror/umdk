@@ -1151,6 +1151,7 @@ public:
                                                                      INT32_COUNT_PER_BLOCK),
                                                static_cast<uint16_t>(SPLIT_BLOCK_DATA_INTS /
                                                                      INT32_COUNT_PER_BLOCK));
+        AscendC::PipeBarrier<PIPE_V>();
         AscendC::Copy(dstInt32, srcInt32, static_cast<uint64_t>(SPLIT_COPY_HEAD_INTS),
                       static_cast<uint8_t>(blockCntPerToken), spreadParams);
         AscendC::Copy(dstInt32[SPLIT_COPY_HEAD_INTS], srcInt32[SPLIT_COPY_HEAD_INTS],
@@ -1278,10 +1279,8 @@ public:
         // Fill the 32B tails once, up front. Nothing below ever writes them again -- the spread only
         // touches the 480B payload of each block -- so every block carries this launch's flag value
         // for free, and a flag becomes visible to a reader exactly when its block's payload does.
-        // The value alternates per launch, so a stale tail from the previous run can never equal this
-        // launch's target sum.
         for (int i = 0; i < outBufferNum; ++i) {
-            AscendC::Duplicate<float>(yInt8Tensor[i].template ReinterpretCast<float>(), blockFlag,
+            AscendC::Duplicate<float>(yInt8Tensor[i].template ReinterpretCast<float>(), 1.0f,
                                       hCommuSize / sizeof(float));
         }
         AscendC::Duplicate<int32_t>(combineSentinel, CombineDataAsFlag::SENTINEL_FLAG,
@@ -1358,12 +1357,8 @@ public:
                 AscendC::WaitFlag<AscendC::HardEvent::MTE3_V>(outEventId);
                 QuantToken(xInTensor[index], moeSmoothScaleTensor[index], yDenseTensor, outEventId);
                 AscendC::SetFlag<AscendC::HardEvent::V_MTE2>(eventId);
-                // Both QuantToken and the spread run on the vector pipe, so they are already ordered
-                // against each other, and the same in-order issue is what lets the shared dense buffer
-                // be reused by the next token: the barrier at the head of QuantToken separates this
-                // spread's read from the next iteration's write. The V->MTE3 release must come after
-                // the spread, not after QuantToken: set earlier it would let the store read a
-                // half-written block buffer.
+                // SpreadTokenToBlocks waits for the quantized dense payload; the next QuantToken's
+                // vector barrier protects reuse of that buffer. Release V->MTE3 after the spread.
                 SpreadTokenToBlocks(yInt8Tensor[outIndex], yDenseTensor);
                 AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(outEventId);
 
@@ -1917,8 +1912,7 @@ public:
     // Waits until every 512B block of one token has landed, by summing that token's block tails.
     // The tails were filled at the sender before any payload was written and are never rewritten, so
     // a tail becomes visible exactly when its own block's payload does -- the flag and the data it
-    // guards travel in the same 512B unit. The value alternates per launch, so a stale tail left by
-    // the previous run sums to the other target and can never be mistaken for this one.
+    // guards travel in the same 512B unit. Consumed tails are cleared after all experts are received.
     CATLASS_DEVICE
     bool TokenBlocksReady(GM_ADDR tokAddr, AscendC::LocalTensor<float> &flagBuf,
                           AscendC::LocalTensor<float> &gatherBuf,
@@ -2033,6 +2027,63 @@ public:
             }
         }
         return progressed;
+    }
+
+    // Reconstruct the same rotating assignment for receiving and for the later flag cleanup.
+    CATLASS_DEVICE
+    void GetRecvAssignment(uint32_t expertStart, uint32_t expertEnd, uint32_t startCoreIdx,
+                           uint32_t &startTokenIdx, uint32_t &coreTokenCount)
+    {
+        uint32_t currentM = expertEnd - expertStart;
+        uint32_t logicalCoreIdx = (recvCoreIdx + recvCoreNum - startCoreIdx) % recvCoreNum;
+        uint32_t tokensPerCore = currentM / recvCoreNum;
+        uint32_t remainder = currentM % recvCoreNum;
+        startTokenIdx = expertStart + logicalCoreIdx * tokensPerCore +
+                        (logicalCoreIdx < remainder ? logicalCoreIdx : remainder);
+        coreTokenCount = tokensPerCore + (logicalCoreIdx < remainder ? 1 : 0);
+    }
+
+    // Each core clears only the tokens it received, after its receive loop for all experts has ended.
+    CATLASS_DEVICE
+    void ClearRecvTokenFlags(AscendC::LocalTensor<int32_t> &tokenPrefix, int64_t ubOffset)
+    {
+        int64_t flagOffset = ubOffset + CEIL_UP(epRankSize * sizeof(int32_t)) +
+                             BUFFER_NUM * CEIL_UP(blockCntPerToken * SPLIT_BLOCK_DATA_SIZE);
+        auto zeros = resource.ubBuf.template GetBufferByByte<float>(flagOffset);
+        AscendC::Duplicate<float>(zeros, 0.0f, blockCntPerToken * UB_BLOCK_SIZE / sizeof(float));
+        AscendC::SetFlag<AscendC::HardEvent::V_MTE3>(0);
+        AscendC::WaitFlag<AscendC::HardEvent::V_MTE3>(0);
+        AscendC::DataCopyParams clearParams{static_cast<uint16_t>(blockCntPerToken), 1U, 0U,
+                                             static_cast<uint16_t>(SPLIT_BLOCK_DATA_SIZE / UB_BLOCK_SIZE)};
+        AscendC::GlobalTensor<float> flags;
+        uint32_t expertStart = 0;
+        uint32_t startCoreIdx = 0;
+        for (uint32_t groupId = 0; groupId < localExpertNum; ++groupId) {
+            uint32_t expertEnd = static_cast<uint32_t>(tokenPrefix.GetValue((groupId + 1) * epRankSize - 1));
+            uint32_t startTokenIdx;
+            uint32_t coreTokenCount;
+            GetRecvAssignment(expertStart, expertEnd, startCoreIdx, startTokenIdx, coreTokenCount);
+            uint32_t endTokenIdx = startTokenIdx + coreTokenCount;
+            for (uint32_t rank = 0; rank < epRankSize; ++rank) {
+                uint32_t index = groupId * epRankSize + rank;
+                uint32_t bucketBegin = index == 0 ? 0 : static_cast<uint32_t>(tokenPrefix.GetValue(index - 1));
+                uint32_t bucketEnd = static_cast<uint32_t>(tokenPrefix.GetValue(index));
+                uint32_t begin = startTokenIdx > bucketBegin ? startTokenIdx : bucketBegin;
+                uint32_t end = endTokenIdx < bucketEnd ? endTokenIdx : bucketEnd;
+                if (begin >= end) {
+                    continue;
+                }
+                uint32_t winOffset = rank * moeExpertNumPerRank + groupId;
+                GM_ADDR wAddr = GetWindAddrByRankId(epRankId) + winOffset * expertPerSizeOnWin;
+                for (uint32_t j = begin - bucketBegin; j < end - bucketBegin; ++j) {
+                    flags.SetGlobalBuffer((__gm__ float *)(wAddr + j * hCommuSize + SPLIT_BLOCK_DATA_SIZE));
+                    AscendC::DataCopy(flags, zeros, clearParams);
+                }
+            }
+            startCoreIdx = (startCoreIdx + expertEnd - expertStart) % recvCoreNum;
+            expertStart = expertEnd;
+        }
+        AscendC::PipeBarrier<PIPE_MTE3>();
     }
 
     CATLASS_DEVICE
@@ -2199,12 +2250,9 @@ public:
                 expertEnd = tokenPrefix.GetValue((groupId + 1) * epRankSize - 1);
             }
             uint32_t currentM = expertEnd - expertStart;
-            uint32_t logicalCoreIdx = (recvCoreIdx + recvCoreNum - startCoreIdx) % recvCoreNum;
-            uint32_t tokensPerCore = currentM / recvCoreNum;
-            uint32_t remainder = currentM % recvCoreNum;
-            uint32_t startTokenIdx = expertStart + logicalCoreIdx * tokensPerCore +
-                                    (logicalCoreIdx < remainder ? logicalCoreIdx : remainder);
-            uint32_t coreTokenCount = tokensPerCore + (logicalCoreIdx < remainder ? 1 : 0);
+            uint32_t startTokenIdx;
+            uint32_t coreTokenCount;
+            GetRecvAssignment(expertStart, expertEnd, startCoreIdx, startTokenIdx, coreTokenCount);
             if (coreTokenCount > 0) {
                 RecvToken(gmX1, gmX1Scale, groupId, startTokenIdx, coreTokenCount, tokenPrefix, subUbOffset);
             }
@@ -2214,6 +2262,7 @@ public:
             startCoreIdx = (startCoreIdx + currentM) % recvCoreNum;
             expertStart = expertEnd;
         }
+        ClearRecvTokenFlags(tokenPrefix, subUbOffset);
         if (recvCoreIdx == 0) {
             PublishEpSendCount(gmEpSendCount, tokenPrefix);
         }
@@ -2404,13 +2453,9 @@ public:
         state = LoadStateSlotByDma(selfStatusTensor, aivIdx * SELF_STATE_SLOT_INTS);
         sumTarget = state == 0 ? 1.0f : 0.0f;
         tokenFlag = state == 0 ? TOKEN_FLAG_1 : TOKEN_FLAG_2;
-        // The 512B-block flags alternate on the same schedule. A tail left over from the previous
-        // launch carries the other value, so a partially filled token sums strictly between the two
-        // targets and can never be read as complete.
-        blockFlag = state == 0 ? 1.0f : 2.0f;
         // aicore forbids an explicit unsigned-to-float cast. Multiplying by a float constant does the
         // conversion implicitly, which is the same reason the reference implementation writes it this way.
-        blockFlagSum = blockFlag * (1.0f * static_cast<int32_t>(blockCntPerToken));
+        blockFlagSum = 1.0f * static_cast<int32_t>(blockCntPerToken);
         StoreStateSlotByDma(selfStatusTensor, aivIdx * SELF_STATE_SLOT_INTS, state == 0 ? 0x3F800000 : 0);
     }
 
@@ -2682,8 +2727,7 @@ private:
 
     // state info
     int32_t tokenFlag{0};    // token flag
-    float blockFlag{0.0f};   // this launch's 512B-block flag value: 1.0f or 2.0f, alternating
-    float blockFlagSum{0.0f};  // blockCntPerToken * blockFlag: one token's fully-arrived sum
+    float blockFlagSum{0.0f};  // blockCntPerToken: one token's fully-arrived sum
     int32_t vToCFlag{0};     // cv flag, decided by cvDataState
     int32_t dataState{0};    // data space state
     int32_t cvDataState{0};  // cv flag state
