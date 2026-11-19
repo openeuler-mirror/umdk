@@ -30,10 +30,12 @@ namespace GMM2 {
     constexpr int64_t INT32_COUNT_PER_BLOCK = 32 / sizeof(int32_t);
     // gmm2-moving-forward quant-ready slots; must match the constants in
     // grouped_matmul_slice_m_per_token_dequant_swiglu_quant_multistage_workspace.h.
-    // 1011KB = right after the 18.75KB (25-row) swiglu-done table at 992KB, rounded up to
-    // the 512B window granularity; the (localExpertNum + 1) 128B slots must fit in the
-    // remaining 13KB of the 1MB windowsExp (host-side guard).
-    constexpr uint64_t NOTIFY_GMM2_SOFT_SYNC_OFFSET = 1011 * 1024;
+    // 802KB = right after the 48-slot epilogue-done announce array at 800KB (it ends at
+    // 801.5KB, already on the 512B window granularity), inside the [792KB, 900KB) band
+    // both dataState halves leave untouched (see ANNOUNCE_EPILOGUE_OFFSET). The
+    // (localExpertNum + 1) 128B slots then have 98KB - 784 slots - so the per-rank
+    // expert cap is back to the GROUP_TOKEN_NUM region's 255 (host-side guard).
+    constexpr uint64_t NOTIFY_GMM2_SOFT_SYNC_OFFSET = 802 * 1024;
     constexpr uint32_t NOTIFY_GMM2_SLOT_STRIDE = 32;  // int32 units, 128B per slot (one spinner per DCCI sector)
     // gmm2-moving-forward currentM table: one 768B row per expert group = 24 private 32B
     // consumer cells, no header. It lives in the EXPANDED groupList workspace region:
@@ -52,6 +54,14 @@ namespace GMM2 {
     constexpr uint32_t NOTIFY_TABLE_CELLS = 24;
     constexpr uint32_t NOTIFY_TABLE_ROW_STRIDE = 192;  // int32 units: 24 cells x 32B per row
     constexpr uint32_t NOTIFY_PUBLISH_ROW_INDEX = 24;
+    // Shared 32B polling scratch (CheckSyncFlag / GetGroupMAiv / WaitRowPublished), one live
+    // copy at a time, above every ubBuf region this kernel lays out from offset 0: the
+    // BlockEpilogue's static_assert bounds its single-stage footprint (~120KB at the 32x256
+    // tile) and LateStateCleanup's staging ends before 36KB. 183KB keeps the 32B slab inside
+    // the 184KB UB budget the gmm1 file sizes its buffers against (the physical UB is 192KB)
+    // - the old 184KB base sat exactly on that budget line and only worked because of the
+    // 8KB reserve.
+    constexpr int64_t TOP_UB_SCRATCH_OFFSET = 183 * 1024;
     // gmm2-moving-forward is active only in deep-fuse mode.
     constexpr bool MOVING_FORWARD = Cam::GMM2_MOVING_FORWARD;
     // gmm1 status-window regions touched by LateStateCleanup; must match the constants in
@@ -264,7 +274,7 @@ public:
     uint32_t GetGroupMAiv(uint32_t groupIdx, uint32_t colIdx, __gm__ int32_t *groupMBase)
     {
         AscendC::LocalTensor<int32_t> mCellTensor =
-            resource.ubBuf.template GetBufferByByte<int32_t>(184 * 1024);
+            resource.ubBuf.template GetBufferByByte<int32_t>(GMM2::TOP_UB_SCRATCH_OFFSET);
         AscendC::GlobalTensor<int32_t> mTensor;
         mTensor.SetGlobalBuffer(groupMBase +
             static_cast<int64_t>(groupIdx) * GMM2::GMM2_GROUP_M_ROW_STRIDE +
@@ -301,9 +311,10 @@ public:
             (__gm__ float *)(syncGmAddr + GMM2::SEND_DONE_TABLE_OFFSET) +
             static_cast<uint64_t>(GMM2::NOTIFY_PUBLISH_ROW_INDEX) * GMM2::NOTIFY_TABLE_ROW_STRIDE +
             static_cast<uint64_t>(consumerIdx) * GMM2::INT32_COUNT_PER_BLOCK);
-        // GetGroupMAiv's cell scratch at 184KB, reused after this wait returns.
+        // GetGroupMAiv's cell scratch (GMM2::TOP_UB_SCRATCH_OFFSET), reused after this
+        // wait returns.
         AscendC::LocalTensor<float> flagTensor =
-            resource.ubBuf.template GetBufferByByte<float>(184 * 1024);
+            resource.ubBuf.template GetBufferByByte<float>(GMM2::TOP_UB_SCRATCH_OFFSET);
         float target = static_cast<float>(static_cast<int32_t>(groupIdx) + 2);
         bool rowPublished = false;
         while (!rowPublished) {
@@ -498,7 +509,10 @@ public:
         // this launch's counts is done (see the transitivity note above). The counts are
         // not parity-encoded, so this clean is load-bearing: a launch that dies mid-way
         // leaves stale counts behind and the NEXT launch would read them as ready - on
-        // any abnormal termination, restart the process.
+        // any abnormal termination, restart the process. The copy is one flat read off the
+        // CLEAN_CHUNK_INTS staging, so its size caps the slot count at 256 ints-wise
+        // (256 slots * 32 ints = 8192) - exactly the MAX_DEEP_FUSE_EXPERT_PER_RANK = 255
+        // bound; raising that limit needs a chunked copy like the recv-flag regions.
         if constexpr (GMM2::MOVING_FORWARD && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE)) {
             const uint32_t notifySlotCount =
                 localExpertNum + ((EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) ? 1 : 0);
@@ -648,7 +662,14 @@ public:
         int64_t gmGroupOffsetA = 0;
         int64_t gmGroupOffsetB = 0;
         int64_t gmGroupOffsetC = 0;
-        constexpr bool kMovingForward = GMM2::MOVING_FORWARD && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0);
+        // The gmm2C region is allocated iff moeExpertNumPerRank != 1 (SetWorkSpace), and
+        // params.problemCount IS that value, so gate the dedicated C buffer on the same
+        // condition the host allocates it under: if this variant ever ran with a single
+        // routed expert, gmGmm2C would sit at workspace offset 0 and the C frontier would
+        // overwrite the token buffers there - this falls back to the old swap-region C
+        // location instead.
+        const bool kMovingForward =
+            GMM2::MOVING_FORWARD && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0) && params.problemCount != 1;
 
         AscendC::GlobalTensor<ElementC> gmC;
         // Moving forward: C lives in its own buffer - written while the gmm1 quant may still be
@@ -680,7 +701,7 @@ public:
                 // Deep fuse: the group size comes from the currentM table (this AIC's
                 // private 32B cell; written by gmm1's LAST send core before its group
                 // announce). groupList is only written by the late cleanup, after gmm2.
-                if constexpr (kMovingForward) {
+                if (kMovingForward) {
                     // Wait until every gmm1 quant worker has announced this group's quant output
                     // (x2/x2Scale ready; also implies the group's gmm1 MMADs are done, so the
                     // x1/x1Scale rows this quant output overwrites were consumed).
@@ -740,7 +761,7 @@ public:
         }
         
         if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
-            if constexpr (kMovingForward) {
+            if (kMovingForward) {
                 // The shared C region sits at the front of the gmm2 C buffer and overlaps the
                 // early routed swiglu rows, so the shared MMADs must wait for the shared quant
                 // (all routed quants were already waited for in the loop above).
@@ -824,7 +845,10 @@ public:
             }
             BlockScheduler blockScheduler;
             BlockEpilogue blockEpilogue(resource, combiner->GetCalcInfo());
-            constexpr bool kMovingForward = GMM2::MOVING_FORWARD && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0);
+            // Same gate as the AIC path above: the gmm2C region exists iff
+            // moeExpertNumPerRank != 1, and params.problemCount is that value.
+            const bool kMovingForward =
+                GMM2::MOVING_FORWARD && ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) != 0) && params.problemCount != 1;
 
             int64_t gmGroupOffsetC = 0;
             if constexpr (EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT) {
@@ -909,7 +933,7 @@ public:
                     GemmCoord blockCoordMNK = blockScheduler.GetBlockCoord(loopIdx);
                     GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
                     CheckSyncFlag(syncGmAddr + GMM2::SOFT_SYNC_OFFSET, static_cast<uint8_t>(coreIdx), target,
-                                      resource.ubBuf.template GetBufferByByte<int32_t>(184 * 1024));
+                                      resource.ubBuf.template GetBufferByByte<int32_t>(GMM2::TOP_UB_SCRATCH_OFFSET));
                     target += 1;
                     blockEpilogue(gmGroupOffsetD, groupIdx, blockShapeMNK, blockCoordMNK, actualBlockShapeMNK);
                 }
@@ -961,7 +985,7 @@ public:
                         GemmCoord blockCoordMNK = blockScheduler.GetBlockCoord(loopIdx);
                         GemmCoord actualBlockShapeMNK = blockScheduler.GetActualBlockShape(blockCoordMNK);
                         CheckSyncFlag(syncGmAddr + GMM2::SOFT_SYNC_OFFSET, static_cast<uint8_t>(coreIdx), target,
-                                      resource.ubBuf.template GetBufferByByte<int32_t>(184 * 1024));
+                                      resource.ubBuf.template GetBufferByByte<int32_t>(GMM2::TOP_UB_SCRATCH_OFFSET));
                         target += 1;
                         blockEpilogue(0, UINT32_MAX, blockShapeMNK, blockCoordMNK, actualBlockShapeMNK);
                     }

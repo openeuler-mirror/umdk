@@ -43,6 +43,8 @@ constexpr uint16_t RECV_SYNC_EVENT_ID = 7;
 // is fixed, not dataState-shifted: both halves of the window leave [792KB, 900KB) untouched,
 // so the array survives launch-to-launch without colliding with either band. It is never
 // cleaned - the poll relies on the per-launch flag parity instead (see WaitEpiloguesDone).
+// The band's other fixed occupant is the gmm2 quant-ready notify slots at 802KB (right after
+// this array, see NOTIFY_GMM2_SOFT_SYNC_OFFSET in the gmm1/gmm2 kernels).
 constexpr uint64_t ANNOUNCE_EPILOGUE_OFFSET = 800 * 1024;
 constexpr uint32_t ANNOUNCE_SLOT_FLOATS = 8;  // one 32B DataCopy block per slot
 
@@ -332,7 +334,7 @@ __aicore__ inline void CamMoeDistributeCombine<TemplateMC2TypeFunc>::Init(
     // fold for a token are independent of every other token, so there is no reason to keep half the
     // cores idle waiting on a batch-wide signal. The non-sentinel paths still hand the work to one
     // sub-block (see gmm2), so they keep the old count and index.
-    announceCount_ = tilingData->fusedDeepMoeInfo.aivNum;
+    announceCount_ = AscendC::GetBlockNum() * AscendC::GetSubBlockNum();
     if constexpr (kUseCombineSentinel && !(EXEC_FLAG & EXEC_FLAG_SHARED_EXPERT)) {
         // gmm2 moving forward: the LAST AIV is freed from the fold to run the gmm1 late
         // cleanup while the others fold (see the gmm2 kernel's AIV path). The fold's token

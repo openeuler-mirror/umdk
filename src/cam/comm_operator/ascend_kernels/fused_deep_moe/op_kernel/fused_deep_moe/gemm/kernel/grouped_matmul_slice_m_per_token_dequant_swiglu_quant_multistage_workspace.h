@@ -80,11 +80,14 @@ constexpr uint32_t NOTIFY_EVENT_SEQ_ROUTED_GROUP_BASE = 2;
 constexpr int32_t V_MTE3_STAGING_DRAIN_EVENT_ID = 4;
 // gmm2-moving-forward notify slots: one per expert group (+1 for the shared expert), the
 // int32 counter lives at field 0 of each 128B slot. Must match the constants in
-// grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h. 1011KB = right after
-// the 18.75KB (25-row) swiglu-done table at 992KB, rounded up to the 512B window
-// granularity; the (localExpertNum + 1) 128B slots must fit in the remaining 13KB of
-// the 1MB windowsExp (host-side guard: localExpertNum <= 103).
-constexpr uint64_t NOTIFY_GMM2_SOFT_SYNC_OFFSET = 1011 * 1024;
+// grouped_matmul_slice_m_per_token_dequant_multistage_workspace.h. 802KB = right after
+// the 48-slot epilogue-done announce array at 800KB (it ends at 801.5KB, already on the
+// 512B window granularity), inside the [792KB, 900KB) band both dataState halves leave
+// untouched (see ANNOUNCE_EPILOGUE_OFFSET in cam_moe_distribute_combine.h). The
+// (localExpertNum + 1) 128B slots then have 98KB - 784 slots - so the per-rank expert
+// cap is back to the GROUP_TOKEN_NUM region's 255 (host-side guard:
+// localExpertNum <= 255).
+constexpr uint64_t NOTIFY_GMM2_SOFT_SYNC_OFFSET = 802 * 1024;
 constexpr uint32_t NOTIFY_GMM2_SLOT_STRIDE = 32;  // int32 units, 128B per slot (one spinner per DCCI sector)
 // gmm2-moving-forward currentM table: one 768B row per expert group = 24 private 32B
 // consumer cells (columns = 1C2V groups: the AIC, its two AIVs and the matching quant
@@ -2943,9 +2946,12 @@ public:
         // UB scratch for the partitioned swiglu-done wait (WaitSendCoresDone), ~2.5KB: above
         // the BlockQuant's worst-case footprint (~176.1KB), below the notify scratch.
         int64_t quantWaitUbOffset = 177 * 1024;
-        // Scratch for the gmm2 quant-done notifications: above any BlockQuant (the CalQuantRow
-        // budget bounds a BlockQuant at ~176KB from offset 0) and below the 192KB UB limit.
-        int64_t gmm2NotifyUbOffset = 184 * 1024;
+        // Scratch for the gmm2 quant-done notifications (32B): above the quant-wait scratch
+        // at 177KB (it ends at ~179.5KB; a BlockQuant itself is bounded at ~176KB from
+        // offset 0 by the CalQuantRow budget) and inside this file's 184KB UB budget - the
+        // old 184KB base sat exactly on the budget line and only worked because the
+        // physical UB is 192KB.
+        int64_t gmm2NotifyUbOffset = 183 * 1024;
 
         RecvQuantSharedExpert(params, quantStartCoreIdx, quantWaitUbOffset, gmm2NotifyUbOffset);
 

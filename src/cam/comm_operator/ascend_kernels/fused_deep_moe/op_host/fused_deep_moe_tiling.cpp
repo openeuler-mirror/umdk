@@ -71,13 +71,15 @@ constexpr uint32_t MAX_BATCH_SIZE = 256;
 constexpr uint32_t MAX_MOE_EXERT_NUM = 1024;
 // Deep fuse stores per-expert 128B slots in the 1MB windowsExp status window. Two regions
 // bound the local expert count: GROUP_TOKEN_NUM at 932KB must fit before the 964KB
-// soft-sync region (cap 255), and the gmm2 quant-ready slots at 1011KB (right after the
-// 18.75KB, 25-row swiglu-done table at 992KB, rounded up to the 512B window granularity)
-// must fit in the remaining 13KB, i.e. (L + 1) * 128B <= 13KB.
-// The latter is tighter: L <= 103 (the +1 slot belongs to the shared expert). The gmm2
-// currentM table lives in the (dynamically sized) groupList workspace region and imposes
-// no window bound.
-constexpr uint32_t MAX_DEEP_FUSE_EXPERT_PER_RANK = 103;
+// soft-sync region, i.e. (L + 1) * 128B <= 32KB (cap 255), and the gmm2 quant-ready slots
+// at 802KB (right after the 48-slot epilogue-done announce array at 800KB, inside the
+// [792KB, 900KB) band both dataState halves leave untouched) must fit before the 900KB
+// state cells, i.e. (L + 1) * 128B <= 98KB (cap 783). The former is tighter: L <= 255
+// (the +1 slot belongs to the shared expert). The same 255 also keeps the LateStateCleanup
+// zero-staging copies (256 slots * 32 ints) exactly within the 8192-int staging capacity.
+// The gmm2 currentM table lives in the (dynamically sized) groupList workspace region and
+// imposes no window bound.
+constexpr uint32_t MAX_DEEP_FUSE_EXPERT_PER_RANK = 255;
 constexpr uint32_t SUPPORT_TOP_K = 12;
 constexpr uint32_t ONE_DIMS = 1;
 constexpr uint32_t TWO_DIMS = 2;
