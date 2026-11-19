@@ -133,11 +133,15 @@ cc_library(
     hdrs = glob([
         "lib/urma/core/include/**/*.h",
         "lib/urma/core/*.h",
-    ]),
+    ]) + select({
+        ":cpu_aarch64": glob(["lib/urma/core_ext/include/**/*.h"]),
+        "//conditions:default": [],
+    }),
     includes = [
         "common/include",
         "lib/urma/core",
         "lib/urma/core/include",
+        "lib/urma/core_ext/include",
     ],
     deps = [":urma_common_headers"],
 )
