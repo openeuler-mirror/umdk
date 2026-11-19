@@ -823,6 +823,7 @@ static uint64_t udma_jetty_opt[] = {
 	URMA_JETTY_BIND_JTG,
 	URMA_JETTY_USER_CTX,
 	URMA_JETTY_FULL_CTX,
+	URMA_JFS_DU_INFO,
 };
 
 static struct udma_u_jetty_opt_info opt_info[] = {
@@ -852,6 +853,7 @@ static struct udma_u_jetty_opt_info opt_info[] = {
 	{sizeof(uint64_t), PERM_R | PERM_W, 0, JETTY_MODE},
 	{sizeof(uint64_t), PERM_R | PERM_W, JETTY_IGNORE, JETTY_MODE},
 	{UDMA_JETTY_CTX_SIZE, PERM_R, 0, JETTY_MODE},
+	{sizeof(urma_jfs_du_info_t), PERM_R, JFS_IGNORE | JETTY_IGNORE, JFS_MODE | JETTY_MODE},
 };
 
 urma_status_t udma_u_verify_jetty_opt(uint64_t opt, void *buf, uint32_t len,
@@ -987,6 +989,25 @@ void udma_u_get_jetty_field(struct udma_u_jetty_queue *sq, uint64_t opt, void *b
 	case URMA_JFS_PI_TYPE:
 		*((uint8_t *)buf) = sq->pi_type;
 		break;
+	case URMA_JFS_DU_INFO: {
+		urma_jfs_du_info_t *info = (urma_jfs_du_info_t *)buf;
+
+		info->sqe_base_addr = (uint64_t)(uintptr_t)sq->qbuf;
+		info->db_addr = (uint64_t)(uintptr_t)(sq->dwqe_addr + UDMA_DOORBELL_OFFSET);
+		info->dwqe_addr = (uint64_t)(uintptr_t)sq->dwqe_addr;
+		info->rc_tjetty = (uint64_t)(uintptr_t)(sq->tjetty != NULL ?
+			&sq->tjetty->urma_tjetty : NULL);
+		info->qbuf_size = sq->qbuf_size;
+		info->baseblk_shift = sq->baseblk_shift;
+		info->baseblk_cnt = sq->baseblk_cnt;
+		info->max_inline_size = sq->max_inline_size;
+		info->max_sge_num = sq->max_sge_num;
+		info->pi = sq->pi;
+		info->ci = sq->ci;
+		info->dwqe_enable = sq->ctx->dwqe_enable;
+		info->st64b_en = sq->ctx->st64b_en;
+		break;
+	}
 	default:
 		break;
 	}
@@ -1072,6 +1093,11 @@ urma_status_t udma_u_get_jetty_opt(urma_jetty_t *jetty, uint64_t opt, void *buf,
 	urma_ret = udma_u_verify_jetty_opt(opt, buf, len, JETTY_MODE, PERM_R);
 	if (urma_ret && urma_ret != URMA_EEXIST)
 		return urma_ret;
+
+	if (opt == URMA_JFS_DU_INFO && udma_jetty->sq.is_wqe_lock_buf_jetty) {
+		UDMA_LOG_ERR("direct urma info is not supported on wqe lock buffer jetty\n");
+		return URMA_EINVAL;
+	}
 
 	if (urma_ret != URMA_EEXIST) {
 		ret = urma_cmd_get_jetty_opt(jetty, opt, buf, len, &udata);
