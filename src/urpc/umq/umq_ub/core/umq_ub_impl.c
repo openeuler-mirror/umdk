@@ -2369,7 +2369,7 @@ int umq_ub_unbind_impl(uint64_t umqh)
     urma_status_t status;
     if (queue->flow_control != NULL) {
         urma_target_jetty_t *tjetty = bind_ctx->tjetty[UB_QUEUE_JETTY_FLOW_CONTROL];
-        UMQ_VLOG_INFO(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind flowcontrol jetty\n",
+        UMQ_VLOG_DEBUG(VLOG_UMQ, "UMQ(ID:%u), remote eid: " EID_FMT ", remote jetty_id: %u, unbind flowcontrol jetty\n",
                       queue->umq_id, EID_ARGS(tjetty->id.eid), tjetty->id.id);
         if (qcfg->tp_mode == URMA_TM_RC) {
             start_timestamp = umq_perf_get_start_timestamp();
