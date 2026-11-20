@@ -11,8 +11,8 @@ Run the commands in this guide from the repository root.
 | Operators | Test entry | Coverage and environment |
 | --- | --- | --- |
 | `moe_dispatch_send_async`, `moe_dispatch_recv_async`, `moe_combine_send_async`, `moe_combine_recv_async` | [Routed async tests](#routed-async-cam-operator-tests) | Ascend 910C precision and timing. Includes balanced/sparse routes, FP16/BF16 and optional INT8 dispatch quantization. |
-| `cam_deepep_dispatch_send`, `cam_deepep_dispatch_recv`, `cam_deepep_combine_send`, `cam_deepep_combine_recv` | [DeepEP AFD benchmark](#deepep-afd-benchmark-ascend-950) | Ascend 950 BF16 correctness and communication benchmark against official DeepEP-Ascend EP. |
-| The four `cam_deepep_*` operators | [DeepEP Meta tests](ut/cam_deepep/) | PyTorch schema, shape and dtype checks through the installed CAM wheel. No NPU executes the kernels. |
+| `afd_async_dispatch_send`, `afd_async_dispatch_recv`, `afd_async_combine_send`, `afd_async_combine_recv` | [AFD async benchmark](#afd-async-benchmark-ascend-950) | Ascend 950 BF16 correctness and communication benchmark against official DeepEP-Ascend EP. |
+| The four AFD async operators | [AFD async Meta tests](ut/afd_async/) | PyTorch schema, shape and dtype checks through the installed CAM wheel. No NPU executes the kernels. |
 | `a2e`, `e2a` | [A2E/E2A device test](#a2e-and-e2a-ascend-a3) | Ascend A3, BF16 eager mode, 16 HCCL ranks (8 MoE + 8 Attention). |
 
 ## A2E and E2A (Ascend A3)
@@ -23,9 +23,9 @@ UT environment with 16 ranks, torchair, the installed CAM wheel and OPP, and
 the `test/cam/ut/util` fixtures imported by the test. Those fixtures must be
 available before pytest can collect the case.
 
-## DeepEP AFD benchmark (Ascend 950)
+## AFD async benchmark (Ascend 950)
 
-The [benchmark driver](benchmark_deepep_afd.py) runs both backends on the same
+The [benchmark driver](benchmark_afd_async.py) runs both backends on the same
 logical BF16 inputs and routes. CAM measures the four asynchronous operators
 separately. The official backend measures the complete EP dispatch and combine
 calls. The CPU tests check route counts, byte accounting, report compatibility,
@@ -34,21 +34,25 @@ tensor tests use CPU PyTorch.
 
 ```bash
 # No Ascend software or device needed.
-python3 test/cam/benchmark_deepep_afd.py --dry-run --num-processes 4
-python3 test/cam/benchmark_deepep_afd.py --dry-run --num-processes 8
-python3 -m pytest -o addopts= test/cam/ut/cam_deepep/test_deepep_benchmark*.py
+python3 test/cam/benchmark_afd_async.py --dry-run --num-processes 4
+python3 test/cam/benchmark_afd_async.py --dry-run --num-processes 8
+python3 -m pytest -o addopts= test/cam/ut/afd_async/test_afd_async_benchmark*.py
 
 # Requires an installed CAM wheel. Uses the PyTorch Meta device.
-python3 -m pytest -o addopts= test/cam/ut/cam_deepep/test_cam_deepep_meta_*.py
+python3 -m pytest -o addopts= test/cam/ut/afd_async/test_afd_async_meta_*.py
 ```
 
 For device runs, use matching CANN, torch and torch-npu on Ascend 950.
-Build and install the CAM wheel and OPP for the four DeepEP operators using
-the [CAM build and installation guide](../../src/cam/README.md):
+Install the CAM wheel and OPP from the same revision. The source directory
+and the `-a` build selector carry the `_arch35` suffix. For example,
+`afd_async_dispatch_send_arch35` builds the device kernel `afd_async_dispatch_send`.
+Call it through `torch.ops.umdk_cam_op_lib.afd_async_dispatch_send` or
+`aclnnAfdAsyncDispatchSend`. The other three operators follow the same convention.
+See the [CAM build and installation guide](../../src/cam/README.md).
 
 ```bash
 ./build/cam/build.sh -c ascend950 -a \
-  "cam_deepep_dispatch_send;cam_deepep_dispatch_recv;cam_deepep_combine_send;cam_deepep_combine_recv"
+  "afd_async_dispatch_send_arch35;afd_async_dispatch_recv_arch35;afd_async_combine_send_arch35;afd_async_combine_recv_arch35"
 ```
 
 Set `OWNER_ROOT` to the built companion DeepEP-Ascend checkout at `25b5153e`
@@ -61,13 +65,13 @@ directory from that build's run package, then pass the resulting SHA-256 to
 the CAM run. Record the source commit alongside the fingerprint.
 
 ```bash
-python3 test/cam/benchmark_deepep_afd.py --fingerprint-cam-opp "$BUILT_CAM_VENDOR_DIR" > built-opp.json
+python3 test/cam/benchmark_afd_async.py --fingerprint-cam-opp "$BUILT_CAM_VENDOR_DIR" > built-opp.json
 OPP_SHA=$(python3 -c 'import json; print(json.load(open("built-opp.json"))["sha256"])')
 ```
 
 ```bash
 # Check four reuse rounds, route/weight correctness and ACKs before timing.
-python3 test/cam/benchmark_deepep_afd.py --backend cam --deepep-root "$OWNER_ROOT" \
+python3 test/cam/benchmark_afd_async.py --backend cam --deepep-root "$OWNER_ROOT" \
   --expected-cam-opp-sha256 "$OPP_SHA" \
   --num-processes 4 --num-ai-cores 1 --num-tokens 64 --hidden 7168 \
   --num-topk 2 --num-experts 8 --cache-mode warm --correctness-rounds 4 \
@@ -75,16 +79,16 @@ python3 test/cam/benchmark_deepep_afd.py --backend cam --deepep-root "$OWNER_ROO
 
 # Run each backend separately using the same shape, placement and timing options.
 # Remove --skip-perf-test and use a new output path after the shape passes.
-python3 test/cam/benchmark_deepep_afd.py --backend official --deepep-root "$OFFICIAL_ROOT" \
+python3 test/cam/benchmark_afd_async.py --backend official --deepep-root "$OFFICIAL_ROOT" \
   --num-processes 4 --num-ai-cores 32 --num-tokens 4096 --hidden 7168 \
   --num-topk 6 --num-experts 256 --skip-perf-test --output output/ep-2a2f-check.json
-python3 test/cam/benchmark_deepep_afd.py --backend cam --deepep-root "$OWNER_ROOT" \
+python3 test/cam/benchmark_afd_async.py --backend cam --deepep-root "$OWNER_ROOT" \
   --expected-cam-opp-sha256 "$OPP_SHA" \
   --num-processes 4 --num-ai-cores 32 --num-tokens 4096 --hidden 7168 \
   --num-topk 6 --num-experts 256 --skip-perf-test --output output/afd-2a2f-check.json
 
 # Compare successful timed reports with matching workloads and environments.
-python3 test/cam/benchmark_deepep_afd.py --compare output/ep-2a2f.json output/afd-2a2f.json
+python3 test/cam/benchmark_afd_async.py --compare output/ep-2a2f.json output/afd-2a2f.json
 ```
 
 For 4A4F, pass `--num-processes 8`. Each Attention rank still has 4096 tokens.

@@ -218,7 +218,7 @@ at::Tensor cam_dispatch_send_async_impl_autograd(
     const int64_t dynamicQuant,
     c10::string_view groupName);
 
-at::Tensor CamDeepepDispatchSendImplAutograd(
+at::Tensor AfdAsyncDispatchSendImplAutograd(
     const at::Tensor &x,
     const at::Tensor &sf,
     const at::Tensor &topkIdx,
@@ -243,7 +243,7 @@ at::Tensor CamDeepepDispatchSendImplAutograd(
     const int64_t sendStatusWords,
     const int64_t numVecCores);
 
-std::tuple<at::Tensor, at::Tensor, at::Tensor> CamDeepepDispatchRecvImplAutograd(
+std::tuple<at::Tensor, at::Tensor, at::Tensor> AfdAsyncDispatchRecvImplAutograd(
     const at::Tensor &payload,
     const at::Tensor &context,
     const at::Tensor &active,
@@ -273,7 +273,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> CamDeepepDispatchRecvImplAutograd
     const int64_t numSfPacks,
     const int64_t numVecCores);
 
-at::Tensor CamDeepepCombineSendImplAutograd(
+at::Tensor AfdAsyncCombineSendImplAutograd(
     const at::Tensor &x,
     const at::Tensor &srcMetadata,
     const at::Tensor &context,
@@ -297,7 +297,7 @@ at::Tensor CamDeepepCombineSendImplAutograd(
     const int64_t completionBytes,
     const int64_t numVecCores);
 
-CombineRecvOut CamDeepepCombineRecvImplAutograd(
+CombineRecvOut AfdAsyncCombineRecvImplAutograd(
     const at::Tensor &payload,
     const at::Tensor &taskInfo,
     const at::Tensor &context,
