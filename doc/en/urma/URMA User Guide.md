@@ -744,7 +744,7 @@ Before an application deletes an object (e.g., JFS, JFR, JFC, Jetty), if it has 
 
 *  Parameters: Typically requires a context pointer of type urma_context_t, which was created during urma_create_context and is used to communicate with the kernel.
 
-*  Return Value: urma_get_async_event returns urma_status_t to inform the user of the function's completion status. A return value of 0 indicates success; other values indicate that the interface call failed, and the event pointer in the parameters points to the obtained event.
+*  Return Value: `urma_get_async_event` returns `urma_status_t`. A return value of 0 indicates success and a valid `event`; a provider may return `URMA_EAGAIN` when no application-visible event is currently available, including for a bond context after consuming an internal physical `URMA_EVENT_EID_CHANGE` event or when its event queue is empty. On `URMA_EAGAIN`, `event` is invalid and the caller must not acknowledge it; wait for the asynchronous event fd to become readable and retry. Other values indicate failure, and `event` must not be read or acknowledged on failure.
 
 2.  **urma_ack_async_event:**
 

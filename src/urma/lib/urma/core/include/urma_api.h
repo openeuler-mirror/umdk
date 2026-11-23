@@ -771,7 +771,7 @@ urma_status_t urma_delete_jfce(urma_jfce_t *jfce);
  *  Get asyn event.
  * @param[in] [Required] ctx: handle of the created urma context;
  * @param[out] [Required] event: the address to put event
- * Return: 0 on success, other value on error
+ * Return: 0 on success; if URMA_EAGAIN is returned, continue processing; other value on error.
  */
 urma_status_t urma_get_async_event(urma_context_t *ctx, urma_async_event_t *event);
 

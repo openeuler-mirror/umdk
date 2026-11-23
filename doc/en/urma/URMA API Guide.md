@@ -2845,7 +2845,7 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 3. Description
 
-Query device or JETTY related asynchronous events.
+Query device or JETTY related asynchronous events. When a non-blocking call has no application-visible event available, a provider may return `URMA_EAGAIN`. For a bond context, `URMA_EAGAIN` is returned when a physical `URMA_EVENT_EID_CHANGE` event is consumed internally or the event queue is empty. On `URMA_EAGAIN`, `event` is invalid and the caller must not call `urma_ack_async_event`; wait for the asynchronous event fd to become readable and retry, and do not treat it as a channel failure or busy-poll for it.
 
 4. Parameters
 
@@ -2855,7 +2855,7 @@ Query device or JETTY related asynchronous events.
 
 5. Return Value
 
-Return: 0 on success, other value on error.
+Return: 0 on success and `event` is valid, `URMA_EAGAIN` when the provider reports that no asynchronous event is currently available, other value on error.
 
 6. [urma_async_event_t](#_ZH-CN_TOPIC_0000002489752798-chtext)<a id="_ZH-CN_TOPIC_0000002489752798-chtext"></a>
 
@@ -7128,7 +7128,7 @@ Definition file: [urma_ubagg.h](../../../src/urma/lib/urma/bond/include/urma_uba
 
 3. Description
 
-Non-blockingly fetches an asynchronous event from a bonding device's virtual context. The jetty/JFR inside the event has already been mapped to the virtual object; after a successful fetch, `urma_ack_async_event` must be called to release it.
+Non-blockingly fetches an asynchronous event from a bonding device's virtual context. The jetty/JFR inside the event has already been mapped to the virtual object; after a successful fetch, `urma_ack_async_event` must be called to release it. Physical `URMA_EVENT_EID_CHANGE` events are consumed internally. `URMA_EAGAIN` is returned when no application-visible event is currently available, including when a physical event was filtered or the event queue is empty. On `URMA_EAGAIN`, `event` is invalid and the caller must not acknowledge it; a filtered physical event has already been acknowledged internally by bondp. The caller should wait for the asynchronous event fd to become readable and retry without busy polling. The `event` output is valid and must be acknowledged only when `URMA_SUCCESS` is returned.
 
 4. Parameters
 
@@ -7140,11 +7140,11 @@ Non-blockingly fetches an asynchronous event from a bonding device's virtual con
 
 5. Return Value
 
-Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond context, `URMA_FAIL` when no event is pending or the event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
+Return: 0 on success, `URMA_EAGAIN` when no application-visible event is currently available, including when an internal event was consumed or no event was pending, `URMA_EINVAL` when args are invalid, ctx is not a bond context, or the physical event cannot be mapped to a bonding object, `URMA_FAIL` when the epoll or event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
 
 6. Sentinel Convention
 
-`port_id->value` is always written, with the following rules:
+After parameter and context validation, `port_id->value` is always written, with the following rules:
 
 - When `event->event_type == URMA_EVENT_JFR_LIMIT` and the source JFR of the event belongs to this bond, `port_id` is the local port coordinate (chip_id/die_id/port_idx) of the member physical JFR; the caller may use it to replenish the receive watermark to that specific member through `bondp_modify_jfr` and immediately post RQEs, avoiding RNR;
 
@@ -7156,6 +7156,9 @@ Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond c
 urma_async_event_t event;
 bondp_port_id_t port_id;
 urma_status_t status = bondp_get_async_event(v_ctx, &event, &port_id);
+if (status == URMA_EAGAIN) {
+    return; /* No application-visible event is currently available; call again after the async event fd becomes readable. */
+}
 if (status == URMA_SUCCESS) {
     if (event.event_type == URMA_EVENT_JFR_LIMIT && port_id.value != UINT16_MAX) {
         /* Redirect the waterline reconfiguration and timely replenishment of RQE to the member ports that generate events, avoiding RNR. */
