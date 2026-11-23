@@ -2807,7 +2807,7 @@ Return: 0 on success, other value on error
 
 3.  描述
 
-查询设备或JETTY相关的异步事件。
+查询设备或JETTY相关的异步事件。非阻塞调用未获取到应用可见事件时，provider可能返回`URMA_EAGAIN`；对于bond context，物理`URMA_EVENT_EID_CHANGE`事件被内部消费或事件队列为空时返回`URMA_EAGAIN`。返回`URMA_EAGAIN`时`event`无效，调用方不得调用`urma_ack_async_event`，应等待异步事件fd可读后重试，不应将其视为通道故障或忙轮询。
 
 4.  参数
 
@@ -2817,7 +2817,7 @@ Return: 0 on success, other value on error
 
 5.  返回值
 
-Return: 0 on success, other value on error.
+Return: 0 on success and `event` is valid, `URMA_EAGAIN` when the provider reports that no asynchronous event is currently available, other value on error.
 
 6.  urma_async_event_t
 
@@ -6937,7 +6937,7 @@ status = bondp_modify_jfr(v_jfr, &attr, &hint);
 
 3.  描述
 
-非阻塞地从聚合（bonding）设备虚拟上下文获取异步事件。事件内的 jetty/JFR 已映射为虚拟对象；获取成功后需调用 `urma_ack_async_event` 释放。
+非阻塞地从聚合（bonding）设备虚拟上下文获取异步事件。事件内的 jetty/JFR 已映射为虚拟对象；获取成功后需调用 `urma_ack_async_event` 释放。物理上下文的 `URMA_EVENT_EID_CHANGE` 事件由 bondp 内部消费。当前没有应用可见事件时返回 `URMA_EAGAIN`，包括物理事件被过滤或事件队列为空；此时 `event` 无效，调用方不得调用 `urma_ack_async_event`，已过滤的物理事件由 bondp 内部完成确认。调用方应等待异步事件fd可读后重试，不应忙轮询。仅当返回 `URMA_SUCCESS` 时，`event` 参数有效且需要调用 `urma_ack_async_event`。
 
 4.  参数
 
@@ -6949,14 +6949,14 @@ status = bondp_modify_jfr(v_jfr, &attr, &hint);
 
 5.  返回值
 
-Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond context, `URMA_FAIL` when no event is pending or the event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
+Return: 0 on success, `URMA_EAGAIN` when no application-visible event is currently available, including when an internal event was consumed or no event was pending, `URMA_EINVAL` when args are invalid, ctx is not a bond context, or the physical event cannot be mapped to a bonding object, `URMA_FAIL` when the epoll or event channel is in error, `URMA_ENOMEM` on out of memory, other value on error
 
 6.  哨兵约定
 
-`port_id->value` 恒被写入，规则：
+参数和 context 校验通过后，`port_id->value` 恒被写入，规则：
 
 - `event->event_type == URMA_EVENT_JFR_LIMIT` 且事件源 JFR 属于本 bond 时，`port_id` 为该成员物理 JFR 对应的本机端口坐标（chip_id/die_id/port_idx），调用方可据此通过 `bondp_modify_jfr` 定向设置接收水位与及时补充RQE，避免 RNR；
-- 其他情况（非 JFR_LIMIT 事件、无事件返回失败、事件源 JFR 不属于本 bond）均为 `UINT16_MAX`，表示端口无效。
+- 其他情况（非 JFR_LIMIT 事件、无可见事件或返回错误、事件源 JFR 不属于本 bond）均为 `UINT16_MAX`，表示端口无效。
 
 7.  示例
 
@@ -6964,6 +6964,9 @@ Return: 0 on success, `URMA_EINVAL` when args are invalid or ctx is not a bond c
 urma_async_event_t event;
 bondp_port_id_t port_id;
 urma_status_t status = bondp_get_async_event(v_ctx, &event, &port_id);
+if (status == URMA_EAGAIN) {
+    return; /* 当前无应用可见事件；异步事件fd再次可读后再调用。 */
+}
 if (status == URMA_SUCCESS) {
     if (event.event_type == URMA_EVENT_JFR_LIMIT && port_id.value != UINT16_MAX) {
         /* 定向重新设置水线与及时补充RQE给产生事件的成员端口，避免 RNR */
