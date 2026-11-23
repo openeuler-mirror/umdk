@@ -129,20 +129,84 @@ TEST(UrmaCommonTest, ClockUsesSampleWhenProcInfoIsUnavailable)
     EXPECT_GT(get_cpu_mhz(false), 0.0);
 }
 
+TEST(UrmaCommonTest, ClockHandlesClockGettimeFailureAndCpuFrequencyMismatch)
+{
+    ResetCommonWrap();
+    g_commonWrap.failSecondClockGettime = true;
+    g_commonWrap.cpuInfo = "cpu MHz : 2000.000\ncpu MHz : 2500.000\n";
+
+    EXPECT_DOUBLE_EQ(2000.000, get_cpu_mhz(true));
+}
+
+TEST(UrmaCommonTest, ClockRejectsSampleCorruptedByTimeJumpAndFallsBackToProc)
+{
+    ResetCommonWrap();
+    g_commonWrap.injectTimeJump = true;
+    g_commonWrap.cpuInfo = "cpu MHz : 2400.000\n";
+
+    EXPECT_DOUBLE_EQ(2400.000, get_cpu_mhz(false));
+}
+
+TEST(UrmaCommonTest, ClockPrintsWarningWhenSampleRejectedAndWarnEnabled)
+{
+    ResetCommonWrap();
+    g_commonWrap.injectTimeJump = true;
+    g_commonWrap.cpuInfo = "cpu MHz : 2400.000\n";
+
+    testing::internal::CaptureStderr();
+    double cpuMhz = get_cpu_mhz(true);
+    std::string err = testing::internal::GetCapturedStderr();
+
+    EXPECT_DOUBLE_EQ(2400.000, cpuMhz);
+    EXPECT_NE(std::string::npos, err.find("rejected"));
+}
+
+TEST(UrmaCommonTest, ClockReturnsSampleWhenProcDeviatesBeyondThreshold)
+{
+    ResetCommonWrap();
+    g_commonWrap.cpuInfo = "cpu MHz : 1.000\n";
+
+    double cpuMhz = get_cpu_mhz(false);
+    EXPECT_GT(cpuMhz, 0.0);
+    EXPECT_NE(1.000, cpuMhz);
+}
+
+#if !defined(__aarch64__)
 TEST(UrmaCommonTest, ClockReturnsZeroWhenSamplingAndProcAreUnavailable)
 {
     ResetCommonWrap();
-    g_commonWrap.failFirstGettimeofday = true;
+    g_commonWrap.failFirstClockGettime = true;
     g_commonWrap.cpuInfo = nullptr;
 
     EXPECT_DOUBLE_EQ(0.0, get_cpu_mhz(false));
 }
 
-TEST(UrmaCommonTest, ClockHandlesGettimeofdayAndCpuFrequencyMismatch)
+TEST(UrmaCommonTest, ClockRejectsSampleCorruptedByTimeJumpReturnsZeroWhenNoFallback)
 {
     ResetCommonWrap();
-    g_commonWrap.failSecondGettimeofday = true;
-    g_commonWrap.cpuInfo = "cpu MHz : 2000.000\ncpu MHz : 2500.000\n";
+    g_commonWrap.injectTimeJump = true;
+    g_commonWrap.cpuInfo = nullptr;
 
-    EXPECT_DOUBLE_EQ(2000.000, get_cpu_mhz(true));
+    EXPECT_DOUBLE_EQ(0.0, get_cpu_mhz(false));
 }
+#endif
+
+#if defined(__aarch64__)
+TEST(UrmaCommonTest, ClockRejectsSampleAndFallsBackToCntfrq)
+{
+    ResetCommonWrap();
+    g_commonWrap.injectTimeJump = true;
+    g_commonWrap.cpuInfo = nullptr;
+
+    EXPECT_GT(get_cpu_mhz(false), 0.0);
+}
+
+TEST(UrmaCommonTest, ClockFallsBackToCntfrqWhenProcAndSampleUnavailable)
+{
+    ResetCommonWrap();
+    g_commonWrap.failCalloc = true;
+    g_commonWrap.cpuInfo = "processor : 0\n";
+
+    EXPECT_GT(get_cpu_mhz(false), 0.0);
+}
+#endif
