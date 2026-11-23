@@ -37,6 +37,7 @@ struct WorkSpaceOffset {
     int64_t expandIdxOffset;   // Remote token index during dispatch
     int64_t epSendCountOffset; // Token count received by each expert from each rank
     int64_t reservedOffset;    // Reserved space
+    int64_t gmm2COffset;       // gmm2 int32 C buffer (gmm2-moving-forward, deep fuse only)
 };
 
 struct FusedDeepMoeInfo {
@@ -100,6 +101,26 @@ constexpr uint32_t GMM2_SWIZZLE_OFFSET = 3;
 constexpr uint32_t GMM2_SWIZZLE_DIRECTION = 0;
 
 constexpr uint32_t WORKSPACE_STAGES = 4;
+
+// Deep-fuse swiglu-quant placement switch (for performance A/B evaluation):
+// - false (Version A): each send core quantizes a group right after its own dequant of that
+//   group (gated by the swiglu-done barrier), then moves on to the next group's dequant.
+// - true  (Version B): the recv cores - idle after RecvCoreFunc - wait for the send cores'
+//   per-group swiglu-done announcement and quantize (RecvQuantCoreFunc), overlapping the
+//   quant of group g with the send cores' dequant of the following groups (each 1C2V group
+//   becomes an epilogue AIV + quant AIV pair).
+// Only effective in deep-fuse mode (moeExpertNumPerRank != 1); shallow mode always quantizes
+// inside CompCoreFunc.
+constexpr bool QUANT_ON_RECV_CORE = true;
+
+// Gmm2 moving forward (see commit 8942a3e2): in deep-fuse mode, remove the AIC<->AIV barrier
+// between gmm1 and gmm2 so the AIC starts gmm2 right after its gmm1 MMADs. Each expert group's
+// gmm2 MMADs wait on a per-group "quant done" notification from the gmm1 quant workers (send or
+// recv cores depending on QUANT_ON_RECV_CORE), currentM is read from epSendCount (written
+// during the receive phase) instead of groupList (written at the end of gmm1), and gmm2's C
+// moves to a dedicated gmm2COffset workspace region so it cannot overwrite swiglu output that
+// the quant has not consumed yet. Shallow mode keeps the barrier and the old C location.
+constexpr bool GMM2_MOVING_FORWARD = true;
 
 constexpr uint32_t EXEC_FLAG_DEEP_FUSE = (1U << 0);
 constexpr uint32_t EXEC_FLAG_TENSOR_LIST = (1U << 1);

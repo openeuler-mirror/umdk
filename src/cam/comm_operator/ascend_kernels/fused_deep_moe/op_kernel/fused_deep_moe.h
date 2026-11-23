@@ -162,7 +162,9 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                        GM_ADDR gmSharedScale, GM_ADDR gmSharedPtrPerTokenScale,
                        layout::RowMajor sharedLayoutA, layout::zN sharedLayoutB,
                        layout::VectorLayout sharedLayoutPerTokenScale, layout::RowMajor sharedLayoutD,
-                       uint32_t epRankId, GM_ADDR gmWorkspace, void *combiner)
+                       uint32_t epRankId, GM_ADDR gmWorkspace, void *combiner,
+                       GM_ADDR gmGmm2C, GM_ADDR gmGroupListI32, uint32_t epRankSize,
+                       GM_ADDR gmExpertTokenNums, GM_ADDR gmReserved)
 {
     using ArchTag = Arch::AtlasA2;
     using DispatchPolicy = DispatchPolicy_;
@@ -230,7 +232,12 @@ CATLASS_DEVICE void GmmDeq(GemmCoord problemShape, uint32_t groupCount, GM_ADDR 
                                        sharedLayoutPerTokenScale,
                                        sharedLayoutD,
                                        gmWorkspace,
-                                       combiner};
+                                       combiner,
+                                       gmGmm2C,
+                                       gmGroupListI32,
+                                       epRankSize,
+                                       gmExpertTokenNums,
+                                       gmReserved};
 
     // call a kernel
     GemmKernel gemm{epRankId};
@@ -394,6 +401,8 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
     GM_ADDR gmExpandIdx = workspaceGM_ + tilingData_->workSpaceOffset.expandIdxOffset;
     GM_ADDR gmEpSendCount = workspaceGM_ + tilingData_->workSpaceOffset.epSendCountOffset;
     GM_ADDR gmReserved = workspaceGM_ + tilingData_->workSpaceOffset.reservedOffset;
+    // gmm2 moving forward: dedicated gmm2 C buffer (deep fuse only; 0-sized otherwise)
+    GM_ADDR gmGmm2C = workspaceGM_ + tilingData_->workSpaceOffset.gmm2COffset;
 
     if constexpr ((EXEC_FLAG & EXEC_FLAG_DEEP_FUSE) == 0) {
         if constexpr (g_coreType == AscendC::AIV) {
@@ -426,12 +435,17 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
         gmShareSmoothScales_, gmexpertIds_, gmExpandIdx, gmEpSendCount, xActiveMask_, gmReserved, gmExpertTokenNums_,
         tilingData_->fusedDeepMoeInfo);
     AscendC::PipeBarrier<PIPE_ALL>();
-    Arch::CrossCoreFlag gmm1AivFinished{0};
-    if constexpr (g_coreType == AscendC::AIV) {
-        Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
-        Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1AivFinished);
-    } else {
-        Arch::CrossCoreWaitFlag(gmm1AivFinished);
+    // gmm2 moving forward: in deep-fuse mode skip the AIV->AIC barrier so the AIC rolls
+    // straight from gmm1 into gmm2; each gmm2 group then waits on the gmm1 quant-done
+    // notification instead (WaitGmm2QuantReady). Shallow mode keeps the barrier.
+    if constexpr (!(Cam::GMM2_MOVING_FORWARD && (EXEC_FLAG & EXEC_FLAG_DEEP_FUSE))) {
+        Arch::CrossCoreFlag gmm1AivFinished{0};
+        if constexpr (g_coreType == AscendC::AIV) {
+            Arch::CrossCoreBarrier<0x0, PIPE_MTE3>();
+            Arch::CrossCoreSetFlag<0x2, PIPE_MTE3>(gmm1AivFinished);
+        } else {
+            Arch::CrossCoreWaitFlag(gmm1AivFinished);
+        }
     }
 
     MoeDistributeCombineImpl::CamMoeDistributeCombine<TemplateMC2TypeFunc> combiner;
@@ -444,6 +458,7 @@ __aicore__ inline void FusedDeepMoe<TemplateMC2TypeFunc>::Process()
                                gmScale2_, layoutW2Scale, gmX2Scale, layoutX2Scale, gmGmm2DepOut, layoutOutput, bs_,
                                shareGmm2ProblemShape, gmShareX2, gmShareWeight2_, gmShareOutput_, gmShareWeight2Scale_,
                                gmShareX2Scale, layoutShareX2, layoutShareWeight2, layoutShareX2Scale,
-                               layoutShareOutput, epRankId_, gmWorkspace, &combiner);
+                               layoutShareOutput, epRankId_, gmWorkspace, &combiner,
+                               gmGmm2C, gmEpSendCount, epRankSize_, gmExpertTokenNums_, gmReserved);
 }
 #endif  // FUSED_DEEP_MOE_H
