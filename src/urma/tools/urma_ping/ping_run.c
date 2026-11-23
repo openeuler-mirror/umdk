@@ -270,7 +270,7 @@ static int resolve_priority(ping_cfg_t *cfg, urma_context_t *ctx, urma_device_at
             cfg->priority = 0;
         } else {
             int pri = get_jetty_priority_by_tp_type(dev_attr, tp_type);
-            if (pri < 0) {
+            if (pri > URMA_MAX_PRIORITY) {
                 return -EINVAL;
             }
             cfg->priority = (uint8_t)pri;

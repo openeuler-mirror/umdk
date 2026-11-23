@@ -152,7 +152,7 @@ static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urm
         }
     }
     LOG_ERROR("Failed to get sl resources for tp_type=0x%x\n", tp_type.value);
-    return -1;
+    return PERFTEST_INVALID_PRIORITY;
 }
 
 static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
@@ -202,7 +202,8 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 
     union urma_tp_type_en tp_type = {0};
     if (cfg->priority == PERFTEST_INVALID_PRIORITY) {
-        if (ctx->urma_ctx->ops->import_jetty_ex == NULL) {
+        if (ctx->urma_ctx->ops->import_jetty_ex == NULL &&
+            !perftest_is_bonding_dev(ctx->urma_ctx->dev->name)) {
             cfg->priority = 0;
         } else if (cfg->use_ctp) {
             tp_type.bs.ctp = 1;
@@ -210,6 +211,11 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
         } else {
             tp_type.bs.rtp = 1;
             cfg->priority = (uint8_t)get_jetty_priority_by_tp_type(&ctx->dev_attr, tp_type);
+        }
+        if (cfg->priority > URMA_MAX_PRIORITY) {
+            LOG_ERROR("The priority parameter %hhu is invalid; it should be 0-15.\n",
+                      cfg->priority);
+            goto del_ctx;
         }
         LOG_ERROR("Warning: %s should set priority to %hhu.\n",
                   (cfg->use_ctp == true ? "ctp" : "rtp"), cfg->priority);
