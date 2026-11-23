@@ -257,7 +257,7 @@ static int get_jetty_priority_by_tp_type(urma_device_attr_t *dev_attr, union urm
         }
     }
     LOG_ERROR("Failed to get sl resources for tp_type=0x%x\n", tp_type.value);
-    return -1;
+    return PING_INVALID_PRIORITY;
 }
 
 static int resolve_priority(ping_cfg_t *cfg, urma_context_t *ctx, urma_device_attr_t *dev_attr)
