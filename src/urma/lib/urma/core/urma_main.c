@@ -16,16 +16,14 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <stdio.h>
-#include <syslog.h>
 #include <unistd.h>
-#include <sys/syscall.h>
 
+#include "urma_cmd_tlv.h"
 #include "urma_device.h"
 #include "urma_log.h"
 #include "urma_private.h"
 #include "urma_provider.h"
 #include "urma_types.h"
-#include "urma_cmd_tlv.h"
 
 #if defined(__ANDROID__) || defined(__OHOS__)
 #define LIBURMA_DIR "/system/lib64/urma"
@@ -288,8 +286,14 @@ urma_status_t urma_init(urma_init_attr_t *conf)
     }
     urma_driver_t *driver, *next;
     UB_LIST_FOR_EACH_SAFE (driver, next, node, &g_driver_list) {
-        if (driver->ops->init == NULL || driver->ops->init(conf) != URMA_SUCCESS) {
-            URMA_LOG_WARN("Provider init failed %s\n", driver->ops->name);
+        /* Keep the request unchanged even if a provider writes to its argument. */
+        urma_init_attr_t provider_conf = conf == NULL ? (urma_init_attr_t){0} : *conf;
+        urma_status_t status = URMA_FAIL;
+        if (driver->ops->init != NULL) {
+            status = driver->ops->init(conf == NULL ? NULL : &provider_conf);
+        }
+        if (status != URMA_SUCCESS) {
+            URMA_LOG_WARN("Provider %s init failed, ret=%d.\n", driver->ops->name, status);
             ub_list_remove(&driver->node);
             free(driver);
         }
@@ -601,7 +605,7 @@ urma_context_t *urma_create_context(urma_device_t *dev, uint32_t eid_index)
         dev_fd = urma_open_cdev(dev->path);
         if (dev_fd < 0) {
             URMA_LOG_ERR("Failed to open urma cdev with path %s, dev_fd=%d\n",
-                dev->path, dev_fd);
+                         dev->path, dev_fd);
             errno = EIO;
             return NULL;
         }
@@ -640,7 +644,7 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
     uint64_t atomic_cnt = (uint64_t)atomic_load(&ctx->ref.atomic_cnt);
     if (atomic_cnt > 1) {
         URMA_LOG_WARN("already in use, atomic_cnt=%lu, dev_name=%s, eid_idx=%u.\n",
-            atomic_cnt, dev_name, eid_index);
+                      atomic_cnt, dev_name, eid_index);
         return URMA_EAGAIN;
     }
 
@@ -650,7 +654,7 @@ urma_status_t urma_delete_context(urma_context_t *ctx)
         (void)close(dev_fd);
     } else {
         URMA_LOG_WARN("[DRV_ERR]Delete ctx error, fd=%d, ret=%d, dev_name=%s, eid_idx=%u.\n",
-            dev_fd, ret, dev_name, eid_index);
+                      dev_fd, ret, dev_name, eid_index);
     }
 
     return ret;

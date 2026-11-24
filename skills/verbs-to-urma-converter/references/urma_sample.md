@@ -191,24 +191,24 @@ static context_t *init_context(const argument_t *args)
     urma_device_t *urma_dev = urma_get_device_by_name(args->dev_name);
     if (urma_dev == NULL) {
         fprintf(stderr, "urma get device by name failed!\n");
-        goto UNINIT;
+        goto FREE_CTX;
     }
 
     if (urma_query_device(urma_dev, &ctx->dev_attr) != URMA_SUCCESS) {
         fprintf(stderr, "Failed to query device %s.\n", args->dev_name);
-        goto UNINIT;
+        goto FREE_CTX;
     }
 
     int eid_index = get_eid_index(urma_dev);
     if (eid_index < 0) {
         fprintf(stderr, "Failed to get eid index\n");
-        goto UNINIT;
+        goto FREE_CTX;
     }
 
     ctx->urma_ctx = urma_create_context(urma_dev, (uint32_t)eid_index);
     if (ctx->urma_ctx == NULL) {
         fprintf(stderr, "Failed to create instance\n");
-        goto UNINIT;
+        goto FREE_CTX;
     }
     ctx->token.token = 0xACFE;
 
@@ -326,8 +326,7 @@ DEL_JFCE:
     urma_delete_jfce(ctx->jfce);
 DEL_CTX:
     (void)urma_delete_context(ctx->urma_ctx);
-UNINIT:
-    (void)urma_uninit();
+FREE_CTX:
     free(ctx);
     return NULL;
 }
