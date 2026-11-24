@@ -494,15 +494,15 @@ int ub_establish_connection(const comm_ub_cfg_t *cfg)
         return -EINVAL;
     }
 
-    /* mgmt channel runs before init_device; must urma_init here. Tolerate EEXIST. */
+    /* The management channel holds its own reference until close or rollback. */
     status = urma_init(&init_attr);
-    if (status != URMA_SUCCESS && status != URMA_EEXIST) {
+    if (status != URMA_SUCCESS) {
         LOG_ERROR("Failed to urma_init for mgmt channel, status: %d.\n", (int)status);
         return -1;
     }
 
     if (ub_create_local_resources(cfg, &ctx) != 0) {
-        return -1;
+        goto uninit;
     }
 
     if (ctx->is_server) {
@@ -549,6 +549,8 @@ rollback_handshake:
     (void)urma_delete_jfc(ctx->jfc);
     (void)urma_delete_context(ctx->urma_ctx);
     free(ctx);
+uninit:
+    (void)urma_uninit();
     return -1;
 }
 
@@ -558,8 +560,7 @@ void ub_close_connection(void)
         return;
     }
 
-    /* Caller (destroy_*_ctx) must invoke close_connection BEFORE uninit_device:
-     * urma_uninit dlclose()'s provider .so, after which ctx->ops dangles. */
+    /* Tear down the management resources before releasing their URMA reference. */
     if (g_ub_ctx->pair.tjetty != NULL) {
         (void)urma_unimport_jetty(g_ub_ctx->pair.tjetty);
         g_ub_ctx->pair.tjetty = NULL;
@@ -606,6 +607,10 @@ void ub_close_connection(void)
     g_ub_ctx->recv_buf_hs = NULL;
     free(g_ub_ctx);
     g_ub_ctx = NULL;
+    urma_status_t status = urma_uninit();
+    if (status != URMA_SUCCESS) {
+        LOG_ERROR("Failed to uninit urma for mgmt channel, status: %d.\n", (int)status);
+    }
 }
 
 /* ========================================================================== */
