@@ -13,6 +13,17 @@
 
 #include "ping_run.h"
 
-int ping_get_topo_info(urma_ping_ubcore_topo_map_t *topo_map);
+typedef struct ping_core_cmd_topo_info {
+    struct {
+        int node_idx;
+    } in;
+    struct {
+        uint32_t node_num;
+        struct urma_ping_ubcore_topo_node topo_info;
+    } out;
+} ping_core_cmd_topo_info_t;
+
+/* The caller owns and may reuse arg; its output is valid only on success. */
+int ping_get_topo_info(uint32_t node_idx, ping_core_cmd_topo_info_t *arg);
 
 #endif

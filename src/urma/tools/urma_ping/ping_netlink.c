@@ -9,12 +9,13 @@
  */
 
 #include <errno.h>
+#include <limits.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/genl.h>
 #include <netlink/netlink.h>
 #include <netlink/socket.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <string.h>
 
 #include "ping_log.h"
 #include "ping_netlink.h"
@@ -30,16 +31,6 @@ enum {
     UBAGG_NL_CMD_UNSPEC,
     UBAGG_NL_GET_TOPO,
 };
-
-typedef struct ping_core_cmd_topo_info {
-    struct {
-        int node_idx;
-    } in;
-    struct {
-        uint32_t node_num;
-        struct urma_ping_ubcore_topo_node topo_info;
-    } out;
-} ping_core_cmd_topo_info_t;
 
 static struct nl_sock *g_ping_nl_sock = NULL;
 static int g_ping_genl_id = 0;
@@ -79,26 +70,28 @@ free_sock:
     return ret;
 }
 
-static struct nl_msg *ping_nl_alloc_msg(uint8_t cmd, int flags)
+static int ping_nl_alloc_msg(uint8_t cmd, int flags, struct nl_msg **out)
 {
-    if (ping_nl_init() != 0) {
-        return NULL;
+    int ret = ping_nl_init();
+    if (ret != 0) {
+        return ret;
     }
 
     struct nl_msg *msg = nlmsg_alloc();
     if (msg == NULL) {
         LOG_ERROR("Failed to allocate netlink message\n");
-        return NULL;
+        return -ENOMEM;
     }
 
     void *msg_hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, g_ping_genl_id, 0, flags, cmd, GENL_FAMILY_VERSION);
     if (msg_hdr == NULL) {
         LOG_ERROR("Failed to put genl header\n");
         nlmsg_free(msg);
-        return NULL;
+        return -ENOMEM;
     }
 
-    return msg;
+    *out = msg;
+    return 0;
 }
 
 static int ping_nl_send_recv_msg_default(struct nl_msg *msg)
@@ -121,57 +114,37 @@ static int ping_nl_send_recv_msg_default(struct nl_msg *msg)
     return ret;
 }
 
-int ping_get_topo_info(urma_ping_ubcore_topo_map_t *topo_map)
+int ping_get_topo_info(uint32_t node_idx, ping_core_cmd_topo_info_t *arg)
 {
-    int ret = 0;
-    ping_core_cmd_topo_info_t *arg = NULL;
-    uint32_t node_num = MAX_NODE_NUM;
-
-    if (topo_map == NULL) {
+    if (arg == NULL) {
         return -EINVAL;
     }
-
-    for (uint32_t i = 0; i < node_num; ++i) {
-        arg = calloc(1, sizeof(*arg));
-        if (arg == NULL) {
-            ret = -ENOMEM;
-            goto free_topo;
-        }
-        arg->in.node_idx = i;
-
-        struct nl_msg *msg = ping_nl_alloc_msg(UBAGG_NL_GET_TOPO, 0);
-        if (msg == NULL) {
-            ret = -ENOMEM;
-            goto free_topo;
-        }
-
-        ret = nla_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-        if (ret != 0) {
-            LOG_ERROR("Failed to put u64 attribute %d, ret=%d\n", UBAGG_HDR_ARGS_ADDR, ret);
-            nlmsg_free(msg);
-            goto free_topo;
-        }
-
-        ret = ping_nl_send_recv_msg_default(msg);
-        nlmsg_free(msg);
-        if (ret < 0) {
-            goto free_topo;
-        }
-
-        if (arg->out.node_num == 0 || arg->out.node_num > MAX_NODE_NUM) {
-            LOG_ERROR("Invalid topo node num from ubagg: %u\n", arg->out.node_num);
-            ret = -EINVAL;
-            goto free_topo;
-        }
-        topo_map->topo_infos[i] = arg->out.topo_info;
-        topo_map->node_num = arg->out.node_num;
-        node_num = arg->out.node_num;
-        free(arg);
-        arg = NULL;
+    if (node_idx > INT_MAX) {
+        return -EOVERFLOW;
     }
-    return ret;
+    (void)memset(arg, 0, sizeof(*arg));
+    arg->in.node_idx = (int)node_idx;
 
-free_topo:
-    free(arg);
-    return ret;
+    struct nl_msg *msg = NULL;
+    int ret = ping_nl_alloc_msg(UBAGG_NL_GET_TOPO, 0, &msg);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = nla_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+    if (ret == 0) {
+        ret = ping_nl_send_recv_msg_default(msg);
+    } else {
+        LOG_ERROR("Failed to put u64 attribute %d, ret=%d\n", UBAGG_HDR_ARGS_ADDR, ret);
+    }
+    nlmsg_free(msg);
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (arg->out.node_num == 0 || node_idx >= arg->out.node_num) {
+        LOG_ERROR("Invalid topo node num from ubagg: %u\n", arg->out.node_num);
+        return -EINVAL;
+    }
+    return 0;
 }

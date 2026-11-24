@@ -15,7 +15,6 @@
 
 #define EID_LEN            (16)
 #define MAX_PORT_NUM       (9)
-#define MAX_NODE_NUM       (1024)
 #define IODIE_NUM_PER_CHIP (1)
 #define IODIE_NUM          (2)
 #define PORT_NUM           (9)
@@ -44,11 +43,6 @@ struct urma_ping_ubcore_topo_node {
     bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
     struct urma_ping_ubcore_topo_agg_dev agg_devs[DEV_NUM];
 };
-
-typedef struct urma_ping_ubcore_topo_map {
-    struct urma_ping_ubcore_topo_node topo_infos[MAX_NODE_NUM];
-    uint32_t node_num;
-} urma_ping_ubcore_topo_map_t;
 
 int start_ping(ping_cfg_t *cfg);
 
