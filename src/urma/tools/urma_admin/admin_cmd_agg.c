@@ -110,10 +110,18 @@ static int admin_cmd_agg_del(urma_eid_t eid)
     /* Hacky: bonding_dev_0 is hardcoded in other components. Deletion is disabled for now. */
     urma_init_attr_t init_attr = {0};
 
-    urma_init(&init_attr);
+    urma_status_t status = urma_init(&init_attr);
+    if (status != URMA_SUCCESS) {
+        printf("Failed to initialize URMA for device lookup, status: %d.\n", (int)status);
+        return -1;
+    }
     urma_device_t *urma_dev = urma_get_device_by_eid(eid, URMA_TRANSPORT_UB);
     bool is_dev_disallowed = urma_dev != NULL && strcmp(urma_dev->name, "bonding_dev_0") == 0;
-    urma_uninit();
+    status = urma_uninit();
+    if (status != URMA_SUCCESS) {
+        printf("Failed to uninitialize URMA after device lookup, status: %d.\n", (int)status);
+        return -1;
+    }
 
     if (is_dev_disallowed) {
         printf("bonding_dev_0 cannot be deleted now.\n");
