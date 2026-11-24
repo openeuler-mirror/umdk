@@ -476,13 +476,6 @@ int ub_establish_connection(const comm_ub_cfg_t *cfg)
         return -EINVAL;
     }
 
-    /* mgmt channel runs before init_device; must urma_init here. Tolerate EEXIST. */
-    status = urma_init(&init_attr);
-    if (status != URMA_SUCCESS && status != URMA_EEXIST) {
-        LOG_ERROR("Failed to urma_init for mgmt channel, status: %d.\n", (int)status);
-        return -1;
-    }
-
     if (cfg->src_eid == NULL || cfg->src_eid[0] == '\0') {
         LOG_ERROR("Invalid mgmt ub cfg: src_eid missing.\n");
         return -EINVAL;
@@ -499,6 +492,13 @@ int ub_establish_connection(const comm_ub_cfg_t *cfg)
     if (cfg->dst_eid == NULL && cfg->dst_jetty_id == 0) {
         LOG_ERROR("UB mgmt server requires -P for jetty id.\n");
         return -EINVAL;
+    }
+
+    /* mgmt channel runs before init_device; must urma_init here. Tolerate EEXIST. */
+    status = urma_init(&init_attr);
+    if (status != URMA_SUCCESS && status != URMA_EEXIST) {
+        LOG_ERROR("Failed to urma_init for mgmt channel, status: %d.\n", (int)status);
+        return -1;
     }
 
     if (ub_create_local_resources(cfg, &ctx) != 0) {
