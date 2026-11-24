@@ -1109,7 +1109,7 @@ RPM package installation output is at: /usr/bin/urma_sample
 
 3. Description
 
-Initialize the URMA execution environment. This interface does not support multi-threaded calls. Concurrent calls with urma_register_sysfs_dev and urma_unregister_provider_ops are not supported.
+Initialize the URMA execution environment. Concurrent calls with urma_init and urma_uninit are supported. Repeated initialization requires matching token and requested uasid values. Each successful call must be paired with one urma_uninit. Concurrent calls with urma_register_sysfs_dev and urma_unregister_provider_ops are not supported.
 
 4. Parameters
 
@@ -1164,7 +1164,7 @@ Definition file: [urma_api.h](../../../src/urma/lib/urma/core/include/urma_api.h
 
 3. Description
 
-Uninitialize the URMA semantic environment. Will release the uasid. This interface does not support multi-threaded calls. Concurrent calls with urma_register_sysfs_dev and urma_unregister_provider_ops are not supported.
+Release one reference acquired by urma_init. The last release cleans up the URMA execution environment and releases the uasid. Stop using the reference and destroy associated resources before calling. Concurrent calls with urma_init and urma_uninit are supported. Concurrent calls with urma_register_sysfs_dev and urma_unregister_provider_ops are not supported.
 
 4. Parameters
 
