@@ -591,6 +591,12 @@ typedef struct jetty_pool_node {
     bool in_global_pool;                // Whether node is in a global pool list (free_q/active_q/err_q)
     bool is_jetty_err;
     bool is_jetty_recovering;         // bond ACK_TIMEOUT: urma async rebuild in flight (parked in recover_q)
+    // Invariant: true only while this node is parked in relay_q (terminal err). Set by
+    // recycle_node_to_relay_q(); cleared by every path that leaves relay_q (currently only
+    // recycle_node_to_free_q()) and by umq_ub_jetty_pool_put_free_node(); calloc/memset nodes
+    // start false. Used to make duplicate modify idempotent and to select the correct counter
+    // in umq_ub_jetty_node_remove(). Must not be read/written outside the pool lock.
+    bool in_relay_q;
     uint16_t node_list_pos;             // index of this node's slot id in jetty_node_list->valid_idx[]
                                         // (valid only while the slot is occupied; 0-initialized on alloc)
     bool tx_flush_done;                 // polled URMA_CR_WR_FLUSH_ERR_DONE on this jetty; flush_sqe pending

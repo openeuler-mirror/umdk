@@ -81,6 +81,7 @@ static ALWAYS_INLINE void recycle_node_to_free_q(jetty_pool_t *pool, jetty_pool_
 {
     __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
     node->in_global_pool = true;
+    node->in_relay_q = false;
     urpc_list_push_back(&pool->free_q, &node->node);
     pool->free_count++;
 }
@@ -89,6 +90,7 @@ static ALWAYS_INLINE void recycle_node_to_relay_q(jetty_pool_t *pool, jetty_pool
 {
     __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
     node->in_global_pool = true;
+    node->in_relay_q = true;
     urpc_list_push_back(&pool->relay_q, &node->node);
     pool->deprecated_count++;
 }
@@ -97,6 +99,7 @@ static ALWAYS_INLINE void recycle_node_to_recover_q(jetty_pool_t *pool, jetty_po
 {
     __atomic_store_n(&node->state, JETTY_POOL_NODE_IDLE, __ATOMIC_RELEASE);
     node->in_global_pool = true;
+    node->in_relay_q = false;
     urpc_list_push_back(&pool->recover_q, &node->node);
     pool->recover_count++;
 }
@@ -417,6 +420,10 @@ void umq_ub_jetty_pool_put_free_node(jetty_pool_node_t *node)
         return;
     }
     (void)pthread_spin_lock(&g_jetty_pool.lock);
+    // Defensive: a node entering free_q is no longer parked in relay_q. Current callers pass
+    // calloc/memset nodes (in_relay_q == false), but clear it explicitly here so future
+    // callers that bypass recycle_node_to_free_q() can not leave a stale in_relay_q flag.
+    node->in_relay_q = false;
     urpc_list_push_back(&g_jetty_pool.free_q, &node->node);
     g_jetty_pool.free_count++;
     (void)pthread_spin_unlock(&g_jetty_pool.lock);
@@ -480,15 +487,21 @@ int umq_ub_jetty_node_remove(jetty_pool_node_t *node)
 
     (void)pthread_spin_lock(&pool->lock);
     if (node->in_global_pool) {
-        // Recovering nodes live in recover_q (detach_from_recover_q also advances probe_cursor);
-        // terminal-err nodes live in relay_q (decrement deprecated_count, NOT active_count);
-        // otherwise in active_q. urpc_list_remove is self-pointer based and list-agnostic.
-        if (node->is_jetty_recovering) {
-            detach_from_recover_q(pool, node);
-            node->is_jetty_recovering = false;
-        } else if (node->is_jetty_err) {
+        // Dispatch on location truth FIRST: in_relay_q is set/cleared only at the relay_q
+        // push/pop sites, so it is authoritative even when flags are stale. A relay_q node
+        // can still carry is_jetty_recovering == true (alloc() checks is_jetty_err before
+        // is_jetty_recovering when routing a cached node, and mark_recovering may race the
+        // relay push); the recovering arm would then mis-charge recover_count and advance
+        // probe_cursor over relay_q linkage. Remaining cases: recovering nodes live in
+        // recover_q (detach_from_recover_q also advances probe_cursor); otherwise in
+        // active_q. urpc_list_remove is self-pointer based and list-agnostic.
+        if (node->in_relay_q) {
             urpc_list_remove(&node->node);
             pool->deprecated_count--;
+            node->is_jetty_recovering = false; // drop a stale flag so free_q stays clean
+        } else if (node->is_jetty_recovering) {
+            detach_from_recover_q(pool, node);
+            node->is_jetty_recovering = false;
         } else {
             urpc_list_remove(&node->node);
             pool->active_count--;
@@ -1000,6 +1013,14 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
         }
         if (node->in_global_pool) {
             umq_ub_jetty_node_mark_err(node);
+            // Already parked in relay_q by a previous modify/mark_err: duplicate modify is a
+            // no-op. Do NOT re-run the migration / counter updates. (Re-mark first: the
+            // we_marked rollback above may have cleared the flag of a node another thread
+            // relayed meanwhile — a relay_q node must always keep is_jetty_err set.)
+            if (node->in_relay_q) {
+                (void)pthread_spin_unlock(&g_jetty_pool.lock);
+                return UMQ_SUCCESS;
+            }
             // Recovering nodes live in recover_q: detach (advances probe_cursor) before relaying.
             if (node->is_jetty_recovering) {
                 detach_from_recover_q(&g_jetty_pool, node);
@@ -1024,6 +1045,12 @@ int umq_ub_jetty_node_modify_err_and_to_relay(jetty_pool_node_t *node)
     // the is_jetty_err check in umq_ub_jetty_node_free.
     (void)pthread_spin_lock(&g_jetty_pool.lock);
     if (!node->in_global_pool) {
+        (void)pthread_spin_unlock(&g_jetty_pool.lock);
+        return UMQ_SUCCESS;
+    }
+    // Already parked in relay_q by a previous modify/mark_err: duplicate modify is a no-op.
+    // Do NOT re-run the migration / counter updates.
+    if (node->in_relay_q) {
         (void)pthread_spin_unlock(&g_jetty_pool.lock);
         return UMQ_SUCCESS;
     }
