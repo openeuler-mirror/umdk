@@ -10,6 +10,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <netlink/errno.h>
 #include <netlink/genl/genl.h>
 #include <stdio.h>
@@ -1034,19 +1035,6 @@ static void urma_eid_to_ipv6_str(const urma_eid_t *eid, char *out, size_t out_le
     }
 }
 
-static tool_topo_info_t *admin_find_topo_node(tool_topo_map_t *topo_map, uint32_t node_id)
-{
-    if (topo_map == NULL) {
-        return NULL;
-    }
-    for (uint32_t i = 0; i < topo_map->node_num; i++) {
-        if (topo_map->topo_infos[i].node_id == node_id) {
-            return &topo_map->topo_infos[i];
-        }
-    }
-    return NULL;
-}
-
 static int admin_collect_related_agg_dev_idxs(const tool_topo_info_t *node_info, const char *dev_name, bool *matched,
                                               uint32_t *matched_cnt, admin_urma_topo_bonding_dev_t *bonding_cache,
                                               bool *cache_valid)
@@ -1089,18 +1077,14 @@ static int admin_collect_related_agg_dev_idxs(const tool_topo_info_t *node_info,
     return *matched_cnt == 0 ? -ENODEV : 0;
 }
 
-static int admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id, const admin_config_t *cfg)
+static int admin_print_topo_node(tool_topo_info_t *cur_node_info, const admin_config_t *cfg)
 {
     (void)printf("========================== topo map start =============================\n");
     bool matched_agg_devs[DEV_NUM] = {0};
     bool bonding_cache_valid[DEV_NUM] = {0};
     admin_urma_topo_bonding_dev_t bonding_cache[DEV_NUM] = {0};
     uint32_t matched_cnt = 0;
-    tool_topo_info_t *cur_node_info = admin_find_topo_node(topo_map, node_id);
-    if (cur_node_info == NULL) {
-        (void)printf("Node %d topo info not found.\n", node_id);
-        return -ENODEV;
-    }
+    uint32_t node_id = cur_node_info->node_id;
 
     if (cfg != NULL && cfg->specify_device) {
         int ret = admin_collect_related_agg_dev_idxs(cur_node_info, cfg->dev_name, matched_agg_devs, &matched_cnt,
@@ -1205,59 +1189,27 @@ static int admin_print_topo_map(tool_topo_map_t *topo_map, uint32_t node_id, con
     return 0;
 }
 
-static uint32_t get_cur_node_id(tool_topo_map_t *topo_map)
+int admin_cmd_get_topo_info(uint32_t node_idx, admin_core_cmd_topo_info_t *arg)
 {
-    uint32_t node_id = 0;
-    for (uint32_t i = 0; i < topo_map->node_num; i++) {
-        tool_topo_info_t *cur_node_info = topo_map->topo_infos + i;
-        if (cur_node_info->is_current != 0) {
-            node_id = cur_node_info->node_id;
-            break;
-        }
-    }
-    return node_id;
-}
-
-int admin_cmd_get_topo_info(tool_topo_map_t *topo_map)
-{
-    int ret = 0;
-    admin_core_cmd_topo_info_t *arg = NULL;
-    uint32_t node_num = MAX_NODE_NUM;
-
-    if (topo_map == NULL) {
+    if (arg == NULL) {
         return -EINVAL;
     }
-
-    for (uint32_t i = 0; i < node_num; ++i) {
-        arg = calloc(1, sizeof(admin_core_cmd_topo_info_t));
-        if (arg == NULL) {
-            ret = -ENOMEM;
-            goto free_topo;
-        }
-        arg->in.node_idx = i;
-
-        struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_GET_TOPO, 0, UBAGG_GENL);
-        if (msg == NULL) {
-            ret = -ENOMEM;
-            goto free_topo;
-        }
-
-        admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
-        ret = admin_nl_send_recv_msg_default(msg, UBAGG_GENL);
-        admin_nl_free_msg(msg);
-        if (ret < 0) {
-            goto free_topo;
-        }
-
-        topo_map->topo_infos[i] = arg->out.topo_info;
-        topo_map->node_num = arg->out.node_num;
-        node_num = arg->out.node_num;
-        free(arg);
-        arg = NULL;
+    if (node_idx > INT_MAX) {
+        return -EOVERFLOW;
     }
-    return ret;
-free_topo:
-    free(arg);
+    (void)memset(arg, 0, sizeof(*arg));
+    arg->in.node_idx = (int)node_idx;
+
+    struct nl_msg *msg = admin_nl_alloc_msg(UBAGG_NL_GET_TOPO, 0, UBAGG_GENL);
+    if (msg == NULL) {
+        return -ENOMEM;
+    }
+
+    int ret = admin_nl_put_u64(msg, UBAGG_HDR_ARGS_ADDR, (uint64_t)(uintptr_t)arg);
+    if (ret == 0) {
+        ret = admin_nl_send_recv_msg_default(msg, UBAGG_GENL);
+    }
+    admin_nl_free_msg(msg);
     return ret;
 }
 
@@ -1688,29 +1640,47 @@ static int cmd_show_dev_tpreuse(admin_config_t *cfg)
 
 static int cmd_show_topo(admin_config_t *cfg)
 {
-    uint32_t node_id;
-    int ret;
-    tool_topo_map_t *topo_map = calloc(1, sizeof(tool_topo_map_t));
-    if (topo_map == NULL) {
+    char *node_id_arg = pop_arg(cfg);
+    bool specified_node = node_id_arg != NULL;
+    uint32_t node_id = 0;
+
+    if (specified_node && ub_str_to_u32(node_id_arg, &node_id) != 0) {
+        (void)printf("Invalid NODE_ID '%s': expected a 32-bit unsigned integer.\n", node_id_arg);
+        return -EINVAL;
+    }
+
+    admin_core_cmd_topo_info_t *arg = malloc(sizeof(*arg));
+    if (arg == NULL) {
         return -ENOMEM;
     }
-    if ((ret = admin_cmd_get_topo_info(topo_map)) != 0) {
-        (void)printf("Failed to get topo info, ret=%d.\n", ret);
-        goto free_topo;
+    uint32_t node_num = 1;
+    int ret;
+
+    for (uint32_t i = 0; i < node_num; i++) {
+        ret = admin_cmd_get_topo_info(i, arg);
+        if (ret != 0) {
+            (void)printf("Failed to get topo info, ret=%d.\n", ret);
+            goto free_topo;
+        }
+        node_num = arg->out.node_num;
+        if (i >= node_num) {
+            break;
+        }
+        tool_topo_info_t *node = &arg->out.topo_info;
+        if ((specified_node && node->node_id == node_id) || (!specified_node && node->is_current != 0)) {
+            ret = admin_print_topo_node(node, cfg);
+            goto free_topo;
+        }
     }
-    char *arg = pop_arg(cfg);
-    ret = ub_str_to_u16(arg, &cfg->idx);
-    if (ret == 0) {
-        node_id = cfg->idx;
+    if (specified_node) {
+        (void)printf("Node %u topo info not found.\n", node_id);
     } else {
-        node_id = get_cur_node_id(topo_map);
+        (void)printf("Current node topo info not found.\n");
     }
-    ret = admin_print_topo_map(topo_map, node_id, cfg);
-    free(topo_map);
-    return ret;
+    ret = -ENODEV;
 
 free_topo:
-    free(topo_map);
+    free(arg);
     return ret;
 }
 

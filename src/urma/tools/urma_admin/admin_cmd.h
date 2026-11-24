@@ -338,7 +338,7 @@ int admin_nl_set_dev_sharing(bool enabled);
 int admin_nl_expose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_unexpose_dev_ns(const char *dev_name, int ns_fd);
 int admin_nl_set_eid_ns(const char *dev_name, uint32_t eid_idx, int ns_fd);
-int admin_cmd_get_topo_info(tool_topo_map_t *topo_map);
+int admin_cmd_get_topo_info(uint32_t node_idx, admin_core_cmd_topo_info_t *arg);
 int admin_cmd_get_topo_bonding_dev_by_eid(const urma_eid_t *agg_eid,
                                           admin_urma_topo_bonding_dev_t *out);
 int admin_get_device_name_by_eid(const urma_eid_t *eid, char *dev_name, size_t dev_name_len);
