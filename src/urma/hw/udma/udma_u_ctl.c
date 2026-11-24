@@ -7,7 +7,6 @@
  *
  */
 
-#include <errno.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include "urma_private.h"
@@ -250,8 +249,7 @@ static urma_jfr_t *udma_u_create_jfr_ex(urma_context_t *ctx,
 
 	udma_u_init_jfr_param_ex(udma_jfr, cfg_ex);
 
-	if (!udma_jfr->lock_free &&
-		pthread_spin_init(&udma_jfr->lock, PTHREAD_PROCESS_PRIVATE))
+	if (!udma_jfr->lock_free && pthread_spin_init(&udma_jfr->lock, PTHREAD_PROCESS_PRIVATE))
 		goto err_spin_init;
 
 	if (udma_u_create_idx_que_ex(udma_jfr, cfg_ex)) {
@@ -526,22 +524,26 @@ static void udma_u_init_jetty_param_ex(struct udma_u_jetty *jetty,
 static int udma_u_create_common_jetty(urma_context_t *ctx, struct udma_u_jetty *jetty, urma_jetty_cfg_t *cfg)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(ctx);
+	int ret;
 
-	if (exec_jetty_create_cmd(ctx, jetty, cfg)) {
+	ret = exec_jetty_create_cmd(ctx, jetty, cfg);
+	if (ret) {
 		UDMA_LOG_ERR("failed to create jetty.\n");
-		return EINVAL;
+		return ret;
 	}
 
 	jetty->sq.db.id = jetty->base.jetty_id.id;
 	jetty->sq.db.type = UDMA_MMAP_JETTY_DSQE;
-	if (udma_u_alloc_db(ctx, &jetty->sq.db)) {
+	ret = udma_u_alloc_db(ctx, &jetty->sq.db);
+	if (ret) {
 		UDMA_LOG_ERR("failed to alloc doorbell.\n");
 		goto err_alloc_db;
 	}
 
 	jetty->sq.dwqe_addr = (void *)jetty->sq.db.addr;
 	jetty->sq.idx = jetty->base.jetty_id.id;
-	if (insert_jetty_node(udma_ctx, jetty)) {
+	ret = insert_jetty_node(udma_ctx, jetty);
+	if (ret) {
 		UDMA_LOG_ERR("failed to insert JETTY queue.\n");
 		goto err_insert_node;
 	}
@@ -552,7 +554,7 @@ err_insert_node:
 err_alloc_db:
 	(void)urma_cmd_delete_jetty(&jetty->base);
 
-	return EINVAL;
+	return ret;
 }
 
 static urma_jetty_t *udma_u_create_jetty_ex(urma_context_t *ctx, struct udma_u_jetty_cfg_ex *cfg_ex)
@@ -968,8 +970,8 @@ static urma_status_t udma_u_post_jetty_wr_ex(struct udma_u_wr_ex *wr_ex,
 	ret = udma_u_post_sq_wr_ex(udma_ctx, &udma_jetty->sq, bad_wr,
 				wr_ex, info);
 	if (ret)
-		UDMA_LOG_ERR("Jetty post SQ WR ex failed, ret = %d, id = %u.\n",
-			     ret, udma_jetty->sq.idx);
+		UDMA_LOG_ERR_RL("Jetty post SQ WR ex failed, ret = %d, id = %u.\n",
+				ret, udma_jetty->sq.idx);
 
 	return ret;
 }
@@ -989,8 +991,8 @@ static urma_status_t udma_u_post_jfs_wr_ex(struct udma_u_wr_ex *wr_ex,
 	ret = udma_u_post_sq_wr_ex(udma_ctx, &udma_jfs->sq, wr_ex->bad_wr,
 				wr_ex, info);
 	if (ret)
-		UDMA_LOG_ERR("JFS post SQ WR ex failed, ret = %d, id = %u.\n",
-			     ret, udma_jfs->sq.idx);
+		UDMA_LOG_ERR_RL("JFS post SQ WR ex failed, ret = %d, id = %u.\n",
+				ret, udma_jfs->sq.idx);
 
 	return ret;
 }

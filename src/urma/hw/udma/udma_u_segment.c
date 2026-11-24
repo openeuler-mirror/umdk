@@ -7,7 +7,6 @@
  *
  */
 
-#include <errno.h>
 #include <string.h>
 #include <ummu_api.h>
 #include "udma_u_buf.h"
@@ -136,21 +135,24 @@ urma_target_seg_t *udma_u_register_seg(urma_context_t *urma_ctx,
 	int ret;
 
 	ret = udma_u_check_seg_cfg(seg_cfg);
-	if (ret)
+	if (ret) {
+		errno = ret;
 		return NULL;
+	}
 
 	seg = (struct udma_u_segment *)calloc(1, sizeof(*seg));
 	if (!seg) {
 		UDMA_LOG_ERR_RL("alloc segment failed.\n");
+		errno = ENOMEM;
 		return NULL;
 	}
 
 	udma_u_init_seg_cfg(urma_ctx, seg_cfg, seg);
-
 	ret = udma_u_grant_segment(seg);
 	if (ret) {
-		UDMA_LOG_ERR_RL("segment grant failed, access = %d, ret = %d.\n",
-			     seg_cfg->flag.bs.access, ret);
+		if (ret != -ERANGE)
+			UDMA_LOG_ERR_RL("segment grant failed, access = %u, ret = %d.\n",
+					seg_cfg->flag.bs.access, ret);
 		goto err_ummu_grant;
 	}
 
@@ -164,6 +166,8 @@ err_pin_segment:
 	udma_u_ungrant_seg(seg);
 err_ummu_grant:
 	free(seg);
+	errno = ret;
+
 	return NULL;
 }
 
@@ -171,15 +175,15 @@ urma_status_t udma_u_unregister_seg(urma_target_seg_t *target_seg)
 {
 	struct udma_u_context *udma_ctx = to_udma_u_ctx(target_seg->urma_ctx);
 	struct udma_u_segment *seg = to_udma_u_seg(target_seg);
-	int ret;
+	urma_status_t ret;
 
 	if (!udma_ctx->sva_sep_mode_en && seg->urma_tseg.seg.attr.bs.non_pin)
 		goto common_process;
 
-	ret = urma_cmd_unregister_seg(target_seg);
+	ret = (urma_status_t)urma_cmd_unregister_seg(target_seg);
 	if (ret) {
 		UDMA_LOG_ERR_RL("URMA command unregister segment failed, ret = %d.\n", ret);
-		return URMA_FAIL;
+		return ret;
 	}
 
 common_process:
@@ -199,14 +203,15 @@ urma_target_seg_t *udma_u_import_seg(urma_context_t *ctx, urma_seg_t *seg,
 	RTE_SET_USED(addr);
 	RTE_SET_USED(flag);
 	if (seg->attr.bs.token_policy > URMA_TOKEN_PLAIN_TEXT) {
-		UDMA_LOG_ERR("invalid token policy = %d.\n",
-			     seg->attr.bs.token_policy);
+		UDMA_LOG_ERR("invalid token policy = %d.\n", seg->attr.bs.token_policy);
+		errno = EINVAL;
 		return NULL;
 	}
 
 	tseg = (struct udma_u_segment *)calloc(1, sizeof(*tseg));
 	if (!tseg) {
 		UDMA_LOG_ERR_RL("alloc target segment failed.\n");
+		errno = ENOMEM;
 		return NULL;
 	}
 

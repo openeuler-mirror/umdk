@@ -8,7 +8,6 @@
  * thanks to rdma-core-master/providers/hns/hns_roce_u_db.c code.
  */
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -207,7 +206,7 @@ int udma_u_alloc_db(struct urma_context *urma_ctx, struct udma_u_doorbell *db)
 	if (db->addr == MAP_FAILED) {
 		UDMA_LOG_ERR_RL("failed to mmap doorbell page, id = %u, type = %u.\n",
 			     db->id, db->type);
-		return EINVAL;
+		return ENOMEM;
 	}
 
 	if (db->type == UDMA_MMAP_JETTY_DSQE)

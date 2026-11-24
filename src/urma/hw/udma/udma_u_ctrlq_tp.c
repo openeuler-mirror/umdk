@@ -54,7 +54,7 @@ urma_status_t udma_u_get_smac(const urma_context_t *ctx, uint8_t *mac)
 {
 	urma_status_t ret;
 
-	ret = urma_cmd_get_smac(ctx, mac);
+	ret = (urma_status_t)urma_cmd_get_smac(ctx, mac);
 	if (ret)
 		UDMA_LOG_ERR("URMA command get smac failed, ret = %d.\n", ret);
 
@@ -65,7 +65,7 @@ urma_status_t udma_u_get_dmac(const urma_context_t *ctx, const urma_net_addr_t *
 {
 	urma_status_t ret;
 
-	ret = urma_cmd_get_dmac(ctx, net_addr, mac);
+	ret = (urma_status_t)urma_cmd_get_dmac(ctx, net_addr, mac);
 	if (ret)
 		UDMA_LOG_ERR("URMA command get dmac failed, ret = %d.\n", ret);
 
@@ -76,7 +76,7 @@ urma_status_t udma_u_get_eid_by_ip(const urma_context_t *ctx, const urma_net_add
 {
 	urma_status_t ret;
 
-	ret = urma_cmd_get_eid_by_ip(ctx, net_addr, eid);
+	ret = (urma_status_t)urma_cmd_get_eid_by_ip(ctx, net_addr, eid);
 	if (ret)
 		UDMA_LOG_ERR("URMA command get EID by IP failed, ret = %d.\n", ret);
 
@@ -87,7 +87,7 @@ urma_status_t udma_u_get_ip_by_eid(const urma_context_t *ctx, const urma_eid_t *
 {
 	urma_status_t ret;
 
-	ret = urma_cmd_get_ip_by_eid(ctx, eid, net_addr);
+	ret = (urma_status_t)urma_cmd_get_ip_by_eid(ctx, eid, net_addr);
 	if (ret)
 		UDMA_LOG_ERR("URMA command get IP by EID failed, ret = %d.\n", ret);
 

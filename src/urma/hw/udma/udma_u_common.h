@@ -10,6 +10,7 @@
 #ifndef __UDMA_U_COMMON_H__
 #define __UDMA_U_COMMON_H__
 
+#include <errno.h>
 #include <unistd.h>
 #include <stdatomic.h>
 #include <arm_neon.h>

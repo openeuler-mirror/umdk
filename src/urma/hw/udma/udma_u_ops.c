@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/mman.h>
-#include <errno.h>
 #include <string.h>
 #include <dlfcn.h>
 #include "udma_u_jfc.h"
@@ -187,7 +186,7 @@ static int udma_u_reserved_sq(struct udma_u_context *udma_ctx, struct udma_creat
 		(void)pthread_mutex_unlock(&g_sq_reserved_lock);
 		UDMA_LOG_ERR("failed to reserve SQ, errno:%d, strerror:%s.\n",
 			     errno, strerror(errno));
-		return EINVAL;
+		return ENOMEM;
 	}
 	g_sq_reserved_len = resp->sq_reserved_len;
 	g_sq_reserved_refcount++;
@@ -270,6 +269,7 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	struct udma_create_ctx_resp resp = {};
 	urma_cmd_udrv_priv_t udrv_data = {};
 	struct udma_u_context *udma_ctx;
+	int ret;
 	urma_context_cfg_t cfg = {
 		.dev = dev,
 		.ops = &g_udma_ops,
@@ -280,15 +280,18 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 	udma_ctx = (struct udma_u_context *)calloc(1, sizeof(*udma_ctx));
 	if (!udma_ctx) {
 		UDMA_LOG_ERR("Failed to alloc memory for UDMA context.\n");
+		errno = ENOMEM;
 		return NULL;
 	}
 
-	if (pthread_mutex_init(&udma_ctx->db_list_mutex, NULL)) {
+	ret = pthread_mutex_init(&udma_ctx->db_list_mutex, NULL);
+	if (ret) {
 		UDMA_LOG_ERR("Failed to init doorbell list mutex.\n");
 		goto err_db_list_mutex;
 	}
 
-	if (pthread_mutex_init(&udma_ctx->hugepage_lock, NULL)) {
+	ret = pthread_mutex_init(&udma_ctx->hugepage_lock, NULL);
+	if (ret) {
 		UDMA_LOG_ERR("Failed to init hugepage mutex.\n");
 		goto err_hugepage_lock;
 	}
@@ -296,7 +299,8 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 
 	udma_u_set_udata(&udrv_data, NULL, 0, &resp, sizeof(resp));
 
-	if (urma_cmd_create_context(&udma_ctx->urma_ctx, &cfg, &udrv_data)) {
+	ret = urma_cmd_create_context(&udma_ctx->urma_ctx, &cfg, &udrv_data);
+	if (ret) {
 		UDMA_LOG_ERR("Failed to create context.\n");
 		goto err_create_ctx;
 	}
@@ -316,13 +320,17 @@ static urma_context_t *udma_u_create_context(urma_device_t *dev, uint32_t eid_in
 		}
 	}
 
-	if (udma_u_alloc_db(&udma_ctx->urma_ctx, &udma_ctx->db)) {
+	ret = udma_u_alloc_db(&udma_ctx->urma_ctx, &udma_ctx->db);
+	if (ret) {
 		UDMA_LOG_ERR("Failed to alloc JFC doorbell.\n");
 		goto err_alloc_db;
 	}
 
-	if (udma_ctx->sq_reserved && udma_u_reserved_sq(udma_ctx, &resp))
-		goto err_reserved_sq;
+	if (udma_ctx->sq_reserved) {
+		ret = udma_u_reserved_sq(udma_ctx, &resp);
+		if (ret)
+			goto err_reserved_sq;
+	}
 
 	udma_u_init_jetty_table(udma_ctx);
 
@@ -342,6 +350,7 @@ err_hugepage_lock:
 	(void)pthread_mutex_destroy(&udma_ctx->db_list_mutex);
 err_db_list_mutex:
 	free(udma_ctx);
+	errno = ret;
 
 	return NULL;
 }
@@ -361,10 +370,9 @@ static urma_status_t udma_u_delete_context(urma_context_t *ctx)
 	}
 	udma_u_destroy_hugepage(udma_ctx);
 
-	if (urma_cmd_delete_context(&udma_ctx->urma_ctx)) {
+	ret = (urma_status_t)urma_cmd_delete_context(&udma_ctx->urma_ctx);
+	if (ret)
 		UDMA_LOG_ERR("UDMA destroy context failed.\n");
-		ret = URMA_FAIL;
-	}
 
 	(void)pthread_mutex_destroy(&udma_ctx->db_list_mutex);
 	free(udma_ctx);
