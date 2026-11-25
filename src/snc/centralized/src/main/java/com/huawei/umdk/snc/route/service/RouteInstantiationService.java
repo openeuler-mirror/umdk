@@ -268,10 +268,9 @@ public class RouteInstantiationService {
     }
 
     // 对框内模板的路由进行实例化
-    public static void instantiateGalaxyXpodRoute(Map.Entry<SuperNodeType, SuperNodeType> snTypeEntry,
-        Map<String, SncTopology> topologyMap, Map<String, Map<String, RouteTable>> routeTemplateMap,
-        Map<String, Map<String, RouteTable>> superNodeRoutes) {
-        String xpodType = snTypeEntry.getValue().getValue();
+    public static Map<String, RouteTable> instantiateGalaxyXpodRoute(Map.Entry<SuperNodeType, SuperNodeType> snEntry,
+        Map<String, SncTopology> topologyMap, Map<String, Map<String, RouteTable>> routeTemplateMap) {
+        String xpodType = snEntry.getValue().getValue();
         Map<String, RouteTable> routeMap = routeTemplateMap.get(xpodType);
         SncTopology topology = topologyMap.get(xpodType);
         Map<String, RouteTable> routes = new HashMap<>();
@@ -281,7 +280,7 @@ public class RouteInstantiationService {
         for (Map.Entry<String, SncNode> entry : topology.getNodeMap().entrySet()) {
             SncNode node = entry.getValue();
             if (NodeType.L1_SW.getValue().equals(node.type())) {
-                Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snTypeEntry,
+                Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snEntry,
                     topologyMap, node, routeMap);
                 routes.putAll(routeTableMap);
             }
@@ -294,13 +293,25 @@ public class RouteInstantiationService {
                 continue;
             }
 
-            Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snTypeEntry,
+            Map<String, RouteTable> routeTableMap = instantiateGalaxyNodeRoute(snEntry,
                 topologyMap, node, routeMap);
             routes.putAll(routeTableMap);
         }
 
-        superNodeRoutes.put(snTypeEntry.getKey().getValue(), routes);
         log.info("instantiate xpod route success");
+        return routes;
+    }
+
+    private void makeChipRoute(Map<String, RouteTable> routes, String label, String deviceName, int chipIndex,
+                               Map<String, Map<String, RoutingEntry>> instantiationRouteMap) {
+        RouteTable routeTable = routes.get(label);
+        if (routeTable == null) {
+            log.error("route not found for label %s", label);
+            throw new IllegalArgumentException(String.format("route not found for label %s", label));
+        }
+        String key = buildRouteTableKey(deviceName, chipIndex);
+        instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
+        routes.remove(label);
     }
 
     public void makeNpuRoutes(NpuDevice npuDevice, Map<String, RouteTable> routes,
@@ -315,13 +326,7 @@ public class RouteInstantiationService {
         for (NpuForwardingChip chip : chips.values()) {
             String label = String.format("type:%s|chassis:%d|slot:%d|ubpu:%d|die:%d", NodeType.NPU.getValue(),
                 chassis, npuDevice.getBoardId(), npuDevice.getBoardIndex(), chip.getChipIndex());
-            RouteTable routeTable = routes.get(label);
-            if (routeTable == null) {
-                log.error("route not found for label %s", label);
-                throw new IllegalArgumentException(String.format("route not found for label %s", label));
-            }
-            String key = buildRouteTableKey(npuDevice.getDeviceName(), chip.getChipIndex());
-            instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
+            makeChipRoute(routes, label, npuDevice.getDeviceName(), chip.getChipIndex(), instantiationRouteMap);
         }
     }
 
@@ -345,15 +350,8 @@ public class RouteInstantiationService {
         int chassis = extractRackNumber(swDevice.getRack());
         String label = String.format("type:%s|chassis:%d|index:%d", NodeType.L1_SW.getValue(), chassis,
             swDevice.getIndex());
-        RouteTable routeTable = routes.get(label);
-        if (routeTable == null) {
-            log.error("route not found for label %s", label);
-            throw new IllegalArgumentException(String.format("route not found for label %s", label));
-        }
-
-        String key = buildRouteTableKey(swDevice.getDeviceName(),
-            chips.values().iterator().next().getChipIndex());
-        instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
+        int chipIndex = chips.keySet().iterator().next();
+        makeChipRoute(routes, label, swDevice.getDeviceName(), chipIndex, instantiationRouteMap);
     }
 
     private void makeL2SwRoutes(SwDevice swDevice, Map<String, RouteTable> routes,
@@ -367,13 +365,7 @@ public class RouteInstantiationService {
         for (SwForwardingChip chip : chips.values()) {
             String label = String.format("type:%s|index:%d|chip:%d", NodeType.L2_SW.getValue(),
                 swDevice.getIndex(), chip.getChipIndex());
-            RouteTable routeTable = routes.get(label);
-            if (routeTable == null) {
-                log.error("route not found for label %s", label);
-                throw new IllegalArgumentException(String.format("route not found for label %s", label));
-            }
-            String key = buildRouteTableKey(swDevice.getDeviceName(), chip.getChipIndex());
-            instantiationRouteMap.put(key, convertToRoutingEntries(routeTable));
+            makeChipRoute(routes, label, swDevice.getDeviceName(), chip.getChipIndex(), instantiationRouteMap);
         }
     }
 
@@ -418,26 +410,5 @@ public class RouteInstantiationService {
             ((addr >> DOT_DECIMAL_TWO_PART) & DOT_DECIMAL_MASK) + "." +
             ((addr >> DOT_DECIMAL_ONE_PART) & DOT_DECIMAL_MASK) + "." +
             (addr & DOT_DECIMAL_MASK);
-    }
-
-    public static Map<String, Map<String, RoutingEntry>> deepCopyRoutingEntry(
-        Map<String, Map<String, RoutingEntry>> source) {
-        Map<String, Map<String, RoutingEntry>> dest = new HashMap<>();
-        for (Map.Entry<String, Map<String, RoutingEntry>> deviceEntry : source.entrySet()) {
-            String deviceKey = deviceEntry.getKey();
-            Map<String, RoutingEntry> srcRouteMap = deviceEntry.getValue();
-            if (srcRouteMap == null) {
-                dest.put(deviceKey, null);
-                continue;
-            }
-
-            Map<String, RoutingEntry> dstRouteMap = new HashMap<>();
-            for (Map.Entry<String, RoutingEntry> routeEntry : srcRouteMap.entrySet()) {
-                RoutingEntry dstEntry = RoutingEntry.copy(routeEntry.getValue());
-                dstRouteMap.put(routeEntry.getKey(), dstEntry);
-            }
-            dest.put(deviceKey, dstRouteMap);
-        }
-        return dest;
     }
 }

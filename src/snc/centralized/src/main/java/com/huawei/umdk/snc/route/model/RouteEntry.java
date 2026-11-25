@@ -24,12 +24,6 @@ public class RouteEntry {
 
     private final Set<NextHopPort> nhpSet = new HashSet<>();
 
-    private final Set<NextHopPort> shortestNhp = new HashSet<>();
-
-    private final Set<NextHopPort> secondNhp = new HashSet<>();
-
-    private final Set<NextHopPort> otherNhp = new HashSet<>();
-
     public RouteEntry(@NonNull Prefix prefix) {
         this.prefix = prefix;
     }
@@ -110,8 +104,5 @@ public class RouteEntry {
     }
     public void copyNhpSet(RouteEntry entry) {
         copySingleNhpSet(nhpSet, entry.nhpSet);
-        copySingleNhpSet(shortestNhp, entry.shortestNhp);
-        copySingleNhpSet(secondNhp, entry.secondNhp);
-        copySingleNhpSet(otherNhp, entry.otherNhp);
     }
 }
