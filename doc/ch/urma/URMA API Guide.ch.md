@@ -1110,7 +1110,7 @@ rpm包安装的结果在：/usr/bin/urma_sample
 
 3.  描述
 
-初始化URMA的执行环境。不支持多线程调用此接口。不支持与urma_register_sysfs_dev、urma_unregister_provider_ops并发调用。
+初始化URMA的执行环境。支持与urma_init、urma_uninit并发调用。重复初始化要求token和请求的uasid一致，每次成功调用须配对一次urma_uninit。不支持与urma_register_sysfs_dev、urma_unregister_provider_ops并发调用。
 
 4.  参数
 
@@ -1165,7 +1165,7 @@ typedef int urma_status_t;
 
 3.  描述
 
-urma语义环境反初始化。会释放uasid。不支持多线程调用此接口。不支持与urma_register_sysfs_dev、urma_unregister_provider_ops并发调用。
+释放一次urma_init获取的引用，最后一个引用释放时清理URMA执行环境并释放uasid。调用前须停止使用该引用并销毁相关资源。支持与urma_init、urma_uninit并发调用。不支持与urma_register_sysfs_dev、urma_unregister_provider_ops并发调用。
 
 4.  参数
 

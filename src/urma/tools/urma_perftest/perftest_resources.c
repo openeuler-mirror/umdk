@@ -172,8 +172,7 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
     }
 
     status = urma_init(&init_attr);
-    /* Tolerate URMA_EEXIST: UB mgmt channel may have already urma_init'd. */
-    if (status != URMA_SUCCESS && status != URMA_EEXIST) {
+    if (status != URMA_SUCCESS) {
         LOG_ERROR("Failed to urma init, status:%d!\n", (int)status);
         return -1;
     }
@@ -282,23 +281,13 @@ static int init_device(perftest_context_t *ctx, perftest_config_t *cfg)
 del_ctx:
     (void)urma_delete_context(ctx->urma_ctx);
 uninit:
-    /* UB mgmt: close mgmt channel before urma_uninit, since urma_uninit
-     * dlclose()'s provider.so 
-     */
-    if (cfg->mgmt_type == PERFTEST_MGMT_UB) {
-        close_connection(cfg);
-    }
     (void)urma_uninit();
     return -1;
 }
 
-static void uninit_device(perftest_context_t *ctx, perftest_config_t *cfg)
+static void uninit_device(perftest_context_t *ctx)
 {
     urma_status_t status;
-
-    if (cfg->mgmt_type == PERFTEST_MGMT_UB) {
-        close_connection(cfg);
-    }
 
     status = urma_delete_context(ctx->urma_ctx);
     if (status != URMA_SUCCESS) {
@@ -2901,7 +2890,7 @@ unregister_mem:
 delete_jettys:
     destroy_simplex_jettys(ctx, cfg);
 uninit_dev:
-    uninit_device(ctx, cfg);
+    uninit_device(ctx);
     return -1;
 }
 
@@ -3152,7 +3141,7 @@ unregister_mem:
 delete_jettys:
     destroy_duplex_jettys(ctx, cfg);
 uninit_dev:
-    uninit_device(ctx, cfg);
+    uninit_device(ctx);
     return -1;
 }
 
@@ -3191,7 +3180,7 @@ static void destroy_simplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     destroy_simplex_jettys(ctx, cfg);
     unregister_mem(ctx, cfg);
     ctx->jetty_num = 0;
-    uninit_device(ctx, cfg);
+    uninit_device(ctx);
     return;
 }
 
@@ -3228,7 +3217,7 @@ static void destroy_duplex_ctx(perftest_context_t *ctx, perftest_config_t *cfg)
     destroy_duplex_jettys(ctx, cfg);
     unregister_mem(ctx, cfg);
     ctx->jetty_num = 0;
-    uninit_device(ctx, cfg);
+    uninit_device(ctx);
     return;
 }
 
