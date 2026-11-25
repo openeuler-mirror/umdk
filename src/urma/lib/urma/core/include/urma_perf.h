@@ -55,12 +55,14 @@ typedef struct urma_perf_stats {
 
 /**
  * Start performance monitoring for urma devices.
+ * Reference-counted; only the first start resets statistics.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_start_perf(void);
 
 /**
  * Stop performance monitoring for urma devices.
+ * Pair with start; only the last stop disables sampling.
  * Return: 0 on success, other value on error
  */
 urma_status_t urma_stop_perf(void);
