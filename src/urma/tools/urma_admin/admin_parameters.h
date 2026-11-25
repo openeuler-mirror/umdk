@@ -23,7 +23,6 @@
 #include "urma_types.h"
 #include "urma_types_str.h"
 
-#define MAX_NODE_NUM            (1024)
 #define EID_LEN                 (16)
 #define PORT_NUM                (9)
 #define CHIP_NUM                (2)
@@ -242,11 +241,6 @@ typedef struct tool_topo_info {
     bool links[IODIE_NUM * PORT_NUM][IODIE_NUM * PORT_NUM];
     tool_topo_agg_dev_t agg_devs[DEV_NUM];
 } tool_topo_info_t;
-
-typedef struct tool_topo_map {
-    tool_topo_info_t topo_infos[MAX_NODE_NUM];
-    uint32_t node_num;
-} tool_topo_map_t;
 
 /* refer to struct ubcore_res_dev_val */
 typedef struct tool_res_dev_val {
