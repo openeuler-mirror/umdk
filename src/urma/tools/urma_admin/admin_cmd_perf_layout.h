@@ -1,0 +1,124 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Description: urma_admin perf netlink payload layout
+ */
+
+#ifndef ADMIN_CMD_PERF_LAYOUT_H
+#define ADMIN_CMD_PERF_LAYOUT_H
+
+#include <stdint.h>
+
+typedef enum admin_perf_record_type {
+    PERF_URMA_CMD_CREATE_JETTY,
+    PERF_CORE_CREATE_JETTY,
+    PERF_AGG_CREATE_JETTY,
+    PERF_UB_CREATE_JETTY,
+    PERF_URMA_CMD_CREATE_CTX,
+    PERF_CORE_ALLOC_UCONTEXT,
+    PERF_AGG_ALLOC_UCONTEXT,
+    PERF_UB_ALLOC_UCONTEXT,
+    PERF_URMA_CMD_CREATE_JFCE,
+    PERF_URMA_CMD_CREATE_JFC,
+    PERF_CORE_CREATE_JFC,
+    PERF_AGG_CREATE_JFC,
+    PERF_UB_CREATE_JFC,
+    PERF_URMA_CMD_CREATE_JFR,
+    PERF_CORE_CREATE_JFR,
+    PERF_AGG_CREATE_JFR,
+    PERF_UB_CREATE_JFR,
+    PERF_URMA_CMD_CREATE_JFS,
+    PERF_CORE_CREATE_JFS,
+    PERF_AGG_CREATE_JFS,
+    PERF_UB_CREATE_JFS,
+    PERF_URMA_CMD_REGISTER_SEG,
+    PERF_CORE_REGISTER_SEG,
+    PERF_AGG_REGISTER_SEG,
+    PERF_UB_REGISTER_SEG,
+    PERF_URMA_CMD_ALLOC_TOKEN_ID,
+    PERF_CORE_ALLOC_TOKEN_ID,
+    PERF_UB_ALLOC_TOKEN_ID,
+    PERF_URMA_CMD_IMPORT_JETTY_EX,
+    PERF_CORE_IMPORT_JETTY,
+    PERF_AGG_IMPORT_JETTY,
+    PERF_UB_GET_TP_LIST,
+    PERF_UB_ACTIVE_TP,
+    PERF_UB_IMPORT_JETTY_EX,
+    PERF_URMA_CMD_IMPORT_JFR_EX,
+    PERF_CORE_IMPORT_JFR,
+    PERF_AGG_IMPORT_JFR,
+    PERF_UB_IMPORT_JFR,
+    PERF_URMA_CMD_BIND_JETTY_EX,
+    PERF_CORE_BIND_JETTY,
+    PERF_UB_BIND_JETTY,
+    PERF_URMA_CMD_IMPORT_SEG,
+    PERF_CORE_IMPORT_SEG,
+    PERF_AGG_IMPORT_SEG,
+    PERF_UB_IMPORT_SEG,
+    PERF_URMA_CMD_UNIMPORT_SEG,
+    PERF_CORE_UNIMPORT_SEG,
+    PERF_AGG_UNIMPORT_SEG,
+    PERF_UB_UNIMPORT_SEG,
+    PERF_URMA_CMD_UNBIND_JETTY,
+    PERF_CORE_UNBIND_JETTY,
+    PERF_UB_DEACTIVE_TP,
+    PERF_UB_UNBIND_JETTY,
+    PERF_URMA_CMD_UNIMPORT_JETTY,
+    PERF_CORE_UNIMPORT_JETTY,
+    PERF_UB_UNIMPORT_JETTY,
+    PERF_URMA_CMD_UNIMPORT_JFR,
+    PERF_CORE_UNIMPORT_JFR,
+    PERF_UB_UNIMPORT_JFR,
+    PERF_URMA_CMD_FREE_TOKEN_ID,
+    PERF_CORE_FREE_TOKEN_ID,
+    PERF_UB_FREE_TOKEN_ID,
+    PERF_URMA_CMD_UNREGISTER_SEG,
+    PERF_CORE_UNREGISTER_SEG,
+    PERF_AGG_UNREGISTER_SEG,
+    PERF_UB_UNREGISTER_SEG,
+    PERF_URMA_CMD_DELETE_JETTY,
+    PERF_CORE_DELETE_JETTY,
+    PERF_AGG_DESTROY_JETTY,
+    PERF_UB_DESTROY_JETTY,
+    PERF_URMA_CMD_DELETE_JFS,
+    PERF_CORE_DELETE_JFS,
+    PERF_AGG_DESTROY_JFS,
+    PERF_UB_DESTROY_JFS,
+    PERF_URMA_CMD_DELETE_JFR,
+    PERF_CORE_DELETE_JFR,
+    PERF_AGG_DESTROY_JFR,
+    PERF_UB_DESTROY_JFR,
+    PERF_URMA_CMD_DELETE_JFC,
+    PERF_CORE_DELETE_JFC,
+    PERF_AGG_DESTROY_JFC,
+    PERF_UB_DESTROY_JFC,
+    ADMIN_PERF_RECORD_TYPE_MAX,
+} admin_perf_record_type_t;
+
+enum {
+    ADMIN_PERF_KABI_RESERVE_COUNT = 2,
+};
+
+typedef struct admin_perf_record_stat {
+    uint32_t record_type;
+    uint32_t reserved;
+    uint64_t count;
+    uint64_t min_ns;
+    uint64_t max_ns;
+    uint64_t avg_ns;
+    uint64_t p90_ns;
+    uint64_t p99_ns;
+    uint64_t p9999_ns;
+} admin_perf_record_stat_t;
+
+typedef struct admin_perf_record_stat_kabi {
+    admin_perf_record_stat_t base;
+    uint64_t kabi_reserved[ADMIN_PERF_KABI_RESERVE_COUNT];
+} admin_perf_record_stat_kabi_t;
+
+typedef struct admin_core_latency_stat {
+    uint32_t version;
+    admin_perf_record_stat_t perf_stat_table[ADMIN_PERF_RECORD_TYPE_MAX];
+} admin_core_latency_stat_t;
+
+#endif /* ADMIN_CMD_PERF_LAYOUT_H */
