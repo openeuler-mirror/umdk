@@ -3159,7 +3159,7 @@ urma_token_id_t *urma_alloc_token_id(urma_context_t *ctx)
     if (token_id != NULL) {
         atomic_fetch_add(&token_id->urma_ctx->ref.atomic_cnt, 1);
     } else {
-        URMA_LOG_ERR("[DRV_ERR]Failed to register seg, dev_name=%s, eid_idx=%u.\n",
+        URMA_LOG_ERR("[DRV_ERR]Failed to alloc token id, dev_name=%s, eid_idx=%u.\n",
             ctx->dev->name, ctx->eid_index);
     }
     return token_id;
