@@ -28,12 +28,13 @@ static urma_token_id_t *udma_u_alloc_tid_common(urma_context_t *ctx, enum ummu_m
 {
 	struct ummu_tid_attr tid_attr = {.mode = mapt_mode};
 	struct udma_u_tid *udma_tid;
+	int free_ret, ret;
 	uint32_t tid;
-	int ret;
 
 	udma_tid = (struct udma_u_tid *)calloc(1, sizeof(*udma_tid));
 	if (udma_tid == NULL) {
 		UDMA_LOG_ERR_RL("allocate UDMA TID failed.\n");
+		errno = ENOMEM;
 		return NULL;
 	}
 
@@ -45,6 +46,7 @@ static urma_token_id_t *udma_u_alloc_tid_common(urma_context_t *ctx, enum ummu_m
 
 	if (tid > UDMA_MAX_TID) {
 		UDMA_LOG_ERR("UMMU allocate TID overflow.\n");
+		ret = ENOSR;
 		goto err_cmd_alloc_key_id;
 	}
 
@@ -59,26 +61,28 @@ static urma_token_id_t *udma_u_alloc_tid_common(urma_context_t *ctx, enum ummu_m
 	return &udma_tid->base;
 
 err_cmd_alloc_key_id:
-	ret = ummu_free_tid(tid);
-	if (ret != 0)
-		UDMA_LOG_ERR_RL("UMMU free TID failed, ret = %d.\n", ret);
+	free_ret = ummu_free_tid(tid);
+	if (free_ret != 0)
+		UDMA_LOG_ERR_RL("UMMU free TID failed, ret = %d.\n", free_ret);
 err_ummu_alloc_tid:
 	free(udma_tid);
+	errno = ret;
+
 	return NULL;
 }
 
 urma_status_t udma_u_free_tid(urma_token_id_t *tid)
 {
 	struct udma_u_tid *udma_tid = to_udma_u_tid(tid);
-	int ret;
+	urma_status_t ret;
 
-	ret = urma_cmd_free_token_id(tid);
+	ret = (urma_status_t)urma_cmd_free_token_id(tid);
 	if (ret != 0) {
 		UDMA_LOG_ERR_RL("URMA command free TID failed, ret = %d.\n", ret);
-		return URMA_FAIL;
+		return ret;
 	}
 
-	ret = ummu_free_tid(udma_tid->tid);
+	ret = (urma_status_t)ummu_free_tid(udma_tid->tid);
 	if (ret != 0)
 		UDMA_LOG_ERR_RL("UMMU free TID failed, ret = %d.\n", ret);
 
