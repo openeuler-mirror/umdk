@@ -178,6 +178,66 @@ TEST(UrmaCoreTest, PerfApisRecordAndFormatStats)
     EXPECT_FALSE(urma_perf_is_enabled());
 }
 
+TEST(UrmaCoreTest, PerfStartsShareStatsUntilLastStop)
+{
+    char before[8192] = {};
+    char after[8192] = {};
+    uint32_t len = sizeof(before);
+
+    EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+    (void)urma_get_perf_timestamp();
+    EXPECT_EQ(URMA_SUCCESS, urma_step_perf(UB_JFS_POST_SEND, 100));
+    EXPECT_EQ(URMA_SUCCESS, urma_get_perf_info(before, &len));
+    EXPECT_NE(nullptr, strstr(before, "UB_JFS_POST_SEND"));
+
+    EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+    len = sizeof(after);
+    EXPECT_EQ(URMA_SUCCESS, urma_get_perf_info(after, &len));
+    EXPECT_STREQ(before, after);
+
+    EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+    EXPECT_TRUE(urma_perf_is_enabled());
+    EXPECT_EQ(URMA_SUCCESS, urma_step_perf(UB_JFS_POST_SEND, 200));
+    EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+    EXPECT_FALSE(urma_perf_is_enabled());
+    EXPECT_EQ(URMA_EINVAL, urma_stop_perf());
+
+    EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+    len = sizeof(after);
+    EXPECT_EQ(URMA_SUCCESS, urma_get_perf_info(after, &len));
+    EXPECT_EQ(nullptr, strstr(after, "UB_JFS_POST_SEND"));
+    EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+}
+
+TEST(UrmaCoreTest, PerfConcurrentUsersKeepSamplingEnabled)
+{
+    pthread_barrier_t barrier;
+    pthread_t threads[2];
+    ASSERT_EQ(0, pthread_barrier_init(&barrier, nullptr, 3));
+    auto worker = [](void *arg) -> void * {
+        auto *sync = static_cast<pthread_barrier_t *>(arg);
+        EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+        (void)pthread_barrier_wait(sync);
+        (void)pthread_barrier_wait(sync);
+        EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+        return nullptr;
+    };
+
+    EXPECT_EQ(URMA_SUCCESS, urma_start_perf());
+    for (auto &thread : threads) {
+        ASSERT_EQ(0, pthread_create(&thread, nullptr, worker, &barrier));
+    }
+    (void)pthread_barrier_wait(&barrier);
+    EXPECT_EQ(URMA_SUCCESS, urma_stop_perf());
+    EXPECT_TRUE(urma_perf_is_enabled());
+    (void)pthread_barrier_wait(&barrier);
+    for (auto &thread : threads) {
+        EXPECT_EQ(0, pthread_join(thread, nullptr));
+    }
+    EXPECT_FALSE(urma_perf_is_enabled());
+    EXPECT_EQ(0, pthread_barrier_destroy(&barrier));
+}
+
 TEST(UrmaCoreTest, PerfThreadCleanupRunsOnWorkerExit)
 {
     pthread_t thread;
