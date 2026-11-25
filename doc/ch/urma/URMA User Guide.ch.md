@@ -2099,7 +2099,9 @@ urma_admin show -w参数说明：
 
 ![](figures/urma_caution.png)
 
-urma_admin的操作依赖rsyslog将日志重定向到/var/log/umdk/urma/urma_admin.log文件中。按大小切割、压缩和保留依赖logrotate工具。如果短期频繁调用命令，会导致日志无法切割。
+1. urma_admin的操作依赖rsyslog将日志重定向到/var/log/umdk/urma/urma_admin.log文件中。按大小切割、压缩和保留依赖logrotate工具。如果短期频繁调用命令，会导致日志无法切割。
+
+2. `urma_admin show dev <DEV> jfc/jfs/jfr/jetty/jetty_group/rc/seg [ID]` 命令不支持在NPU上查询。
 
 ## 6.5 DFX维测
 
