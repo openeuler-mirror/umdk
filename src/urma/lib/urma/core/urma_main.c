@@ -15,6 +15,8 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <limits.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -38,7 +40,18 @@ static struct ub_list g_so_list = UB_LIST_INITIALIZER(&g_so_list);
 static struct ub_list g_dev_list = UB_LIST_INITIALIZER(&g_dev_list);
 static uint32_t g_uasid;
 static pthread_spinlock_t g_dev_list_lock;
-static atomic_uint g_init_flag;
+
+enum urma_init_state {
+    URMA_UNINITIALIZED,
+    URMA_INITIALIZED,
+    URMA_INIT_FAILED,
+};
+
+static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+/* Serialize the entire lifecycle, including provider initialization and teardown. */
+static enum urma_init_state g_init_state = URMA_UNINITIALIZED;
+static unsigned int g_init_refs;
+static urma_init_attr_t g_init_conf;
 
 typedef struct urma_so {
     char path[URMA_MAX_LIB_PATH];
@@ -46,18 +59,24 @@ typedef struct urma_so {
     struct ub_list node; /* Add to so list */
 } urma_so_t;
 
-static void urma_close_provider(void *handler, const char *file)
+static urma_status_t urma_close_drivers(void)
 {
-    int ret;
+    urma_status_t ret = URMA_SUCCESS;
+    urma_so_t *so, *next;
 
-    if (handler != NULL) {
-        ret = dlclose(handler);
-        if (ret == 0) {
-            URMA_LOG_INFO("%s is closed.\n", file);
-        } else {
-            URMA_LOG_ERR("%s close failed, err=%s.\n", file, dlerror());
+    UB_LIST_FOR_EACH_SAFE (so, next, node, &g_so_list) {
+        if (so->dl != NULL) {
+            if (dlclose(so->dl) != 0) {
+                URMA_LOG_ERR("%s close failed, err=%s.\n", so->path, dlerror());
+                ret = URMA_FAIL;
+                continue;
+            }
+            URMA_LOG_INFO("%s is closed.\n", so->path);
         }
+        ub_list_remove(&so->node);
+        free(so);
     }
+    return ret;
 }
 
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
@@ -260,27 +279,25 @@ static int urma_open_drivers(void)
 }
 #endif
 
-urma_status_t urma_init(urma_init_attr_t *conf)
+static enum urma_init_state urma_init_once(const urma_init_attr_t *conf)
 {
-    /* g_init_flag is initialized as 0 */
-    if (atomic_load(&g_init_flag) > 0) {
-        URMA_LOG_WARN("urma_init has been called before.\n");
-        return URMA_EEXIST;
-    }
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
     /* TODONEXT: call ubcore to allocate uasid */
     if (urma_open_drivers() < 0) {
-        URMA_LOG_ERR("None of the providers registered.\n");
-        /* we can continue on android platform */
-#if !defined(__ANDROID__) && !defined(SO_LINKED)
-        return URMA_FAIL;
+        URMA_LOG_ERR("Failed to scan provider libraries.\n");
+#ifndef SO_LINKED
+        goto close_drivers;
 #endif
     }
 #endif
 
-    (void)pthread_spin_init(&g_dev_list_lock, PTHREAD_PROCESS_PRIVATE);
-    /* Compensate: a callback registered before init could not be forwarded
-     * (providers not loaded yet); now they are. */
+    int ret = pthread_spin_init(&g_dev_list_lock, PTHREAD_PROCESS_PRIVATE);
+    if (ret != 0) {
+        URMA_LOG_ERR("Failed to initialize device list lock, ret=%d.\n", ret);
+        goto close_drivers;
+    }
+
+    /* Forward callbacks registered before the providers were loaded. */
     if (urma_is_log_func_registered()) {
         urma_register_log_func_to_providers(urma_get_log_func());
     }
@@ -299,47 +316,100 @@ urma_status_t urma_init(urma_init_attr_t *conf)
         }
     }
 #if !defined(__OHOS__) && !defined(__OH__) && !defined(__ANDROID__)
-    /* Phase 1: scan sysfs and match drivers outside the lock (I/O heavy) */
+    /* Scan sysfs outside the device list lock. */
     struct ub_list candidate_list = UB_LIST_INITIALIZER(&candidate_list);
     struct ub_list dev_name_list = UB_LIST_INITIALIZER(&dev_name_list);
     urma_scan_sysfs_devices(&candidate_list, &dev_name_list, &g_driver_list);
 
-    /* Phase 2: merge candidates into dev_list under the lock (lightweight) */
     (void)pthread_spin_lock(&g_dev_list_lock);
     (void)urma_merge_sysfs_devices(&g_dev_list, &candidate_list, &dev_name_list);
     (void)pthread_spin_unlock(&g_dev_list_lock);
 #endif
+    return URMA_INITIALIZED;
 
-    atomic_fetch_add(&g_init_flag, 1);
-    return URMA_SUCCESS;
+close_drivers:
+    return urma_close_drivers() == URMA_SUCCESS ? URMA_UNINITIALIZED : URMA_INIT_FAILED;
+}
+
+static urma_status_t urma_uninit_once(void)
+{
+    urma_status_t ret = URMA_SUCCESS;
+    urma_driver_t *driver;
+    UB_LIST_FOR_EACH (driver, node, &g_driver_list) {
+        urma_status_t status = driver->ops->uninit == NULL ? URMA_FAIL : driver->ops->uninit();
+        if (status != URMA_SUCCESS) {
+            URMA_LOG_ERR("Provider %s uninit failed, ret=%d.\n", driver->ops->name, status);
+            ret = URMA_FAIL;
+        }
+    }
+    if (ret != URMA_SUCCESS) {
+        /* A failed provider shutdown can leave code or devices in use. */
+        return ret;
+    }
+
+    urma_free_devices(&g_dev_list);
+    int err = pthread_spin_destroy(&g_dev_list_lock);
+    if (err != 0) {
+        URMA_LOG_ERR("Failed to destroy device list lock, ret=%d.\n", err);
+        ret = URMA_FAIL;
+    }
+    g_uasid = 0;
+    if (urma_close_drivers() != URMA_SUCCESS) {
+        ret = URMA_FAIL;
+    }
+    return ret;
+}
+
+urma_status_t urma_init(urma_init_attr_t *conf)
+{
+    const urma_init_attr_t request = conf == NULL ? (urma_init_attr_t){0} : *conf;
+    urma_status_t ret = URMA_SUCCESS;
+
+    (void)pthread_mutex_lock(&g_init_mutex);
+    if (g_init_state == URMA_INITIALIZED) {
+        if (request.token != g_init_conf.token || request.uasid != g_init_conf.uasid) {
+            ret = URMA_EINVAL;
+        } else if (g_init_refs == UINT_MAX) {
+            ret = EOVERFLOW;
+        } else {
+            ++g_init_refs;
+        }
+        goto out_unlock;
+    }
+    if (g_init_state == URMA_INIT_FAILED) {
+        ret = URMA_FAIL;
+        goto out_unlock;
+    }
+    g_init_state = urma_init_once(conf == NULL ? NULL : &request);
+    if (g_init_state == URMA_INITIALIZED) {
+        g_init_conf = request;
+        g_init_refs = 1;
+    } else {
+        ret = URMA_FAIL;
+    }
+
+out_unlock:
+    (void)pthread_mutex_unlock(&g_init_mutex);
+    return ret;
 }
 
 urma_status_t urma_uninit(void)
 {
     urma_status_t ret = URMA_SUCCESS;
-    if (atomic_load(&g_init_flag) == 0) {
-        URMA_LOG_WARN("urma has not been initialized.\n");
-        return ret;
-    }
 
-    urma_driver_t *driver;
-    UB_LIST_FOR_EACH (driver, node, &g_driver_list) {
-        if (driver->ops->uninit == NULL || driver->ops->uninit() != URMA_SUCCESS) {
-            URMA_LOG_WARN("Provider uninit failed %s\n", driver->ops->name);
-            ret = URMA_FAIL;
-        }
+    (void)pthread_mutex_lock(&g_init_mutex);
+    if (g_init_state != URMA_INITIALIZED) {
+        ret = g_init_state == URMA_INIT_FAILED ? URMA_FAIL : URMA_SUCCESS;
+        goto out_unlock;
     }
-    urma_free_devices(&g_dev_list);
-    (void)pthread_spin_destroy(&g_dev_list_lock);
-    /* unload urma so */
-    urma_so_t *so, *next;
-    UB_LIST_FOR_EACH_SAFE (so, next, node, &g_so_list) {
-        urma_close_provider(so->dl, so->path);
-        ub_list_remove(&so->node);
-        free(so);
+    if (--g_init_refs != 0) {
+        goto out_unlock;
     }
+    ret = urma_uninit_once();
+    g_init_state = ret == URMA_SUCCESS ? URMA_UNINITIALIZED : URMA_INIT_FAILED;
 
-    atomic_fetch_sub(&g_init_flag, 1);
+out_unlock:
+    (void)pthread_mutex_unlock(&g_init_mutex);
     return ret;
 }
 
