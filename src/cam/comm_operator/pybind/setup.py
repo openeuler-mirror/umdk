@@ -165,14 +165,14 @@ sources = [
     "./gather_selection_sparse_flash_attention.cpp",
     "./quant_lightning_indexer.cpp",
     "./swiglu_clip_quant.cpp",
-    "./moe_combine_recv_async.cpp",
-    "./moe_combine_send_async.cpp",
-    "./moe_dispatch_recv_async.cpp",
-    "./moe_dispatch_send_async.cpp",
-    "./afd_async_dispatch_send.cpp",
-    "./afd_async_dispatch_recv.cpp",
-    "./afd_async_combine_send.cpp",
     "./afd_async_combine_recv.cpp",
+    "./afd_async_combine_send.cpp",
+    "./afd_async_dispatch_recv.cpp",
+    "./afd_async_dispatch_send.cpp",
+    "./afd_async_dispatch_send_arch35.cpp",
+    "./afd_async_dispatch_recv_arch35.cpp",
+    "./afd_async_combine_send_arch35.cpp",
+    "./afd_async_combine_recv_arch35.cpp",
 ]
 
 

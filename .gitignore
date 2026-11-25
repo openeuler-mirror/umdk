@@ -6,3 +6,4 @@ build/cam/pytorch_extension
 output
 ascend_kernels_ascend*_proj
 third_party
+.DS_Store

@@ -330,7 +330,7 @@ class CamBackend:
 
     def dispatch_send(self):
         o, c = self.owner, self.cfg
-        self.ops.afd_async_dispatch_send(
+        self.ops.afd_async_dispatch_send_arch35(
             self.x, self.sf, self.idx, self.weights, self.mask, self.task, o.context,
             o.control_buffer, o.round_ledger, o.workspace, o.jetty_ptrs, self.send_status, self.group_name,
             c['num_ranks'], c['num_experts'], c['num_topk'], c['num_tokens_per_tile'],
@@ -338,7 +338,7 @@ class CamBackend:
 
     def dispatch_recv(self):
         o, c = self.owner, self.cfg
-        self.ops.afd_async_dispatch_recv(
+        self.ops.afd_async_dispatch_recv_arch35(
             o.payload, o.context, o.active, o.execution_state, o.recv_workspace, o.control_buffer,
             o.recv_x, self.recv_sf, o.recv_src_metadata, self.group_name,
             c['num_ranks'], c['num_experts'], c['num_topk'], c['num_source_lanes'], c['num_layers'],
@@ -348,7 +348,7 @@ class CamBackend:
 
     def combine_send(self):
         o, c = self.owner, self.cfg
-        self.ops.afd_async_combine_send(
+        self.ops.afd_async_combine_send_arch35(
             o.combine_x, o.recv_src_metadata, o.context, o.active, o.control_buffer,
             o.execution_state, o.combine_send_workspace, o.jetty_ptrs, o.completion, self.group_name,
             c['num_src_ranks'], c['num_ranks'], c['num_experts'], c['num_topk'], c['num_source_lanes'],
@@ -357,7 +357,7 @@ class CamBackend:
 
     def combine_recv(self):
         o, c = self.owner, self.cfg
-        self.ops.afd_async_combine_recv(
+        self.ops.afd_async_combine_recv_arch35(
             o.payload, self.task, o.context, o.control_buffer, o.round_ledger, o.combine_recv_workspace,
             self.mask, self.output, self.idx, self.weights, self.recv_status, self.progress, self.group_name,
             c['num_experts'], c['num_ranks'], c['num_topk'], c['round_step'], 0, c['num_hidden'],
