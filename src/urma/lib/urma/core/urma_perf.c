@@ -161,7 +161,8 @@ static const char* perf_type_names[] = {
 };
 
 static atomic_bool g_urma_perf_context_inited = ATOMIC_VAR_INIT(false);
-static pthread_mutex_t g_urma_perf_init_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_urma_perf_control_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t g_urma_perf_refs = 0;
 static atomic_bool g_urma_perf_record_enable = ATOMIC_VAR_INIT(false);
 static urma_perf_record_ctx_t g_urma_perf_record_ctx = {0};
 static pthread_spinlock_t g_urma_perf_record_lock;
@@ -372,14 +373,19 @@ bool urma_perf_is_enabled()
 
 urma_status_t urma_start_perf(void)
 {
-    atomic_store_explicit(&g_urma_perf_record_enable, false, memory_order_relaxed);
+    (void)pthread_mutex_lock(&g_urma_perf_control_lock);
+    if (g_urma_perf_refs == UINT32_MAX) {
+        (void)pthread_mutex_unlock(&g_urma_perf_control_lock);
+        return URMA_EINVAL;
+    }
+    if (g_urma_perf_refs != 0) {
+        g_urma_perf_refs++;
+        (void)pthread_mutex_unlock(&g_urma_perf_control_lock);
+        return URMA_SUCCESS;
+    }
     if (!atomic_load(&g_urma_perf_context_inited)) {
-        (void)pthread_mutex_lock(&g_urma_perf_init_lock);
-        if (!atomic_load(&g_urma_perf_context_inited)) {
-            urma_perf_global_context_init();
-            atomic_store(&g_urma_perf_context_inited, true);
-        }
-        (void)pthread_mutex_unlock(&g_urma_perf_init_lock);
+        urma_perf_global_context_init();
+        atomic_store(&g_urma_perf_context_inited, true);
     }
 #ifdef URMA_PERF_USE_CNTVCT
     if (!atomic_load_explicit(&g_cntvct_mult_shift_inited, memory_order_acquire)) {
@@ -390,12 +396,22 @@ urma_status_t urma_start_perf(void)
     // reset context
     urma_perf_reset_record_item(true, 0);
     atomic_store_explicit(&g_urma_perf_record_enable, true, memory_order_relaxed);
+    g_urma_perf_refs = 1;
+    (void)pthread_mutex_unlock(&g_urma_perf_control_lock);
     return URMA_SUCCESS;
 }
 
 urma_status_t urma_stop_perf(void)
 {
-    atomic_store_explicit(&g_urma_perf_record_enable, false, memory_order_relaxed);
+    (void)pthread_mutex_lock(&g_urma_perf_control_lock);
+    if (g_urma_perf_refs == 0) {
+        (void)pthread_mutex_unlock(&g_urma_perf_control_lock);
+        return URMA_EINVAL;
+    }
+    if (--g_urma_perf_refs == 0) {
+        atomic_store_explicit(&g_urma_perf_record_enable, false, memory_order_relaxed);
+    }
+    (void)pthread_mutex_unlock(&g_urma_perf_control_lock);
     return URMA_SUCCESS;
 }
 
