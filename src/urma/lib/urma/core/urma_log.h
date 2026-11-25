@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <errno.h>
 #include <urma_types.h>
 #include <pthread.h>
 #ifndef __cplusplus
@@ -104,9 +105,13 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
 #endif
 
 #define URMA_LOG(l, ...)                                                                                    \
-    if (!urma_log_drop(URMA_VLOG_LEVEL_##l)) {                                                              \
-        urma_log_loc(__FILE_NAME__, __func__, __LINE__, URMA_VLOG_LEVEL_##l, __VA_ARGS__);                  \
-    }
+    do {                                                                                                    \
+        int urma_log_errno_ = errno;                                                                         \
+        if (!urma_log_drop(URMA_VLOG_LEVEL_##l)) {                                                          \
+            urma_log_loc(__FILE_NAME__, __func__, __LINE__, URMA_VLOG_LEVEL_##l, __VA_ARGS__);              \
+        }                                                                                                   \
+        errno = urma_log_errno_;                                                                            \
+    } while (0)
 
 #define URMA_LOG_INFO(...) URMA_LOG(INFO, __VA_ARGS__)
 
@@ -119,11 +124,13 @@ bool urma_log_rl_check(urma_log_rl_state_t *rs, const char *file,
 /* Internal rate limit log macro */
 #define URMA_LOG_RL(l, rs, ...) \
     do { \
+        int urma_log_errno_ = errno; \
         if (!urma_log_drop(URMA_VLOG_LEVEL_##l)) { \
             if (urma_log_rl_check(rs, __FILE_NAME__, __func__, __LINE__)) { \
                 urma_log_loc(__FILE_NAME__, __func__, __LINE__, URMA_VLOG_LEVEL_##l, __VA_ARGS__); \
             } \
         } \
+        errno = urma_log_errno_; \
     } while (0)
 
 /* Public rate limit log macros - each call defines independent rate limit state */
