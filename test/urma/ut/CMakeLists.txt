@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 
+add_subdirectory(admin)
 add_subdirectory(bond)
 add_subdirectory(common)
 add_subdirectory(core)
