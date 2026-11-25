@@ -2034,7 +2034,9 @@ Example:
 
 ![](figures/urma_caution.png)
 
-urma_admin operations use rsyslog to redirect logs to /var/log/umdk/urma/urma_admin.log. Size-based rotation, compression, and retention depend on logrotate. Frequent short-interval command invocations may prevent log rotation.
+1. urma_admin operations use rsyslog to redirect logs to /var/log/umdk/urma/urma_admin.log. Size-based rotation, compression, and retention depend on logrotate. Frequent short-interval command invocations may prevent log rotation.
+
+2. `urma_admin show dev <DEV> jfc/jfs/jfr/jetty/jetty_group/rc/seg [ID]` is not supported on NPU.
 
 ## 6.5 DFX Diagnostics
 
