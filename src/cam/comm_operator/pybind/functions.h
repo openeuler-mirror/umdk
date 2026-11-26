@@ -151,7 +151,7 @@ std::tuple<at::Tensor, at::Tensor> swiglu_clip_quant_npu(
     const at::Tensor& x, const at::Tensor& group_index, const at::Tensor& group_alpha,
     bool activate_left, int64_t quant_mode, int64_t clamp_mode);
 
-at::Tensor cam_combine_recv_async_impl_autograd(
+at::Tensor afd_async_combine_recv_impl_autograd(
     const at::Tensor &expandX,
     const at::Tensor &expertIds,
     const at::Tensor &expertScales,
@@ -167,7 +167,7 @@ at::Tensor cam_combine_recv_async_impl_autograd(
     const int64_t worldSize,
     c10::string_view groupName);
 
-at::Tensor cam_combine_send_async_impl_autograd(
+at::Tensor afd_async_combine_send_impl_autograd(
     const at::Tensor &expandX,
     const at::Tensor &commArgs,
     const at::Tensor &batchInfo,
@@ -183,7 +183,7 @@ at::Tensor cam_combine_send_async_impl_autograd(
     const int64_t tpSize,
     c10::string_view groupName);
 
-std::vector<at::Tensor> cam_dispatch_recv_async_impl_autograd(
+std::vector<at::Tensor> afd_async_dispatch_recv_impl_autograd(
     const at::Tensor &x,
     const at::Tensor &commArgs,
     const int64_t commId,
@@ -199,7 +199,7 @@ std::vector<at::Tensor> cam_dispatch_recv_async_impl_autograd(
     const int64_t dynamicQuant,
     c10::string_view groupName);
 
-at::Tensor cam_dispatch_send_async_impl_autograd(
+at::Tensor afd_async_dispatch_send_impl_autograd(
     const at::Tensor &x,
     const at::Tensor &expertIds,
     const at::Tensor &commArgs,
@@ -218,7 +218,7 @@ at::Tensor cam_dispatch_send_async_impl_autograd(
     const int64_t dynamicQuant,
     c10::string_view groupName);
 
-at::Tensor AfdAsyncDispatchSendImplAutograd(
+at::Tensor AfdAsyncDispatchSendArch35ImplAutograd(
     const at::Tensor &x,
     const at::Tensor &sf,
     const at::Tensor &topkIdx,
@@ -243,7 +243,7 @@ at::Tensor AfdAsyncDispatchSendImplAutograd(
     const int64_t sendStatusWords,
     const int64_t numVecCores);
 
-std::tuple<at::Tensor, at::Tensor, at::Tensor> AfdAsyncDispatchRecvImplAutograd(
+std::tuple<at::Tensor, at::Tensor, at::Tensor> AfdAsyncDispatchRecvArch35ImplAutograd(
     const at::Tensor &payload,
     const at::Tensor &context,
     const at::Tensor &active,
@@ -273,7 +273,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> AfdAsyncDispatchRecvImplAutograd(
     const int64_t numSfPacks,
     const int64_t numVecCores);
 
-at::Tensor AfdAsyncCombineSendImplAutograd(
+at::Tensor AfdAsyncCombineSendArch35ImplAutograd(
     const at::Tensor &x,
     const at::Tensor &srcMetadata,
     const at::Tensor &context,
@@ -297,7 +297,7 @@ at::Tensor AfdAsyncCombineSendImplAutograd(
     const int64_t completionBytes,
     const int64_t numVecCores);
 
-CombineRecvOut AfdAsyncCombineRecvImplAutograd(
+CombineRecvOut AfdAsyncCombineRecvArch35ImplAutograd(
     const at::Tensor &payload,
     const at::Tensor &taskInfo,
     const at::Tensor &context,

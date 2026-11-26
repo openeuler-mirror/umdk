@@ -14,7 +14,7 @@
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
     // Identifies the Python ABI; install matching CANN kernels separately.
-    m.attr("CAM_ROUTED_ONLY_CONTRACT") = pybind11::str("cam_async_routed_only_compact_v2");
+    m.attr("CAM_ROUTED_ONLY_CONTRACT") = pybind11::str("afd_async_routed_only_compact_v2");
     m.def("fused_deep_moe", &FusedDeepMoeImplAutograd, "fused_deep_moe");
     m.def("all2_all_detour", &all2_all_detour_impl_autograd, "all2_all_detour");
     m.def("reduce_scatter_detour", &reduce_scatter_detour_impl_autograd, "reduce_scatter_detour");
@@ -32,14 +32,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
           "gather_selection_sparse_flash_attention");
     m.def("quant_lightning_indexer", &quant_lightning_indexer_npu, "quant_lightning_indexer");
     m.def("swiglu_clip_quant", &swiglu_clip_quant_npu, "swiglu_clip_quant");
-    m.def("moe_combine_recv_async", &cam_combine_recv_async_impl_autograd, "moe_combine_recv_async");
-    m.def("moe_combine_send_async", &cam_combine_send_async_impl_autograd, "moe_combine_send_async");
-    m.def("moe_dispatch_recv_async", &cam_dispatch_recv_async_impl_autograd, "moe_dispatch_recv_async");
-    m.def("moe_dispatch_send_async", &cam_dispatch_send_async_impl_autograd, "moe_dispatch_send_async");
-    m.def("afd_async_dispatch_send", &AfdAsyncDispatchSendImplAutograd, "afd_async_dispatch_send");
-    m.def("afd_async_dispatch_recv", &AfdAsyncDispatchRecvImplAutograd, "afd_async_dispatch_recv");
-    m.def("afd_async_combine_send", &AfdAsyncCombineSendImplAutograd, "afd_async_combine_send");
-    m.def("afd_async_combine_recv", &AfdAsyncCombineRecvImplAutograd, "afd_async_combine_recv");
+    m.def("afd_async_combine_recv", &afd_async_combine_recv_impl_autograd, "afd_async_combine_recv");
+    m.def("afd_async_combine_send", &afd_async_combine_send_impl_autograd, "afd_async_combine_send");
+    m.def("afd_async_dispatch_recv", &afd_async_dispatch_recv_impl_autograd, "afd_async_dispatch_recv");
+    m.def("afd_async_dispatch_send", &afd_async_dispatch_send_impl_autograd, "afd_async_dispatch_send");
+    m.def("afd_async_dispatch_send_arch35", &AfdAsyncDispatchSendArch35ImplAutograd, "afd_async_dispatch_send_arch35");
+    m.def("afd_async_dispatch_recv_arch35", &AfdAsyncDispatchRecvArch35ImplAutograd, "afd_async_dispatch_recv_arch35");
+    m.def("afd_async_combine_send_arch35", &AfdAsyncCombineSendArch35ImplAutograd, "afd_async_combine_send_arch35");
+    m.def("afd_async_combine_recv_arch35", &AfdAsyncCombineRecvArch35ImplAutograd, "afd_async_combine_recv_arch35");
 }
 
 TORCH_LIBRARY(umdk_cam_op_lib, m) {
@@ -104,19 +104,19 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
         int? key_dtype=None) -> (Tensor, Tensor)");
     m.def("swiglu_clip_quant(Tensor x, Tensor group_index, Tensor group_alpha, *, bool activate_left=False, \
         int quant_mode=1, int clamp_mode=1) -> (Tensor, Tensor)");
-    m.def("moe_combine_recv_async(Tensor expand_x, Tensor expert_ids, Tensor expert_scales, Tensor comm_args, \
+    m.def("afd_async_combine_recv(Tensor expand_x, Tensor expert_ids, Tensor expert_scales, Tensor comm_args, \
     int comm_id, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, str group_name) -> Tensor");
-    m.def("moe_combine_send_async(Tensor expand_x, Tensor comm_args, Tensor batch_info, \
+    m.def("afd_async_combine_send(Tensor expand_x, Tensor comm_args, Tensor batch_info, \
     int comm_id, int max_seq_len, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int moe_rank_id, \
     int world_size, int tp_size, str group_name) -> Tensor");
-    m.def("moe_dispatch_recv_async(Tensor x, Tensor comm_args, \
+    m.def("afd_async_dispatch_recv(Tensor x, Tensor comm_args, \
     int comm_id, int max_seq_len, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int moe_rank_id, \
     int world_size, int tp_size, int dynamic_quant, str group_name) -> Tensor[]");
-    m.def("moe_dispatch_send_async(Tensor x, Tensor expert_ids, Tensor comm_args, \
+    m.def("afd_async_dispatch_send(Tensor x, Tensor expert_ids, Tensor comm_args, \
     int comm_id, int max_seq_len, int batch_size, int hidden_size, int top_k, \
     int moe_rank_num, int attn_rank_num, int route_expert_num_per_moe, int attn_rank_id, \
     int world_size, int layer_index, int tp_size, int dynamic_quant, str group_name) -> Tensor");
@@ -124,7 +124,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     // afd_workspace (send state and scratch) and send_status are mutable. The
     // jetty inbox writes target the peer control_base, which is the local
     // control_buffer when the peer is this rank, so it is marked mutable too.
-    m.def("afd_async_dispatch_send(Tensor x, Tensor sf, Tensor topk_idx, Tensor topk_weights, \
+    m.def("afd_async_dispatch_send_arch35(Tensor x, Tensor sf, Tensor topk_idx, Tensor topk_weights, \
     Tensor token_mask, Tensor task_info, Tensor context, Tensor(a!) control_buffer, \
     Tensor(b!) round_ledger, Tensor(c!) afd_workspace, Tensor jetty_ptrs, Tensor(d!) send_status, \
     str group_ep, int num_ranks, int num_experts, int num_topk, int num_tokens_per_tile, \
@@ -134,7 +134,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     // kernel writes them in place and returns the same storage. execution_state
     // and afd_workspace (scratch) are also advanced in place. In FFN transaction
     // mode the kernel builds the next slice in the caller-owned active arena.
-    m.def("afd_async_dispatch_recv(Tensor payload, Tensor context, Tensor(f!) active, \
+    m.def("afd_async_dispatch_recv_arch35(Tensor payload, Tensor context, Tensor(f!) active, \
     Tensor(d!) execution_state, Tensor(e!) afd_workspace, Tensor control_buffer, \
     Tensor(a!) recv_x, Tensor(b!) recv_sf, Tensor(c!) recv_src_metadata, str group_ep, \
     int num_ranks, int num_experts, \
@@ -146,7 +146,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     // The kernel advances the caller-owned control plane in place: the send
     // path writes control_buffer (the peer inbox when the peer is this rank),
     // execution_state and the workspace scratch, and fills completion.
-    m.def("afd_async_combine_send(Tensor x, Tensor src_metadata, Tensor context, Tensor(e!) active, \
+    m.def("afd_async_combine_send_arch35(Tensor x, Tensor src_metadata, Tensor context, Tensor(e!) active, \
     Tensor(a!) control_buffer, Tensor(b!) execution_state, Tensor(c!) afd_workspace, Tensor jetty_ptrs, \
     Tensor(d!) completion, str group_ep, int num_src_ranks, int num_ranks, int num_experts, \
     int num_topk, int num_source_lanes, int num_layers, int max_padded_tokens, \
@@ -155,7 +155,7 @@ TORCH_LIBRARY(umdk_cam_op_lib, m) {
     // The five preallocated receive buffers are both written and returned as a
     // fixed-size aliased tuple; round_ledger, afd_workspace and the peer credit
     // stores into control_buffer are advanced in place as well.
-    m.def("afd_async_combine_recv(Tensor payload, Tensor task_info, Tensor context, \
+    m.def("afd_async_combine_recv_arch35(Tensor payload, Tensor task_info, Tensor context, \
     Tensor(a!) control_buffer, Tensor(b!) round_ledger, Tensor(c!) afd_workspace, Tensor token_mask, \
     Tensor(d!) combined_x, Tensor(e!) combined_topk_idx, Tensor(f!) topk_weights, Tensor(g!) recv_status, \
     Tensor(h!) return_progress, str group_ep, int num_experts, int num_ranks, int num_topk, \

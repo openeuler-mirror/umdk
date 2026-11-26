@@ -34,7 +34,7 @@ Registry: `src/cam/comm_operator/ascend_kernels/operator_registry.json`.
 ## Examples
 
 ```bash
-./build/cam/build.sh -c ascend910_93 -a "cam_moe_distribute_combine_recv" -r
+./build/cam/build.sh -c ascend910_93 -a "afd_async_combine_recv" -r
 ./build/cam/build.sh -c ascend910_93 -p
 ./build/cam/build.sh -c ascend910_93 -m
 ./build/cam/build.sh -c ascend950 -a "fused_deep_moe_arch35" -r

@@ -37,7 +37,7 @@ def schema_of(op):
 
 class TestAfdAsyncDispatchMeta:
     def test_schema_marks_mutable_inputs(self):
-        send = schema_of("afd_async_dispatch_send")
+        send = schema_of("afd_async_dispatch_send_arch35")
         # round_ledger / afd_workspace / control_buffer / send_status are written
         # in place, and the single output is the caller's status buffer.
         assert "Tensor(a!) control_buffer" in send
@@ -46,7 +46,7 @@ class TestAfdAsyncDispatchMeta:
         assert "Tensor(d!) send_status" in send
         assert "-> Tensor(d!)" in send
 
-        recv = schema_of("afd_async_dispatch_recv")
+        recv = schema_of("afd_async_dispatch_recv_arch35")
         # The three preallocated receive buffers are both written and returned.
         assert "Tensor(a!) recv_x" in recv
         assert "Tensor(b!) recv_sf" in recv
@@ -70,7 +70,7 @@ class TestAfdAsyncDispatchMeta:
         jetty_ptrs = meta_tensor([8], torch.int64)
         send_status = meta_tensor([16], torch.int32)
 
-        out = torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+        out = torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
             x, sf, topk_idx, topk_weights, token_mask, task_info, context,
             control_buffer, round_ledger, afd_workspace, jetty_ptrs,
             send_status, "test_group", 2, 2, 2, 2, 1, 1, 1, 1000, 16, 1,
@@ -83,7 +83,7 @@ class TestAfdAsyncDispatchMeta:
         x = meta_tensor([4, 128], torch.bfloat16)
         sf = meta_tensor([1], torch.int16)
         send_status = meta_tensor([8], torch.int32)
-        out = torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+        out = torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
             x, sf, meta_tensor([4, 2], torch.int64), meta_tensor([4, 2], torch.float32),
             meta_tensor([4], torch.bool), meta_tensor([64], torch.uint8),
             meta_tensor([256], torch.uint8), meta_tensor([1024], torch.uint8),
@@ -104,7 +104,7 @@ class TestAfdAsyncDispatchMeta:
         recv_sf = meta_tensor([8, 1], torch.int16)
         recv_src_metadata = meta_tensor([8, 4], torch.int32)
 
-        outs = torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+        outs = torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
             payload, context, active, execution_state, afd_workspace,
             control_buffer, recv_x, recv_sf, recv_src_metadata, "test_group",
             2, 2, 2, 2, 1, 8, 8, 1, 4, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
@@ -118,7 +118,7 @@ class TestAfdAsyncDispatchMeta:
         recv_x = meta_tensor([8, 128], torch.bfloat16)
         recv_sf = meta_tensor([8, 0], torch.int16)
         recv_src_metadata = meta_tensor([8, 4], torch.int32)
-        outs = torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+        outs = torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
             meta_tensor([1024], torch.uint8), meta_tensor([256], torch.uint8),
             meta_tensor([RECV_ACTIVE_BYTES], torch.uint8), meta_tensor([16], torch.uint8),
             meta_tensor([1024], torch.uint8), meta_tensor([1024], torch.uint8),
@@ -158,32 +158,32 @@ class TestAfdAsyncDispatchMetaRejects:
 
     def test_send_rejects_topk_idx_dtype(self):
         with pytest.raises(RuntimeError, match="topk_idx must have dtype"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
                 *self.send_args(topk_idx=meta_tensor([4, 2], torch.int32)),
                 2, 2, 2, 2, 1, 1, 1, 1000, 16, 1,
             )
 
     def test_send_rejects_experts_not_divisible_by_ranks(self):
         with pytest.raises(RuntimeError, match="num_experts must divide by num_ranks"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
                 *self.send_args(), 2, 3, 2, 2, 1, 1, 1, 1000, 16, 1,
             )
 
     def test_send_rejects_zero_timeout(self):
         with pytest.raises(RuntimeError, match="timeout_cycles must be positive"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
                 *self.send_args(), 2, 2, 2, 2, 1, 1, 1, 0, 16, 1,
             )
 
     def test_send_rejects_negative_sf_stride(self):
         with pytest.raises(RuntimeError, match="sf strides must be nonnegative"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
                 *self.send_args(), 2, 2, 2, 2, -1, 1, 1, 1000, 16, 1,
             )
 
     def test_send_rejects_status_len_mismatch(self):
         with pytest.raises(RuntimeError, match="send_status must be"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35(
                 *self.send_args(send_status=meta_tensor([8], torch.int32)),
                 2, 2, 2, 2, 1, 1, 1, 1000, 16, 1,
             )
@@ -216,41 +216,41 @@ class TestAfdAsyncDispatchMetaRejects:
     ])
     def test_recv_rejects_invalid_expert_partition(self, ranks, experts, error):
         with pytest.raises(RuntimeError, match=error):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(), ranks, experts, 2, 2, 1, 8, 8, 1, 4, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )
 
     def test_recv_rejects_wrong_output_dtype(self):
         with pytest.raises(RuntimeError, match="recv_sf must have dtype"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(recv_sf=meta_tensor([8, 1], torch.uint8)),
                 2, 2, 2, 2, 1, 8, 8, 1, 4, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )
 
     def test_recv_rejects_wrong_output_shape(self):
         with pytest.raises(RuntimeError, match="recv_sf must be"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(recv_sf=meta_tensor([8, 8], torch.int16)),
                 2, 2, 2, 2, 1, 8, 8, 1, 4, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )
 
     def test_recv_rejects_bad_stage_count(self):
         with pytest.raises(RuntimeError, match="num_tokens_per_stage out of range"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(),
                 2, 2, 2, 2, 1, 8, 8, 1, 3, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )
 
     def test_recv_rejects_padding_below_alignment(self):
         with pytest.raises(RuntimeError, match="one expert_alignment"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(),
                 2, 2, 2, 2, 1, 8, 8, 128, 4, 0, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )
 
     def test_recv_rejects_rank_index_out_of_range(self):
         with pytest.raises(RuntimeError, match="rank_idx out of range"):
-            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv(
+            torch.ops.umdk_cam_op_lib.afd_async_dispatch_recv_arch35(
                 *self.recv_args(),
                 2, 2, 2, 2, 1, 8, 8, 1, 4, 2, 1, 1, 1024, 1024, 256, 128, 1, 1,
             )

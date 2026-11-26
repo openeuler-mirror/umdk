@@ -10,8 +10,8 @@ Run the commands in this guide from the repository root.
 
 | Operators | Test entry | Coverage and environment |
 | --- | --- | --- |
-| `moe_dispatch_send_async`, `moe_dispatch_recv_async`, `moe_combine_send_async`, `moe_combine_recv_async` | [Routed async tests](#routed-async-cam-operator-tests) | Ascend 910C precision and timing. Includes balanced/sparse routes, FP16/BF16 and optional INT8 dispatch quantization. |
-| `afd_async_dispatch_send`, `afd_async_dispatch_recv`, `afd_async_combine_send`, `afd_async_combine_recv` | [AFD async benchmark](#afd-async-benchmark-ascend-950) | Ascend 950 BF16 correctness and communication benchmark against official DeepEP-Ascend EP. |
+| `afd_async_dispatch_send`, `afd_async_dispatch_recv`, `afd_async_combine_send`, `afd_async_combine_recv` | [Routed async tests](#routed-async-cam-operator-tests) | Ascend 910C precision and timing. Includes balanced/sparse routes, FP16/BF16 and optional INT8 dispatch quantization. |
+| `afd_async_dispatch_send_arch35`, `afd_async_dispatch_recv_arch35`, `afd_async_combine_send_arch35`, `afd_async_combine_recv_arch35` | [AFD async benchmark](#afd-async-benchmark-ascend-950) | Ascend 950 BF16 correctness and communication benchmark against official DeepEP-Ascend EP. |
 | The four AFD async operators | [AFD async Meta tests](ut/afd_async/) | PyTorch schema, shape and dtype checks through the installed CAM wheel. No NPU executes the kernels. |
 | `a2e`, `e2a` | [A2E/E2A device test](#a2e-and-e2a-ascend-a3) | Ascend A3, BF16 eager mode, 16 HCCL ranks (8 MoE + 8 Attention). |
 
@@ -46,8 +46,9 @@ For device runs, use matching CANN, torch and torch-npu on Ascend 950.
 Install the CAM wheel and OPP from the same revision. The source directory
 and the `-a` build selector carry the `_arch35` suffix. For example,
 `afd_async_dispatch_send_arch35` builds the device kernel `afd_async_dispatch_send`.
-Call it through `torch.ops.umdk_cam_op_lib.afd_async_dispatch_send` or
-`aclnnAfdAsyncDispatchSend`. The other three operators follow the same convention.
+Call it through `torch.ops.umdk_cam_op_lib.afd_async_dispatch_send_arch35` or
+`aclnnAfdAsyncDispatchSend`. The other three Python wrappers use the `_arch35`
+suffix; their ACLNN symbols retain the device operator names.
 See the [CAM build and installation guide](../../src/cam/README.md).
 
 ```bash
@@ -124,21 +125,21 @@ operators in `torch.ops.umdk_cam_op_lib`:
 
 | Phase | Operator |
 | --- | --- |
-| Dispatch send | `moe_dispatch_send_async` |
-| Dispatch receive | `moe_dispatch_recv_async` |
-| Combine send | `moe_combine_send_async` |
-| Combine receive | `moe_combine_recv_async` |
+| Dispatch send | `afd_async_dispatch_send` |
+| Dispatch receive | `afd_async_dispatch_recv` |
+| Combine send | `afd_async_combine_send` |
+| Combine receive | `afd_async_combine_recv` |
 
 | File | Purpose |
 | --- | --- |
-| `async_cam_precision.py` | Independent CPU dispatch and FP16/BF16 combine golden |
-| `async_cam_performance.py` | Per-operator and complete-round measurements |
-| `async_cam_common.py` | Protocol planning, HCCL setup, and four-stage execution |
-| `test_async_cam_*.py` | Offline planner, timing and optional CPU tensor regressions |
+| `afd_async_precision.py` | Independent CPU dispatch and FP16/BF16 combine golden |
+| `afd_async_performance.py` | Per-operator and complete-round measurements |
+| `afd_async_common.py` | Protocol planning, HCCL setup, and four-stage execution |
+| `test_afd_async_*.py` | Offline planner, timing and optional CPU tensor regressions |
 
 The local contract is defined in
 [`pybind.cpp`](../../src/cam/comm_operator/pybind/pybind.cpp) and the four
-`cam_moe_distribute_*` directories under
+`afd_async_*` directories under
 [`ascend_kernels`](../../src/cam/comm_operator/ascend_kernels).
 The scripts load the locally built `umdk_cam_op_lib` package. They require no
 model weights or shared-expert transfers.
@@ -148,10 +149,10 @@ model weights or shared-expert transfers.
 From the repository root, no torch or Ascend installation is needed for:
 
 ```bash
-python test/cam/async_cam_precision.py --help
-python test/cam/async_cam_precision.py --dry-run
-python test/cam/async_cam_performance.py --dry-run
-python -m unittest discover -s test/cam -p "test_async_cam_*.py"
+python test/cam/afd_async_precision.py --help
+python test/cam/afd_async_precision.py --dry-run
+python test/cam/afd_async_performance.py --dry-run
+python -m unittest discover -s test/cam -p "test_afd_async_*.py"
 ```
 
 Dry runs validate topology, positive per-rank lengths, receive capacity,
@@ -159,7 +160,7 @@ integer-address limits, buffer requirements, and planned expert chunks.
 They execute no native operators. Normal execution requires torchrun and fails
 if the runtime, device, or one of the four registered operators is missing.
 
-`test_async_cam_golden` runs tensor regression tests when CPU PyTorch is
+`test_afd_async_golden` runs tensor regression tests when CPU PyTorch is
 installed and otherwise reports skips. It needs no torch-npu or NPU. It checks
 FP16/BF16 output rounding, FP32 accumulation order, quantization budgets and
 strict bit comparisons; the other two test modules need only standard Python.
@@ -171,7 +172,7 @@ CANN/HCCL stack. Build the four operators from this repository:
 
 ```bash
 ./build/cam/build.sh -c ascend910_93 -a \
-  "cam_moe_distribute_dispatch_send;cam_moe_distribute_dispatch_recv;cam_moe_distribute_combine_send;cam_moe_distribute_combine_recv"
+  "afd_async_dispatch_send;afd_async_dispatch_recv;afd_async_combine_send;afd_async_combine_recv"
 ```
 
 Install the generated CAM `.run` package, source its
@@ -204,19 +205,19 @@ that all accepted configurations have been qualified on hardware.
 
 ```bash
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=4 \
-  test/cam/async_cam_precision.py --dtype fp16 --dynamic-quant 0
+  test/cam/afd_async_precision.py --dtype fp16 --dynamic-quant 0
 
 # Multiple chunks, quantized BF16, and repeated use of the same HCCL windows.
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=4 \
-  test/cam/async_cam_precision.py --dtype bf16 --dynamic-quant 1 --capacity 4
+  test/cam/afd_async_precision.py --dtype bf16 --dynamic-quant 1 --capacity 4
 
 # Empty experts and an entirely empty MoE participant still send completion.
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=4 \
-  test/cam/async_cam_precision.py --routing sparse --capacity 16
+  test/cam/afd_async_precision.py --routing sparse --capacity 16
 
 # Two independent Attention groups: receive order may vary by readiness.
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=6 \
-  test/cam/async_cam_precision.py --attn-ranks 4 --moe-ranks 2 --tp-size 2 \
+  test/cam/afd_async_precision.py --attn-ranks 4 --moe-ranks 2 --tp-size 2 \
   --lengths 7,5,3,1 --capacity 4
 ```
 
@@ -254,9 +255,9 @@ reported separately, under its own budget — see the combine note below.
 ### Quantization contract
 
 The dynamic-quantization contract is versioned in
-`async_cam_common._quantize_contract()`, which is the single place allowed to
+`afd_async_common._quantize_contract()`, which is the single place allowed to
 encode it. It mirrors `QuantProcess()` in
-`src/cam/comm_operator/ascend_kernels/cam_moe_distribute_dispatch_send/op_kernel`: per-row FP32
+`src/cam/comm_operator/ascend_kernels/afd_async_dispatch_send/op_kernel`: per-row FP32
 `amax`, multiplier `127/amax`, FP32 product rounding followed by
 round-half-to-even, and the reciprocal
 `1.0f/(127.0f/amax)` stored as the dequantization scale. The stored value is the
@@ -297,11 +298,11 @@ execution, and concurrent layers require separate hardware qualification.
 
 ```bash
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=4 \
-  test/cam/async_cam_performance.py --measure-mode both \
+  test/cam/afd_async_performance.py --measure-mode both \
   --warmup 2 --iterations 10 --output .cache/async-cam-performance.json
 
 timeout --kill-after=30s 600s torchrun --standalone --nproc_per_node=4 \
-  test/cam/async_cam_performance.py --measure-mode cycle \
+  test/cam/afd_async_performance.py --measure-mode cycle \
   --warmup 5 --iterations 50 --dtype bf16 --dynamic-quant 1 \
   --output .cache/async-cam-cycle.json
 ```
