@@ -88,6 +88,35 @@ static inline bool urma_is_bonding_dev(char *dev_name)
         strlen(URMA_UBAGG_DEV_PREFIX)) == 0;
 }
 
+/* Map errno to URMA_* of the same value, unmapped falls back to URMA_FAIL. */
+static inline urma_status_t urma_errno_to_status(int err)
+{
+    switch (err) {
+        case EAGAIN:
+            return URMA_EAGAIN;
+        case ENOMEM:
+            return URMA_ENOMEM;
+        case EPERM:
+            return URMA_ENOPERM;
+        case ETIMEDOUT:
+            return URMA_ETIMEOUT;
+        case EINVAL:
+            return URMA_EINVAL;
+        case EEXIST:
+            return URMA_EEXIST;
+        case EINPROGRESS:
+            return URMA_EINPROGRESS;
+        case ENOSPC:
+            return URMA_ENOSPC;
+        case ENOSR:
+            return URMA_ENOSR;
+        case EBUSY:
+            return URMA_EBUSY;
+        default:
+            return URMA_FAIL;
+    }
+}
+
 void urma_ubagg_switch_init(void);
 void urma_ubagg_switch_inc(void);
 uint32_t urma_ubagg_switch_get(void);
