@@ -142,6 +142,33 @@ TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupRejectsOversizedList)
     EXPECT_EQ(0, urma_test::GetHwMockState().postJfrCount);
 }
 
+TEST(UrmaBondTest, DatapathPublicPostRecvWithoutBackupRejectsNullTseg)
+{
+    BondPathFixture fixture;
+    urma_sge_t recvSge[2] = {};
+    urma_jfr_wr_t firstWr = {};
+    urma_jfr_wr_t secondWr = {};
+    urma_jfr_wr_t *badWr = nullptr;
+
+    /* the second WR carries an SGE without a local segment */
+    recvSge[0].tseg = &fixture.localSeg.v_tseg;
+    recvSge[1].tseg = nullptr;
+    firstWr.src.sge = &recvSge[0];
+    firstWr.src.num_sge = 1;
+    firstWr.next = &secondWr;
+    secondWr.src.sge = &recvSge[1];
+    secondWr.src.num_sge = 1;
+    fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
+    fixture.ctx.msn_enable = false;
+    fixture.comp.comp_type = BONDP_COMP_JFR;
+    fixture.phyOps.post_jfr_wr = MockPostAnyJfrWr;
+
+    /* a NULL tseg would reach the provider unchanged: reject the owning WR */
+    EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
+    EXPECT_EQ(&secondWr, badWr);
+    EXPECT_EQ(0, urma_test::GetHwMockState().postJfrCount);
+}
+
 TEST(UrmaBondTest, DatapathPollJfcConvertsSingleDeviceSendCr)
 {
     BondPathFixture fixture;
@@ -483,6 +510,7 @@ TEST(UrmaBondTest, DatapathPostSendStoreHandlesFullBufferAndInvalidPathRetry)
     invalidWr.rw.src.num_sge = BONDP_MAX_SGE_NUM + 1;
     /* WR validation rejects an out-of-range SGE count with EINVAL */
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &invalidWr, &badWr));
+    EXPECT_EQ(&invalidWr, badWr);
 
     pthread_spin_destroy(&fixture.comp.send_lock);
     wr_buf_uninit(&fixture.comp.send_wr_buf);
@@ -536,7 +564,8 @@ TEST(UrmaBondTest, DatapathPostSendStoreRollsBackAfterPartialProviderFailure)
         &fixture.ctx.p_vjetty_id_table, physicalJfsId, JFS, fixture.comp.v_jfs.jfs_id.id, &fixture.comp));
 
     EXPECT_EQ(URMA_EAGAIN, bondp_post_jfs_wr_sched(&fixture.comp.v_jfs, &firstWr, &badWr));
-    EXPECT_NE(nullptr, badWr);
+    /* the provider rejected the second WR: name that WR, not the list head */
+    EXPECT_EQ(&secondWr, badWr);
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfsCount);
     EXPECT_EQ(1U, fixture.comp.sqe_cnt[0][0].load());
 
@@ -595,7 +624,7 @@ TEST(UrmaBondTest, DatapathPostRecvStoreSubmitsAndCleansProviderFailure)
     fixture.comp.rqe_cnt[0] = 0;
     fixture.phyOps.post_jfr_wr = MockPostFirstJfrWrFails;
     EXPECT_EQ(URMA_EAGAIN, bondp_post_jfr_wr_sched(&fixture.comp.v_jfr, &firstWr, &badWr));
-    EXPECT_NE(nullptr, badWr);
+    EXPECT_EQ(&firstWr, badWr);
     EXPECT_EQ(1, urma_test::GetHwMockState().postJfrCount);
     EXPECT_EQ(0U, fixture.comp.rqe_cnt[0]);
 
@@ -797,6 +826,7 @@ TEST(UrmaBondTest, PublicDatapathApisRejectRecvStateBeforeProviderAccess)
     fixture.ctx.bonding_mode = BONDP_BONDING_MODE_BALANCE;
     fixture.ctx.msn_enable = true;
     EXPECT_EQ(URMA_EINVAL, bondp_post_jetty_recv_wr_sched(&fixture.jetty.v_jetty, &recvWr, &badRecv));
+    EXPECT_EQ(&recvWr, badRecv);
 
     ASSERT_EQ(0, wr_buf_init(&fixture.jfr.recv_wr_buf, 1, BONDP_MAX_SGE_NUM));
     heldEntry = jfr_wr_buf_alloc(&fixture.jfr.recv_wr_buf);
@@ -823,7 +853,7 @@ TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsStableScheduleFailures)
     fixture.jfr.active_indices[0] = 0;
     fixture.ctx.bonding_mode = static_cast<bondp_bonding_mode_t>(0xff);
     EXPECT_EQ(URMA_EINVAL, bondp_post_jfr_wr_sched(&fixture.jfr.v_jfr, &recvWr, &badRecv));
-
+    EXPECT_EQ(&recvWr, badRecv);
 }
 
 TEST(UrmaBondTest, PublicDatapathRecvWithoutBackupRejectsOversizedWrList)
@@ -871,9 +901,9 @@ TEST(UrmaBondTest, DatapathJettyStandaloneDispatchesProviderPostCallbacks)
     urma_test::SetHwMockBadWr(&sendWr, &recvWr);
     urma_test::SetHwMockStatus(URMA_FAIL);
     EXPECT_EQ(URMA_FAIL, bondp_post_jetty_send_wr_sched(&fixture.comp.v_jetty, &sendWr, &badSend));
-    EXPECT_NE(nullptr, badSend);
+    EXPECT_EQ(&sendWr, badSend);
     EXPECT_EQ(URMA_FAIL, bondp_post_jetty_recv_wr_sched(&fixture.comp.v_jetty, &recvWr, &badRecv));
-    EXPECT_NE(nullptr, badRecv);
+    EXPECT_EQ(&recvWr, badRecv);
 }
 
 TEST(UrmaBondTest, DatapathJettyRecvStoreUsesSharedJfrBuffer)
