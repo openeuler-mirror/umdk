@@ -1399,6 +1399,9 @@ static urma_status_t bondp_post_recv_wr_list_and_store(bondp_comp_t *bdp_comp, u
     wr_buf_t *recv_wr_buf = get_recv_wr_buf(bdp_comp);
     if (recv_wr_buf == NULL) {
         URMA_LOG_ERR_RL("Failed to get recv_wr_buf, comp_type:%d\n", bdp_comp->comp_type);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
         return URMA_EINVAL;
     }
     while (cur != NULL && wr_count < BONDP_BATCH_POST_MAX_NUM) {
@@ -1514,6 +1517,15 @@ static urma_status_t post_recv_check_jfr_wr_valid(const bondp_comp_t *bdp_comp, 
                         " by the device.\n",
                         wr->src.num_sge, max_jfr_sge);
         return URMA_EINVAL;
+    }
+    /* A RECV SGE must carry a locally registered segment: the post path rewrites
+     * sge->tseg to the physical segment of the target member, and a NULL tseg
+     * would reach the provider unchanged. */
+    for (uint32_t i = 0; i < wr->src.num_sge; i++) {
+        if (wr->src.sge[i].tseg == NULL) {
+            URMA_LOG_ERR_RL("when set recv_wr, sge[%u].tseg is NULL.\n", i);
+            return URMA_EINVAL;
+        }
     }
     return URMA_SUCCESS;
 }
