@@ -8,7 +8,7 @@ add_executable(urma_common_ut
     util_clock_test.cpp
 )
 target_link_options(urma_common_ut PRIVATE -Wl,--wrap=calloc -Wl,--wrap=gettimeofday
-    -Wl,--wrap=fopen -Wl,--wrap=fgets -Wl,--wrap=fclose)
+    -Wl,--wrap=clock_gettime -Wl,--wrap=fopen -Wl,--wrap=fgets -Wl,--wrap=fclose)
 target_link_libraries(urma_common_ut PRIVATE urma_test_common ${URMA_COMMON_STATIC} GTest::gtest_main)
 
 add_test(NAME urma_common_ut COMMAND urma_common_ut)

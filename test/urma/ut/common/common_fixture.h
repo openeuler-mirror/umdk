@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <sys/time.h>
+#include <time.h>
 
 #include <gtest/gtest.h>
 
@@ -29,6 +30,10 @@ struct CommonWrapState {
     bool failFirstGettimeofday;
     bool failSecondGettimeofday;
     int gettimeofdayCalls;
+    bool failFirstClockGettime;
+    bool failSecondClockGettime;
+    bool injectTimeJump;
+    int clockGettimeCalls;
     const char *cpuInfo;
 };
 

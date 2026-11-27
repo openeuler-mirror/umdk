@@ -20,6 +20,7 @@ using namespace urma_test_common;
 extern "C" {
 void *__real_calloc(size_t nmemb, size_t size);
 int __real_gettimeofday(struct timeval *tv, void *tz);
+int __real_clock_gettime(clockid_t clk, struct timespec *ts);
 FILE *__real_fopen(const char *path, const char *mode);
 char *__real_fgets(char *s, int size, FILE *stream);
 int __real_fclose(FILE *stream);
@@ -42,6 +43,22 @@ int __wrap_gettimeofday(struct timeval *tv, void *tz)
         return -1;
     }
     return __real_gettimeofday(tv, tz);
+}
+
+int __wrap_clock_gettime(clockid_t clk, struct timespec *ts)
+{
+    ++g_commonWrap.clockGettimeCalls;
+    if (g_commonWrap.failFirstClockGettime && g_commonWrap.clockGettimeCalls == 1) {
+        return -1;
+    }
+    if (g_commonWrap.failSecondClockGettime && g_commonWrap.clockGettimeCalls == 2) {
+        return -1;
+    }
+    int rc = __real_clock_gettime(clk, ts);
+    if (g_commonWrap.injectTimeJump && g_commonWrap.clockGettimeCalls >= 2) {
+        ts->tv_sec += 5;
+    }
+    return rc;
 }
 
 FILE *__wrap_fopen(const char *path, const char *mode)
