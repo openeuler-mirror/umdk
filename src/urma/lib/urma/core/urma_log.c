@@ -63,6 +63,9 @@ bool urma_is_log_func_registered(void)
 
 urma_status_t urma_register_log_func(urma_log_cb_t func)
 {
+    if (urma_is_log_func_registered()) {
+        return URMA_SUCCESS;
+    }
     if (func == NULL) {
         URMA_LOG_ERR("Invalid parameter.\n");
         return URMA_EINVAL;
