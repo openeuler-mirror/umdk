@@ -30,6 +30,7 @@ import com.huawei.umdk.snc.entity.NpuDevice;
 import com.huawei.umdk.snc.entity.NpuForwardingChip;
 import com.huawei.umdk.snc.entity.NpuPortEntity;
 import com.huawei.umdk.snc.entity.PortEntity;
+import com.huawei.umdk.snc.entity.RoutingEntry;
 import com.huawei.umdk.snc.entity.SuperNode;
 import com.huawei.umdk.snc.entity.SwDevice;
 import com.huawei.umdk.snc.entity.SwForwardingChip;
@@ -63,6 +64,8 @@ class LinkEventServiceTest {
     private static final String L1_SW_PORT = "sw-l1-0-port-0";
     private static final String L2_SW_PORT = "sw-l2-0-port-0";
 
+    private static final Map<String, Map<String, RoutingEntry>> SUPER_NODE_ROUTES = new HashMap<>();
+
     @BeforeEach
     void setUp() {
         snc = new SncService();
@@ -81,7 +84,7 @@ class LinkEventServiceTest {
     void notifyLinkEvent_down_updatesNpuPortStatus() {
         LinkEvent event = new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:00:00");
 
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event);
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event);
 
         PortEntity port = findPort(snc.getSuperNode(SUPER_NODE_NAME), NPU_0, NPU0_PORT);
         assertNotNull(port);
@@ -92,9 +95,9 @@ class LinkEventServiceTest {
     @Test
     void notifyLinkEvent_up_restoresNpuPortStatus() {
         // 先 down 再 up
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME),
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES,
             new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:00:00"));
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME),
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES,
             new LinkEvent(NPU_0, NPU0_PORT, "up", "2026-08-04 10:05:00"));
 
         PortEntity port = findPort(snc.getSuperNode(SUPER_NODE_NAME), NPU_0, NPU0_PORT);
@@ -107,7 +110,7 @@ class LinkEventServiceTest {
     void notifyLinkEvent_down_updatesL1SwPortStatus() {
         LinkEvent event = new LinkEvent(L1_SW, L1_SW_PORT, "down", "2026-08-04 10:10:00");
 
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event);
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event);
 
         PortEntity port = findPort(snc.getSuperNode(SUPER_NODE_NAME), L1_SW, L1_SW_PORT);
         assertNotNull(port);
@@ -119,7 +122,7 @@ class LinkEventServiceTest {
     void notifyLinkEvent_down_updatesL2SwPortStatus() {
         LinkEvent event = new LinkEvent(L2_SW, L2_SW_PORT, "down", "2026-08-04 10:15:00");
 
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event);
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event);
 
         PortEntity port = findPort(snc.getSuperNode(SUPER_NODE_NAME), L2_SW, L2_SW_PORT);
         assertNotNull(port);
@@ -129,7 +132,7 @@ class LinkEventServiceTest {
 
     @Test
     void notifyLinkEvent_onlyAffectsTargetPort() {
-        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME),
+        snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES,
             new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:20:00"));
 
         // 目标端口已 down
@@ -148,34 +151,35 @@ class LinkEventServiceTest {
     @Test
     void notifyLinkEvent_nullSupernode_throwsIllegalArgument() {
         LinkEvent event = new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:00:00");
-        assertThrows(IllegalArgumentException.class, () -> snc.notifyLinkEvent(null, event));
+        assertThrows(IllegalArgumentException.class,
+            () -> snc.notifyLinkEvent(null, SUPER_NODE_ROUTES, event));
     }
 
     @Test
     void notifyLinkEvent_nullEvent_throwsIllegalArgument() {
         assertThrows(IllegalArgumentException.class,
-            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), null));
+            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, null));
     }
 
     @Test
     void notifyLinkEvent_invalidEventType_throwsIllegalArgument() {
         LinkEvent event = new LinkEvent(NPU_0, NPU0_PORT, "unknown", "2026-08-04 10:00:00");
         assertThrows(IllegalArgumentException.class,
-            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event));
+            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event));
     }
 
     @Test
     void notifyLinkEvent_deviceNotFound_throwsIllegalState() {
         LinkEvent event = new LinkEvent("not-exist-device", NPU0_PORT, "down", "2026-08-04 10:00:00");
         assertThrows(IllegalStateException.class,
-            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event));
+            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event));
     }
 
     @Test
     void notifyLinkEvent_portNotFound_throwsIllegalState() {
         LinkEvent event = new LinkEvent(NPU_0, "not-exist-port", "down", "2026-08-04 10:00:00");
         assertThrows(IllegalStateException.class,
-            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event));
+            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event));
     }
 
     @Test
@@ -183,7 +187,7 @@ class LinkEventServiceTest {
         snc.removeSuperNode(SUPER_NODE_NAME);
         LinkEvent event = new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:00:00");
         assertThrows(IllegalArgumentException.class,
-            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), event));
+            () -> snc.notifyLinkEvent(snc.getSuperNode(SUPER_NODE_NAME), SUPER_NODE_ROUTES, event));
     }
 
     @Test
@@ -191,7 +195,7 @@ class LinkEventServiceTest {
         snc.uninit();
         LinkEvent event = new LinkEvent(NPU_0, NPU0_PORT, "down", "2026-08-04 10:00:00");
         SuperNode sn = new SuperNode(SUPER_NODE_NAME, "v1", null, null);
-        assertThrows(SNCStateException.class, () -> snc.notifyLinkEvent(sn, event));
+        assertThrows(SNCStateException.class, () -> snc.notifyLinkEvent(sn, SUPER_NODE_ROUTES, event));
     }
 
     // ===== 测试数据构建 =====

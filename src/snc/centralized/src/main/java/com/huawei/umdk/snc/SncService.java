@@ -9,7 +9,7 @@
  */
 package com.huawei.umdk.snc;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,31 +54,10 @@ public class SncService {
 
     private static final Logger LOG = new Logger(SncService.class);
 
-    private static final List<String> TOPO_TEMPLATE_FILES = Arrays.asList(
-        SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128.getValue() + ".json",
-        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128.getValue() + ".json",
-        SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512.getValue() + ".json",
-        SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512.getValue() + ".json"
-    );
-
     private static final Map<SuperNodeType, SuperNodeType> GALAXY_TEMPLATE_MAP = Map.of(
         SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_128, SuperNodeType.ATLAS950_GALAXY_RACK32_OF_128,
         SuperNodeType.ATLAS950_GALAXY_RACK32_SUPERNODE_512, SuperNodeType.ATLAS950_GALAXY_RACK32_OF_512
     );
-
-    // key: xPod_type
-    private final Map<String, SncTopology> topologyMap = new HashMap<>();
-
-    // key1: xPod_type    key2: node label
-    private final Map<String, Map<String, RouteTable>> routeTemplateMap = new HashMap<>();
-
-    // 超节点的路由模板   key1: xPod_type    key2: node label
-    private final Map<String, Map<String, RouteTable>> superNodeRoutes = new HashMap<>();
-
-    // 上线的超节点的路由
-    private volatile Map<String, Map<String, RoutingEntry>> instantiationRouteMap = new HashMap<>();
-
-    private volatile boolean routeCalculated = false;
 
     private enum State {
         INIT, READY, DATAREADY, UNINIT
@@ -358,7 +337,7 @@ public class SncService {
         return result;
     }
 
-    public void notifyLinkEvent(SuperNode supernode, LinkEvent event) {
+    public void notifyLinkEvent(SuperNode supernode, Map<String, Map<String, RoutingEntry>> routeMap, LinkEvent event) {
         checkNotUninit();
         if (supernode == null) {
             LOG.error("notifyLinkEvent: error=supernode must not be null");
@@ -372,7 +351,7 @@ public class SncService {
         LOG.info("notifyLinkEvent: superNode=" + supernode.getName() + ", device=" + event.getDeviceName()
             + ", port=" + event.getPortName() + ", status=" + event.getEventType());
         // 路由收敛：基于 link 事件按 BFS 在互联转发节点间传播收敛状态
-        routeConvergeService.converge(instantiationRouteMap, supernode, event);
+        routeConvergeService.converge(routeMap, supernode, event);
     }
 
     private void checkNotUninit() {
@@ -392,55 +371,53 @@ public class SncService {
         }
     }
 
-    private static void calculateDefaultTemplateRoute(Map<String, SncTopology> topologyMap,
-                                                      Map<String, Map<String, RouteTable>> topologyRouteMap) {
-        for (String filePath : TOPO_TEMPLATE_FILES) {
-            SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
-            String xpodType = topology.getLabel().getNames().get("type");
-            if (xpodType == null) {
-                throw new IllegalArgumentException("find invalid xpod type");
-            }
-            Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
-            LOG.info("calculate default route template success");
-
-            if (topologyMap != null) {
-                topologyMap.put(xpodType, topology);
+    private static void calculateDefaultTemplateRoute(String superNodeType,
+        Map<String, SncTopology> topologyMap, Map<String, Map<String, RouteTable>> topologyRouteMap) {
+        for (Map.Entry<SuperNodeType, SuperNodeType> entry : GALAXY_TEMPLATE_MAP.entrySet()) {
+            if (!entry.getKey().getValue().equals(superNodeType)) {
+                continue;
             }
 
-            if (topologyRouteMap != null) {
-                topologyRouteMap.put(xpodType, routeMap);
+            List<String> templateFiles = new ArrayList<>();
+            templateFiles.add(entry.getKey().getValue() + ".json");
+            templateFiles.add(entry.getValue().getValue() + ".json");
+            for (String filePath : templateFiles) {
+                SncTopology topology = TopoTemplateService.parseTemplateFile(filePath);
+                String xpodType = topology.getLabel().getNames().get("type");
+                if (xpodType == null) {
+                    throw new IllegalArgumentException("find invalid xpod type");
+                }
+                Map<String, RouteTable> routeMap = RouteMspService.routeMsp(topology);
+                LOG.info("calculate default route template success");
+
+                if (topologyMap != null) {
+                    topologyMap.put(xpodType, topology);
+                }
+
+                if (topologyRouteMap != null) {
+                    topologyRouteMap.put(xpodType, routeMap);
+                }
             }
         }
-    }
-
-    public static Map<String, Map<String, RouteTable>> routeMSP() {
-        // Map<topology_type, <node label, route>>
-        Map<String, Map<String, RouteTable>> topologyRouteMap = new HashMap<>();
-        calculateDefaultTemplateRoute(null, topologyRouteMap);
-        return topologyRouteMap;
     }
 
     // 路由计算加实例化
-    public synchronized void routeCalculate() {
+    private Map<String, RouteTable> routeCalculate(String superNodeType) {
         checkNotUninit();
-        if (routeCalculated) {
-            LOG.info("route has calculated");
-            return;
-        }
 
-        topologyMap.clear();
-        routeTemplateMap.clear();
-        for (SuperNodeType superNodeType : SuperNodeType.values()) {
-            superNodeRoutes.remove(superNodeType.getValue());
-        }
+        Map<String, RouteTable> routeMap = new HashMap<>();
+        Map<String, SncTopology> topologyMap = new HashMap<>();
+        Map<String, Map<String, RouteTable>> routeTemplateMap = new HashMap<>();
 
-        calculateDefaultTemplateRoute(topologyMap, routeTemplateMap);
+        calculateDefaultTemplateRoute(superNodeType, topologyMap, routeTemplateMap);
 
         for (Map.Entry<SuperNodeType, SuperNodeType> entry : GALAXY_TEMPLATE_MAP.entrySet()) {
-            RouteInstantiationService.instantiateGalaxyXpodRoute(entry, topologyMap, routeTemplateMap, superNodeRoutes);
+            if (entry.getKey().getValue().equals(superNodeType)) {
+                return RouteInstantiationService.instantiateGalaxyXpodRoute(entry, topologyMap, routeTemplateMap);
+            }
         }
 
-        routeCalculated = true;
+        return routeMap;
     }
 
     public Map<String, Map<String, RoutingEntry>> makeRoutes(SuperNode superNode, String superNodeType) {
@@ -452,16 +429,8 @@ public class SncService {
             throw new IllegalArgumentException("super node type is null or empty");
         }
 
-        if (!routeCalculated) {
-            routeCalculate();
-        }
-
         LOG.info("super node type %s", superNodeType);
-        Map<String, RouteTable> routes = superNodeRoutes.get(superNodeType);
-        if (routes == null) {
-            throw new IllegalArgumentException("no instantiated routes for " + superNodeType);
-        }
-
+        Map<String, RouteTable> routes = routeCalculate(superNodeType);
         RouteInstantiationService service = new RouteInstantiationService();
         Map<String, Map<String, RoutingEntry>> tempRouteMap = new HashMap<>();
         if (superNode.getNpuDevices() != null) {
@@ -478,29 +447,8 @@ public class SncService {
             }
         }
 
-        Map<String, Map<String, RoutingEntry>> copyRoutingEntry =
-            RouteInstantiationService.deepCopyRoutingEntry(tempRouteMap);
-        this.instantiationRouteMap.putAll(copyRoutingEntry);
-
         LOG.info("make routes success for %s, total %d entries", superNode.getName(), tempRouteMap.size());
         return tempRouteMap;
-    }
-
-    public Map<String, RoutingEntry> getNodeRoute(String deviceName, int chipIndex) {
-        checkNotUninit();
-        if (deviceName == null) {
-            throw new IllegalArgumentException("device info is null");
-        }
-
-        LOG.info("device name %s and chip index %d", deviceName, chipIndex);
-
-        String key = RouteInstantiationService.buildRouteTableKey(deviceName, chipIndex);
-        Map<String, RoutingEntry> routingEntries = instantiationRouteMap.get(key);
-        if (routingEntries == null) {
-            throw new IllegalArgumentException("not found route for " + key);
-        }
-
-        return routingEntries;
     }
 
     private void checkDrainEvent(DrainEvent event) {

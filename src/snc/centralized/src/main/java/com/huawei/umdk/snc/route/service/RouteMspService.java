@@ -96,8 +96,6 @@ public class RouteMspService {
 
         addPortNameForNhp(srcNode);
 
-        dividePathTypes(srcNode);
-
         return searchGraph;
     }
 
@@ -480,26 +478,5 @@ public class RouteMspService {
                 return policyPath.isOtherEnable();
         }
         return false;
-    }
-
-    private static void dividePathTypes(SncNode srcNode) {
-        Map<Prefix, RouteEntry> routeEntries = srcNode.getRouteTable().getRouteEntries();
-        for (RouteEntry entry : routeEntries.values()) {
-            for (NextHopPort nhp : entry.getNhpSet()) {
-                switch (nhp.getPathType()) {
-                    case SHORTEST:
-                        entry.getShortestNhp().add(nhp);
-                        break;
-                    case SECOND_SHORTEST:
-                        entry.getSecondNhp().add(nhp);
-                        break;
-                    case OTHER:
-                        entry.getOtherNhp().add(nhp);
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
     }
 }
