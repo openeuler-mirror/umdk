@@ -71,7 +71,7 @@ static urma_status_t urma_close_drivers(void)
                 ret = URMA_FAIL;
                 continue;
             }
-            URMA_LOG_INFO("%s is closed.\n", so->path);
+            URMA_LOG_DEBUG("%s is closed.\n", so->path);
         }
         ub_list_remove(&so->node);
         free(so);
@@ -105,7 +105,7 @@ static int urma_open_provider(const char file[URMA_MAX_LIB_PATH])
         return -1;
     }
 
-    URMA_LOG_INFO("%s opened successfully.\n", canonicalized_path);
+    URMA_LOG_DEBUG("%s opened successfully.\n", canonicalized_path);
     free(canonicalized_path);
     ub_list_push_back(&g_so_list, &so->node);
     return 0;
@@ -124,7 +124,7 @@ int urma_register_provider_ops(urma_provider_ops_t *provider_ops)
     }
     driver->ops = provider_ops;
     ub_list_push_back(&g_driver_list, &driver->node);
-    URMA_LOG_INFO("%s ops registered successfully.\n", provider_ops->name);
+    URMA_LOG_DEBUG("%s ops registered successfully.\n", provider_ops->name);
     return 0;
 }
 
@@ -143,7 +143,7 @@ int urma_unregister_provider_ops(urma_provider_ops_t *provider_ops)
             break;
         }
     }
-    URMA_LOG_INFO("%s ops unregistered successfully.\n", provider_ops->name);
+    URMA_LOG_DEBUG("%s ops unregistered successfully.\n", provider_ops->name);
     return 0;
 }
 
@@ -218,7 +218,7 @@ static bool urma_validate_driver(struct dirent *dent)
     const char *driver_prefix = "liburma";
     if (dent->d_type == DT_LNK || dent->d_type == DT_REG) {
         if (len < strlen(".so") || strncmp(dent->d_name, driver_prefix, strlen(driver_prefix)) != 0) {
-            URMA_LOG_INFO("dent_name=%s is not valid\n", dent->d_name);
+            URMA_LOG_DEBUG("dent_name=%s is not valid\n", dent->d_name);
             return false;
         }
         return true;
@@ -235,7 +235,7 @@ static int urma_open_drivers(void)
         return -1;
     }
     if (info.dli_fname != NULL) {
-        URMA_LOG_INFO("dl_addr=%s\n", info.dli_fname);
+        URMA_LOG_DEBUG("dl_addr=%s\n", info.dli_fname);
     }
 
     char dl_dir[URMA_MAX_LIB_PATH] = {0};
@@ -252,7 +252,7 @@ static int urma_open_drivers(void)
     strcat(dl_dir, "/urma");
     DIR *dir = opendir(dl_dir);
     if (dir == NULL) {
-        URMA_LOG_INFO("Skipping driver scan for directory %s\n", dl_dir);
+        URMA_LOG_DEBUG("Skipping driver scan for directory %s\n", dl_dir);
         return 0;
     }
 
@@ -892,12 +892,12 @@ static __attribute__((constructor)) void liburma_init(void)
     urma_discover_sysfs_path();
 #endif
     /* URMA_LOG_X should be used after the above log operations finish */
-    URMA_LOG_INFO("Start to init liburma.\n");
+    URMA_LOG_DEBUG("Start to init liburma.\n");
     return;
 }
 
 static __attribute__((destructor)) void liburma_uninit(void)
 {
-    URMA_LOG_INFO("Finish to uninit liburma.\n");
+    URMA_LOG_DEBUG("Finish to uninit liburma.\n");
     return;
 }
