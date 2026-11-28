@@ -177,6 +177,17 @@ typedef struct bondp_context {
 #else
     std::atomic_uint imported_tjetty_cnt;
 #endif
+    /* Local vjetty registry, independent of pjetty existence. Health and the
+     * cold/hot manager enumerate this instead of the pjetty-id table so a
+     * vjetty with zero pjettys (all faulty/cold) can still be found and told
+     * to create/promote a pjetty. */
+    struct ub_list vjetty_list;
+    pthread_rwlock_t vjetty_list_lock;
+#ifndef __cplusplus
+    atomic_bool coldhot_canceling;
+#else
+    std::atomic_bool coldhot_canceling;
+#endif
 } bondp_context_t;
 
 typedef struct bondp_jfc {
@@ -240,6 +251,19 @@ typedef enum pjetty_error_done_type {
     PJETTY_FLUSH_ERROR_DONE = 2
 } pjetty_error_done_type_t;
 
+/* Cold/hot standby pjetty state (active_backup Jetty only).
+ * HOT   : in service, p_jetty exists and valid[] is true.
+ * COLD  : not in service, only a promotion candidate. A recovered/faulted slot
+ *         has no p_jetty (created on demand when promoted); a slot demoted by
+ *         a capacity swap keeps its idle p_jetty. Created only by the manager.
+ * FAULTY: failed; p_jetty removed after flush/drain, excluded from candidates
+ *         until a health probe reports the local path recovered. */
+typedef enum bondp_pjetty_state {
+    BONDP_PJETTY_HOT = 0,
+    BONDP_PJETTY_COLD,
+    BONDP_PJETTY_FAULTY,
+} bondp_pjetty_state_t;
+
 /** A struct to mimic Polymorphism in creating/deleting some components of urma.
  * This will introduce extra memory cost due to union size taking the largest size.
  */
@@ -263,6 +287,22 @@ typedef struct bondp_comp {
     uint32_t active_count;
     bondp_context_t *bondp_ctx;
     uint8_t pjettys_error_done[URMA_UBAGG_DEV_MAX_NUM];
+    struct ub_list vjetty_node; /* link in bondp_context_t.vjetty_list */
+    /* Cold/hot standby (active_backup Jetty only). hot_pjetty_cnt == 0 or
+     * >= enabled_count means full-hot legacy mode. has_rplc_jfc records
+     * whether the vjetty was created with a replacement shared JFC, needed to
+     * rebuild the physical pjetty cfg of a cold pjetty on demand. */
+    uint8_t has_rplc_jfc;
+#ifndef __cplusplus
+    atomic_uint hot_pjetty_cnt;
+#else
+    std::atomic_uint hot_pjetty_cnt;
+#endif
+#ifndef __cplusplus
+    atomic_int pjetty_state[URMA_UBAGG_DEV_MAX_NUM];
+#else
+    std::atomic_int pjetty_state[URMA_UBAGG_DEV_MAX_NUM];
+#endif
     bondp_hash_table_t v_conn_table;
     bondp_comp_type_t comp_type;
     urma_ref_t use_cnt; /* Initialize to 0 */
@@ -407,6 +447,28 @@ static inline bool bondp_jetty_port_usable(const bondp_comp_t *bdp_comp, uint32_
         return false;
     }
     return true;
+}
+
+/* Effective number of HOT pjettys: 0 (default) or a value >= enabled_count
+ * means every enabled pjetty is HOT (full-hot legacy behavior). */
+static inline uint32_t bondp_coldhot_effective_cnt(const bondp_comp_t *bdp_comp)
+{
+    uint32_t cnt = atomic_load(&bdp_comp->hot_pjetty_cnt);
+    if (cnt == 0 || cnt >= bdp_comp->enabled_count) {
+        return bdp_comp->enabled_count;
+    }
+    return cnt;
+}
+
+/* Cold/hot standby is only meaningful for an active_backup bonding Jetty whose
+ * configured HOT count leaves at least one COLD pjetty. */
+static inline bool bondp_coldhot_active(const bondp_comp_t *bdp_comp)
+{
+    uint32_t cnt = atomic_load(&bdp_comp->hot_pjetty_cnt);
+    return bdp_comp->comp_type == BONDP_COMP_JETTY &&
+           bdp_comp->bondp_ctx != NULL &&
+           bdp_comp->bondp_ctx->bonding_mode == BONDP_BONDING_MODE_ACTIVE_BACKUP &&
+           cnt != 0 && cnt < bdp_comp->enabled_count;
 }
 
 #endif // BONDP_TYPES_H

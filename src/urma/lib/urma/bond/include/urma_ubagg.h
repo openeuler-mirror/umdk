@@ -93,6 +93,10 @@ typedef enum bondp_user_ctl_opcode {
      * ports for balance-mode RM Jetty send scheduling.
      * in: addr=0, len=0; requires balance mode and health-check context. */
     BONDP_USER_CTL_AUTO_SKIP_FAULTY,
+    /* Set the hot pjetty count of a bonding Jetty at runtime.
+     * in: addr=bondp_set_hot_pjetty_cnt_in_t*, len=sizeof(bondp_set_hot_pjetty_cnt_in_t).
+     * 0 means the full-hot legacy behavior (all enabled pjettys kept in service). */
+    BONDP_USER_CTL_SET_HOT_PJETTY_CNT,
 } bondp_user_ctl_opcode_t;
 
 typedef enum bondp_port_status_state {
@@ -243,7 +247,17 @@ typedef struct bondp_jetty_cfg {
     urma_jetty_cfg_t base;
     const bondp_port_id_t *port_ids;
     uint32_t port_count;
+    /* Number of pjettys kept in service (HOT). 0 means full-hot legacy mode:
+     * every enabled pjetty is created and kept in service. Internal field, set
+     * through BONDP_USER_CTL_SET_HOT_PJETTY_CNT at runtime. */
+    uint32_t hot_pjetty_cnt;
 } bondp_jetty_cfg_t;
+
+/* BONDP_USER_CTL_SET_HOT_PJETTY_CNT */
+typedef struct bondp_set_hot_pjetty_cnt_in {
+    urma_jetty_t *jetty;
+    uint32_t hot_pjetty_cnt;
+} bondp_set_hot_pjetty_cnt_in_t;
 
 typedef struct urma_bond_jetty_ext {
     uint8_t version;

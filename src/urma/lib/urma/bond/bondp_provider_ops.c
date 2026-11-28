@@ -24,6 +24,7 @@
 
 #include "bondp_cp_jetty.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_coldhot.h"
 #include "bondp_cp_seg.h"
 #include "bondp_cp_tjetty.h"
 #include "bondp_cp_user_ctl.h"
@@ -129,6 +130,7 @@ urma_status_t bondp_init(urma_init_attr_t *conf)
 urma_status_t bondp_uninit(void)
 {
     bondp_topo_uninit();
+    bondp_coldhot_stop();
     bondp_worker_destroy();
 
     return URMA_SUCCESS;
@@ -463,6 +465,13 @@ urma_context_t *bondp_create_context(urma_device_t *dev, uint32_t eid_index, int
         URMA_LOG_ERR("Failed to create ctx\n");
         return NULL;
     }
+    ub_list_init(&bdp_ctx->vjetty_list);
+    if (pthread_rwlock_init(&bdp_ctx->vjetty_list_lock, NULL) != 0) {
+        URMA_LOG_ERR("Failed to init vjetty list lock\n");
+        free(bdp_ctx);
+        return NULL;
+    }
+    atomic_init(&bdp_ctx->coldhot_canceling, false);
 
     bdp_ctx->msn_enable = false;
     bdp_ctx->seg_cache_enable = false;
@@ -516,6 +525,7 @@ DELETE_PCONTEXT:
 DELETE_VCONTEXT:
     bondp_delete_vcontext(bdp_ctx);
 FREE_CONTEXT:
+    (void)pthread_rwlock_destroy(&bdp_ctx->vjetty_list_lock);
     free(bdp_ctx);
     return NULL;
 }
@@ -533,6 +543,9 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
      * bondp_hc_start: the hc/fb teardown must not interleave with a
      * concurrent start or a second teardown. */
     (void)pthread_mutex_lock(&ctx->mutex);
+    /* Cold/hot manager is torn down only on real context destruction, not on
+     * feature reconfiguration (set_ctx_cfg / set_bonding_mode). */
+    bondp_coldhot_cancel_ctx(bdp_ctx);
     bondp_uninit_ctx_features(bdp_ctx);
     (void)pthread_mutex_unlock(&ctx->mutex);
     if (bondp_delete_pcontext(bdp_ctx) != 0) {
@@ -545,6 +558,7 @@ urma_status_t bondp_delete_context(urma_context_t *ctx)
         ret = URMA_FAIL;
     }
 
+    (void)pthread_rwlock_destroy(&bdp_ctx->vjetty_list_lock);
     free(bdp_ctx);
 
     URMA_LOG_DEBUG("Finish to delete ctx, dev_name=%s, eid_idx=%u.\n",

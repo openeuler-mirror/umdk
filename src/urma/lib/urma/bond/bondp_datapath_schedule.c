@@ -258,7 +258,9 @@ static int schedule_send_active_backup(const bondp_comp_t *bdp_comp, const bondp
                 continue;
             }
             target_used[tar_idx] = true;
-            if (atomic_load(&bdp_tjetty->p_tjettys[j].valid) && atomic_load(&bdp_comp->valid[loc_idx])) {
+            if (atomic_load(&bdp_tjetty->p_tjettys[j].valid) &&
+                atomic_load(&bdp_comp->valid[loc_idx]) &&
+                !atomic_load(&bdp_comp->bondp_ctx->port_status_bad[loc_idx])) {
                 *send_idx = (int)loc_idx;
                 *target_idx = (int)tar_idx;
                 return 0;
@@ -432,6 +434,12 @@ static int schedule_recv_balance(const bondp_comp_t *bdp_comp, int *recv_idx)
 
     for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
         uint32_t active_idx = bdp_comp->active_indices[i];
+        /* Cold/hot standby: only HOT pjettys physically exist, never steer a
+         * receive WR onto a COLD/FAULTY index (its p_jetty is absent). */
+        if (bdp_comp->comp_type == BONDP_COMP_JETTY && bondp_coldhot_active(bdp_comp) &&
+            atomic_load(&bdp_comp->pjetty_state[active_idx]) != BONDP_PJETTY_HOT) {
+            continue;
+        }
         uint32_t rqe_cnt = bdp_comp->rqe_cnt[active_idx];
         if (rqe_cnt < least_load) {
             least_load = rqe_cnt;
@@ -613,6 +621,10 @@ int schedule_recv_n(bondp_comp_t *bdp_comp, uint32_t wr_num, uint32_t recv_wr_cn
 
         for (uint32_t i = 0; i < bdp_comp->active_count; i++) {
             uint32_t active_idx = bdp_comp->active_indices[i];
+            if (bdp_comp->comp_type == BONDP_COMP_JETTY && bondp_coldhot_active(bdp_comp) &&
+                atomic_load(&bdp_comp->pjetty_state[active_idx]) != BONDP_PJETTY_HOT) {
+                continue;
+            }
             if (current_load[active_idx] < least_load) {
                 least_load = current_load[active_idx];
                 least_load_idx = (int)active_idx;
