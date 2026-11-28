@@ -57,6 +57,10 @@ typedef enum urma_core_cmd {
     URMA_CORE_SHOW_TPID_LIST,
     URMA_CORE_SHOW_TPID_REUSE,
     URMA_CORE_SHOW_SYSTEM,
+    URMA_CORE_H2D_QUERY_RES,
+    URMA_CORE_H2D_SHOW_TPID_LIST,
+    URMA_CORE_H2D_SHOW_TPID_REUSE,
+    URMA_CORE_H2D_SET_LOG_LEVEL,
 } urma_core_cmd_t;
 
 /* only for uburma device ioctl */

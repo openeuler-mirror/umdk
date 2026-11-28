@@ -52,6 +52,7 @@ static int usage(admin_config_t *cfg)
            "  dev   Device management operations\n"
            "  eid   EID management operations\n"
            "  main_ue_eid  Main UE EID query table operations\n"
+           "  npu   NPU-side resource and log management operations\n"
            "  system  System configuration operations\n"
            "Run '%s <command> --help' for more information on a specific command.\n"
            "\n"
@@ -283,6 +284,7 @@ int admin_cmd_main(admin_config_t *cfg)
         {"dev", admin_cmd_dev},
         {"eid", admin_cmd_eid},
         {"main_ue_eid", admin_cmd_main_ue_eid},
+        {"npu", admin_cmd_npu},
         {"perf", admin_cmd_perf},
         {"system", admin_cmd_system},
         {0},
