@@ -16,6 +16,7 @@
 #include "ub_util.h"
 #include "urma_log.h"
 
+#include "bondp_cp_coldhot.h"
 #include "bondp_cp_tjetty.h"
 #include "bondp_dp_health.h"
 #include "bondp_provider_ops.h"
@@ -620,6 +621,84 @@ static int bondp_user_ctl_auto_skip_faulty(urma_context_t *ctx, urma_user_ctl_in
     return URMA_SUCCESS;
 }
 
+/* Resolve a caller-provided jetty pointer to its bondp_comp via the context
+ * vjetty registry and take a use_cnt reference. The pointer is never
+ * dereferenced before the registry lookup, so a concurrent delete cannot turn
+ * this into a use-after-free: delete removes the node before freeing. */
+static bondp_comp_t *bondp_get_jetty_ref_by_ptr(bondp_context_t *bdp_ctx, urma_jetty_t *jetty)
+{
+    bondp_comp_t *target = CONTAINER_OF_FIELD(jetty, bondp_comp_t, v_jetty);
+    bondp_comp_t *found = NULL;
+    bondp_comp_t *iter = NULL;
+
+    pthread_rwlock_rdlock(&bdp_ctx->vjetty_list_lock);
+    UB_LIST_FOR_EACH (iter, vjetty_node, &bdp_ctx->vjetty_list) {
+        if (iter != target) {
+            continue;
+        }
+        if (iter->comp_type != BONDP_COMP_JETTY) {
+            break;
+        }
+        found = iter;
+        atomic_fetch_add(&found->use_cnt.atomic_cnt, 1);
+        break;
+    }
+    pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
+
+    if (found != NULL && atomic_load(&found->deleting)) {
+        atomic_fetch_sub(&found->use_cnt.atomic_cnt, 1);
+        return NULL;
+    }
+    return found;
+}
+
+static inline void bondp_put_jetty_ref(bondp_comp_t *comp)
+{
+    if (comp != NULL) {
+        atomic_fetch_sub(&comp->use_cnt.atomic_cnt, 1);
+    }
+}
+
+static int bondp_user_ctl_set_hot_pjetty_cnt(urma_context_t *ctx, urma_user_ctl_in_t *in,
+                                             urma_user_ctl_out_t *out)
+{
+    (void)out;
+
+    if (in->addr == 0 || in->len != sizeof(bondp_set_hot_pjetty_cnt_in_t)) {
+        URMA_LOG_ERR("Invalid set hot pjetty cnt param.\n");
+        return -EINVAL;
+    }
+
+    const bondp_set_hot_pjetty_cnt_in_t *cfg =
+        (const bondp_set_hot_pjetty_cnt_in_t *)(uintptr_t)in->addr;
+    if (cfg->jetty == NULL) {
+        URMA_LOG_ERR("Invalid jetty for set hot pjetty cnt.\n");
+        return -EINVAL;
+    }
+
+    bondp_context_t *bdp_ctx = CONTAINER_OF_FIELD(ctx, bondp_context_t, v_ctx);
+    if (bdp_ctx->bonding_mode != BONDP_BONDING_MODE_ACTIVE_BACKUP) {
+        URMA_LOG_ERR("Set hot pjetty cnt requires active_backup mode.\n");
+        return -EINVAL;
+    }
+
+    bondp_comp_t *comp = bondp_get_jetty_ref_by_ptr(bdp_ctx, cfg->jetty);
+    if (comp == NULL) {
+        URMA_LOG_ERR("Set hot pjetty cnt: jetty not found in this context.\n");
+        return -EINVAL;
+    }
+
+    (void)pthread_mutex_lock(&ctx->mutex);
+    atomic_store(&comp->hot_pjetty_cnt, cfg->hot_pjetty_cnt);
+    int ret = bondp_coldhot_start();
+    if (ret == 0) {
+        ret = bondp_coldhot_post_reconcile(bdp_ctx, comp->v_jetty.jetty_id.id);
+    }
+    (void)pthread_mutex_unlock(&ctx->mutex);
+    bondp_put_jetty_ref(comp);
+    return ret;
+}
+
 int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_out_t *out)
 {
     if (in == NULL) {
@@ -656,6 +735,8 @@ int bondp_user_ctl(urma_context_t *ctx, urma_user_ctl_in_t *in, urma_user_ctl_ou
             return bondp_user_ctl_query_port_status(ctx, in, out);
         case BONDP_USER_CTL_AUTO_SKIP_FAULTY:
             return bondp_user_ctl_auto_skip_faulty(ctx, in, out);
+        case BONDP_USER_CTL_SET_HOT_PJETTY_CNT:
+            return bondp_user_ctl_set_hot_pjetty_cnt(ctx, in, out);
         default: {
             URMA_LOG_ERR("Unsupported opcode, opcode=%d\n", in->opcode);
             return -EINVAL;

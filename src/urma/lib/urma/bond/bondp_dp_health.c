@@ -18,6 +18,7 @@
 #include "urma_log.h"
 
 #include "bondp_context_table.h"
+#include "bondp_cp_coldhot.h"
 #include "bondp_cp_tjetty.h"
 #include "bondp_topo_info.h"
 #include "bondp_types.h"
@@ -272,13 +273,29 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
     }
 
     uint32_t ready_cnt = 0;
-    bdp_p_vjetty_id_t *item = NULL;
+    bondp_comp_t *comp = NULL;
 
-    pthread_rwlock_rdlock(&bdp_ctx->p_vjetty_id_table.lock);
-    HMAP_FOR_EACH (item, hmap_node, &bdp_ctx->p_vjetty_id_table.hmap) {
-        bondp_comp_t *comp = item->comp;
-        if (item->key.type != JETTY || comp == NULL ||
-            comp->p_jetty[local_idx] == NULL) {
+    /* Enumerate the vjetty registry, not the pjetty-id table: a vjetty whose
+     * pjettys are all cold/faulty still needs to be told to create one. */
+    pthread_rwlock_rdlock(&bdp_ctx->vjetty_list_lock);
+    UB_LIST_FOR_EACH (comp, vjetty_node, &bdp_ctx->vjetty_list) {
+        if (comp == NULL) {
+            continue;
+        }
+        if (bondp_coldhot_active(comp)) {
+            /* Cold/hot standby owns the pjetty lifecycle: a recovery only
+             * arms a failback request for the manager thread, which promotes
+             * the COLD pjetty and swaps out the lowest-priority HOT one. */
+            atomic_store(&comp->bondp_ctx->port_status_bad[local_idx], false);
+            /* Only a pjetty that was removed on fault is a failback candidate.
+             * A never-created or demoted COLD pjetty is not probed-for-recovery:
+             * it is promoted on demand by the manager. */
+            if (atomic_load(&comp->pjetty_state[local_idx]) == BONDP_PJETTY_FAULTY) {
+                (void)bondp_coldhot_post_failback(bdp_ctx, comp->v_jetty.jetty_id.id, local_idx);
+            }
+            continue;
+        }
+        if (comp->p_jetty[local_idx] == NULL) {
             continue;
         }
         atomic_store(&comp->bondp_ctx->port_status_bad[local_idx], false);
@@ -288,7 +305,7 @@ static void hc_set_local_idx_jettys_hc_valid(bondp_context_t *bdp_ctx, uint32_t 
         atomic_store(&comp->hc_valid[local_idx], true);
         ready_cnt++;
     }
-    pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
 
     if (ready_cnt != 0) {
         URMA_LOG_WARN("Path ready: local jettys ready for failback, "
@@ -333,6 +350,29 @@ bool bondp_hc_tjettys_all_registered(struct bondp_context *bdp_ctx)
 
 static bool hc_switch_probe_target(bondp_hc_node_t *node, bondp_hc_path_t *path,
                                    bondp_context_t *bdp_ctx);
+
+/* Notify the cold/hot manager that every HOT pjetty reaching this local port
+ * is faulty; the manager owns the demote/promote. Duplicates are harmless: the
+ * manager ignores an event whose pjetty is no longer HOT. */
+static void hc_post_fault_local_idx(bondp_context_t *bdp_ctx, uint32_t local_idx)
+{
+    bondp_comp_t *comp = NULL;
+
+    if (bdp_ctx == NULL || local_idx >= URMA_UBAGG_DEV_MAX_NUM)
+        return;
+
+    pthread_rwlock_rdlock(&bdp_ctx->vjetty_list_lock);
+    UB_LIST_FOR_EACH (comp, vjetty_node, &bdp_ctx->vjetty_list) {
+        if (comp == NULL)
+            continue;
+        if (!bondp_coldhot_active(comp))
+            continue;
+        if (atomic_load(&comp->pjetty_state[local_idx]) != BONDP_PJETTY_HOT)
+            continue;
+        (void)bondp_coldhot_post_fault(bdp_ctx, comp->v_jetty.jetty_id.id, local_idx);
+    }
+    pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
+}
 
 static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urma_cr_t *cr)
 {
@@ -386,6 +426,7 @@ static void hc_process_probe_cr(bondp_hc_ctx_t *hc_ctx, int local_idx, const urm
         hc_set_tjetty_list_target_valid(node, (uint32_t)local_idx, target_idx);
     } else if (bdp_ctx != NULL && cr->status == URMA_CR_LOC_ACCESS_ERR) {
         bondp_set_port_status_bad(bdp_ctx, (uint32_t)local_idx);
+        hc_post_fault_local_idx(bdp_ctx, (uint32_t)local_idx);
     }
     if (ok && bdp_ctx != NULL) {
         hc_set_local_idx_jettys_hc_valid(bdp_ctx, (uint32_t)local_idx);

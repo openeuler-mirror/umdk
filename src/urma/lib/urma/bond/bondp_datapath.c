@@ -13,6 +13,7 @@
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_coldhot.h"
 #include "bondp_cp_tjetty.h"
 #include "bondp_datapath_convert.h"
 #include "bondp_datapath_schedule.h"
@@ -45,6 +46,7 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
     /* With AUTO_SKIP_FAULTY active (RM Jetty + balance + enabled), a context
      * BAD port does not make the jetty usable. */
     bool auto_skip_active = bondp_jetty_auto_skip_active(comp);
+    bool coldhot_active = bondp_coldhot_active(comp);
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         /*
          * hc_valid is set after a rebuilt path passes health checking.  The
@@ -53,10 +55,16 @@ bool bondp_jetty_is_available(const urma_jetty_t *jetty)
          */
         if (comp->p_jetty[i] != NULL &&
             (atomic_load(&comp->valid[i]) || atomic_load(&comp->hc_valid[i])) &&
-            !(auto_skip_active && atomic_load(&comp->bondp_ctx->port_status_bad[i]))) {
+            !(auto_skip_active && atomic_load(&comp->bondp_ctx->port_status_bad[i])) &&
+            (!coldhot_active || atomic_load(&comp->pjetty_state[i]) == BONDP_PJETTY_HOT)) {
             return true;
         }
     }
+    /* A healthy COLD standby that can still be promoted means the jetty is
+     * recoverable: the data path will park WRs and the manager will promote it.
+     */
+    if (coldhot_active && bondp_coldhot_has_cold(comp))
+        return true;
     return false;
 }
 
@@ -552,6 +560,10 @@ static void failback_rebuild_vacated_pjetty(bondp_comp_t *bdp_comp, uint32_t mov
 
 static void try_failback(bondp_comp_t *bdp_comp)
 {
+    /* Cold/hot standby owns failback through the manager thread. */
+    if (bondp_coldhot_active(bdp_comp)) {
+        return;
+    }
     if (!bondp_fb_need_switch_path(bdp_comp)) {
         return;
     }
@@ -766,6 +778,112 @@ OUT:
     return ret;
 }
 
+/*
+ * No HOT path is currently usable but at least one COLD pjetty exists: accept
+ * the WRs by parking them in the send_wr_buf deferred queue. The entries keep
+ * their depth slot (no sqe_cnt accounting) until the manager promotes a COLD
+ * pjetty and replays them.
+ */
+static urma_status_t bondp_post_send_wr_pending(bondp_comp_t *bdp_comp, urma_jfs_wr_t *wr,
+                                                urma_jfs_wr_t **bad_wr, int wr_total,
+                                                bondp_target_jetty_t *bdp_tjetty)
+{
+    jfs_wr_entry_t *wr_entries[BONDP_BATCH_POST_MAX_NUM];
+
+    uint32_t allocated = jfs_wr_buf_alloc_batch(&bdp_comp->send_wr_buf, wr_entries, wr_total);
+    if (allocated != (uint32_t)wr_total) {
+        jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
+        if (bad_wr != NULL) {
+            *bad_wr = wr;
+        }
+        /* Mirror the udma SQ-overflow error code for a full defer queue. */
+        return URMA_ENOMEM;
+    }
+
+    bool msn_enable = (bdp_tjetty->mask & BONDP_TJETTY_FLAG_MSN_ENABLED) != 0;
+    uint32_t base_msn = 0;
+    if (msn_enable) {
+        base_msn = atomic_fetch_add(&bdp_comp->msn, (uint32_t)wr_total) % BONDP_MAX_BITMAP_SIZE;
+    }
+
+    urma_jfs_wr_t *cur = wr;
+    int wr_count = 0;
+    urma_status_t ret = URMA_SUCCESS;
+    for (int i = 0; i < wr_total; i++) {
+        jfs_wr_entry_t *wr_entry = wr_entries[i];
+        wr_entry->user_ctx = cur->user_ctx;
+        wr_entry->target_vjetty = bdp_tjetty;
+        wr_entry->bdp_comp = bdp_comp;
+        wr_entry->rnr_retry_pending = false;
+        wr_entry->rnr_retry_cnt = 0;
+        wr_entry->cold_pending = true;
+        wr_entry->fixed_port = false;
+        wr_entry->send_idx = UINT32_MAX;
+        wr_entry->target_idx = 0;
+        if (cur->flag.bs.has_drv_ext) {
+            bondp_jfs_wr_t *bwr = CONTAINER_OF_FIELD(cur, bondp_jfs_wr_t, base);
+            wr_entry->info.src_chip_id = bwr->src_chip_id;
+            wr_entry->info.dst_chip_id = bwr->dst_chip_id;
+        }
+        urma_jfs_wr_t *pwr = &wr_entry->wr;
+        ret = copy_jfs_wr(cur, pwr, jfs_wr_entry_src_sge(wr_entry),
+                          jfs_wr_entry_dst_sge(wr_entry, bdp_comp->max_send_sge),
+                          bdp_comp->max_send_sge, bdp_comp->max_send_rsge);
+        if (ret != 0) {
+            if (bad_wr != NULL) {
+                *bad_wr = cur;
+            }
+            goto CLEANUP;
+        }
+        uint32_t ut_slot_idx = 0;
+        ret = bondp_clone_wr_user_tseg(pwr,
+                                       jfs_wr_entry_ut_ext_copy(wr_entry, bdp_comp->max_send_sge,
+                                                                bdp_comp->max_send_rsge),
+                                       BONDP_USER_TSEG_SLOT_STRIDE, &ut_slot_idx,
+                                       bdp_comp->max_send_sge + bdp_comp->max_send_rsge);
+        if (ret != URMA_SUCCESS) {
+            if (bad_wr != NULL) {
+                *bad_wr = cur;
+            }
+            goto CLEANUP;
+        }
+        encode_jfs_wr_msn(pwr, bdp_comp, (base_msn + (uint32_t)i) % BONDP_MAX_BITMAP_SIZE, msn_enable);
+        jfs_wr_get_refs(pwr);
+        ret = check_wr_tseg_not_deleting(pwr);
+        if (ret != URMA_SUCCESS) {
+            jfs_wr_put_refs(pwr);
+            if (bad_wr != NULL) {
+                *bad_wr = cur;
+            }
+            goto CLEANUP;
+        }
+        pwr->user_ctx = wr_entry->wr_id;
+        if (i > 0) {
+            wr_entries[i - 1]->wr.next = pwr;
+        }
+        pwr->next = NULL;
+        wr_count++;
+        cur = cur->next;
+    }
+
+    pthread_spin_lock(&bdp_comp->send_lock);
+    for (int i = 0; i < wr_total; i++) {
+        wr_buf_entry_hdr_t *hdr = (wr_buf_entry_hdr_t *)wr_entries[i];
+        hdr->entry_type = WR_BUF_ENTRY_JFS;
+    }
+    pthread_spin_unlock(&bdp_comp->send_lock);
+    /* Wake the manager so a COLD pjetty gets promoted and these WRs replayed. */
+    (void)bondp_coldhot_post_reconcile(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id);
+    return URMA_SUCCESS;
+
+CLEANUP:
+    for (int j = 0; j < wr_count; j++) {
+        jfs_wr_put_refs(&wr_entries[j]->wr);
+    }
+    jfs_wr_buf_release_batch(&bdp_comp->send_wr_buf, wr_entries, allocated);
+    return ret;
+}
+
 /**
  * This function assumes all WRs in the list share the same tjetty and scheduling result.
  * It processes each WR under a single lock acquisition, allocates entries, copies and
@@ -807,14 +925,25 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
         jfs_wr_entry_t *wr_entries[BONDP_BATCH_POST_MAX_NUM];
         ret = schedule_send_wr(wr, bdp_comp, &send_idx, &target_idx, hint);
         if (ret != 0) {
-            if (hint != NULL && bad_wr != NULL) {
-                *bad_wr = wr;
+            if (hint != NULL) {
+                if (bad_wr != NULL) {
+                    *bad_wr = wr;
+                }
+                if (ret == URMA_EINVAL) {
+                    /* Static remote_id coordinate error: retrying cannot help. */
+                    return URMA_EINVAL;
+                }
+                return URMA_EAGAIN;
             }
-            if (hint != NULL && ret == URMA_EINVAL) {
-                /* Static remote_id coordinate error: retrying cannot help. */
-                return URMA_EINVAL;
+            /* No HOT path usable: defer onto the COLD standby queue if one is
+             * still available, else surface the failure. A permanent scheduling
+             * error (URMA_EINVAL: target jetty has no usable port / unsupported
+             * mode) must not be parked, it is not recoverable by promotion. */
+            if (ret != URMA_EINVAL && bondp_coldhot_active(bdp_comp) &&
+                bondp_coldhot_has_cold(bdp_comp)) {
+                return bondp_post_send_wr_pending(bdp_comp, wr, bad_wr, wr_total, bdp_tjetty);
             }
-            return hint != NULL ? URMA_EAGAIN : URMA_FAIL;
+            return URMA_FAIL;
         }
         uint32_t allocated = jfs_wr_buf_alloc_batch(&bdp_comp->send_wr_buf, wr_entries, wr_total);
         if (allocated != (uint32_t)wr_total) {
@@ -834,7 +963,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             continue; /* Path invalidated, retry */
         }
         /* Copy + encode MSN + link.
-         * NOTE: send_idx/target_idx/entry_type are NOT set here —
+         * NOTE: send_idx/target_idx/entry_type are NOT set here
          * path binding/check/convert run before send_lock, the entries are
          * committed and submitted inside send_lock below */
         urma_jfs_wr_t *cur = wr;
@@ -942,6 +1071,7 @@ static urma_status_t bondp_post_send_wr_list_and_store(bondp_comp_t *bdp_comp,
             wr_entries[i]->send_idx = send_idx;
             wr_entries[i]->target_idx = target_idx;
             wr_entries[i]->fixed_port = (hint != NULL);
+            wr_entries[i]->cold_pending = false;
         }
         /* A hint-pinned WR ignores AUTO_SKIP BAD marks: the user explicitly
          * chose the remote port and takes the egress risk. */
@@ -1805,6 +1935,98 @@ static void resend_matched_jfs_wrs(bondp_comp_t *bdp_comp, uint64_t base_wr_id,
     }
 }
 
+/* COLD standby: move every in-flight WR of the failed path into the deferred
+ * (cold_pending) queue, excluding the triggering entry which the caller parks
+ * itself. Called with send_lock held. */
+static void bondp_coldhot_pending_matched(bondp_comp_t *bdp_comp, uint64_t trig_wr_id,
+                                          uint32_t old_send_idx, uint32_t old_target_idx)
+{
+    for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+        jfs_wr_entry_t *wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, i);
+        if (wr_entry->wr_id == trig_wr_id ||
+            wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            wr_entry->bdp_comp != bdp_comp ||
+            wr_entry->cold_pending ||
+            wr_entry->send_idx != old_send_idx ||
+            wr_entry->target_idx != old_target_idx) {
+            continue;
+        }
+        /* An RNR-pending entry was already removed from sqe_cnt when its RNR
+         * CR was handled. Detach it from the retry task (which targets this
+         * soon-to-be-deleted egress) and park it so replay picks a new path. */
+        if (!wr_entry->rnr_retry_pending) {
+            atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
+        }
+        wr_entry->cold_pending = true;
+        wr_entry->rnr_retry_pending = false;
+        wr_entry->send_idx = UINT32_MAX;
+    }
+}
+
+/* Park every in-flight WR sent on send_idx so it can be replayed on another
+ * HOT path before this pjetty is flushed and deleted. */
+void bondp_coldhot_pending_idx(bondp_comp_t *bdp_comp, uint32_t send_idx)
+{
+    if (bdp_comp == NULL || bdp_comp->send_wr_buf.entries == NULL) {
+        return;
+    }
+
+    pthread_spin_lock(&bdp_comp->send_lock);
+    for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+        jfs_wr_entry_t *wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, i);
+        if (wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            wr_entry->bdp_comp != bdp_comp ||
+            wr_entry->cold_pending ||
+            wr_entry->send_idx != send_idx) {
+            continue;
+        }
+        if (!wr_entry->rnr_retry_pending) {
+            atomic_fetch_sub(&bdp_comp->sqe_cnt[(int)send_idx][wr_entry->target_idx], 1);
+        }
+        wr_entry->cold_pending = true;
+        wr_entry->rnr_retry_pending = false;
+        wr_entry->send_idx = UINT32_MAX;
+    }
+    pthread_spin_unlock(&bdp_comp->send_lock);
+}
+
+void bondp_coldhot_replay_pending(bondp_comp_t *bdp_comp)
+{
+    if (bdp_comp == NULL || bdp_comp->send_wr_buf.entries == NULL) {
+        return;
+    }
+
+    pthread_spin_lock(&bdp_comp->send_lock);
+    for (uint32_t i = 0; i < bdp_comp->send_wr_buf.max_wr_num; i++) {
+        jfs_wr_entry_t *wr_entry = (jfs_wr_entry_t *)__wr_buf_idx(&bdp_comp->send_wr_buf, i);
+        if (wr_entry->entry_type != WR_BUF_ENTRY_JFS ||
+            wr_entry->bdp_comp != bdp_comp ||
+            !wr_entry->cold_pending) {
+            continue;
+        }
+        int new_send_idx = -1;
+        int new_target_idx = -1;
+        int schedule_ret;
+        if (wr_entry->fixed_port) {
+            new_target_idx = (int)wr_entry->target_idx;
+            schedule_ret = schedule_send_fixed(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
+                                               new_target_idx, &new_send_idx);
+        } else {
+            schedule_ret = schedule_send(&wr_entry->target_vjetty->v_tjetty, bdp_comp,
+                                         &new_send_idx, &new_target_idx,
+                                         wr_entry->wr.flag.bs.has_drv_ext ? &wr_entry->info : NULL);
+        }
+        if (schedule_ret != 0) {
+            continue;
+        }
+        wr_entry->cold_pending = false;
+        if (bondp_resend_jfs_wr_impl(bdp_comp, wr_entry, new_send_idx, new_target_idx, false) != 0) {
+            wr_entry->cold_pending = true;
+        }
+    }
+    pthread_spin_unlock(&bdp_comp->send_lock);
+}
+
 /*
  * Failover disabled: reclaim send wr entries stranded on the invalidated path
  * before the rebuild deletes the old pjetty and drops their unpolled CQEs.
@@ -1901,7 +2123,7 @@ static bondp_comp_t *get_comp_by_cr(bondp_context_t *bdp_ctx, int dev_idx, urma_
             }
         }
     }
-    /* Slow path: cache miss → rwlock + hash-table lookup. */
+    /* Slow path: cache miss ->rwlock + hash-table lookup. */
     urma_jetty_id_t pjetty_id = {
         .eid = bdp_ctx->p_ctxs[dev_idx]->eid,
         .id = cr->local_id,
@@ -2149,6 +2371,31 @@ static cr_convert_ret_t handle_send_cr_with_store(bondp_context_t *bdp_ctx, int 
         if (skip_p_tjetty != NULL) {
             atomic_store(&skip_p_tjetty->valid, false);
         }
+
+        if (bondp_coldhot_active(bdp_comp)) {
+            uint32_t old_send_idx = (uint32_t)send_idx;
+            uint32_t old_target_idx = (uint32_t)target_idx;
+            if (bondp_coldhot_has_cold(bdp_comp)) {
+                /* Park the triggering WR and every other in-flight WR of this
+                 * path on the deferred queue; a COLD pjetty will be promoted
+                 * and the queue replayed by the manager thread. */
+                atomic_fetch_sub(&bdp_comp->sqe_cnt[old_send_idx][old_target_idx], 1);
+                wr_entry->cold_pending = true;
+                wr_entry->send_idx = UINT32_MAX;
+                bondp_coldhot_pending_matched(bdp_comp, wr_id, old_send_idx, old_target_idx);
+                (void)pthread_spin_unlock(&bdp_comp->send_lock);
+                (void)bondp_coldhot_post_fault(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, old_send_idx);
+                put_comp(bdp_comp);
+                return CONVERT_SKIP;
+            }
+            /* No COLD backup left: every pjetty is faulty. Reclaim the other
+             * stranded WRs and return this one through its error CR below. */
+            (void)reclaim_stranded_jfs_wrs(bdp_comp, old_send_idx, wr_entry);
+            (void)pthread_spin_unlock(&bdp_comp->send_lock);
+            (void)bondp_coldhot_post_fault(bdp_comp->bondp_ctx, bdp_comp->v_jetty.jetty_id.id, old_send_idx);
+            goto CONVERT_CR;
+        }
+
         /*
          * Failover disabled: reclaim the WRs stranded on the invalidated path
          * before the rebuild is scheduled; the triggering WR is excluded and

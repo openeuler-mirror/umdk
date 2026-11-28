@@ -83,6 +83,9 @@ typedef struct jfs_wr_entry {
     uint32_t target_idx;
     bool fixed_port; /* WR posted on a user-specified port; exempt from rerouting */
     bool rnr_retry_pending;
+    bool cold_pending; /* Deferred until a COLD pjetty is promoted to HOT. The
+                        * entry keeps its send_wr_buf depth slot; send_idx is
+                        * set to UINT32_MAX and it is not counted in sqe_cnt. */
     uint32_t rnr_retry_cnt;
     bondp_chip_id_info_t info;
     urma_sge_t sge_data[];

@@ -24,6 +24,15 @@ struct jfs_wr_entry;
 int bondp_resend_jfs_wr(struct bondp_comp *bdp_comp, struct jfs_wr_entry *wr_entry,
                         int send_idx, int target_idx);
 
+/* Replay WRs parked on the cold_pending queue after a COLD pjetty has been
+ * promoted to HOT. Takes send_lock internally; caller must not hold it. */
+void bondp_coldhot_replay_pending(struct bondp_comp *bdp_comp);
+
+/* Park every in-flight WR sent on send_idx onto the cold_pending queue so it
+ * can be replayed on another HOT pjetty before this one is deleted. Takes
+ * send_lock internally; caller must not hold it. */
+void bondp_coldhot_pending_idx(struct bondp_comp *bdp_comp, uint32_t send_idx);
+
 /* Pure validation of a caller-provided wr hint (no context involved): version,
  * size and mask bits (the reserved words are not enforced). A zero mask keeps
  * the bond scheduling; a non-zero mask must name one side with all three

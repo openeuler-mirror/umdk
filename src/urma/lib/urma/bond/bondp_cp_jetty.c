@@ -23,6 +23,7 @@
 
 #include "bondp_connection.h"
 #include "bondp_context_table.h"
+#include "bondp_cp_coldhot.h"
 #include "bondp_dp_failback.h"
 #include "bondp_dp_health.h"
 #include "bondp_dp_rnr_retry.h"
@@ -1502,8 +1503,18 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
     if (jetty_cfg->shared.jfc != NULL) {
         bdp_rplc_jfc = CONTAINER_OF_FIELD(jetty_cfg->shared.jfc, bondp_jfc_t, v_jfc);
     }
+    /* Cold/hot standby: only the first hot_cnt entries (priority order) are
+     * created as HOT; the rest stay COLD and are created on demand. */
+    uint32_t hot_cnt = bdp_jetty->enabled_count;
+    if (bondp_coldhot_active(bdp_jetty)) {
+        hot_cnt = bondp_coldhot_effective_cnt(bdp_jetty);
+    }
     for (uint32_t n = 0; n < bdp_jetty->enabled_count; ++n) {
         uint32_t i = bdp_jetty->enabled_indices[n];
+        if (n >= hot_cnt) {
+            atomic_store(&bdp_jetty->pjetty_state[i], BONDP_PJETTY_COLD);
+            continue;
+        }
         p_cfg.jfs_cfg.jfc = bdp_jfs_jfc->p_jfc[i];
         p_cfg.shared.jfr = bdp_jfr->p_jfr[i];
         if (bdp_ctx->bonding_level == BONDP_BONDING_LEVEL_PORT) {
@@ -1520,6 +1531,7 @@ static int bondp_create_pjetty(bondp_context_t *bdp_ctx, bondp_comp_t *bdp_jetty
         jetty->jetty_cfg.user_ctx = (uint64_t)bdp_jetty;
         bdp_jetty->p_jetty[i] = jetty;
         atomic_store(&bdp_jetty->valid[i], true);
+        atomic_store(&bdp_jetty->pjetty_state[i], BONDP_PJETTY_HOT);
         URMA_LOG_DEBUG("Created pjetty successfully, idx=%u, jetty_id=%u, dev=%s, eid_idx=%u\n",
                        i, jetty->jetty_id.id, bdp_ctx->p_ctxs[i]->dev->name, bdp_ctx->p_ctxs[i]->eid_index);
     }
@@ -1640,10 +1652,13 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
     atomic_init(&bdp_jetty->deleting, false);
     (void)pthread_spin_init(&bdp_jetty->send_lock, PTHREAD_PROCESS_PRIVATE);
     bdp_jetty->modify_to_error = false;
+    atomic_init(&bdp_jetty->hot_pjetty_cnt, 0);
     for (uint32_t i = 0; i < URMA_UBAGG_DEV_MAX_NUM; i++) {
         for (uint32_t j = 0; j < URMA_UBAGG_DEV_MAX_NUM; j++) {
             atomic_init(&bdp_jetty->sqe_cnt[i][j], 0);
         }
+        atomic_init(&bdp_jetty->valid[i], false);
+        atomic_init(&bdp_jetty->pjetty_state[i], BONDP_PJETTY_COLD);
     }
 
     const bondp_port_id_t *cfg_active_port_ids = NULL;
@@ -1660,6 +1675,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         }
         cfg_active_port_count = bdp_cfg->port_count;
         cfg_active_port_ids = bdp_cfg->port_ids;
+        atomic_store(&bdp_jetty->hot_pjetty_cnt, bdp_cfg->hot_pjetty_cnt);
     }
 
     if (init_active_indices(bdp_ctx, bdp_jetty, cfg_active_port_ids, cfg_active_port_count) != 0) {
@@ -1685,6 +1701,7 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         goto FREE_JETTY;
     }
 
+    bdp_jetty->has_rplc_jfc = (jetty_cfg->shared.jfc != NULL) ? 1 : 0;
     if (bondp_create_pjetty(bdp_ctx, bdp_jetty, jetty_cfg) != 0) {
         URMA_LOG_ERR("Failed to create pjetty\n");
         goto DELETE_PJETTY;
@@ -1721,6 +1738,17 @@ urma_jetty_t *bondp_create_jetty(urma_context_t *ctx, urma_jetty_cfg_t *jetty_cf
         bondp_jfc_t *bdp_jfc = CONTAINER_OF_FIELD(shared_jfc, bondp_jfc_t, v_jfc);
         atomic_fetch_add(&bdp_jfc->use_cnt.atomic_cnt, 1);
     }
+
+    /* Lazily bring up the global cold/hot manager on first use. */
+    if (bondp_coldhot_active(bdp_jetty)) {
+        (void)bondp_coldhot_start();
+    }
+
+    /* Register in the context-level vjetty list so health/manager can reach
+     * this vjetty even when it currently has zero pjettys. */
+    pthread_rwlock_wrlock(&bdp_ctx->vjetty_list_lock);
+    ub_list_push_back(&bdp_ctx->vjetty_list, &bdp_jetty->vjetty_node);
+    pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
 
     return &bdp_jetty->v_jetty;
 
@@ -1759,6 +1787,13 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! Therefore, by locking it, we can avoid the scenario where the reference count is incremented again after
     ! the check use_cnt > 0 but before the lock is acquired.
     */
+    /* Remove from the vjetty registry first so no new reference can be taken,
+     * then gate on use_cnt under the pjetty-id table lock. On failure, put the
+     * node back. */
+    pthread_rwlock_wrlock(&bdp_ctx->vjetty_list_lock);
+    ub_list_remove(&bdp_jetty->vjetty_node);
+    ub_list_init(&bdp_jetty->vjetty_node);
+
     pthread_rwlock_wrlock(&bdp_ctx->p_vjetty_id_table.lock);
     atomic_store(&bdp_jetty->deleting, true);
     /* Stop cached lookups before deciding whether only retry tasks hold refs. */
@@ -1768,6 +1803,8 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     if (use_cnt > retry_task_num) {
         atomic_store(&bdp_jetty->deleting, false);
         pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+        ub_list_push_back(&bdp_ctx->vjetty_list, &bdp_jetty->vjetty_node);
+        pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
         URMA_LOG_ERR("Failed to delete jetty[%u], still in use. use_cnt=%lu\n", jetty_id, use_cnt);
         return URMA_EAGAIN;
     }
@@ -1778,6 +1815,7 @@ urma_status_t bondp_delete_jetty(urma_jetty_t *jetty)
     ! thus allowing us to directly execute the deletion process.
     */
     pthread_rwlock_unlock(&bdp_ctx->p_vjetty_id_table.lock);
+    pthread_rwlock_unlock(&bdp_ctx->vjetty_list_lock);
 
     /*
      * RNR retry cancellation waits for the worker callback. Do it only after
