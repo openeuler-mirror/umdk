@@ -197,16 +197,16 @@ static double cntfrq_get_cpu_mhz(void)
 
 double get_cpu_mhz(bool cpu_freq_warn)
 {
+#if defined(__aarch64__)
+    double cntfrq = cntfrq_get_cpu_mhz();
+    if (cntfrq > 0.0) {
+        return cntfrq;
+    }
+#endif
+
     double sample, proc, delta;
     sample = gettime_get_cpu_mhz(cpu_freq_warn);
     proc = proc_get_cpu_mhz(cpu_freq_warn);
-    if ((proc - 0.0f) <= 0.0) {
-        /* /proc/cpuinfo has no "cpu MHz" (ARM, containers, etc.).
-         * On ARM, prefer cntfrq_el0 (counter frequency register) which is the
-         * exact increment rate of get_cycles(); other architectures have no
-         * equivalent register and rely solely on the regression sample. */
-        proc = cntfrq_get_cpu_mhz();
-    }
     if ((proc - 0.0f) <= 0.0 && (sample - 0.0f) <= 0.0) {
         return 0;
     }
